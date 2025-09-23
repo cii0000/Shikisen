@@ -231,3 +231,13 @@ extension Dictionary where Value: Hashable {
         reduce(into: .init()) { $0[$1.value] = $1.key }
     }
 }
+
+extension Dictionary where Value: RangeReplaceableCollection {
+    mutating func append(_ element: Value.Element, forKey key: Key) {
+        if self[key] != nil {
+            self[key]!.append(element)
+        } else {
+            self[key] = Value([element])
+        }
+    }
+}

@@ -386,6 +386,9 @@ extension Rect {
             && abs(midY - other.midY) < (height + other.height) / 2
     }
     func intersects(_ edge: Edge) -> Bool {
+        if !intersects(edge.bounds) {
+            return false
+        }
         if !(!contains(edge.p0) && !contains(edge.p1)) {
             return true
         }

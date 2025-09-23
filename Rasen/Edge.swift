@@ -460,6 +460,28 @@ extension Pointline {
         }
         return false
     }
+    func intersects(_ otherRect: Rect) -> Bool {
+        if otherRect.contains(firstPoint) {
+            return true
+        } else {
+            let x0y0 = otherRect.origin
+            let x1y0 = Point(otherRect.maxX, otherRect.minY)
+            let x0y1 = Point(otherRect.minX, otherRect.maxY)
+            let x1y1 = Point(otherRect.maxX, otherRect.maxY)
+            func intersects(_ edge: Edge) -> Bool {
+                for ledge in edges {
+                    if ledge.intersects(edge) {
+                        return true
+                    }
+                }
+                return false
+            }
+            return intersects(Edge(x0y0, x1y0))
+            || intersects(Edge(x1y0, x1y1))
+            || intersects(Edge(x1y1, x0y1))
+            || intersects(Edge(x0y1, x0y0))
+        }
+    }
 }
 extension Pointline.Control: AppliableTransform {
     static func * (lhs: Self, rhs: Transform) -> Self {

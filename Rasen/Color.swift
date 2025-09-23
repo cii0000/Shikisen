@@ -163,8 +163,23 @@ extension Color {
     static let subInterpolated = Color(white: 0.75, opacity: 0.25)
     static let warning = Color(red: 1, green: 0.5, blue: 0)
     static let loudnessWarning = Color(red: 1.0, green: 0, blue: 0)
+    static let justFit = Color(red: 0.75, green: 0.75, blue: 0)
     
-    static let octave = Color(white: 0.75, opacity: 0.5)
+    static let octave = Color(white: 0.75, opacity: 0.75)
+    
+    static let octaveChord = Color(red: 0.65, green: 0.65, blue: 0.65)
+    static let powerChord = Color(red: 0.8, green: 0.8, blue: 0.68)
+    static let majorChord = Color(red: 0.875, green: 0.75, blue: 0)
+    static let major3Chord = Color(red: 0.875, green: 0.75, blue: 0).with(lightness: 95)
+    static let suspendedChord = Color(red: 0.25, green: 0.9, blue: 0)
+    static let minorChord = Color(red: 0.0, green: 0.8, blue: 0.95)
+    static let minor3Chord = Color(red: 0.0, green: 0.8, blue: 0.95).with(lightness: 93)
+    static let augmentedChord = Color(red: 0.75, green: 0.5, blue: 1.0)
+    static let flatfiveChord = Color(red: 1.0, green: 0.6, blue: 1.0)
+    static let wholeToneChord = Color(red: 0.25, green: 0.9, blue: 0).with(lightness: 95)
+    static let semitoneChord = Color(red: 1.0, green: 0.65, blue: 0.2)
+    static let diminishChord = Color(red: 1.0, green: 0.5, blue: 0.5)
+    static let tritoneChord = Color(red: 1.0, green: 0.5, blue: 0.5).with(lightness: 75)
 }
 
 extension Color {

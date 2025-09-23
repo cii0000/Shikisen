@@ -637,7 +637,7 @@ final class MoveScoreAction: DragEventAction {
                         type = .note
                         beganPitch = note.pitch
                         
-                        let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % Sheet.beatInterval == 0 })
+                        let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % EditGrid.beatInterval == 0 })
                         let dBeat = isInterval ? (note.beatRange.start - note.beatRange.start.interval(scale: interval)) : 0
                         beganDeltaNoteBeat = dBeat
                         
@@ -663,7 +663,7 @@ final class MoveScoreAction: DragEventAction {
                         rootView.node.append(child: octaveNode)
                         
                         let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
-                        let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: Sheet.fullEditBeatInterval)
+                        let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                         rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString())
                     }
                 } else if let (noteI, result) = v {
@@ -842,7 +842,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: Sheet.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
                     case .allSprol(let sprolI, let sprol, let spectlopeY):
                         type = .sprol
                         
@@ -902,7 +902,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(sprol.pitch, intervalScale: Sheet.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(sprol.pitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
                     case .spectlopeHeight:
                         type = .spectlopeHeight
                         
@@ -926,7 +926,7 @@ final class MoveScoreAction: DragEventAction {
                         }
                         
                         beganPitch = note.pitch
-                        let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % Sheet.beatInterval == 0 })
+                        let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % EditGrid.beatInterval == 0 })
                         let dBeat = isInterval ? (note.beatRange.start - note.beatRange.start.interval(scale: interval)) : 0
                         beganDeltaNoteBeat = dBeat
                         beganBeatRange = note.beatRange
@@ -964,7 +964,7 @@ final class MoveScoreAction: DragEventAction {
                         rootView.node.append(child: octaveNode)
                         
                         let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
-                        let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: Sheet.fullEditBeatInterval)
+                        let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                         rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString())
                     }
                 } else if scoreView.containsIsShownSpectrogram(scoreP, scale: rootView.screenToWorldScale) {
@@ -1074,7 +1074,7 @@ final class MoveScoreAction: DragEventAction {
                                 if let noteI, noteI < scoreView.model.notes.count {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
-                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: Sheet.fullEditBeatInterval)
+                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
                                 }
                             }
@@ -1125,7 +1125,7 @@ final class MoveScoreAction: DragEventAction {
                                 if let noteI, noteI < scoreView.model.notes.count {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(neBeat - note.beatRange.start))
-                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: Sheet.fullEditBeatInterval)
+                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
                                 }
                             }
@@ -1178,7 +1178,7 @@ final class MoveScoreAction: DragEventAction {
                                 if let noteI, noteI < scoreView.model.notes.count {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(beat - note.beatRange.start))
-                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: Sheet.fullEditBeatInterval)
+                                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
                                 }
                             }
@@ -1451,7 +1451,7 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.rendableNormarizedPitResult(atBeat: beganStartBeat, at: $0)
                         }
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: Sheet.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
                     }
                 case .spectlopeHeight:
                     var nivs = [IndexValue<Note>](capacity: beganNotes.count)

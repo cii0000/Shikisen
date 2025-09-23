@@ -42,8 +42,8 @@ extension Note {
     }
     @discardableResult
     mutating func replace(lyric: String, at oi: Int, tempo: Rational,
-                          beatInterval: Rational = Sheet.fullEditBeatInterval,
-                          pitchInterval: Rational = Sheet.fullEditPitchInterval,
+                          beatInterval: Rational = EditGrid.fullEditBeatInterval,
+                          pitchInterval: Rational = EditGrid.fullEditPitchInterval,
                           isUpdateNext: Bool = true) -> Int {
         func update(lyric: String, at oi: Int, isOld: Bool = true) -> (lyricI: Int, isNext: Bool) {
             let oldNote = self
@@ -1735,8 +1735,8 @@ struct Mora: Hashable, Codable {
                 kffs.append(.init(onsetFf, durSec: onsetDurSec, pitch: pitch))
                 kffs.append(.init(onsetFf, durSec: 0.025, pitch: pitch))
                 if let youonFf {
-                    kffs.append(.init(.linear(onsetFf, youonFf, t: 0.5), durSec: 0.025, pitch: -pitch / 8))
                     centerI = kffs.count
+                    kffs.append(.init(.linear(onsetFf, youonFf, t: 0.5), durSec: 0.025, pitch: -pitch / 8))
                     kffs.append(.init(youonFf, durSec: youonDurSec))
                 } else {
                     var ff0 = FormantFilter.linear(onsetFf, nextFf, t: 0.75)
@@ -1745,8 +1745,8 @@ struct Mora: Hashable, Codable {
                     ff0[5] = nextFf[5]
                     
                     kffs.append(.init(ff0, durSec: 0.02, pitch: pitch * 2 / 3))
-                    kffs.append(.init(.linear(ff0, nextFf, t: 0.5), durSec: 0.025, pitch: -pitch / 8))
                     centerI = kffs.count
+                    kffs.append(.init(.linear(ff0, nextFf, t: 0.5), durSec: 0.025, pitch: -pitch / 8))
                 }
                 kffs.append(.init(vowelFf, durSec: 0))
             case .ta, .tj, .tβ, .te, .to, .tɕ, .ts, .tɕRes, .tsRes:

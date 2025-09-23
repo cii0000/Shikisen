@@ -31,11 +31,14 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
     var selectedRange: Range<String.Index>?
     var selectedLineLocation = 0.0
     
-    var isFullEdit = false {
+    var editGrid = EditGrid.main {
         didSet {
-            guard isFullEdit != oldValue else { return }
-            if let node = timelineNode.children.first(where: { $0.name == "isFullEdit" }) {
-                node.isHidden = !isFullEdit
+            guard editGrid != oldValue else { return }
+            if let node = timelineNode.children.first(where: { $0.name == "fullGrid" }) {
+                node.isHidden = editGrid != .full
+            }
+            if let node = timelineNode.children.first(where: { $0.name == "secondGrid" }) {
+                node.isHidden = editGrid != .second
             }
         }
     }
@@ -228,6 +231,7 @@ extension TextView {
         
         var contentPathlines = [Pathline]()
         var subBorderPathlines = [Pathline]()
+        var secondEditBorderPathlines = [Pathline]()
         var fullEditBorderPathlines = [Pathline]()
         var borderPathlines = [Pathline]()
         
@@ -241,6 +245,7 @@ extension TextView {
         makeBeatPathlines(in: timeOption.beatRange, sy: sy, ey: ey,
                           subBorderPathlines: &subBorderPathlines,
                           fullEditBorderPathlines: &fullEditBorderPathlines,
+                          secondEditBorderPathlines: &secondEditBorderPathlines,
                           borderPathlines: &borderPathlines)
         
         let secRange = timeOption.secRange
@@ -255,9 +260,15 @@ extension TextView {
         var nodes = [Node]()
         
         if !fullEditBorderPathlines.isEmpty {
-            nodes.append(Node(name: "isFullEdit",
-                              isHidden: !isFullEdit,
+            nodes.append(Node(name: "fullGrid",
+                              isHidden: editGrid != .full,
                               path: Path(fullEditBorderPathlines),
+                              fillType: .color(.border)))
+        }
+        if !secondEditBorderPathlines.isEmpty {
+            nodes.append(Node(name: "secondGrid",
+                              isHidden: editGrid != .second,
+                              path: Path(secondEditBorderPathlines),
                               fillType: .color(.border)))
         }
         if !borderPathlines.isEmpty {

@@ -230,10 +230,12 @@ extension TimelineView {
                            enabledBeatExtension: Bool = true,
                            subBorderPathlines: inout [Pathline],
                            fullEditBorderPathlines: inout [Pathline],
+                           secondEditBorderPathlines: inout [Pathline],
                            borderPathlines: inout [Pathline]) {
         let roundedSBeat = beatRange.start.rounded(.down)
         let deltaBeat = Rational(1, 128)
         let beatR1 = Rational(1, 8)
+        let beatR2 = Rational(1, 16)
         let beat0 = Rational(1)
         var cBeat = roundedSBeat
         while cBeat <= beatRange.end {
@@ -242,6 +244,8 @@ extension TimelineView {
                     0.5
                 } else if cBeat % beatR1 == 0 {
                     0.25
+                } else if cBeat % beatR2 == 0 {
+                    0.125
                 } else {
                     0.0625
                 }
@@ -253,7 +257,10 @@ extension TimelineView {
                                 width: lw, height: ey - sy + dlh * 2)
                 if subBorderBeats.contains(cBeat) {
                     subBorderPathlines.append(.init(rect))
-                } else if lw == 0.0625 {
+                } else if lw == 0.0625 || lw == 0.125 {
+                    if lw == 0.125 {
+                        secondEditBorderPathlines.append(.init(rect))
+                    }
                     fullEditBorderPathlines.append(.init(rect))
                 } else {
                     borderPathlines.append(.init(rect))
@@ -599,11 +606,14 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         timelineBounds?.outset(by: Sheet.timelinePadding)
     }
     
-    var isFullEdit = false {
+    var editGrid = EditGrid.main {
         didSet {
-            guard isFullEdit != oldValue else { return }
-            if let node = timelineNode.children.first(where: { $0.name == "isFullEdit" }) {
-                node.isHidden = !isFullEdit
+            guard editGrid != oldValue else { return }
+            if let node = timelineNode.children.first(where: { $0.name == "fullGrid" }) {
+                node.isHidden = editGrid != .full
+            }
+            if let node = timelineNode.children.first(where: { $0.name == "secondGrid" }) {
+                node.isHidden = editGrid != .second
             }
         }
     }
@@ -659,7 +669,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         var contentPathlines = [Pathline](),
             borderPathlines = [Pathline](), subBorderPathlines = [Pathline]()
-        var fullEditBorderPathlines = [Pathline]()
+        var fullEditBorderPathlines = [Pathline](), secondEditBorderPathlines = [Pathline]()
         var selectedPathlines = [Pathline]()
         
         contentPathlines.append(.init(Rect(x: sx, y: centerY - lw / 2,
@@ -668,6 +678,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         makeBeatPathlines(in: beatRange.start ..< beatRange.end + loopDurBeat, sy: sy, ey: ey,
                           subBorderPathlines: &subBorderPathlines,
                           fullEditBorderPathlines: &fullEditBorderPathlines,
+                          secondEditBorderPathlines: &secondEditBorderPathlines,
                           borderPathlines: &borderPathlines)
         
         let mainBeatX = x(atBeat: model.mainBeat)
@@ -676,7 +687,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             let kx = x(atBeat: keyframe.beat + beatRange.start)
             
             let nKnobH = keyframe.isKey ? knobH : iKnobH
-            let nKnobW = (keyframe.beat + beatRange.start) % Sheet.beatInterval == 0 ? knobW : knobW / 2
+            let nKnobW = (keyframe.beat + beatRange.start) % EditGrid.beatInterval == 0 ? knobW : knobW / 2
             let topD: Double
             if !keyframe.draftPicture.isEmpty {
                 let pathline = Pathline(Rect(x: kx - nKnobW / 2,
@@ -694,7 +705,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             
             let bottomD = 0.0
             
-            let niKnobW = (keyframe.beat + beatRange.start) % Sheet.beatInterval == 0 ? iKnobW : iKnobW / 2
+            let niKnobW = (keyframe.beat + beatRange.start) % EditGrid.beatInterval == 0 ? iKnobW : iKnobW / 2
             let pathline = keyframe.isKey ?
             Pathline(Rect(x: kx - nKnobW / 2,
                           y: centerY - nKnobH / 2 + bottomD,
@@ -709,7 +720,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             }
         }
         let kx = ex
-        let nKnobW = eBeat % Sheet.beatInterval == 0 ? knobW : knobW / 2
+        let nKnobW = eBeat % EditGrid.beatInterval == 0 ? knobW : knobW / 2
         let eKnobMinY = centerY - knobH / 2 - 1
         contentPathlines.append(.init(Rect(x: kx - nKnobW / 2,
                                            y: eKnobMinY,
@@ -825,9 +836,15 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         var nodes = [Node]()
         if !fullEditBorderPathlines.isEmpty {
-            nodes.append(Node(name: "isFullEdit",
-                              isHidden: !isFullEdit,
+            nodes.append(Node(name: "fullGrid",
+                              isHidden: editGrid != .full,
                               path: Path(fullEditBorderPathlines),
+                              fillType: .color(.border)))
+        }
+        if !secondEditBorderPathlines.isEmpty {
+            nodes.append(Node(name: "secondGrid",
+                              isHidden: editGrid != .second,
+                              path: Path(secondEditBorderPathlines),
                               fillType: .color(.border)))
         }
         if !borderPathlines.isEmpty {

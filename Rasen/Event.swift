@@ -417,6 +417,8 @@ extension Quasimode {
     static let insertKeyframe = Self(modifier: [.command], .e)
     static let addScore = Self(modifier: [.shift, .command], .e)
     
+    static let justFit = Self(modifier: [.command], .no3)
+    
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
     

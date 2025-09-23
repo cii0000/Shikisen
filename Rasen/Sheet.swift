@@ -2243,8 +2243,6 @@ extension Sheet {
     static let knobWidth = 2.0, knobHeight = 12.0, rulerHeight = 4.0
     static let knobEditDistance = 20.0
     static let timelineY = 18.0
-    static let fullEditPitchInterval = Rational(1, 16), pitchInterval = Rational(1)
-    static let fullEditBeatInterval = Rational(1, 128), beatInterval = Rational(1, 8)
     static let pitchHeight = 5.375
     static let noteHeight = 1.75
     static let tonePadding = 2.0

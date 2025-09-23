@@ -672,18 +672,17 @@ final class RootView: View, @unchecked Sendable {
     func updateSheetViewsWithPOV() {
         sheetViewValues.forEach {
             if let view = $0.value.sheetView {
-                updateWithIsFullEdit(in: view)
+                updateWithEditGrid(in: view)
                 view.screenToWorldScale = screenToWorldScale
             }
         }
     }
-    func updateWithIsFullEdit(in sheetView: SheetView) {
-        let isFullEdit = isFullEditNote
-        sheetView.textsView.elementViews.forEach { $0.isFullEdit = isFullEdit }
-        sheetView.contentsView.elementViews.forEach { $0.isFullEdit = isFullEdit }
-        sheetView.scoreView.isFullEdit = isFullEdit
-        sheetView.animationView.isFullEdit = isFullEdit
-        sheetView.scoreView.isEditTone = isEditTone
+    func updateWithEditGrid(in sheetView: SheetView) {
+        let editGrid = EditGrid(logScale: pov.logScale)
+        sheetView.textsView.elementViews.forEach { $0.editGrid = editGrid }
+        sheetView.contentsView.elementViews.forEach { $0.editGrid = editGrid }
+        sheetView.scoreView.editGrid = editGrid
+        sheetView.animationView.editGrid = editGrid
     }
     
     var sheetLineWidth: Double { Line.defaultLineWidth }
@@ -909,11 +908,12 @@ final class RootView: View, @unchecked Sendable {
                         let nis = sheetView.noteIndexes(from: selections)
                         if !nis.isEmpty {
                             for ni in nis {
-                                var nLine = scoreView.pointline(from: score.notes[ni])
+                                var nLine = scoreView.pointline(at: ni)
                                 nLine = scoreView.convertToWorld(nLine)
                                 sPointlines.append(nLine)
                             }
                         }
+                        
                         if nis.count == 1 {
                             let note = score.notes[nis[0]]
                             if note.pits.count > 1 {
@@ -2000,7 +2000,7 @@ final class RootView: View, @unchecked Sendable {
         var maxShp: IntPoint?
         sheetPositionFromVertical(at: shp) { nShp in
             let dShp = IntPoint(nShp.x + deltaX, nShp.y)
-            if sheetID(at: dShp) != nil {
+            if let sheetView = sheetView(at: dShp), sheetView.model.enabledTimeline {
                 maxShp = maxShp != nil ? (dShp.y > maxShp!.y ? dShp : maxShp!) : dShp
             }
         }
@@ -2336,7 +2336,7 @@ final class RootView: View, @unchecked Sendable {
                         
                         guard self.sheetID(at: shp) == sid,
                               self.sheetViewValues[shp] != nil else { return }
-                        self.updateWithIsFullEdit(in: sheetView)
+                        self.updateWithEditGrid(in: sheetView)
                         sheetRecord.willwriteClosure = { [weak sheetView, weak self,
                                                           weak historyRecord] (record) in
                             if let sheetView {
@@ -2423,7 +2423,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.node.attitude.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
         sheetView.node.enableCache = true
-        updateWithIsFullEdit(in: sheetView)
+        updateWithEditGrid(in: sheetView)
         
         sheetRecord.willwriteClosure = { [weak sheetView, weak sheetHistoryRecord, weak self] (record) in
             if let sheetView = sheetView {
@@ -2442,7 +2442,7 @@ final class RootView: View, @unchecked Sendable {
                 sheetsNode.append(child: sheetView.node)
             }
             thumbnailNodeValues[shp]?.node?.removeFromParent()
-            updateWithIsFullEdit(in: sheetView)
+            updateWithEditGrid(in: sheetView)
         }
         
         return sheetView
@@ -2557,7 +2557,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.node.attitude.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
         sheetView.node.enableCache = true
-        updateWithIsFullEdit(in: sheetView)
+        updateWithEditGrid(in: sheetView)
         
         sheetView.contentsView.elementViews.forEach { $0.updateSpectrogram() }
         sheetView.scoreView.updateSpectrogram()
@@ -2581,7 +2581,7 @@ final class RootView: View, @unchecked Sendable {
         sheetViewValues[shp] = .init(sheetID: sid, sheetView: sheetView, task: nil)
         sheetsNode.append(child: sheetView.node)
         updateMap()
-        updateWithIsFullEdit(in: sheetView)
+        updateWithEditGrid(in: sheetView)
         
         return sheetView
     }
@@ -3177,20 +3177,14 @@ final class RootView: View, @unchecked Sendable {
         Sheet.knobEditDistance * screenToWorldScale
     }
     
-    var isEditTone: Bool {
-        pov.logScale < -2
-    }
-    var isFullEditNote: Bool {
-        pov.logScale < -3.5
-    }
     var currentBeatInterval: Rational {
-        isFullEditNote ? Sheet.fullEditBeatInterval : Sheet.beatInterval
+        EditGrid(logScale: pov.logScale).beatInterval
     }
     var currentKeyframeBeatInterval: Rational {
         currentBeatInterval
     }
     var currentPitchInterval: Rational {
-        isFullEditNote ? Sheet.fullEditPitchInterval : Sheet.pitchInterval
+        EditGrid(logScale: pov.logScale).pitchInterval
     }
     func smoothPitch(from scoreView: ScoreView, at scoreP: Point) -> Double? {
         scoreView.smoothPitch(atY: scoreP.y)

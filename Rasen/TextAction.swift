@@ -137,14 +137,19 @@ final class LookUpAction: InputKeyEventAction {
     }
     func show(for p: Point) {
         if !rootView.isEditingSheet {
-            if let sid = rootView.sheetID(at: rootView.sheetPosition(at: p)),
+            let shp = rootView.sheetPosition(at: p)
+            if let sid = rootView.sheetID(at: shp),
                let recoder = rootView.model.sheetRecorders[sid],
                let updateDate = recoder.directory.updateDate,
                let createdDate = recoder.directory.createdDate {
                
                 let fileSize = recoder.fileSize
                 let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
-                rootView.show("Sheet".localized + "\n\t\("File Size".localized): \(string)" + "\n\t\("Update Date".localized): \(updateDate.defaultString)" + "\n\t\("Created Date".localized): \(createdDate.defaultString)", at: p)
+                rootView.show("Sheet".localized 
+                              + "\n\t\("File Size".localized): \(string)"
+                              + "\n\t\("Update Date".localized): \(updateDate.defaultString)"
+                              + "\n\t\("Created Date".localized): \(createdDate.defaultString)"
+                              + "\n\t\("Position".localized): \(shp.x)_\(shp.y)", at: p)
             } else {
                 rootView.show("Root".localized, at: p)
             }

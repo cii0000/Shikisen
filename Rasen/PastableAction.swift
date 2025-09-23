@@ -1567,7 +1567,8 @@ final class PastableAction: Action {
                 octaveNode: Node?, beganNotes = [Int: Note](), beganSheetView: SheetView?,
                 textNode: Node?, imageNode: Node?, textFrame: Rect?, textScale = 1.0
     var snapDistance = 1.0
-    private var notePlayer: NotePlayer?, playerBeatNoteIndexes = [Int](), oldPitch: Rational?
+    private var notePlayer: NotePlayer?, playerBeatNoteIndexes = [Int](),
+                oldPitch: Rational?, oldBeat: Rational?
     
     func updateWithPaste(at p: Point, atScreen sp: Point, _ phase: Phase) {
         let shp = rootView.sheetPosition(at: p)
@@ -2043,8 +2044,8 @@ final class PastableAction: Action {
                 
                 let minBV = beganNotes.min(by: { $0.value.beatRange.start < $1.value.beatRange.start })
                 let maxBV = beganNotes.max(by: { $0.value.beatRange.end < $1.value.beatRange.end })
-                let minBeat = (minBV?.value.beatRange.start ?? 0) + beat
-                let maxBeat = (maxBV?.value.beatRange.end ?? 0) + beat
+                let minBeat = minBV?.value.beatRange.start ?? 0
+                let maxBeat = maxBV?.value.beatRange.end ?? 0
                 let noteI = !beganNotes.contains(where: { 0 >= $0.value.beatRange.start }) ?
                 minBV?.key :
                 (!beganNotes.contains(where: { 0 < $0.value.beatRange.end }) ? maxBV?.key : nil)
@@ -2053,7 +2054,7 @@ final class PastableAction: Action {
                 playerBeatNoteIndexes = vs.map { $0.noteI }
                 
                 updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
-            } else {
+            } else if pitch != oldPitch || beat != oldBeat {
                 var notes = beganNotes.sorted(by: { $0.key < $1.key }).map { $0.value }
                 for j in 0 ..< notes.count {
                     notes[j].pitch += pitch - beganPitch
@@ -2068,9 +2069,11 @@ final class PastableAction: Action {
                     notePlayer?.notes = playerBeatNoteIndexes.map {
                         scoreView.rendableNormarizedPitResult(atBeat: beat, at: $0)
                     }
-                    oldPitch = pitch
                 }
             }
+            
+            oldPitch = pitch
+            oldBeat = beat
             
 //            selectingLineNode.children = notes.map {
 //                let node = scoreView.noteNode(from: $0).node
@@ -2862,6 +2865,8 @@ final class PastableAction: Action {
         case .notesValue(_):
             octaveNode?.removeFromParent()
             octaveNode = nil
+            
+            notePlayer?.stop()
             
             guard let sheetView = beganSheetView else { return }
             let scoreView = sheetView.scoreView

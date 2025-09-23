@@ -490,7 +490,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                             
                             if let beatRange = animationView.beatRange {
                                 let roundedSBeat = beatRange.start.rounded(.down)
-                                let deltaBeat = animationView.isFullEdit ? Rational(1, 128) : Rational(1, 8)
+                                let deltaBeat = animationView.editGrid.beatInterval
                                 var cBeat = roundedSBeat
                                 while cBeat < beatRange.end {
                                     if cBeat >= beatRange.start {
@@ -555,7 +555,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                             if deltaI != oldDeltaI {
                                 oldDeltaI = deltaI
                                 
-                                let frameBeat = Sheet.fullEditBeatInterval
+                                let frameBeat = EditGrid.fullEditBeatInterval
                                 let nRootBeat = (beganRootBeat + .init(deltaI) * frameBeat)
                                     .interval(scale: frameBeat)
                                 

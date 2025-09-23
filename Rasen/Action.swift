@@ -315,6 +315,7 @@ final class RootAction: Action {
         case .goNextFrame: GoNextFrameAction(self)
         case .insertKeyframe: InsertKeyframeAction(self)
         case .addScore: AddScoreAction(self)
+        case .justFit: JustFitAction(self)
         case .interpolate, .controlInterpolate: InterpolateAction(self)
         case .disconnect: DisconnectAction(self)
         case .stop: StopAction(self)
@@ -1297,6 +1298,90 @@ final class AddScoreAction: InputKeyEventAction {
                 
                 rootAction.updateActionNode()
                 rootView.updateSelects()
+            }
+        case .changed:
+            break
+        case .ended:
+            rootView.cursor = rootView.defaultCursor
+        }
+    }
+}
+
+final class JustFitAction: InputKeyEventAction {
+    let rootAction: RootAction, rootView: RootView
+    let isEditingSheet: Bool
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+        isEditingSheet = rootView.isEditingSheet
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        guard isEditingSheet else {
+            rootAction.keepOut(with: event)
+            return
+        }
+        if rootAction.isPlaying(with: event) {
+            rootAction.stopPlaying(with: event)
+        }
+        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
+            ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
+        switch event.phase {
+        case .began:
+            rootView.cursor = .arrow
+            
+            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+                let scoreView = sheetView.scoreView
+                let score = scoreView.model
+                
+                let scoreP = scoreView.convertFromWorld(p)
+                if let noteI = scoreView.noteIndex(at: scoreP,
+                                                   scale: rootView.screenToWorldScale) {
+                    let beat: Double = scoreView.beat(atX: scoreP.x)
+                    let result = score.notes[noteI].pitResult(atBeat: beat - Double(score.notes[noteI].beatRange.start))
+                    let pitch = (result.pitch.rationalValue(intervalScale: rootView.currentPitchInterval) + result.notePitch).rounded()
+                    var nivs = [IndexValue<Note>]()
+                    
+                    let nis: [Int]
+                    if rootView.selections.isEmpty {
+                        let beat: Rational = scoreView.beat(atX: scoreP.x)
+                        nis = scoreView.model.notes.enumerated()
+                            .filter { $0.element.beatRange.contains(beat) }.map { $0.offset }
+                    } else {
+                        nis = sheetView.noteIndexes(from: rootView.selections)
+                    }
+                    
+                    for ni in nis {
+                        var note = score.notes[ni]
+                        let oldNote = note
+                        if note.pits.count > 1 {
+                            let result = note.pitResult(atBeat: beat - Double(note.beatRange.start))
+                            if result.isStraight {
+                                note.pitch.round()
+                                let nPitch = Chord.approximationJustIntonation5Limit(pitch: (note.pits[result.pitI].pitch + note.pitch).rounded() - pitch) + pitch - note.pitch
+                                note.pits[result.pitI].pitch = nPitch
+                                if result.pitI + 1 < note.pits.count {
+                                    note.pits[result.pitI + 1].pitch = nPitch
+                                }
+                                if oldNote.pits[result.pitI].pitch != nPitch {
+                                    nivs.append(.init(value: note, index: ni))
+                                }
+                            }
+                        } else {
+                            note.pits[0].pitch.round()
+                            note.pitch = Chord.approximationJustIntonation5Limit(pitch: note.firstPitch.rounded() - pitch) + pitch - note.pits[0].pitch
+                            if oldNote.pitch != note.pitch {
+                                nivs.append(.init(value: note, index: ni))
+                            }
+                        }
+                    }
+                    if !nivs.isEmpty {
+                        sheetView.newUndoGroup()
+                        sheetView.replace(nivs)
+                    }
+                }
             }
         case .changed:
             break

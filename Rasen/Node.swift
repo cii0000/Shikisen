@@ -1011,6 +1011,13 @@ extension Node {
         lineWidth > 0 && lineType != nil ?
             path.bounds?.inset(by: -lineWidth) : path.bounds
     }
+    var transformedDrawableBounds: Rect? {
+        if let bounds = drawableBounds {
+            return bounds * localTransform
+        } else {
+            return nil
+        }
+    }
     
     func contains(_ p: Point) -> Bool {
         !isHidden && containsPath(p)

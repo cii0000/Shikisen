@@ -1221,7 +1221,9 @@ extension Note {
         Int(firstPitch.rounded())
     }
     var firstPitResult: PitResult {
-        .init(notePitch: pitch, pitch: .rational(firstPit.pitch), stereo: firstStereo,
+        .init(notePitch: pitch, pitI: 0,
+              isStraight: pits.count > 1 ? firstPit.pitch == pits[1].pitch : true,
+              pitch: .rational(firstPit.pitch), stereo: firstStereo,
               tone: firstTone, lyric: firstPit.lyric, id: id)
     }
     
@@ -1355,33 +1357,52 @@ extension Note {
         }
     }
     struct PitResult: Hashable {
-        var notePitch: Rational, pitch: ResultPitch, stereo: Stereo,
+        var notePitch: Rational, pitI: Int, isStraight: Bool, pitch: ResultPitch, stereo: Stereo,
             tone: Tone, lyric: String, id: UUID
         
         var sumTone: Double {
             tone.spectlope.sumVolm
         }
+        var isJustIntonation: Bool {
+            if isStraight, case .rational(let pitch) = pitch,
+               Chord.unisonFromApproximationJustIntonation5Limit(pitch: notePitch + pitch) != nil {
+                true
+            } else {
+                false
+            }
+        }
     }
     func pitResult(atBeat beat: Double) -> PitResult {
         if pits.count == 1 || beat <= .init(pits[0].beat) {
             let pit = pits[0]
-            return .init(notePitch: pitch, pitch: .rational(pit.pitch), stereo: pit.stereo,
+            return .init(notePitch: pitch, pitI: 0, isStraight: true,
+                         pitch: .rational(pit.pitch), stereo: pit.stereo,
                          tone: pit.tone, lyric: pit.lyric, id: id)
         } else if let pit = pits.last, beat >= .init(pit.beat) {
-            return .init(notePitch: pitch, pitch: .rational(pit.pitch), stereo: pit.stereo,
+            return .init(notePitch: pitch, pitI: pits.count - 1, isStraight: true,
+                         pitch: .rational(pit.pitch), stereo: pit.stereo,
                          tone: pit.tone, lyric: pit.lyric, id: id)
         }
+        var nPitI = 0, isStraight = false, straightPitch: Rational?
         for pitI in 0 ..< pits.count - 1 {
             let pit = pits[pitI], nextPit = pits[pitI + 1]
-            if beat >= .init(pit.beat) && beat < .init(nextPit.beat) && pit.isEqualWithoutBeat(nextPit) {
-                return .init(notePitch: pitch, pitch: .rational(pit.pitch), stereo: pit.stereo,
-                             tone: pit.tone, lyric: pit.lyric, id: id)
+            if beat >= .init(pit.beat) && beat < .init(nextPit.beat) {
+                nPitI = pitI
+                isStraight = pit.pitch == nextPit.pitch
+                straightPitch = isStraight ? pit.pitch : nil
+                if pit.isEqualWithoutBeat(nextPit) {
+                    return .init(notePitch: pitch, pitI: pitI,
+                                 isStraight: true,
+                                 pitch: .rational(pit.pitch), stereo: pit.stereo,
+                                 tone: pit.tone, lyric: pit.lyric, id: id)
+                }
             }
         }
         
         let sec = beat * 60 / 120
         let pitbend = pitbend(fromTempo: 120)
-        return .init(notePitch: pitch, pitch: .real(pitbend.pitch(atSec: sec) * 12),
+        return .init(notePitch: pitch, pitI: nPitI, isStraight: isStraight,
+                     pitch: straightPitch != nil ? .rational(straightPitch!) : .real(pitbend.pitch(atSec: sec) * 12),
                      stereo: pitbend.stereo(atSec: sec),
                      tone: .init(overtone: pitbend.overtone(atSec: sec),
                                  spectlope: pitbend.spectlope(atSec: sec),
@@ -1684,6 +1705,24 @@ struct Chord: Hashable, Codable {
             default: 3
             }
         }
+        
+        var color: Color {
+            switch self {
+            case .octave: .octaveChord
+            case .power: .powerChord
+            case .major: .majorChord
+            case .major3: .major3Chord
+            case .suspended: .suspendedChord
+            case .minor: .minorChord
+            case .minor3: .minor3Chord
+            case .augmented: .augmentedChord
+            case .flatfive: .flatfiveChord
+            case .wholeTone: .wholeToneChord
+            case .semitone: .semitoneChord
+            case .diminish: .diminishChord
+            case .tritone: .tritoneChord
+            }
+        }
     }
     
     struct ChordTyper: Hashable, Codable, CustomStringConvertible {
@@ -1884,10 +1923,12 @@ extension Chord {
         }
     }
     static func unisonFromApproximationJustIntonation5Limit(pitch: Rational) -> Int? {
+        guard !pitch.isInteger else { return nil }
         let unison = pitch.mod(12)
         let dUnison = unison.decimalPart
         for i in 1 ... 11 {
-            if approximationJustIntonation5Limit(unison: Rational(i)) - Rational(i) == dUnison {
+            let n = approximationJustIntonation5Limit(unison: Rational(i))
+            if (n < Rational(i) ? n - Rational(i - 1) : n - Rational(i)) == dUnison {
                 return i
             }
         }
