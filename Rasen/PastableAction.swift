@@ -1813,7 +1813,7 @@ final class PastableAction: Action {
                     let pitch = sheetView.scoreView.pitch(atY: scoreP.y,
                                                           interval: rootView.currentPitchInterval)
                     edges = sheetView.scoreView.scaleEdges(fromUnison: pitch.mod(12))
-                    rootView.cursor = .arrowWith(string: Pitch(value: pitch).octaveString())
+                    rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString())
                     selectingLineNode.lineWidth = pitch.isInteger ? 0.5 : 0.25
                 case .vertical:
                     let beat = sheetView.scoreView.beat(atX: scoreP.x,
@@ -2062,6 +2062,7 @@ final class PastableAction: Action {
                     notes[j].id = .init()
                 }
                 scoreView.replace(notes.enumerated().map { .init(value: $0.element, index: $0.offset + scoreView.model.notes.count - notes.count) })
+                rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                 
                 octaveNode?.children = scoreView.octaveNode(noteIs: Array(scoreView.model.notes.count - notes.count ..< scoreView.model.notes.count)).children
                 
@@ -2082,7 +2083,7 @@ final class PastableAction: Action {
 //            }
             
             rootView.cursor = .circle(string: Pitch(value: pitch)
-                .octaveString(deltaPitch: pitch - deltaPitch))
+                .displayString(deltaPitch: pitch - deltaPitch))
         }
         
         switch pasteObject {
@@ -3194,7 +3195,8 @@ final class PastableAction: Action {
                 snapLineNode.removeFromParent()
                 selectingLineNode.removeFromParent()
             }
-            
+        
+            rootView.selections = []
             rootView.updateSelects()
             rootView.updateFinding(at: editingP)
             rootView.updateTextCursor()
@@ -3306,7 +3308,7 @@ final class PastableAction: Action {
                 rootView.removeSheets(at: shps)
             }
             
-            rootView.updateSelects()
+            rootView.selections = []
             rootView.updateWithFinding()
         case .changed:
             break
@@ -3379,7 +3381,7 @@ final class PastableAction: Action {
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
             
-            rootView.updateSelects()
+            rootView.selections = []
             rootView.updateWithFinding()
             
             rootView.cursor = rootView.defaultCursor

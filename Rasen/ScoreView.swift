@@ -256,7 +256,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
         updateScore()
         
         if model.enabled {
-            scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate, isUpdateNotewaveDic: true)
+            scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate, isUpdateNotewaveDic: false)
         }
         node.attitude.position.y = binder[keyPath: keyPath].timelineY
     }
@@ -270,6 +270,10 @@ extension ScoreView {
         updateScore()
     }
     func updateClippingNode() {
+        guard model.enabled else {
+            clippingNode.isHidden = true
+            return
+        }
         var parent: Node?
         node.allParents { node, stop in
             if node.bounds != nil {
@@ -1937,6 +1941,12 @@ extension ScoreView {
             switch self {
             case .pit(let pitI): pitI == 0
             case .startBeat, .endBeat: true
+            default: false
+            }
+        }
+        var isPit: Bool {
+            switch self {
+            case .pit, .lyric: true
             default: false
             }
         }

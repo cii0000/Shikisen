@@ -499,8 +499,9 @@ extension ScoreTrackItem {
         durSec = score.secRange.end
         loopDurSec = score.sec(fromBeat: score.loopDurBeat)
         self.isEnabledSamples = isEnabledSamples
+        
+        isChanged = true
         if isUpdateNotewaveDic {
-            isChanged = true
             updateNotewaveDic()
         }
     }

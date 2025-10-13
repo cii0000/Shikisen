@@ -1001,7 +1001,7 @@ final class LineAction: Action {
                 self.octaveNode = octaveNode
                 rootView.node.append(child: octaveNode)
                 
-                rootView.cursor = .circle(string: Pitch(value: pitch).octaveString())
+                rootView.cursor = .circle(string: Pitch(value: pitch).displayString())
             }
         case .changed:
             let p = rootView.convertScreenToWorld(event.screenPoint)
@@ -1050,7 +1050,7 @@ final class LineAction: Action {
                 
                 if isNote {
                     rootView.cursor = .circle(string: Pitch(value: pitch)
-                        .octaveString(deltaPitch: pitch - beganPitch))
+                        .displayString(deltaPitch: pitch - beganPitch))
                 }
             }
         case .ended:

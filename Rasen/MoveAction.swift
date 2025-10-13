@@ -610,8 +610,8 @@ final class MoveScoreAction: DragEventAction {
                 let scoreP = scoreView.convert(sheetP, from: sheetView.node)
                 let v = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale)
                 let selectedNoteIs = !(v?.result.isStartEndBeat ?? false)
-                && rootView.isSelect(at: p) ? sheetView.containedNotes(from: rootView.selections) : []
-                if !selectedNoteIs.isEmpty {
+                && rootView.isSelect(at: p) ? sheetView.noteIndexes(from: rootView.selections) : []
+                if !selectedNoteIs.isEmpty && !(v?.result.isPit ?? false) {
                     rootView.selections = []
                     
                     let noteIs = selectedNoteIs
@@ -664,7 +664,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                         let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                        rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString())
+                        rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
                     }
                 } else if let (noteI, result) = v {
                     self.noteI = noteI
@@ -752,7 +752,7 @@ final class MoveScoreAction: DragEventAction {
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                                                  
-                        rootView.cursor = .circle(string: Pitch(value: beganPitch).octaveString())
+                        rootView.cursor = .circle(string: Pitch(value: beganPitch).displayString())
                         
                     case .even(let pitI):
                         type = .even
@@ -842,7 +842,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     case .allSprol(let sprolI, let sprol, let spectlopeY):
                         type = .sprol
                         
@@ -902,7 +902,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(sprol.pitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(sprol.pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     case .spectlopeHeight:
                         type = .spectlopeHeight
                         
@@ -965,7 +965,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                         let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                        rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString())
+                        rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
                     }
                 } else if scoreView.containsIsShownSpectrogram(scoreP, scale: rootView.screenToWorldScale) {
                     type = .isShownSpectrogram
@@ -1009,7 +1009,7 @@ final class MoveScoreAction: DragEventAction {
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                         
-                        rootView.cursor = .arrowWith(string: Pitch(value: beganPitch).octaveString())
+                        rootView.cursor = .arrowWith(string: Pitch(value: beganPitch).displayString())
                     }
                 } else if scoreView.containsTimeline(scoreP, scale: rootView.screenToWorldScale) {
                     type = .allBeat
@@ -1075,7 +1075,7 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
                             rootView.updateSelects()
@@ -1126,7 +1126,7 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(neBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
                             rootView.updateSelects()
@@ -1179,7 +1179,7 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(beat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).octaveString(deltaPitch: dPitch))
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
                             rootView.updateSelects()
@@ -1219,7 +1219,7 @@ final class MoveScoreAction: DragEventAction {
                             
                             octaveNode?.children = scoreView.scaleNode(mainPitch: pitch).children
                             
-                            rootView.cursor = .arrowWith(string: Pitch(value: pitch).octaveString())
+                            rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString(deltaPitch: dPitch))
                             
                             oldPitch = pitch
                         }
@@ -1375,7 +1375,7 @@ final class MoveScoreAction: DragEventAction {
                                 
                                 oldPitch = pitch
                                 
-                                rootView.cursor = .circle(string: Pitch(value: pitch).octaveString())
+                                rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch))
                             }
                             rootView.updateSelects()
                         }
@@ -1451,7 +1451,7 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.rendableNormarizedPitResult(atBeat: beganStartBeat, at: $0)
                         }
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).octaveString(hidableDecimal: false))
+                        rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     }
                 case .spectlopeHeight:
                     var nivs = [IndexValue<Note>](capacity: beganNotes.count)
@@ -2043,7 +2043,7 @@ final class MoveSheetAction: DragEventAction {
     
     private var sheetView: SheetView?, type = MoveType.move, oldP = Point(), typeRect = Rect()
     private var lineIs = [Int](), planeIs = [Int](), textIs = [Int](), contentIs = [Int]()
-    private var oldLines = [Line](), oldPlanes = [Plane](), oldTexts = [Text](), oldContents = [Content]()
+    private var oldLines = [Line](), oldPlanes = [Plane](), oldTexts = [Text](), oldContents = [Content](), oldStr: String?
     private var sheetOrigin = Point()
 
     func flow(with event: DragEvent) {
@@ -2136,6 +2136,22 @@ final class MoveSheetAction: DragEventAction {
                 }
                 for (ci, oldContent) in zip(contentIs, oldContents) {
                     sheetView.contentsView.elementViews[ci].model = oldContent * transform
+                }
+                
+                if type == .scale {
+                    let str = (typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP)).string(digitsCount: 2)
+                    if str != oldStr {
+                        rootView.cursor = rootView.cursor(from: "x" + str,
+                                                          isArrow: true)
+                        oldStr = str
+                    }
+                } else if type == .rotate {
+                    let str = ((Point.differenceAngle(oldP, typeRect.centerPoint, p) + .pi).loopedRotation * 180 / .pi).string(digitsCount: 2)
+                    if str != oldStr {
+                        rootView.cursor = rootView.cursor(from: str + "°",
+                                                          isArrow: true)
+                        oldStr = str
+                    }
                 }
             }
         case .ended:

@@ -178,7 +178,7 @@ final class LookUpAction: InputKeyEventAction {
                     let maxFq = Pitch(value: maxPitchRat).fq
                     let minSec: Double = sheetView.animationView.sec(atX: nSelection.rect.minX)
                     let maxSec: Double = sheetView.animationView.sec(atX: nSelection.rect.maxX)
-                    rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitchRat - minPitchRat).octaveString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
+                    rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitchRat - minPitchRat).displayString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
                 } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                     let scoreView = sheetView.scoreView
                     let score = scoreView.model
@@ -192,7 +192,7 @@ final class LookUpAction: InputKeyEventAction {
                         let startPitch = Pitch(value: fpr.start)
                         let endPitch = Pitch(value: fpr.end)
                         
-                        let str = "\(startPitch.octaveString()) ... \(endPitch.octaveString())  (\(startPitch.fq.string(digitsCount: 1)) ... \(endPitch.fq.string(digitsCount: 1)) Hz)".localized
+                        let str = "\(startPitch.displayString()) ... \(endPitch.displayString())  (\(startPitch.fq.string(digitsCount: 1)) ... \(endPitch.fq.string(digitsCount: 1)) Hz)".localized
                         rootView.show(str, at: p)
                     } else {
                         let nSelection = sheetView.convertFromWorld(selection)
@@ -205,7 +205,7 @@ final class LookUpAction: InputKeyEventAction {
                         let maxFq = Pitch(value: maxPitch).fq
                         let minSec: Double = sheetView.animationView.sec(atX: nSelection.rect.minX)
                         let maxSec: Double = sheetView.animationView.sec(atX: nSelection.rect.maxX)
-                        rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitch - minPitch).octaveString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
+                        rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitch - minPitch).displayString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
                     }
                 } else {
                     rootView.show("No selection".localized, at: p)
@@ -234,7 +234,7 @@ final class LookUpAction: InputKeyEventAction {
             let y = sheetView.scoreView.noteY(atX: sheetView.scoreView.convertFromWorld(p).x, at: noteI)
             let pitch = Pitch(value: sheetView.scoreView.pitch(atY: y, interval: Rational(1, 12)))
             let fq = pitch.fq
-            let fqStr = "\("Note".localized) \(pitch.octaveString()) (\(fq.string(digitsCount: 2)) Hz)".localized
+            let fqStr = "\("Note".localized) \(pitch.displayString()) (\(fq.string(digitsCount: 2)) Hz)".localized
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
@@ -252,7 +252,7 @@ final class LookUpAction: InputKeyEventAction {
             } else {
                 let pitchInterval = rootView.currentPitchInterval
                 let pitch = Pitch(value: scoreView.pitch(atY: scoreP.y, interval: pitchInterval))
-                let fqStr = "\(pitch.octaveString()) (\(pitch.fq.string(digitsCount: 2)) Hz)".localized
+                let fqStr = "\(pitch.displayString()) (\(pitch.fq.string(digitsCount: 2)) Hz)".localized
                 let typers = scoreView.chordTypers(at: scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale)
                 if !typers.isEmpty {
                     let str = typers.reduce(into: "") { $0 += (!$0.isEmpty ? " " : "") + $1.type.description }
@@ -265,9 +265,9 @@ final class LookUpAction: InputKeyEventAction {
                   let (node, contentView) = sheetView.spectrogramNode(at: sheetView.convertFromWorld(p)) {
             let y = node.convertFromWorld(p).y
             let pitch = contentView.spectrogramPitch(atY: y)!
-            let pitchRat = Rational(pitch, intervalScale: .init(1, 12))
+            let pitchRat = Rational(pitch, intervalScale: EditGrid.fullEditPitchInterval)
             let nfq = Pitch(value: pitchRat).fq
-            let fqStr = "\(Pitch(value: pitchRat).octaveString()) (\(nfq.string(digitsCount: 2)) Hz)".localized
+            let fqStr = "\(Pitch(value: pitchRat).displayString()) (\(nfq.string(digitsCount: 2)) Hz)".localized
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                     let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),

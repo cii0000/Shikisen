@@ -234,6 +234,7 @@ extension TimelineView {
                            borderPathlines: inout [Pathline]) {
         let roundedSBeat = beatRange.start.rounded(.down)
         let deltaBeat = Rational(1, 128)
+        let beatR0 = Rational(1, 2)
         let beatR1 = Rational(1, 8)
         let beatR2 = Rational(1, 16)
         let beat0 = Rational(1)
@@ -242,12 +243,14 @@ extension TimelineView {
             if cBeat >= beatRange.start {
                 let lw: Double = if cBeat % beat0 == 0 {
                     0.5
-                } else if cBeat % beatR1 == 0 {
+                } else if cBeat % beatR0 == 0 {
                     0.25
-                } else if cBeat % beatR2 == 0 {
+                } else if cBeat % beatR1 == 0 {
                     0.125
-                } else {
+                } else if cBeat % beatR2 == 0 {
                     0.0625
+                } else {
+                    0.03125
                 }
                 
                 let beatX = x(atBeat: cBeat)
@@ -257,8 +260,8 @@ extension TimelineView {
                                 width: lw, height: ey - sy + dlh * 2)
                 if subBorderBeats.contains(cBeat) {
                     subBorderPathlines.append(.init(rect))
-                } else if lw == 0.0625 || lw == 0.125 {
-                    if lw == 0.125 {
+                } else if lw == 0.0625 || lw == 0.03125 {
+                    if lw == 0.0625 {
                         secondEditBorderPathlines.append(.init(rect))
                     }
                     fullEditBorderPathlines.append(.init(rect))

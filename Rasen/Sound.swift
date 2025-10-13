@@ -24,10 +24,10 @@ import Accelerate.vecLib.vDSP
 //#endif
 
 struct LyricsUnison: Hashable, Codable {
-    enum Step: Int32, Hashable, Codable, CaseIterable {
+    enum Step: Int, Hashable, Codable, CaseIterable {
         case c = 0, d = 2, e = 4, f = 5, g = 7, a = 9, b = 11
     }
-    enum Accidental: Int32, Hashable, Codable, CaseIterable {
+    enum Accidental: Int, Hashable, Codable, CaseIterable {
         case none = 0, flat = -1, sharp = 1
     }
     
@@ -37,20 +37,20 @@ struct LyricsUnison: Hashable, Codable {
         self.step = step
         self.accidental = accidental
     }
-    init(unison: Int, isSharp: Bool) {
-        switch unison {
-        case 0: self = .init(.c)
-        case 1: self = isSharp ? .init(.c, .sharp) : .init(.d, .flat)
-        case 2: self = .init(.d)
-        case 3: self = isSharp ? .init(.d, .sharp) : .init(.e, .flat)
-        case 4: self = .init(.e)
-        case 5: self = .init(.f)
-        case 6: self = isSharp ? .init(.f, .sharp) : .init(.g, .flat)
-        case 7: self = .init(.g)
-        case 8: self = isSharp ? .init(.g, .sharp) : .init(.a, .flat)
-        case 9: self = .init(.a)
-        case 10: self = isSharp ? .init(.a, .sharp) : .init(.b, .flat)
-        case 11: self = .init(.b)
+    static func with(unison: Int) -> [LyricsUnison] {
+        switch unison.mod(12) {
+        case 0: [.init(.c)]
+        case 1: [.init(.c, .sharp), .init(.d, .flat)]
+        case 2: [.init(.d)]
+        case 3: [.init(.d, .sharp), .init(.e, .flat)]
+        case 4: [.init(.e)]
+        case 5: [.init(.f)]
+        case 6: [.init(.f, .sharp), .init(.g, .flat)]
+        case 7: [.init(.g)]
+        case 8: [.init(.g, .sharp), .init(.a, .flat)]
+        case 9: [.init(.a)]
+        case 10: [.init(.a, .sharp), .init(.b, .flat)]
+        case 11: [.init(.b)]
         default: fatalError()
         }
     }
@@ -67,6 +67,28 @@ extension LyricsUnison.Step {
         case .b: "B"
         }
     }
+    var degreeName: String {
+        switch self {
+        case .c: "Ⅰ"
+        case .d: "Ⅱ"
+        case .e: "Ⅲ"
+        case .f: "Ⅳ"
+        case .g: "Ⅴ"
+        case .a: "Ⅵ"
+        case .b: "Ⅶ"
+        }
+    }
+    var minorDegreeName: String {
+        switch self {
+        case .c: "ⅰ"
+        case .d: "ⅱ"
+        case .e: "ⅲ"
+        case .f: "ⅳ"
+        case .g: "ⅴ"
+        case .a: "ⅵ"
+        case .b: "ⅶ"
+        }
+    }
 }
 extension LyricsUnison.Accidental {
     var name: String {
@@ -81,8 +103,11 @@ extension LyricsUnison {
     var name: String {
         step.name + accidental.name
     }
+    var degreeName: String {
+        accidental.name + step.degreeName
+    }
     var unison: Int {
-        (Int(step.rawValue) + Int(accidental.rawValue)).mod(12)
+        (step.rawValue + accidental.rawValue).mod(12)
     }
 }
 
@@ -117,10 +142,12 @@ extension Pitch {
         self.init(octave: octave,
                   lyricsUnison: LyricsUnison(step, accidental))
     }
-    func lyricsUnison(isSharp: Bool) -> LyricsUnison {
-        LyricsUnison(unison: Int(unison.rounded()), isSharp: isSharp)
+    
+    func lyricsUnisons() -> [LyricsUnison] {
+        LyricsUnison.with(unison: Int(unison.rounded()))
     }
-    func octaveString(hidableDecimal: Bool = true, deltaPitch: Rational = 0) -> String {
+    
+    func displayString(hidableDecimal: Bool = true, deltaPitch: Rational = 0) -> String {
         let octavePitch = value / 12
         let iPart = octavePitch.rounded(.down)        
         let dPart = (octavePitch - iPart) * 12
@@ -150,7 +177,7 @@ extension Pitch {
             return "\(iPart).\(dPartStr)" + deltaStr
         } else {
             let ddPart = dPart.decimalPart * 16
-            let ddPartStr = ddPart.decimalPart == 0 ? String(format: "%d", Int(ddPart)) : "\(ddPart.decimalPart)"
+            let ddPartStr = String(format: "%d", Int(ddPart))
             return "\(iPart).\(dPartStr).\(ddPartStr)" + deltaStr
         }
     }
@@ -216,8 +243,17 @@ extension MusicScale {
         }
         return nil
     }
+    
+    func degreeLyricsUnison(unison: Int) -> [LyricsUnison] {
+        if type.isPopular {
+            LyricsUnison.with(unison: (unison - self.unison).mod(12))
+        } else {
+            []
+        }
+    }
+    
     var name: String {
-        "\(LyricsUnison(unison: unison, isSharp: false).name) \(type) (\(unison))"
+        "\(String.union(from: LyricsUnison.with(unison: unison).map { $0.name })) \(type) (\(unison))"
     }
 }
 
@@ -2209,7 +2245,7 @@ extension Score {
 }
 
 struct Music {
-    static let defaultTempo: Rational = 135
+    static let defaultTempo: Rational = 120
     static let minTempo = Rational(1, 4), maxTempo: Rational = 10000
     static let tempoRange = minTempo ... maxTempo
     static let defaultDurBeat = Rational(16)

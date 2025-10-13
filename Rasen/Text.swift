@@ -165,6 +165,14 @@ extension String {
             return self
         }
     }
+    
+    static func union(from strings: [String], separator: String = " ") -> String {
+        var str = ""
+        strings.forEach {
+            str += str.isEmpty ? $0 : (separator + $0)
+        }
+        return str
+    }
 }
 extension Substring {
     func substring(_ str: String,

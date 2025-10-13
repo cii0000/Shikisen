@@ -571,28 +571,28 @@ extension Formant: MonoInterpolatable {
 }
 
 struct FormantFilter: Hashable, Codable {
-    var formants: [Formant] = [.init(sdVolm: 0.7 * 0.9, sdNoise: 0,
-                                     sdPitch: 9.1, sPitch: 67.3, ePitch: 74.0, edPitch: 6.3,
+    var formants: [Formant] = [.init(sdVolm: 0.5 * 0.9, sdNoise: 0,
+                                     sdPitch: 9.1, sPitch: 67.8, ePitch: 74.5, edPitch: 6.3,
                                      volm: 0.9 * 0.9, noise: 0.13,
                                      edVolm: 0.5 * 0.9, edNoise: 0.18),
                                .init(sdVolm: 0.5 * 0.9, sdNoise: 0.13,
-                                     sdPitch: 5.7, sPitch: 79.5, ePitch: 81.2, edPitch: 5.2,
+                                     sdPitch: 5.7, sPitch: 80, ePitch: 81.7, edPitch: 5.2,
                                      volm: 0.9 * 0.9, noise: 0.3,
                                      edVolm: 0.33 * 0.9, edNoise: 0.26),
                                .init(sdVolm: 0.3 * 0.9, sdNoise: 0.23,
-                                     sdPitch: 1.6, sPitch: 94, ePitch: 96, edPitch: 1.1,
+                                     sdPitch: 1.6, sPitch: 94.5, ePitch: 96.5, edPitch: 1.1,
                                      volm: 1, noise: 0.35,
                                      edVolm: 0.33, edNoise: 0.69),
                                .init(sdVolm: 0.4, sdNoise: 0.69,
-                                     sdPitch: 0.5, sPitch: 98.5, ePitch: 100.2, edPitch: 1.2,
+                                     sdPitch: 0.5, sPitch: 99, ePitch: 100.7, edPitch: 1.2,
                                      volm: 0.75, noise: 0.39,
                                      edVolm: 0, edNoise: 1),
                                .init(sdVolm: 0, sdNoise: 1,
-                                     sdPitch: 0.8, sPitch: 107.4, ePitch: 109.1, edPitch: 0.9,
+                                     sdPitch: 0.8, sPitch: 107.9, ePitch: 109.6, edPitch: 0.9,
                                      volm: 0.3 * 0.9, noise: 0.61,
                                      edVolm: 0.1 * 0.9, edNoise: 1),
                                .init(sdVolm: 0.1 * 0.9, sdNoise: 1,
-                                     sdPitch: 0.6, sPitch: 113.2, ePitch: 114.8, edPitch: 0.8,
+                                     sdPitch: 0.6, sPitch: 113.7, ePitch: 115.3, edPitch: 0.8,
                                      volm: 0.2 * 0.9, noise: 0.93,
                                      edVolm: 0, edNoise: 1)]
 }
@@ -1447,15 +1447,24 @@ struct Mora: Hashable, Codable {
                     ff1[1].formMultiplyVolm(0.75)
                     let pitch = previousPitch != nil ? -(pitch - previousPitch!) / 8 : 0
                     kffs.append(.init(ff1, durSec: 0.06, pitch: pitch))
+                } else if isβ {
+                    kffs.append(.init(preFf, durSec: 0.05, id: id))
+                    centerI = kffs.count + 1
                 } else {
-                    kffs.append(.init(preFf, durSec: isβ ? 0.05 : 0.1, id: id))
+                    kffs.append(.init(preFf, durSec: 0.1, id: id))
                     centerI = kffs.count
                 }
             } else {
                 centerI = kffs.count
             }
             if let youonFf {
-                kffs.append(.init(youonFf, durSec: youonDurSec))
+                if isβ {
+                    let ff = youonFf.mid(vowelFf)
+                    kffs.append(.init(youonFf, durSec: youonDurSec * 0.5))
+                    kffs.append(.init(ff, durSec: youonDurSec * 0.5))
+                } else {
+                    kffs.append(.init(youonFf, durSec: youonDurSec))
+                }
             }
             kffs.append(.init(vowelFf, durSec: 0))
         } else {
