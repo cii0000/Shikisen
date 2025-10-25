@@ -714,39 +714,6 @@ extension Spectlope {
     var formantCount: Int {
         sprols.count / 4
     }
-    
-    func baseColor(lightness: Double = 85) -> Color {
-        guard self != .init(), !sprols.isEmpty else { return .background }
-        let minV = sprols.min { $0.volm < $1.volm }!
-        let maxV = sprols.max { $0.volm < $1.volm }!
-        let t = maxV.volm == 0 ? 0 : (maxV.volm - minV.volm) / maxV.volm
-        let chroma = Double.linear(0, 60, t: t)
-        let maxPitch = maxV.pitch
-        let greenaPitch = Score.doubleMinPitch,
-            bluePitch = 12.0 * 2, purplePitch = 12.0 * 4, redPitch = 12.0 * 6, orangePitch = 12.0 * 8,
-            yellowPitch = Score.doubleMaxPitch
-        return if maxPitch < bluePitch {
-            .init(lightness: lightness, nearestChroma: chroma,
-                  hue: maxPitch.clipped(min: greenaPitch, max: bluePitch,
-                                        newMin: .pi2 * 0.625, newMax: .pi2 * 0.75))
-        } else if maxPitch < purplePitch {
-            .init(lightness: lightness, nearestChroma: chroma,
-                  hue: maxPitch.clipped(min: bluePitch, max: purplePitch,
-                                        newMin: .pi2 * 0.75, newMax: .pi2 * 0.875))
-        } else if maxPitch < redPitch {
-            .init(lightness: lightness, nearestChroma: chroma,
-                  hue: maxPitch.clipped(min: purplePitch, max: redPitch,
-                                        newMin: -.pi2 * 0.125, newMax: 0))
-        } else if maxPitch < orangePitch {
-            .init(lightness: lightness, nearestChroma: chroma,
-                  hue: maxPitch.clipped(min: redPitch, max: orangePitch,
-                                        newMin: 0, newMax: .pi2 * 0.125))
-        } else {
-            .init(lightness: lightness, nearestChroma: chroma,
-                  hue: maxPitch.clipped(min: orangePitch, max: yellowPitch,
-                                        newMin: .pi2 * 0.125, newMax: .pi2 * 0.25))
-        }
-    }
 }
 extension Sprol: MonoInterpolatable {
     static func linear(_ f0: Self, _ f1: Self, t: Double) -> Self {
@@ -968,10 +935,6 @@ extension Tone {
     }
     var isDefault: Bool {
         spectlope == .init()
-    }
-    
-    func baseColor(lightness: Double = 85) -> Color {
-        spectlope.baseColor(lightness: lightness)
     }
 }
 extension Tone: MonoInterpolatable {
@@ -1211,8 +1174,9 @@ extension Envelope: Protobuf {
 }
 
 struct Note {
+    static let defaultF0Pitch = Rational(51), doubleDefaultF0Pitch = Double(defaultF0Pitch)
     var beatRange = 0 ..< Rational(1, 4)
-    var pitch = Rational(0)
+    var pitch = Rational(0), f0Pitch = defaultF0Pitch
     var pits = [Pit()]
     var spectlopeHeight = Sheet.spectlopeHeight
     var id = UUID()
@@ -1221,6 +1185,7 @@ extension Note: Protobuf {
     init(_ pb: PBNote) throws {
         beatRange = (try? RationalRange(pb.beatRange).value) ?? 0 ..< Rational(1, 4)
         pitch = (try? Rational(pb.pitch)) ?? 0
+        f0Pitch = (try? Rational(pb.f0Pitch)) ?? Self.defaultF0Pitch
         pits = pb.pits.compactMap { try? Pit($0) }.sorted(by: { $0.beat < $1.beat })
         if pits.isEmpty {
             pits = [Pit()]
@@ -1233,6 +1198,9 @@ extension Note: Protobuf {
         .with {
             $0.beatRange = RationalRange(value: beatRange).pb
             $0.pitch = pitch.pb
+            if f0Pitch != Self.defaultF0Pitch {
+                $0.f0Pitch = f0Pitch.pb
+            }
             $0.pits = pits.map { $0.pb }
             $0.spectlopeHeight = spectlopeHeight
             $0.id = id.pb
@@ -1409,6 +1377,9 @@ extension Note {
         }
     }
     func pitResult(atBeat beat: Double) -> PitResult {
+        pitResult(atBeat: beat, tempo: 120, from: pitbend(fromTempo: 120))
+    }
+    func pitResult(atBeat beat: Double, tempo: Double, from pitbend: Pitbend) -> PitResult {
         if pits.count == 1 || beat <= .init(pits[0].beat) {
             let pit = pits[0]
             return .init(notePitch: pitch, pitI: 0, isStraight: true,
@@ -1435,8 +1406,7 @@ extension Note {
             }
         }
         
-        let sec = beat * 60 / 120
-        let pitbend = pitbend(fromTempo: 120)
+        let sec = beat * 60 / tempo
         return .init(notePitch: pitch, pitI: nPitI, isStraight: isStraight,
                      pitch: straightPitch != nil ? .rational(straightPitch!) : .real(pitbend.pitch(atSec: sec) * 12),
                      stereo: pitbend.stereo(atSec: sec),

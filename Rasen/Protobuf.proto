@@ -231,6 +231,7 @@ message PBEnvelope {
 
 message PBNote {
     PBRational pitch = 1;
+    PBRational f0Pitch = 11;
     repeated PBPit pits = 2;
     PBRationalRange beatRange = 3;
     double spectlopeHeight = 10;

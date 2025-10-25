@@ -130,6 +130,8 @@ extension Note {
             let isNext = Phoneme.firstVowel(nextPhonemes) != Phoneme.firstVowel(currentPhonemes)
             if lyric.isEmpty { return (i, isNext) }
             
+            let baseFF = FormantFilter().with(f0Pitch: .init(f0Pitch))
+            
             let previousPhoneme: Phoneme?, previousFormantFilter: FormantFilter?, previousID: UUID?
             let previousPitch: Rational?
             if let preI = i.range.reversed().first(where: { !pits[$0].lyric.isEmpty }) {
@@ -140,7 +142,7 @@ extension Note {
                 previousPitch = pits[i - 1].pitch
             } else if i > 0 {
                 previousPhoneme = .a
-                previousFormantFilter = FormantFilter().withSelfA(to: .a)
+                previousFormantFilter = baseFF.withSelfA(to: .a)
                 previousID = .init()
                 previousPitch = pits[i - 1].pitch
             } else {
@@ -151,7 +153,7 @@ extension Note {
             }
             
             var ni = i
-            if var mora = Mora(hiragana: lyric,
+            if var mora = Mora(hiragana: lyric, baseFormantFilterA: baseFF,
                                previousPhoneme: previousPhoneme,
                                previousFormantFilter: previousFormantFilter, previousID: previousID,
                                nextPhoneme: nextPhonemes.first, previousPitch: previousPitch,
@@ -213,7 +215,9 @@ extension Note {
                                                    stereo: .init(volm: oldPit.stereo.volm,
                                                                  pan: result.stereo.pan,
                                                                  id: result.stereo.id),
-                                                   tone: .init(spectlope: ff.formantFilter.spectlope, id: ff.id),
+                                                   tone: .init(overtone: result.tone.overtone,
+                                                               spectlope: ff.formantFilter.spectlope,
+                                                               id: ff.id),
                                                    lyric: lyric),
                                       index: fi + minI))
                     if !isRemoved && !isLyric && fi == 0 {
@@ -571,6 +575,7 @@ extension Formant: MonoInterpolatable {
 }
 
 struct FormantFilter: Hashable, Codable {
+    /// f0: 4.03
     var formants: [Formant] = [.init(sdVolm: 0.5 * 0.9, sdNoise: 0,
                                      sdPitch: 9.1, sPitch: 67.8, ePitch: 74.5, edPitch: 6.3,
                                      volm: 0.9 * 0.9, noise: 0.13,
@@ -585,7 +590,7 @@ struct FormantFilter: Hashable, Codable {
                                      edVolm: 0.33, edNoise: 0.69),
                                .init(sdVolm: 0.4, sdNoise: 0.69,
                                      sdPitch: 0.5, sPitch: 99, ePitch: 100.7, edPitch: 1.2,
-                                     volm: 0.75, noise: 0.39,
+                                     volm: 0.825, noise: 0.39,
                                      edVolm: 0, edNoise: 1),
                                .init(sdVolm: 0, sdNoise: 1,
                                      sdPitch: 0.8, sPitch: 107.9, ePitch: 109.6, edPitch: 0.9,
@@ -602,6 +607,27 @@ extension FormantFilter {
     }
     var spectlope: Spectlope {
         .init(sprols: formants.flatMap { [$0.sprol0, $0.sprol1, $0.sprol2, $0.sprol3] })
+    }
+    
+    func with(f0Pitch: Double) -> Self {
+        guard f0Pitch != Note.doubleDefaultF0Pitch else {
+            return self
+        }
+        
+        var n = self
+        
+        if f0Pitch < 51 {
+            n.formants[0].pitch += f0Pitch.clipped(min: 39, max: 51, newMin: -3, newMax: 0)
+            n.formants[1].pitch += f0Pitch.clipped(min: 39, max: 51, newMin: -3, newMax: 0)
+            n.formants[2].pitch += f0Pitch.clipped(min: 39, max: 51, newMin: -1, newMax: 0)
+            n.formants[3].pitch += f0Pitch.clipped(min: 39, max: 51, newMin: -1, newMax: 0)
+        } else {
+            n.formants[0].pitch += f0Pitch.clipped(min: 51, max: 63, newMin: 0, newMax: 5)
+            n.formants[1].pitch += f0Pitch.clipped(min: 51, max: 63, newMin: 0, newMax: 5)
+            n.formants[2].pitch += f0Pitch.clipped(min: 51, max: 63, newMin: 0, newMax: 0.5)
+            n.formants[3].pitch += f0Pitch.clipped(min: 51, max: 63, newMin: 0, newMax: 0.5)
+        }
+        return n
     }
     
     var defaultFormantsString: String {
@@ -726,7 +752,7 @@ extension FormantFilter {
             n[1].formMultiplyVolm(0.75)
             n[2].sdPitch *= 0.5
             n[2].pitch += -1
-            n[3].pitch += -0.5
+            n[3].pitch += -0.25
             return n
         case .j:
             var n = withSelfA(to: .i)
@@ -776,7 +802,7 @@ extension FormantFilter {
             n[1].edPitch *= 0.8
             n[1].dPitch *= 0.5
             n[2].pitch += 1
-            n[3].pitch += 0.5
+            n[3].pitch += 0.25
             return n
         case .o:
             var n = self
@@ -786,7 +812,7 @@ extension FormantFilter {
             n[1].formMultiplyVolm(0.75)
             n.formMultiplyEsVolm(0.67, at: 1)
             n[2].pitch += 1
-            n[3].pitch += 0.5
+            n[3].pitch += 0.25
             return n
         case .ã, .ĩ, .ɯ̃, .ẽ, .õ:
             let nPhoneme: Phoneme = switch phoneme {
@@ -1362,14 +1388,16 @@ struct KeyFormantFilter: Hashable, Codable {
 struct Mora: Hashable, Codable {
     var keyFormantFilters: [KeyFormantFilter]
     
-    init?(hiragana: String, previousPhoneme: Phoneme?, previousFormantFilter: FormantFilter?, previousID: UUID?, nextPhoneme: Phoneme?, previousPitch: Rational?, pitch: Rational) {
+    init?(hiragana: String, baseFormantFilterA: FormantFilter,
+          previousPhoneme: Phoneme?, previousFormantFilter: FormantFilter?, previousID: UUID?,
+          nextPhoneme: Phoneme?, previousPitch: Rational?, pitch: Rational) {
         var phonemes = Phoneme.phonemes(fromHiragana: hiragana, nextPhoneme: nextPhoneme)
         guard !phonemes.isEmpty else { return nil }
         
         let baseFf: FormantFilter = if let previousPhoneme, let previousFormantFilter {
             previousFormantFilter.toA(from: previousPhoneme)
         } else {
-            .init()
+            baseFormantFilterA
         }
         
         let vowel: Phoneme

@@ -1149,6 +1149,15 @@ struct PBNote: Sendable {
   /// Clears the value of `pitch`. Subsequent reads from it will return its default value.
   mutating func clearPitch() {self._pitch = nil}
 
+  var f0Pitch: PBRational {
+    get {return _f0Pitch ?? PBRational()}
+    set {_f0Pitch = newValue}
+  }
+  /// Returns true if `f0Pitch` has been explicitly set.
+  var hasF0Pitch: Bool {return self._f0Pitch != nil}
+  /// Clears the value of `f0Pitch`. Subsequent reads from it will return its default value.
+  mutating func clearF0Pitch() {self._f0Pitch = nil}
+
   var pits: [PBPit] = []
 
   var beatRange: PBRationalRange {
@@ -1176,6 +1185,7 @@ struct PBNote: Sendable {
   init() {}
 
   fileprivate var _pitch: PBRational? = nil
+  fileprivate var _f0Pitch: PBRational? = nil
   fileprivate var _beatRange: PBRationalRange? = nil
   fileprivate var _id: PBUUID? = nil
 }
@@ -5232,6 +5242,7 @@ extension PBNote: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
   static let protoMessageName: String = "PBNote"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "pitch"),
+    11: .same(proto: "f0Pitch"),
     2: .same(proto: "pits"),
     3: .same(proto: "beatRange"),
     10: .same(proto: "spectlopeHeight"),
@@ -5249,6 +5260,7 @@ extension PBNote: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
       case 3: try { try decoder.decodeSingularMessageField(value: &self._beatRange) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._id) }()
       case 10: try { try decoder.decodeSingularDoubleField(value: &self.spectlopeHeight) }()
+      case 11: try { try decoder.decodeSingularMessageField(value: &self._f0Pitch) }()
       default: break
       }
     }
@@ -5274,11 +5286,15 @@ extension PBNote: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
     if self.spectlopeHeight.bitPattern != 0 {
       try visitor.visitSingularDoubleField(value: self.spectlopeHeight, fieldNumber: 10)
     }
+    try { if let v = self._f0Pitch {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBNote, rhs: PBNote) -> Bool {
     if lhs._pitch != rhs._pitch {return false}
+    if lhs._f0Pitch != rhs._f0Pitch {return false}
     if lhs.pits != rhs.pits {return false}
     if lhs._beatRange != rhs._beatRange {return false}
     if lhs.spectlopeHeight != rhs.spectlopeHeight {return false}

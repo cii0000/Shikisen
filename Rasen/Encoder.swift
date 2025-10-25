@@ -329,12 +329,12 @@ final class Movie {
     
     func writeAudio(from seq: Sequencer,
                     headroomAmp: Double = Audio.headroomAmp,
-                    enabledUseWaveclip: Bool = true,
+                    waveclip: Waveclip? = .default,
                     isCompress: Bool = true,
                     progressHandler: (Double, inout Bool) -> ()) throws {
         guard let buffer = try seq.buffer(sampleRate: sampleRate,
                                           headroomAmp: headroomAmp,
-                                          enabledUseWaveclip: enabledUseWaveclip,
+                                          waveclip: waveclip,
                                           isCompress: isCompress,
                                           progressHandler: progressHandler) else { return }
         guard let cmBuffer = buffer.cmSampleBuffer else { return }

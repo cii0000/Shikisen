@@ -1383,7 +1383,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             sequencer?.beginPause()
             audioPauseTask = Task { @MainActor in
                 try Task.checkCancellation()
-                try await Task.sleep(sec: Waveclip.releaseSec + 0.01)
+                try await Task.sleep(sec: Waveclip.default.releaseSec + 0.01)
                 try Task.checkCancellation()
                 sequencer?.pause()
             }
@@ -1974,7 +1974,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 sequencer?.beginPause()
                 audioPauseTask = Task { @MainActor in
                     try Task.checkCancellation()
-                    try await Task.sleep(sec: Waveclip.releaseSec + 0.01)
+                    try await Task.sleep(sec: Waveclip.default.releaseSec + 0.01)
                     try Task.checkCancellation()
                     sequencer?.pause()
                 }
@@ -2376,7 +2376,7 @@ final class SheetView: BindableView, @unchecked Sendable {
               otherTimelineIDs: Set<UUID> = []) {
         if isPlaying {
             isPlaying = false
-            Sleep.start(atTime: Waveclip.releaseSec + 0.01)
+            Sleep.start(atTime: Waveclip.default.releaseSec + 0.01)
         }
         if let sec {
             firstSec = sec

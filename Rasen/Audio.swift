@@ -122,7 +122,7 @@ final class NotePlayer {
                                         overtone: note.tone.overtone,
                                         spectlope: note.tone.spectlope),
                          secRange: -.infinity ..< .infinity,
-                         reverb: .init())
+                         reverb: .init(), waveclip: .default)
         }
         rendnotes.forEach { noteIDs.insert($0.id) }
         
@@ -145,7 +145,7 @@ final class NotePlayer {
         
         isPlaying = false
         
-        timer.start(afterTime: max(NotePlayer.stopEngineSec, Waveclip.releaseSec),
+        timer.start(afterTime: max(NotePlayer.stopEngineSec, Waveclip.default.releaseSec),
                     dispatchQueue: .main) {
         } waitClosure: {
         } cancelClosure: {
@@ -412,12 +412,12 @@ final class PCMNoder: ObjectHashable {
                         
                         let sec = Double(i) * rSampleRate
                         let amp = enabledWaveclip ?
-                        Waveclip.amp(atSec: sec,
-                                     attackStartSec: loopedContentStartSec,
-                                     releaseStartSec: loopedContentEndSec - Waveclip.releaseSec) : 1
+                        Waveclip.default.scale(atSec: sec,
+                                             attackStartSec: loopedContentStartSec,
+                                             releaseStartSec: loopedContentEndSec - Waveclip.default.releaseSec) : 1
                         
-                        let playingWaveclipAmp = Waveclip
-                            .amp(atSec: Double(ni + frameStartI) * rSampleRate,
+                        let playingWaveclipAmp = Waveclip.default
+                            .scale(atSec: Double(ni + frameStartI) * rSampleRate,
                                  attackStartSec: playingAttackStartSec, releaseStartSec: playingReleaseStartSec)
                         
                         nFrames[ni] = oFrames[oi * pcmBuffer.stride] * Float(amp * playingWaveclipAmp)
@@ -739,13 +739,13 @@ final class ScoreNoder: ObjectHashable {
                 let sec = Double(i) * rSampleRate
                 
                 let waveclipAmp = isPremultipliedEnvelope ?
-                1 : Waveclip.amp(atSec: sec, attackStartSec: startSec, releaseStartSec: releaseSec)
+                1 : Waveclip.default.scale(atSec: sec, attackStartSec: startSec, releaseStartSec: releaseSec)
                 
-                let allWaveclipAmp = Waveclip
-                    .amp(atSec: sec, attackStartSec: allAttackStartSec, releaseStartSec: allReleaseStartSec)
+                let allWaveclipAmp = Waveclip.default
+                    .scale(atSec: sec, attackStartSec: allAttackStartSec, releaseStartSec: allReleaseStartSec)
                 
-                let playingWaveclipAmp = Waveclip
-                    .amp(atSec: Double(ui) * rSampleRate,
+                let playingWaveclipAmp = Waveclip.default
+                    .scale(atSec: Double(ui) * rSampleRate,
                          attackStartSec: playingAttackStartSec, releaseStartSec: playingReleaseStartSec)
                 
                 let amp = waveclipAmp * allWaveclipAmp * playingWaveclipAmp
@@ -850,7 +850,7 @@ final class ScoreNoder: ObjectHashable {
                     let isFirstCross = loopedNoteRange.lowerBound < 0
                     let isLastCross = loopedNoteRange.upperBound > maxCount
                     let allAttackStartSec = type == .normal && isFirstCross ? 0.0 : nil
-                    let allReleaseStartSec = type == .normal && isLastCross ? seqDurSec - Waveclip.releaseSec : nil
+                    let allReleaseStartSec = type == .normal && isLastCross ? seqDurSec - Waveclip.default.releaseSec : nil
                     
                     let noteRange = loopedNoteRange + loopStartI
                     
@@ -1004,7 +1004,8 @@ final class Sequencer {
             durSec == 0 || (scoreTrackItems.allSatisfy { $0.isEmpty } && pcmTrackItems.isEmpty)
         }
     }
-    static func sampless(from tracks: [Track], sampleRate: Double) -> [[Double]] {
+    static func sampless(from tracks: [Track], waveclip: Waveclip = .default,
+                         sampleRate: Double) -> [[Double]] {
         var allDurSec = tracks.sum { Double($0.durSec) }
         let count = Int((allDurSec * sampleRate).rounded(.up))
         
@@ -1029,7 +1030,7 @@ final class Sequencer {
             allDurSec += Double(durSec)
         }
         
-        PCMBuffer.useWaveclip(sampless: &sampless, sampleRate: sampleRate)
+        PCMBuffer.apply(waveclip, sampless: &sampless, sampleRate: sampleRate)
         
         return sampless
     }
@@ -1292,7 +1293,7 @@ extension Sequencer {
     func export(url: URL,
                 sampleRate: Double,
                 headroomAmp: Double = Audio.headroomAmp,
-                enabledUseWaveclip: Bool = true,
+                waveclip: Waveclip? = .default,
                 isCompress: Bool = true,
                 isLinearPCM: Bool,
                 progressHandler: (Double, inout Bool) -> ()) throws {
@@ -1310,20 +1311,20 @@ extension Sequencer {
     }
     func audio(sampleRate: Double,
                headroomAmp: Double = Audio.headroomAmp,
-               enabledUseWaveclip: Bool = true,
+               waveclip: Waveclip? = .default,
                isCompress: Bool = true,
                progressHandler: (Double, inout Bool) -> ()) throws -> Audio? {
         guard let buffer = try buffer(sampleRate: sampleRate,
                                       headroomAmp: headroomAmp,
-                                      enabledUseWaveclip: enabledUseWaveclip,
+                                      waveclip: waveclip,
                                       isCompress: isCompress,
                                       progressHandler: progressHandler) else { return nil }
         return Audio(pcmData: buffer.pcmData)
     }
     func buffer(sampleRate: Double,
                 headroomAmp: Double = Audio.headroomAmp,
-                enabledUseWaveclip: Bool = true,
-                limitLufs: Double? = Audio.limitLufs,
+                waveclip: Waveclip? = .default,
+                limitLufs: Double? = nil,
                 isCompress: Bool = true,
                 progressHandler: (Double, inout Bool) -> ()) throws -> AVAudioPCMBuffer? {
         let oldHeadroomAmp = clippingAudioUnit.headroomAmp
@@ -1387,8 +1388,8 @@ extension Sequencer {
         
         stop()
         
-        if enabledUseWaveclip {
-            allBuffer.useWaveclip()
+        if let waveclip {
+            allBuffer.apply(waveclip)
         }
         if let limitLufs {
             allBuffer.normalizeLoudness(limitLufs: limitLufs)
@@ -1609,43 +1610,43 @@ extension AVAudioPCMBuffer {
         }
         return false
     }
-    func useWaveclip() {
+    func apply(_ waveclip: Waveclip) {
         let rSampleRate = 1 / sampleRate
         let frameCount = frameCount
         guard frameCount > 0 else { return }
         for ci in 0 ..< channelCount {
-            let enabledAttack = abs(self[ci, 0]) > Waveclip.minAmp
-            let enabledRelease = abs(self[ci, frameCount - 1]) > Waveclip.minAmp
+            let enabledAttack = abs(self[ci, 0]) > 0.00001
+            let enabledRelease = abs(self[ci, frameCount - 1]) > 0.00001
             if enabledAttack || enabledRelease {
                 enumerated(channelIndex: ci) { i, v in
                     let aSec = Double(i) * rSampleRate
-                    if enabledAttack && aSec < Waveclip.attackSec {
-                        self[ci, i] *= Float(aSec * Waveclip.rAttackSec)
+                    if enabledAttack && aSec < waveclip.attackSec {
+                        self[ci, i] *= Float(aSec * waveclip.rAttackSec)
                     }
                     let rSec = Double(frameCount - 1 - i) * rSampleRate
-                    if enabledRelease && rSec < Waveclip.releaseSec {
-                        self[ci, i] *= Float(rSec * Waveclip.rReleaseSec)
+                    if enabledRelease && rSec < waveclip.releaseSec {
+                        self[ci, i] *= Float(rSec * waveclip.rReleaseSec)
                     }
                 }
             }
         }
     }
-    static func useWaveclip(sampless: inout [[Double]], sampleRate: Double) {
+    static func apply(_ waveclip: Waveclip, sampless: inout [[Double]], sampleRate: Double) {
         let rSampleRate = 1 / sampleRate
         let frameCount = sampless[0].count, channelCount = sampless.count
         guard frameCount > 0 else { return }
         for ci in 0 ..< channelCount {
-            let enabledAttack = abs(sampless[ci][0]) > Waveclip.minDoubleAmp
-            let enabledRelease = abs(sampless[ci][frameCount - 1]) > Waveclip.minDoubleAmp
+            let enabledAttack = abs(sampless[ci][0]) > 0.00001
+            let enabledRelease = abs(sampless[ci][frameCount - 1]) > 0.00001
             if enabledAttack || enabledRelease {
                 for i in 0 ..< frameCount {
                     let aSec = Double(i) * rSampleRate
-                    if enabledAttack && aSec < Waveclip.attackSec {
-                        sampless[ci][i] *= aSec * Waveclip.rAttackSec
+                    if enabledAttack && aSec < waveclip.attackSec {
+                        sampless[ci][i] *= aSec * waveclip.rAttackSec
                     }
                     let rSec = Double(frameCount - 1 - i) * rSampleRate
-                    if enabledRelease && rSec < Waveclip.releaseSec {
-                        sampless[ci][i] *= rSec * Waveclip.rReleaseSec
+                    if enabledRelease && rSec < waveclip.releaseSec {
+                        sampless[ci][i] *= rSec * waveclip.rReleaseSec
                     }
                 }
             }
@@ -2029,7 +2030,7 @@ final class ClippingAudioUnit: AUAudioUnit {
                 
                 for ci in 0 ..< outputBLP.count {
                     let outputFrames = outputBLP[ci].mData!.assumingMemoryBound(to: Float.self)
-                    if abs(outputFrames[0]) > Waveclip.minAmp {
+                    if abs(outputFrames[0]) > 0.00001 {
                         for i in 0 ..< Int(frameCount) {
                             outputFrames[i] *= .init(i) / .init(frameCount)
                         }

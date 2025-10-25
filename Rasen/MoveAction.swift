@@ -541,7 +541,7 @@ final class MoveScoreAction: DragEventAction {
         case keyBeats, allBeat, endBeat, loopDurBeat, isShownSpectrogram, scale,
              startNoteBeat, endNoteBeat, note,
              pit, strightPit,
-             even, sprol, spectlopeHeight
+             even, sprol, spectlopeHeight, f0
     }
     
     private let editableInterval = 5.0
@@ -558,7 +558,7 @@ final class MoveScoreAction: DragEventAction {
                 beganDeltaNoteBeat = Rational(),
                 oldPitch: Rational?, oldBeat: Rational?, octaveNode: Node?,
                 minScorePitch = Rational(0), maxScorePitch = Rational(0)
-    private var beganStartBeat = Rational(0), beganPitch = Rational(0),  beganBeatX = 0.0, beganPitchY = 0.0
+    private var beganStartBeat = Rational(0), beganPitch = Rational(0),  beganBeatX = 0.0, beganPitchY = 0.0, beganF0Pitch = Rational(0)
     private var beganTone = Tone(), beganOvertone = Overtone(), beganEnvelope = Envelope()
     private var sprolI: Int?, beganSprol = Sprol()
     private var beganScoreOption: ScoreOption?
@@ -914,6 +914,23 @@ final class MoveScoreAction: DragEventAction {
                             rootView.selections = []
                         }
                         beganNotes[noteI] = score.notes[noteI]
+                        
+                    case .f0:
+                        type = .f0
+                        
+                        self.noteI = noteI
+                        
+                        beganNotes[noteI] = score.notes[noteI]
+                        
+                        let pitchInterval = rootView.currentPitchInterval
+                        beganPitch = scoreView.pitch(atY: scoreView.convertFromWorld(p).y,
+                                                     interval: pitchInterval)
+                        
+                        beganF0Pitch = note.f0Pitch
+                        
+                        beganPitchY = scoreView.y(fromPitch: note.pitch)
+                        
+                        rootView.cursor = .circle(string: Pitch(value: note.f0Pitch).displayString())
                     case .note, .startBeat, .endBeat:
                         self.noteI = noteI
                         
@@ -1293,6 +1310,28 @@ final class MoveScoreAction: DragEventAction {
                     let isShownSpectrogram = scoreView.isShownSpectrogram(at: scoreP)
                     scoreView.isShownSpectrogram = isShownSpectrogram
                     
+                case .f0:
+                    let pitchInterval = rootView.currentPitchInterval
+                    let pitch = scoreView.pitch(atY: scoreView.convertFromWorld(p).y,
+                                                interval: pitchInterval)
+                    let dPitch = pitch - beganPitch
+                    let nPitch = (beganF0Pitch + dPitch).clipped(min: 39, max: 63)
+                    if nPitch != oldPitch {
+                        var nivs = [IndexValue<Note>](capacity: beganNotes.count)
+                        for (noteI, beganNote) in beganNotes {
+                            guard noteI < score.notes.count else { continue }
+                            
+                            var note = beganNote
+                            note.f0Pitch = nPitch
+                            
+                            nivs.append(.init(value: note, index: noteI))
+                        }
+                        scoreView.replace(nivs)
+                        
+                        oldPitch = nPitch
+                        
+                        rootView.cursor = .circle(string: Pitch(value: beganF0Pitch + dPitch).displayString())
+                    }
                 case .pit, .strightPit:
                     if let noteI, noteI < score.notes.count {
                         let beatInterval = rootView.currentBeatInterval

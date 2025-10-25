@@ -893,6 +893,14 @@ final class PastableAction: Action {
                     }
                 }
                 show(ps)
+            case .f0:
+                let note = score.notes[noteI]
+                if isSendPasteboard {
+                    Pasteboard.shared.copiedObjects = [.normalizationRationalValue(note.f0Pitch)]
+                }
+                let x = scoreView.x(atBeat: note.beatRange.start)
+                show([.init(x, scoreView.y(fromPitch: note.firstPitch) - 10),
+                      .init(x, scoreView.y(fromPitch: note.f0Pitch))])
             case .lyric:
                 break
             case .even(let pitI):
@@ -1391,6 +1399,20 @@ final class PastableAction: Action {
                 sheetView.removeNote(at: noteI)
                 
                 sheetView.updatePlaying()
+                return true
+                
+            case .f0:
+                var note = score.notes[noteI]
+                Pasteboard.shared.copiedObjects = [.normalizationRationalValue(note.f0Pitch)]
+                
+                if note.f0Pitch != Note.defaultF0Pitch {
+                    note.f0Pitch = Note.defaultF0Pitch
+                    
+                    sheetView.newUndoGroup()
+                    sheetView.replace(note, at: noteI)
+                    
+                    sheetView.updatePlaying()
+                }
                 return true
                 
             case .lyric:
@@ -2861,8 +2883,31 @@ final class PastableAction: Action {
             }
         case .normalizationValue:
             break
-        case .normalizationRationalValue:
-            break
+        case .normalizationRationalValue(let v):
+            guard let sheetView = rootView.sheetView(at: shp) else { return }
+            if sheetView.model.score.enabled {
+                let scoreView = sheetView.scoreView
+                if let (noteI, result) = scoreView
+                    .hitTestPoint(scoreView.convertFromWorld(p),
+                                  scale: rootView.screenToWorldScale) {
+                    switch result {
+                    case .f0:
+                        let f0Pitch = v.clipped(Score.pitchRange)
+                        
+                        var note = scoreView.model.notes[noteI]
+                        if f0Pitch != note.f0Pitch {
+                            note.f0Pitch = f0Pitch
+                            
+                            sheetView.newUndoGroup()
+                            sheetView.replace(note, at: noteI)
+                            
+                            sheetView.updatePlaying()
+                        }
+                        
+                    default: break
+                    }
+                }
+            }
         case .notesValue(_):
             octaveNode?.removeFromParent()
             octaveNode = nil
@@ -3556,7 +3601,7 @@ final class CopyLineColorAction: InputKeyEventAction {
                             scoreView.pitPosition(atPit: $0.offset, from: note) : nil
                         }
                     }
-                    show(ps, color: tone.baseColor())
+                    show(ps, color: .background)
                 }
             }
         }

@@ -104,33 +104,76 @@ extension vDSP {
 }
 
 struct Waveclip {
-    static let minAmp: Float = 0.00001, minDoubleAmp = 0.00001
-    static let attackSec = 0.015625, releaseSec = 0.015625
-    static let rAttackSec = 1 / attackSec, rReleaseSec = 1 / releaseSec
+    static let `default` = Self.init()
+    static let small = Self.init(attackSec: 0, releaseSec: 0.015625 / 4)
+    
+    var attackSec: Double {
+        didSet {
+            rAttackSec = attackSec == 0 ? 0 : (1 / attackSec)
+        }
+    }
+    var releaseSec: Double {
+        didSet {
+            rReleaseSec = releaseSec == 0 ? 0 : (1 / releaseSec)
+        }
+    }
+    
+    private(set) var rAttackSec, rReleaseSec: Double
+    
+    init(attackSec: Double = 0.015625, releaseSec: Double = 0.015625) {
+        self.attackSec = attackSec
+        self.releaseSec = releaseSec
+        self.rAttackSec = attackSec == 0 ? 0 : (1 / attackSec)
+        self.rReleaseSec = releaseSec == 0 ? 0 : (1 / releaseSec)
+    }
 }
 extension Waveclip {
-    static func amp(atSec sec: Double, attackStartSec: Double?, releaseStartSec: Double?) -> Double {
+    func scale(atSec sec: Double, attackStartSec: Double?, releaseStartSec: Double?) -> Double {
         guard attackStartSec != nil || releaseStartSec != nil else { return 1 }
-        let aAmp: Double
+        let aScale: Double
         if let attackStartSec {
-            if sec <= attackStartSec {
+            if sec < attackStartSec {
                 return 0
             }
             let nSec = sec - attackStartSec
-            aAmp = nSec < attackSec ? nSec * rAttackSec : 1
+            aScale = nSec < attackSec ? nSec * rAttackSec : 1
         } else {
-            aAmp = 1
+            aScale = 1
         }
         
         if let releaseStartSec, sec >= releaseStartSec {
             let nSec = sec - releaseStartSec
             return if releaseSec > 0 && nSec < releaseSec {
-                .linear(aAmp, 0, t: nSec * rReleaseSec)
+                aScale * (1 - nSec * rReleaseSec)
             } else {
                 0
             }
         } else {
-            return aAmp
+            return aScale
+        }
+    }
+    func scaleWithCrossfade(atSec sec: Double, attackStartSec: Double?, releaseStartSec: Double?) -> Double {
+        guard attackStartSec != nil || releaseStartSec != nil else { return 1 }
+        let aScale: Double
+        if let attackStartSec {
+            if sec < attackStartSec {
+                return 0
+            }
+            let nSec = sec - attackStartSec
+            aScale = nSec < attackSec ? .sin(.pi / 2 * nSec * rAttackSec) : 1
+        } else {
+            aScale = 1
+        }
+        
+        if let releaseStartSec, sec >= releaseStartSec {
+            let nSec = sec - releaseStartSec
+            return if releaseSec > 0 && nSec < releaseSec {
+                .cos(.pi / 2 * nSec * rReleaseSec)
+            } else {
+                0
+            }
+        } else {
+            return aScale
         }
     }
 }
@@ -151,7 +194,7 @@ struct EnvelopeMemo: Hashable, Codable {
     }
 }
 extension EnvelopeMemo {
-    func amp(atSec sec: Double, attackStartSec: Double?, releaseStartSec: Double?) -> Double {
+    func scale(atSec sec: Double, attackStartSec: Double?, releaseStartSec: Double?) -> Double {
         guard attackStartSec != nil || releaseStartSec != nil else { return 1 }
         let aAmp: Double
         if let attackStartSec {
@@ -332,6 +375,7 @@ struct Rendnote {
     var pitbend: Pitbend
     var secRange: Range<Double>
     var reverb: Reverb
+    var waveclip: Waveclip
     var isStereoNoise = true
     var isRelease = false
     let id = UUID()
@@ -350,7 +394,8 @@ extension Rendnote {
                   noiseSeed0: seed0, noiseSeed1: seed1,
                   pitbend: pitbend,
                   secRange: sSec ..< eSec,
-                  reverb: .init())
+                  reverb: .init(),
+                  waveclip: note.isOneOvertone && eSec - sSec < Waveclip.default.attackSec ? .small : .default)
     }
     
     var isStft: Bool {
@@ -360,7 +405,7 @@ extension Rendnote {
         secRange.length.isInfinite
     }
     var rendableDurSec: Double {
-        min(isLoop ? firstFq.rounded(.up) / firstFq : secRange.length + Waveclip.releaseSec,
+        min(isLoop ? firstFq.rounded(.up) / firstFq : secRange.length + waveclip.releaseSec,
             1000)
     }
     
@@ -370,14 +415,14 @@ extension Rendnote {
             let rendableDurSec = min(firstFq.rounded(.up) / firstFq, 1000)
             return max(1, Int((rendableDurSec * sampleRate).rounded(.down)))
         }
-        let rendableDurSec = min(secRange.length + Waveclip.releaseSec, 1000)
+        let rendableDurSec = min(secRange.length + waveclip.releaseSec, 1000)
         let sampleCount = max(1, Int((rendableDurSec * sampleRate).rounded(.up)))
         return (isStereoNoise && pitbend.isFullNoise) || reverb.isEmpty ?
         sampleCount :
         sampleCount + reverb.count(sampleRate: sampleRate) - 1
     }
     func releaseCount(sampleRate: Double) -> Int {
-        let rendableDurSec = min(Waveclip.releaseSec, 1000)
+        let rendableDurSec = min(waveclip.releaseSec, 1000)
         let sampleCount = max(1, Int((rendableDurSec * sampleRate).rounded(.up)))
         return (isStereoNoise && pitbend.isFullNoise) || reverb.isEmpty ?
         sampleCount : sampleCount + reverb.count(sampleRate: sampleRate) - 1
@@ -399,11 +444,11 @@ extension Rendnote {
                 let rSampleRate = 1 / sampleRate
                 let sampleCount = samples.count
                 let attackStartSec = !pitbend.firstStereo.isEmpty && !pitbend.firstSpectlope.isEmptyVolm ? 0.0 : nil
-                let releaseStartSec = Double(sampleCount - 1) * rSampleRate - Waveclip.releaseSec
+                let releaseStartSec = Double(sampleCount - 1) * rSampleRate - waveclip.releaseSec
                 for i in 0 ..< sampleCount {
-                    samples[i] *= Waveclip.amp(atSec: Double(i) * rSampleRate,
-                                               attackStartSec: attackStartSec,
-                                               releaseStartSec: releaseStartSec)
+                    samples[i] *= waveclip.scale(atSec: Double(i) * rSampleRate,
+                                                 attackStartSec: attackStartSec,
+                                                 releaseStartSec: releaseStartSec)
                 }
             }
             return samples
