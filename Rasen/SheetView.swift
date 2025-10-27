@@ -1796,8 +1796,7 @@ final class SheetView: BindableView, @unchecked Sendable {
     
     private var playingTimer: (any DispatchSourceTimer)?,
                 playingOldKeyframeIndex: Int?
-    private var playingCaptions = [Caption](),
-                playingCaption: Caption?, playingCaptionNodes = [Node]()
+    private var playingCaptions = [Caption](), playingCaptionNodes = [Node]()
     private var playingSheetIndex = 0
     var previousSheetViews = [WeakElement<SheetView>]()
     var nextSheetViews = [WeakElement<SheetView>]()
@@ -1827,8 +1826,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         animationView.isPlaying = isPlaying
         animationView.previousNextNode.isHidden = isPlaying
         if isPlaying {
-            let playingSec = firstSec
-            ?? model.animation.sec(fromBeat: model.animation.mainBeat)
+            let playingSec = firstSec ?? model.animation.sec(fromBeat: model.animation.mainBeat)
             self.playingSec = playingSec
             
             playingOldKeyframeIndex = nil
@@ -1837,25 +1835,10 @@ final class SheetView: BindableView, @unchecked Sendable {
             bottomNodes = bottomSheetViews.count.range.map { _ in Node() }
             centerNode = nil
             topNodes = topSheetViews.count.range.map { _ in Node() }
-            
             playingSheetIndex = 0
-            playingCaption = nil
+            playingCaptions = []
             
-            let beat = firstSec != nil ?
-            model.animation.beat(fromSec: firstSec!) :
-            model.animation.mainBeat
-            
-            let caption = model.caption(atBeat: beat)
-            playingCaption = caption
-            if let caption = caption {
-                let nodes = caption.nodes(in: model.mainFrame ?? bounds)
-                playingCaptionNodes = nodes
-                animationView.captionNode.children = nodes
-            } else {
-                playingCaptionNodes = []
-                animationView.captionNode.children = []
-            }
-            
+            updateCaption()
             setupTimeNodes(isVolume: true)
             
             var seqTracks = [Sequencer.Track]()
@@ -1883,9 +1866,8 @@ final class SheetView: BindableView, @unchecked Sendable {
                 musicBackgroundNode = Node(path: .init(bounds), fillType: .color(.subRemoving))
             }
             
-            let mainSec = model.animation.sec(fromBeat: beat)
-            deltaSec += mainSec
-            willPlaySec = mainSec
+            deltaSec += playingSec
+            willPlaySec = playingSec
             
             for weakElement in nextSheetViews {
                 guard let sheetView = weakElement.element else { continue }
@@ -1952,7 +1934,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             updateWithKeyframeIndex()
             
             animationView.captionNode.children = []
-            playingCaption = nil
+            playingCaptions = []
             playingCaptionNodes = []
             
             playingSecRange = nil
@@ -1992,7 +1974,8 @@ final class SheetView: BindableView, @unchecked Sendable {
             
             if !sheetView.bottomSheetViews.isEmpty {
                 for (si, bottomSheetViewE) in sheetView.bottomSheetViews.enumerated() {
-                    guard let bottomSheetView = bottomSheetViewE.element else { continue }
+                    guard let bottomSheetView = bottomSheetViewE.element,
+                          bottomSheetView.model.enabledAnimation else { continue }
                     let i = bottomSheetView.model.animation.indexInBeatRange(atSec: playingSec)
                     if let i {
                         if bottomSheetView.playingOldKeyframeIndex != i {
@@ -2029,7 +2012,8 @@ final class SheetView: BindableView, @unchecked Sendable {
             
             if !sheetView.topSheetViews.isEmpty {
                 for (si, topSheetViewE) in sheetView.topSheetViews.enumerated() {
-                    guard let topSheetView = topSheetViewE.element else { continue }
+                    guard let topSheetView = topSheetViewE.element,
+                          topSheetView.model.enabledAnimation else { continue }
                     let i = topSheetView.model.animation.indexInBeatRange(atSec: playingSec)
                     if let i {
                         if topSheetView.playingOldKeyframeIndex != i {
@@ -2057,22 +2041,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 animationView.node.children = children
             }
             
-            let playingBeat = sheetView.model.animation.beat(fromSec: playingSec)
-            let caption = sheetView.model.caption(atBeat: playingBeat)
-            if caption != playingCaption {
-                playingCaption = caption
-                if let caption = caption {
-                    let nodes = caption.nodes(in: sheetView.model.mainFrame ?? sheetView.bounds)
-                    playingCaptionNodes = nodes
-                    animationView.captionNode.children = nodes
-                } else {
-                    playingCaptionNodes = []
-                    animationView.captionNode.children = playingCaptionNodes
-                }
-            } else {
-                animationView.captionNode.children = playingCaptionNodes
-            }
-            
+            updateCaption()
             updateTimeNodes()
             
             sheetView.contentsView.elementViews.forEach {
@@ -2407,23 +2376,25 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func updateCaption() {
-        guard isPlaying else { return }
-        
-        guard let playingSec else { return }
+        guard isPlaying, let playingSec else { return }
         
         let sheetView = playingSheetView
-        let playingBeat = sheetView.model.animation
-            .beat(fromSec: Double(playingSec), beatRate: 60)
-        
-        let caption = model.caption(atBeat: playingBeat)
-        playingCaption = caption
-        if let caption = caption {
-            let nodes = caption.nodes(in: model.mainFrame ?? bounds)
-            playingCaptionNodes = nodes
-            animationView.captionNode.children = nodes
+        let captions = sheetView.model.captions(atSec: playingSec)
+        + sheetView.bottomSheetViews.flatMap { $0.element?.model.captions(atSec: playingSec) ?? [] }
+        + sheetView.topSheetViews.flatMap { $0.element?.model.captions(atSec: playingSec) ?? [] }
+        if captions != playingCaptions {
+            playingCaptions = captions
+            if !captions.isEmpty {
+                let nodes = Caption.nodes(in: sheetView.model.mainFrame ?? sheetView.bounds,
+                                          from: captions)
+                playingCaptionNodes = nodes
+                animationView.captionNode.children = nodes
+            } else {
+                playingCaptionNodes = []
+                animationView.captionNode.children = playingCaptionNodes
+            }
         } else {
-            playingCaptionNodes = []
-            animationView.captionNode.children = []
+            animationView.captionNode.children = playingCaptionNodes
         }
     }
     

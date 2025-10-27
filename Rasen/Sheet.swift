@@ -2452,18 +2452,17 @@ extension Sheet {
              in: bounds)
     }
     func node(isBorder: Bool, atSec sec: Rational,
-              renderingCaptionFrame: Rect? = nil,
+              enabledCaption: Bool, renderingCaptionFrame: Rect? = nil,
               isBackground: Bool = true,
               attitude: Attitude = .init(),
               in bounds: Rect) -> CPUNode {
         let rootBeat = animation.beat(fromSec: sec)
         
-        let captionNodes: [CPUNode]
-        if let renderingCaptionFrame = renderingCaptionFrame,
-           let caption = captions.first(where: { $0.beatRange.contains(rootBeat) }) {
-            captionNodes = caption.cpuNodes(in: renderingCaptionFrame)
+        let captionNodes: [CPUNode] = if enabledCaption {
+            Caption.cpuNodes(in: renderingCaptionFrame ?? bounds,
+                             from: captions(atSec: sec))
         } else {
-            captionNodes = []
+            []
         }
         
         let k = animation.keyframe(atRootBeat: rootBeat)
@@ -2588,8 +2587,8 @@ extension Sheet {
             $0.beatRange.start < $1.beatRange.start
         }
     }
-    func caption(atBeat beat: Rational) -> Caption? {
-        Caption.caption(atBeat: beat, in: captions)
+    func captions(atSec sec: Rational) -> [Caption] {
+        Caption.captions(atSec: sec, in: captions)
     }
     
     var allEndBeat: Rational {
@@ -2633,12 +2632,11 @@ extension Sheet {
                                          with sb: Rect) -> [Double] {
         switch orientation {
         case .horizontal:
-             [104, sb.height - 104,
-              (1 * sb.height / 4).rounded(),
+             [(1 * sb.height / 4).rounded(),
               (2 * sb.height / 4).rounded(),
               (3 * sb.height / 4).rounded()].sorted()
         case .vertical:
-             [104, sb.width - 104,
+             [40, sb.width - 40,
               (1 * sb.width / 4).rounded(),
               (2 * sb.width / 4).rounded(),
               (3 * sb.width / 4).rounded()].sorted()

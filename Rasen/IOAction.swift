@@ -1124,6 +1124,7 @@ final class IOAction: Action {
                         var sec = Rational(0)
                         for (i, _) in sheet.animation.keyframes.enumerated() {
                             let node = sheet.node(isBorder: false, atSec: sec,
+                                                  enabledCaption: false,
                                                   attitude: .init(position: rendering.mainItem.frame.origin),
                                                   in: rendering.bounds)
                             let durBeat = sheet.animation.rendableKeyframeDurBeat(at: i)
@@ -1239,27 +1240,34 @@ final class IOAction: Action {
                             //tempo -> startTime
                             let node: CPUNode
                             if !bottomSheets.isEmpty || !topSheets.isEmpty {
-                                var children = [CPUNode]()
+                                var children = [CPUNode](), captions = [Caption]()
                                 for (bottomSheet, sheetBounds) in bottomSheets.reversed() {
+                                    captions += bottomSheet.captions(atSec: sec)
+                                    guard bottomSheet.enabledAnimation else { continue }
                                     children.append(bottomSheet.node(isBorder: false, atSec: sec,
-                                                                     renderingCaptionFrame: b,
+                                                                     enabledCaption: false,
                                                                      isBackground: false,
                                                                      in: sheetBounds))
                                 }
+                                captions += sheet.captions(atSec: sec)
                                 children.append(sheet.node(isBorder: false, atSec: sec,
-                                                           renderingCaptionFrame: b,
+                                                           enabledCaption: false,
                                                            isBackground: false,
                                                            in: sheetBounds))
                                 for (topSheet, sheetBounds) in topSheets {
+                                    captions += topSheet.captions(atSec: sec)
+                                    guard topSheet.enabledAnimation else { continue }
                                     children.append(topSheet.node(isBorder: false, atSec: sec,
-                                                                  renderingCaptionFrame: b,
+                                                                  enabledCaption: false,
                                                                   isBackground: false,
                                                                   in: sheetBounds))
                                 }
-                                node = CPUNode(children: children, attitude: .init(position: origin),
+                                let captionNodes = Caption.cpuNodes(in: b, from: captions)
+                                node = CPUNode(children: children + captionNodes, attitude: .init(position: origin),
                                                path: Path(sheetBounds))
                             } else {
                                 node = sheet.node(isBorder: false, atSec: sec,
+                                                  enabledCaption: true,
                                                   renderingCaptionFrame: b,
                                                   attitude: .init(position: origin),
                                                   in: sheetBounds)

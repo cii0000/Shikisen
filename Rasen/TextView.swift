@@ -251,9 +251,9 @@ extension TextView {
         let secRange = timeOption.secRange
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
             let sec = Rational(sec)
-            guard secRange.contains(sec) else { continue }
             let secX = x(atSec: sec)
-            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH / 2,
+            let lw = sec == 1 ? knobW : lw
+            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
                                                width: lw, height: rulerH)))
         }
         

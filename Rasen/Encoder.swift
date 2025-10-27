@@ -81,6 +81,16 @@ extension Caption {
             return (path, tp)
         }
     }
+    static func cpuNodes(withFontSize fontSize: Double = defaultFontSize,
+                         in bounds: Rect, padding: Double = defaultPadding,
+                         outlineWidth: Double = defaultOutlineWidth,
+                         from captions: [Caption]) -> [CPUNode] {
+        captions
+            .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
+            .enumerated().flatMap { $0.element.cpuNodes(withFontSize: fontSize, in: bounds,
+                                                        padding: padding * .init($0.offset * 3 + 1),
+                                                        outlineWidth: outlineWidth) }
+    }
     func cpuNodes(withFontSize fontSize: Double = defaultFontSize,
                   in bounds: Rect, padding: Double = defaultPadding,
                   outlineWidth: Double = defaultOutlineWidth) -> [CPUNode] {
@@ -98,6 +108,16 @@ extension Caption {
                     .init(attitude: .init(position: tp), path: path,
                           fillType: .color(.background))]
         }
+    }
+    static func nodes(withFontSize fontSize: Double = defaultFontSize,
+                      in bounds: Rect, padding: Double = defaultPadding,
+                      outlineWidth: Double = defaultOutlineWidth,
+                      from captions: [Caption]) -> [Node] {
+        captions
+            .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
+            .enumerated().flatMap { $0.element.nodes(withFontSize: fontSize, in: bounds,
+                                                     padding: padding * .init($0.offset * 3 + 1),
+                                                     outlineWidth: outlineWidth) }
     }
     func nodes(withFontSize fontSize: Double = defaultFontSize,
                   in bounds: Rect, padding: Double = defaultPadding,
@@ -118,13 +138,8 @@ extension Caption {
         }
     }
     
-    static func caption(atBeat time: Rational, in captions: [Caption]) -> Caption? {
-        for caption in captions {
-            if caption.beatRange.contains(time) {
-                return caption
-            }
-        }
-        return nil
+    static func captions(atSec sec: Rational, in captions: [Caption]) -> [Caption] {
+        captions.filter { $0.beatRange.contains($0.beat(fromSec: sec)) }
     }
 }
 

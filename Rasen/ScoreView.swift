@@ -443,6 +443,10 @@ extension ScoreView {
             if oldValue.beatRange != newValue.beatRange {
                 scoreTrackItem?.durSec = model.secRange.end
             }
+            
+            if oldValue.endLoopDurBeat != newValue.endLoopDurBeat {
+                scoreTrackItem?.loopDurSec = model.sec(fromBeat: model.loopDurBeat)
+            }
         }
     }
     
@@ -1782,9 +1786,12 @@ extension ScoreView {
             return .init(controls: [.init(point: .init(noteSX, noteY)),
                                     .init(point: .init(noteEX, noteY))])
         } else {
+            let pitbend = note.pitbend(fromTempo: 120)
             var beat = note.beatRange.start, ps = [Point]()
             while beat <= note.beatRange.end {
-                let noteX = x(atBeat: beat), noteY = noteY(atBeat: beat, from: note)
+                let result = note.pitResult(atBeat: .init(beat - note.beatRange.start),
+                                            tempo: 120, from: pitbend)
+                let noteX = x(atBeat: beat), noteY = noteY(from: result, from: note)
                 ps.append(Point(noteX, noteY))
                 beat += .init(1, 48)
             }
@@ -2491,6 +2498,9 @@ extension ScoreView {
         let result = note.pitResult(atBeat: .init(beat - note.beatRange.start))
         return .init(note.pitch) + result.pitch.doubleValue
     }
+    func pitch(from result: Note.PitResult, from note: Note) -> Double {
+        (.init(note.pitch) + result.pitch.doubleValue).clipped(Score.doublePitchRange)
+    }
     func stereo(atX x: Double, at noteI: Int) -> Stereo {
         let note = model.notes[noteI]
         let result = note.pitResult(atBeat: beat(atX: x) - .init(note.beatRange.start))
@@ -2600,7 +2610,8 @@ extension ScoreView {
                                                  max: Sheet.maxSpectlopeHeight,
                                                  newMin: 0, newMax: 1)
             let toneMaxY = toneMaxY(from: note)
-            let pitbend = note.pitbend(fromTempo: model.tempo)
+            let tempo = model.tempo
+            let pitbend = note.pitbend(fromTempo: tempo)
             
             var beatSet = Set<Rational>(minimumCapacity: Int(note.beatRange.length / .init(1, 72)))
             var nBeat = note.beatRange.start
@@ -2630,7 +2641,9 @@ extension ScoreView {
             var toneFrames = [(pitIs: [Int], frame: Rect)](), pitIs = [Int]()
             for (bi, nBeat) in beats.enumerated() {
                 let nx = self.x(atBeat: nBeat)
-                let psPitch = pitch(atBeat: nBeat, from: note)
+                let result = note.pitResult(atBeat: .init(nBeat - note.beatRange.start),
+                                            tempo: Double(tempo), from: pitbend)
+                let psPitch = pitch(from: result, from: note)
                 let noteY = y(fromPitch: psPitch)
                 
                 let topY = noteY
