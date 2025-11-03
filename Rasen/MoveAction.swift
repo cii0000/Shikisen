@@ -284,9 +284,9 @@ final class MoveAnimationAction: DragEventAction {
     private var node = Node()
     private var sheetView: SheetView?, animationIndex = 0, keyframeIndex = 0
     private var type = SlideType.key
-    private var beganSP = Point(), beganSheetP = Point(), beganKeyframeOptions = [Int: KeyframeOption](),
+    private var beganSP = Point(), beganSheetP = Point(), beganKeyframeOptions = [Int: KeyframeOption](), maxBeat = Rational(0),
                 beganTimelineX = 0.0, beganKeyframeX = 0.0, beganBeatX = 0.0,
-                beganKeyframeBeat = Rational(0)
+                beganKeyframeBeat = Rational(0), beganRootBeatIndex = Animation.RootBeatIndex()
     private var beganAnimationOption: AnimationOption?
     private var minLastSec = 1 / 12.0
     
@@ -314,6 +314,7 @@ final class MoveAnimationAction: DragEventAction {
                 beganSheetP = sheetP
                 beganTimelineX = sheetView.animationView
                     .x(atBeat: sheetView.animationView.model.beatRange.start)
+                beganRootBeatIndex = sheetView.animationView.model.rootBeatIndex
                 let timelineP = sheetView.animationView.timelineNode.convertFromWorld(p)
                 if sheetView.animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale) {
                     let animationView = sheetView.animationView
@@ -344,6 +345,24 @@ final class MoveAnimationAction: DragEventAction {
                         type = .previousNext
                         
                         beganAnimationOption = sheetView.model.animation.option
+                    case .startBeat:
+                        type = .startBeat
+                        
+                        beganAnimationOption = sheetView.model.animation.option
+                        beganBeatX = animationView.x(atBeat: sheetView.model.animation.beatRange.start)
+                        
+                        if sheetView.model.animation.keyframes.count >= 2 {
+                            beganKeyframeOptions = (1 ..< animationView.model.keyframes.count).reduce(into: .init()) {
+                                $0[$1] = animationView.model.keyframes[$1].option
+                            }
+                            maxBeat = animationView.model.keyframes[1].beat
+                            + sheetView.model.animation.beatRange.start
+                        } else {
+                            maxBeat = sheetView.model.animation.beatRange.end
+                        }
+                        
+                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.beatRange.start),
+                                                          isArrow: true)
                     case .endBeat:
                         type = .endBeat
                         
@@ -397,11 +416,26 @@ final class MoveAnimationAction: DragEventAction {
                     }
                 case .startBeat:
                     let interval = rootView.currentKeyframeBeatInterval
-                    let beat = animationView.beat(atX: sheetP.x,
-                                                  interval: interval) + sheetView.model.animation.beatRange.start
-                    if beat != sheetView.model.animation.beatRange.start {
+                    let beat = min(animationView.beat(atX: sheetP.x,
+                                                  interval: interval),
+                                   maxBeat)
+                    if let beganAnimationOption,
+                        beat != sheetView.model.animation.beatRange.start {
+                        
                         sheetView.binder[keyPath: sheetView.keyPath]
-                            .animation.beatRange.start = beat
+                            .animation.beatRange = beat ..< beganAnimationOption.beatRange.end
+                        sheetView.binder[keyPath: sheetView.keyPath].animation
+                            .keyframes[0].beat = 0
+                        
+                        if sheetView.model.animation.keyframes.count >= 2 {
+                            let dBeat = -(beat - beganAnimationOption.beatRange.start)
+                            beganKeyframeOptions.forEach {
+                                sheetView.binder[keyPath: sheetView.keyPath].animation
+                                    .keyframes[$0.key].beat = $0.value.beat + dBeat
+                            }
+                        }
+                        
+                        animationView.rootBeatIndex = beganRootBeatIndex
                         
                         sheetView.animationView.updateTimeline()
                         
@@ -411,8 +445,9 @@ final class MoveAnimationAction: DragEventAction {
                 case .endBeat:
                     if let beganAnimationOption {
                         let interval = rootView.currentBeatInterval
-                        let nBeat = animationView.beat(atX: beganBeatX + sheetP.x - beganSheetP.x,
-                                                       interval: interval)
+                        let nBeat = max(animationView.beat(atX: beganBeatX + sheetP.x - beganSheetP.x,
+                                                       interval: interval),
+                                        animationView.model.keyframes.last!.beat + beganAnimationOption.beatRange.start)
                         if nBeat != animationView.beatRange?.end {
                             let dBeat = nBeat - beganAnimationOption.beatRange.end
                             let startBeat = sheetView.animationView.beat(atX: Sheet.textPadding.width, interval: interval)
@@ -420,6 +455,8 @@ final class MoveAnimationAction: DragEventAction {
                             
                             animationView.beatRange?.end = nkBeat
                         }
+                        
+                        animationView.rootBeatIndex = beganRootBeatIndex
                         
                         rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.beatRange.end),
                                                           isArrow: true)
@@ -498,14 +535,7 @@ final class MoveAnimationAction: DragEventAction {
                         isNewUndoGroup = true
                     }
                 }
-                switch type {
-                case .all, .startBeat, .endBeat, .loopDurBeat, .previousNext:
-                    if let beganAnimationOption, sheetView.model.animation.option != beganAnimationOption {
-                        updateUndoGroup()
-                        sheetView.capture(option: sheetView.model.animation.option,
-                                          oldOption: beganAnimationOption)
-                    }
-                case .key:
+                func updateKeyframe() {
                     let animationView = sheetView.animationView
                     let okos = beganKeyframeOptions
                         .filter { animationView.model.keyframes[$0.key].option != $0.value }
@@ -518,6 +548,19 @@ final class MoveAnimationAction: DragEventAction {
                         updateUndoGroup()
                         sheetView.capture(kos, old: okos)
                     }
+                }
+                switch type {
+                case .all, .startBeat, .endBeat, .loopDurBeat, .previousNext:
+                    if let beganAnimationOption, sheetView.model.animation.option != beganAnimationOption {
+                        updateUndoGroup()
+                        sheetView.capture(option: sheetView.model.animation.option,
+                                          oldOption: beganAnimationOption)
+                    }
+                    if type == .startBeat {
+                        updateKeyframe()
+                    }
+                case .key:
+                    updateKeyframe()
                 case .none: break
                 }
             }

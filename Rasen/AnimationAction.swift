@@ -684,8 +684,6 @@ final class PlayAction: InputKeyEventAction {
                     
                     if cSheetView.model.enabledTimeline {
                         cSheetView.play()
-                        rootView.cursor = rootView.cursor(from: cSheetView.currentTimeString() + "...",
-                                                          isArrow: true)
                     }
                 } else {
                     let sheetP = cSheetView.convertFromWorld(p)
@@ -911,8 +909,9 @@ final class InsertKeyframeAction: InputKeyEventAction {
                     if contentView.model.timeOption == nil {
                         var content = contentView.model
                         let startBeat: Rational = sheetView.animationView.beat(atX: content.origin.x)
+                        let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                         content.timeOption = .init(beatRange: startBeat ..< (4 + startBeat),
-                                                   tempo: sheetView.nearestTempo(at: sheetP) ?? Music.defaultTempo)
+                                                   tempo: tempo)
                         
                         sheetView.newUndoGroup()
                         sheetView.replace(IndexValue(value: content, index: ci))
@@ -924,8 +923,9 @@ final class InsertKeyframeAction: InputKeyEventAction {
                     if textView.model.timeOption == nil {
                         var text = textView.model
                         let startBeat: Rational = sheetView.animationView.beat(atX: text.origin.x)
+                        let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                         text.timeOption = .init(beatRange: startBeat ..< (4 + startBeat),
-                                                tempo: sheetView.nearestTempo(at: sheetP) ?? Music.defaultTempo)
+                                                tempo: tempo)
                         
                         sheetView.newUndoGroup()
                         sheetView.replace([IndexValue(value: text, index: ti)])
@@ -1002,6 +1002,7 @@ final class InsertKeyframeAction: InputKeyEventAction {
                     sheetView.newUndoGroup(enabledKeyframeIndex: false)
                     sheetView.set(beat: 0, at: 0)
                     var option = sheetView.model.animation.option
+                    option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                     option.timelineY = sheetP.y.clipped(min: Sheet.timelineY,
                                                      max: Sheet.height - Sheet.timelineY)
                     option.enabled = true

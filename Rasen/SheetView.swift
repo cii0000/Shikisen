@@ -1252,6 +1252,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     enum HitResult {
         case key(i: Int)
         case previousNext(PreviousNext)
+        case startBeat
         case endBeat
         case loopDurBeat
         case all
@@ -1273,6 +1274,12 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             }
         }
         
+        let sd = abs(p.x - x(atBeat: model.beatRange.start))
+        if sd < minD && sd < 10.0 * scale {
+            minD = sd
+            minResult = .startBeat
+        }
+        
         let ed = abs(p.x - x(atBeat: model.beatRange.end))
         if ed < minD && ed < 10.0 * scale {
             minD = ed
@@ -1281,7 +1288,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let md = Sheet.knobEditDistance * 2 * scale
         if let (minI, d) = slidableKeyframeIndex(at: p, maxDistance: md) {
-            if d < minD {
+            if minI != 0, d < minD {
                 minD = d
                 minResult = .key(i: minI)
             }
@@ -1792,6 +1799,18 @@ final class SheetView: BindableView, @unchecked Sendable {
                                               startSec: 0,
                                               durSec: mainDurSec))
         return seqTrack
+    }
+    
+    func mainFrameWithBottomAndTop() -> Rect {
+        if let f = model.mainFrame {
+            return f
+        }
+        for sheetView in bottomSheetViews {
+            if let f = sheetView.element?.model.mainFrame {
+                return f
+            }
+        }
+        return bounds
     }
     
     private var playingTimer: (any DispatchSourceTimer)?,
@@ -2385,7 +2404,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         if captions != playingCaptions {
             playingCaptions = captions
             if !captions.isEmpty {
-                let nodes = Caption.nodes(in: sheetView.model.mainFrame ?? sheetView.bounds,
+                let nodes = Caption.nodes(in:  sheetView.mainFrameWithBottomAndTop(),
                                           from: captions)
                 playingCaptionNodes = nodes
                 animationView.captionNode.children = nodes

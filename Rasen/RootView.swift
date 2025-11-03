@@ -2939,6 +2939,20 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
+    func nearestAroundTempo(at p: Point) -> Rational {
+        let shps = aroundSheetPositions(atCenter: sheetPosition(at: p))
+        var nnTempo: Rational?
+        for shp in shps {
+            if let sheetView = sheetViewValues[shp]?.sheetView,
+               let tempo = sheetView.nearestTempo(at: sheetView.convertFromWorld(p)) {
+                
+                nnTempo = tempo
+                break
+            }
+        }
+        return nnTempo ?? Music.defaultTempo
+    }
+    
     func worldBorder(at p: Point) -> (border: Border, edge: Edge)? {
         let d = 5 * screenToWorldScale
         let shp = sheetPosition(at: p)

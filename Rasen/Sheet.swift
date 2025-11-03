@@ -1873,7 +1873,7 @@ extension Animation: BeatRangeType {
             }
             previousBeat = nextBeat
         }
-        return nil
+        return beat - keyframes.last!.beat
     }
     
     func index(atRoot rootI: Int) -> Int {
@@ -2632,13 +2632,20 @@ extension Sheet {
                                          with sb: Rect) -> [Double] {
         switch orientation {
         case .horizontal:
-             [(1 * sb.height / 4).rounded(),
+             [231, sb.height - 231,
+              (1 * sb.height / 4).rounded(),
+              (1 * sb.height / 3).rounded(),
               (2 * sb.height / 4).rounded(),
+              (2 * sb.height / 3).rounded(),
               (3 * sb.height / 4).rounded()].sorted()
         case .vertical:
              [40, sb.width - 40,
+              87, sb.width - 87,
+              138, sb.width - 138,
               (1 * sb.width / 4).rounded(),
+              (1 * sb.width / 3).rounded(),
               (2 * sb.width / 4).rounded(),
+              (2 * sb.width / 3).rounded(),
               (3 * sb.width / 4).rounded()].sorted()
         }
     }

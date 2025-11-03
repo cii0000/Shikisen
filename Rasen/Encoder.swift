@@ -70,7 +70,7 @@ extension Caption {
             let path = Typesetter(string: string, typobute: typebute).path()
             return (path, tp)
         case .vertical:
-            let tp = bounds.maxXMidYPoint + Point(-padding * 5, tb.width / 2)
+            let tp = bounds.maxXMidYPoint + Point(-padding - tb.height * 3, tb.width / 2)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
@@ -81,9 +81,18 @@ extension Caption {
             return (path, tp)
         }
     }
-    static func cpuNodes(withFontSize fontSize: Double = defaultFontSize,
-                         in bounds: Rect, padding: Double = defaultPadding,
-                         outlineWidth: Double = defaultOutlineWidth,
+    
+    static func cpuNodes(in bounds: Rect, from captions: [Caption]) -> [CPUNode] {
+        let ratio = bounds.width / 444
+        let fontSize = Self.defaultFontSize * ratio
+        let padding = Self.defaultPadding * ratio
+        let outlineWidth = Self.defaultOutlineWidth * ratio
+        return cpuNodes(withFontSize: fontSize, in: bounds, padding: padding,
+                        outlineWidth: outlineWidth, from: captions)
+    }
+    static func cpuNodes(withFontSize fontSize: Double,
+                         in bounds: Rect, padding: Double,
+                         outlineWidth: Double,
                          from captions: [Caption]) -> [CPUNode] {
         captions
             .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
@@ -91,9 +100,8 @@ extension Caption {
                                                         padding: padding * .init($0.offset * 3 + 1),
                                                         outlineWidth: outlineWidth) }
     }
-    func cpuNodes(withFontSize fontSize: Double = defaultFontSize,
-                  in bounds: Rect, padding: Double = defaultPadding,
-                  outlineWidth: Double = defaultOutlineWidth) -> [CPUNode] {
+    func cpuNodes(withFontSize fontSize: Double, in bounds: Rect, padding: Double,
+                  outlineWidth: Double) -> [CPUNode] {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
                                                padding: padding, outlineWidth: outlineWidth) else { return [] }
         switch orientation {
@@ -109,9 +117,18 @@ extension Caption {
                           fillType: .color(.background))]
         }
     }
-    static func nodes(withFontSize fontSize: Double = defaultFontSize,
-                      in bounds: Rect, padding: Double = defaultPadding,
-                      outlineWidth: Double = defaultOutlineWidth,
+    
+    static func nodes(in bounds: Rect, from captions: [Caption]) -> [Node] {
+        let ratio = bounds.width / 444
+        let fontSize = Self.defaultFontSize * ratio
+        let padding = Self.defaultPadding * ratio
+        let outlineWidth = Self.defaultOutlineWidth * ratio
+        return nodes(withFontSize: fontSize, in: bounds, padding: padding,
+                     outlineWidth: outlineWidth, from: captions)
+    }
+    static func nodes(withFontSize fontSize: Double,
+                      in bounds: Rect, padding: Double,
+                      outlineWidth: Double,
                       from captions: [Caption]) -> [Node] {
         captions
             .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
@@ -119,9 +136,8 @@ extension Caption {
                                                      padding: padding * .init($0.offset * 3 + 1),
                                                      outlineWidth: outlineWidth) }
     }
-    func nodes(withFontSize fontSize: Double = defaultFontSize,
-                  in bounds: Rect, padding: Double = defaultPadding,
-                  outlineWidth: Double = defaultOutlineWidth) -> [Node] {
+    func nodes(withFontSize fontSize: Double,
+               in bounds: Rect, padding: Double, outlineWidth: Double) -> [Node] {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
                                                padding: padding, outlineWidth: outlineWidth) else { return [] }
         switch orientation {

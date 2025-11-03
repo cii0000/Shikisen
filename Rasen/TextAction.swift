@@ -336,8 +336,10 @@ final class LookUpAction: InputKeyEventAction {
         let widthStr = width.string(digitsCount: 1, enabledZeroInteger: false)
         let heightStr = height.string(digitsCount: 1, enabledZeroInteger: false)
         let iWidth = max(Int(width.rounded()), 1), iHeight = max(Int(height.rounded()), 1)
-        let wScale = height == 0 ? "" : String(format: "%.2f:1", width / height)
-        return if Rational(iWidth, iHeight) == Rational(16, 9) {
+        let wScale = height == 0 ? "" : String(format: "%.3f:1", width / height)
+        return if Rational(iWidth, iHeight) == Rational(37, 20) {
+            "\(widthStr) x \(heightStr) \(wScale) 37:20"
+        } else if Rational(iWidth, iHeight) == Rational(16, 9) {
             "\(widthStr) x \(heightStr) \(wScale) 16:9"
         } else if Rational(iWidth, iHeight) == Rational(16, 10) {
             "\(widthStr) x \(heightStr) \(wScale) 16:10"

@@ -1289,9 +1289,8 @@ final class AddScoreAction: InputKeyEventAction {
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 let inP = sheetView.convertFromWorld(p)
-                let option = ScoreOption(tempo: sheetView.nearestTempo(at: inP) ?? Music.defaultTempo,
-                                         timelineY: Sheet.timelineY,
-                                         enabled: true)
+                let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
+                let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
                 
                 sheetView.newUndoGroup()
                 sheetView.set(option)
