@@ -350,7 +350,7 @@ message PBAnimation {
 }
 
 message PBSheetOption {
-    PBRational durBeat = 1;
+    PBRect mainFrame = 1;
 }
 
 enum PBPreviousNext {
@@ -368,7 +368,7 @@ message PBSheet {
     repeated PBText texts = 3;
     repeated PBContent contents = 11;
     repeated PBBorder borders = 4;
-    repeated PBRect rects = 9;
+    PBRect mainFrame = 12;
     PBUUColor backgroundUUColor = 5;
 }
 
@@ -605,6 +605,7 @@ message PBSheetUndoItem {
         PBScoreOption setScoreOption = 49;
         PBNoteIndexValueArray insertDraftNotes = 50;
         PBInt64Array removeDraftNotes = 51;
+        PBSheetOption setSheetOption = 52;
     }
 }
 message PBWorldUndoItem {
@@ -675,5 +676,6 @@ message PBPastableObject {
         PBNotesValue notesValue = 14;
         PBStereo stereo = 24;
         PBTone tone = 15;
+        PBRect rect = 25;
     }
 }

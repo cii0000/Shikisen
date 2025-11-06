@@ -479,6 +479,32 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                         let animationView = sheetView.animationView
                         let animation = animationView.model
                         
+                        func updateFromVertical() {
+                            let sec = animationView.model.sec(fromBeat: animationView.model.localBeat)
+                            let bounds = sheetView.bounds
+                            var otherChildren = [Node]()
+                            let shp = rootView.sheetPosition(at: p)
+                            rootView.sheetPositionFromVertical(at: shp) { nShp in
+                                if shp != nShp,
+                                   let oSheetView = rootView.sheetView(at: nShp),
+                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.secRange.contains(sec) {
+                                    
+                                    let i = oSheetView.animationView.model.index(atSec: sec)
+                                    let keyframeView = oSheetView.animationView.elementViews[i]
+                                    let nodes = keyframeView.linesView.elementViews.map {
+                                        let node = $0.node.clone
+                                        node.lineType = .color(.background)
+                                        return node
+                                    }
+                                    otherChildren.append(Node(children: nodes, isClippingChildren: true,
+                                                path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.25))))
+                                }
+                            }
+                            if sheetView.otherNode.children.count != otherChildren.count {
+                                sheetView.otherNode.children = otherChildren
+                            }
+                        }
+                        
                         let oldKI = animationView.model.index
                         var isChangedRootI = false
                         switch type {
@@ -549,6 +575,8 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                                 if oldRKI != sheetView.rootKeyframeIndex {
                                     isChangedRootI = true
                                 }
+                                
+                                updateFromVertical()
                             }
                         case .time:
                             let deltaI = Int((allDX / animationIndexInterval).rounded())
@@ -568,6 +596,8 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                                 if oldRKI != sheetView.rootKeyframeIndex {
                                     isChangedRootI = true
                                 }
+                                
+                                updateFromVertical()
                             }
                         }
                         

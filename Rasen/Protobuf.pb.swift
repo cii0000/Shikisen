@@ -1758,20 +1758,20 @@ struct PBSheetOption: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var durBeat: PBRational {
-    get {return _durBeat ?? PBRational()}
-    set {_durBeat = newValue}
+  var mainFrame: PBRect {
+    get {return _mainFrame ?? PBRect()}
+    set {_mainFrame = newValue}
   }
-  /// Returns true if `durBeat` has been explicitly set.
-  var hasDurBeat: Bool {return self._durBeat != nil}
-  /// Clears the value of `durBeat`. Subsequent reads from it will return its default value.
-  mutating func clearDurBeat() {self._durBeat = nil}
+  /// Returns true if `mainFrame` has been explicitly set.
+  var hasMainFrame: Bool {return self._mainFrame != nil}
+  /// Clears the value of `mainFrame`. Subsequent reads from it will return its default value.
+  mutating func clearMainFrame() {self._mainFrame = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _durBeat: PBRational? = nil
+  fileprivate var _mainFrame: PBRect? = nil
 }
 
 struct PBSheet: @unchecked Sendable {
@@ -1830,10 +1830,14 @@ struct PBSheet: @unchecked Sendable {
     set {_uniqueStorage()._borders = newValue}
   }
 
-  var rects: [PBRect] {
-    get {return _storage._rects}
-    set {_uniqueStorage()._rects = newValue}
+  var mainFrame: PBRect {
+    get {return _storage._mainFrame ?? PBRect()}
+    set {_uniqueStorage()._mainFrame = newValue}
   }
+  /// Returns true if `mainFrame` has been explicitly set.
+  var hasMainFrame: Bool {return _storage._mainFrame != nil}
+  /// Clears the value of `mainFrame`. Subsequent reads from it will return its default value.
+  mutating func clearMainFrame() {_uniqueStorage()._mainFrame = nil}
 
   var backgroundUucolor: PBUUColor {
     get {return _storage._backgroundUucolor ?? PBUUColor()}
@@ -3076,6 +3080,14 @@ struct PBSheetUndoItem: Sendable {
     set {value = .removeDraftNotes(newValue)}
   }
 
+  var setSheetOption: PBSheetOption {
+    get {
+      if case .setSheetOption(let v)? = value {return v}
+      return PBSheetOption()
+    }
+    set {value = .setSheetOption(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Value: Equatable, Sendable {
@@ -3127,6 +3139,7 @@ struct PBSheetUndoItem: Sendable {
     case setScoreOption(PBScoreOption)
     case insertDraftNotes(PBNoteIndexValueArray)
     case removeDraftNotes(PBInt64Array)
+    case setSheetOption(PBSheetOption)
 
   }
 
@@ -3520,6 +3533,14 @@ struct PBPastableObject: Sendable {
     set {value = .tone(newValue)}
   }
 
+  var rect: PBRect {
+    get {
+      if case .rect(let v)? = value {return v}
+      return PBRect()
+    }
+    set {value = .rect(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Value: Equatable, Sendable {
@@ -3542,6 +3563,7 @@ struct PBPastableObject: Sendable {
     case notesValue(PBNotesValue)
     case stereo(PBStereo)
     case tone(PBTone)
+    case rect(PBRect)
 
   }
 
@@ -6277,7 +6299,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
 extension PBSheetOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheetOption"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "durBeat"),
+    1: .same(proto: "mainFrame"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -6286,7 +6308,7 @@ extension PBSheetOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._durBeat) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._mainFrame) }()
       default: break
       }
     }
@@ -6297,14 +6319,14 @@ extension PBSheetOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._durBeat {
+    try { if let v = self._mainFrame {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBSheetOption, rhs: PBSheetOption) -> Bool {
-    if lhs._durBeat != rhs._durBeat {return false}
+    if lhs._mainFrame != rhs._mainFrame {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6320,7 +6342,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     3: .same(proto: "texts"),
     11: .same(proto: "contents"),
     4: .same(proto: "borders"),
-    9: .same(proto: "rects"),
+    12: .same(proto: "mainFrame"),
     5: .same(proto: "backgroundUUColor"),
   ]
 
@@ -6332,7 +6354,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     var _texts: [PBText] = []
     var _contents: [PBContent] = []
     var _borders: [PBBorder] = []
-    var _rects: [PBRect] = []
+    var _mainFrame: PBRect? = nil
     var _backgroundUucolor: PBUUColor? = nil
 
     #if swift(>=5.10)
@@ -6355,7 +6377,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       _texts = source._texts
       _contents = source._contents
       _borders = source._borders
-      _rects = source._rects
+      _mainFrame = source._mainFrame
       _backgroundUucolor = source._backgroundUucolor
     }
   }
@@ -6381,9 +6403,9 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
         case 4: try { try decoder.decodeRepeatedMessageField(value: &_storage._borders) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._backgroundUucolor) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._animation) }()
-        case 9: try { try decoder.decodeRepeatedMessageField(value: &_storage._rects) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._score) }()
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._contents) }()
+        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._mainFrame) }()
         default: break
         }
       }
@@ -6414,15 +6436,15 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       try { if let v = _storage._animation {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
-      if !_storage._rects.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._rects, fieldNumber: 9)
-      }
       try { if let v = _storage._score {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       } }()
       if !_storage._contents.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._contents, fieldNumber: 11)
       }
+      try { if let v = _storage._mainFrame {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6439,7 +6461,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
         if _storage._texts != rhs_storage._texts {return false}
         if _storage._contents != rhs_storage._contents {return false}
         if _storage._borders != rhs_storage._borders {return false}
-        if _storage._rects != rhs_storage._rects {return false}
+        if _storage._mainFrame != rhs_storage._mainFrame {return false}
         if _storage._backgroundUucolor != rhs_storage._backgroundUucolor {return false}
         return true
       }
@@ -8265,6 +8287,7 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     49: .same(proto: "setScoreOption"),
     50: .same(proto: "insertDraftNotes"),
     51: .same(proto: "removeDraftNotes"),
+    52: .same(proto: "setSheetOption"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -8877,6 +8900,19 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
           self.value = .removeDraftNotes(v)
         }
       }()
+      case 52: try {
+        var v: PBSheetOption?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .setSheetOption(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .setSheetOption(v)
+        }
+      }()
       default: break
       }
     }
@@ -9079,6 +9115,10 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     case .removeDraftNotes?: try {
       guard case .removeDraftNotes(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 51)
+    }()
+    case .setSheetOption?: try {
+      guard case .setSheetOption(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 52)
     }()
     case nil: break
     }
@@ -9563,6 +9603,7 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     14: .same(proto: "notesValue"),
     24: .same(proto: "stereo"),
     15: .same(proto: "tone"),
+    25: .same(proto: "rect"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -9808,6 +9849,19 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
           self.value = .stereo(v)
         }
       }()
+      case 25: try {
+        var v: PBRect?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .rect(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .rect(v)
+        }
+      }()
       default: break
       }
     }
@@ -9894,6 +9948,10 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     case .stereo?: try {
       guard case .stereo(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 24)
+    }()
+    case .rect?: try {
+      guard case .rect(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 25)
     }()
     case nil: break
     }

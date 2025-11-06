@@ -1399,7 +1399,7 @@ extension O {
         append(plotName, OKeyInfo(sheetGroup, "Plot points $1 on the sheet with $0 as the base scale, center of the sheet as the origin,\ne.g. sheet plot base: 1 ((0 0) (1 1))".localized),
                F(left: [""], right: ["base", ""], .plot))
         append(flipName, OKeyInfo(sheetGroup, "Flip sheet based on $0, e.g. sheet horizontal flip".localized),
-               F(left: 1, .flip))
+               F(left: 1, right: 1, .flip))
         
         let otherGroup = OKeyInfo.Group(name: "Other".localized)
         append(asLabelName, OKeyInfo(otherGroup, "Make label.".localized),

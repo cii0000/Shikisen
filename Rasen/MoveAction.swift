@@ -35,6 +35,7 @@ final class MoveAction: DragEventAction {
         case text(MoveTextAction)
         case tempo(MoveTempoAction)
         case border(MoveBorderAction)
+        case mainFrame(MoveMainFrameAction)
         case none
     }
     private var type = MoveType.none
@@ -50,6 +51,7 @@ final class MoveAction: DragEventAction {
         case .text(let action): action.updateNode()
         case .tempo(let action): action.updateNode()
         case .border(let action): action.updateNode()
+        case .mainFrame(let action): action.updateNode()
         case .none: break
         }
     }
@@ -82,6 +84,8 @@ final class MoveAction: DragEventAction {
                 } else if sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
                                                        scale: rootView.screenToWorldScale) {
                     type = .score(MoveScoreAction(rootAction))
+                } else if rootView.mainFrame(at: p) != nil {
+                    type = .mainFrame(MoveMainFrameAction(rootAction))
                 } else if rootView.border(at: p) != nil {
                     type = .border(MoveBorderAction(rootAction))
                 }
@@ -106,6 +110,8 @@ final class MoveAction: DragEventAction {
         case .tempo(let action):
             action.flow(with: event)
         case .border(let action):
+            action.flow(with: event)
+        case .mainFrame(let action):
             action.flow(with: event)
         case .none:
             switch event.phase {
@@ -2164,7 +2170,7 @@ final class MoveSheetAction: DragEventAction {
                     sheetOrigin = rootView.sheetFrame(with: shp).origin
                     self.sheetView = sheetView
                     
-                    var minDSq = Double.infinity, maxD = 2 * rootView.screenToWorldScale
+                    var minDSq = Double.infinity, maxD = 4 * rootView.screenToWorldScale
                     for selection in rootView.selections {
                         guard selection.rect.width != 0 && selection.rect.height != 0 else { continue }
                         let rect = selection.rect
@@ -2851,6 +2857,71 @@ final class MoveBorderAction: DragEventAction {
                 if borderView.model != beganBorder {
                     sheetView.newUndoGroup()
                     sheetView.capture(borderView.model, old: beganBorder, at: borderI)
+                }
+            }
+            
+            rootView.cursor = rootView.defaultCursor
+        }
+    }
+}
+
+final class MoveMainFrameAction: DragEventAction {
+    let rootAction: RootAction, rootView: RootView
+    let isEditingSheet: Bool
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+        isEditingSheet = rootView.isEditingSheet
+    }
+    
+    enum MoveType {
+        case minXminY, maxXminY, minXmaxY, maxXMaxY
+    }
+    
+    private var sheetView: SheetView?, beganOption: SheetOption?, type = MoveType.minXmaxY
+    private var beganSP = Point(), beganInP = Point(), shp = IntPoint()
+    
+    func flow(with event: DragEvent) {
+        guard isEditingSheet else {
+            rootAction.keepOut(with: event)
+            return
+        }
+        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
+            ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
+        switch event.phase {
+        case .began:
+            rootView.cursor = .arrow
+            
+            if let sheetView = rootView.sheetView(at: p),
+               let shp = rootView.sheetPosition(from: sheetView) {
+                
+                self.sheetView = sheetView
+                let sheetP = sheetView.convertFromWorld(p)
+                beganSP = sp
+                beganInP = sheetP
+                self.sheetView = sheetView
+                beganOption = sheetView.model.option
+                
+                self.shp = shp
+            }
+        case .changed:
+            if let sheetView {
+                let sheetP = sheetView.convertFromWorld(p), cp = sheetView.bounds.centerPoint
+                let rect = Rect(cp,
+                                dx: min(abs(sheetP.x - cp.x).rounded(), Sheet.defaultBounds.width / 2),
+                                dy: min(abs(sheetP.y - cp.y).rounded(), Sheet.defaultBounds.height / 2))
+                sheetView.mainFrame = rect
+                
+                let width = rect.width, height = rect.height
+                rootView.cursor = rootView.cursor(from: "\(LookUpAction.sizeString(from: .init(width: width, height: height)))")
+            }
+        case .ended:
+            if let sheetView, let beganOption {
+                if sheetView.model.option != beganOption {
+                    sheetView.newUndoGroup()
+                    sheetView.capture(sheetView.model.option, old: beganOption)
                 }
             }
             

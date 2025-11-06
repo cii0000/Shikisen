@@ -83,7 +83,7 @@ extension Caption {
     }
     
     static func cpuNodes(in bounds: Rect, from captions: [Caption]) -> [CPUNode] {
-        let ratio = bounds.width / 444
+        let ratio = min(bounds.width / 444, bounds.height / 240)
         let fontSize = Self.defaultFontSize * ratio
         let padding = Self.defaultPadding * ratio
         let outlineWidth = Self.defaultOutlineWidth * ratio
@@ -119,7 +119,7 @@ extension Caption {
     }
     
     static func nodes(in bounds: Rect, from captions: [Caption]) -> [Node] {
-        let ratio = bounds.width / 444
+        let ratio = min(bounds.width / 444, bounds.height / 240)
         let fontSize = Self.defaultFontSize * ratio
         let padding = Self.defaultPadding * ratio
         let outlineWidth = Self.defaultOutlineWidth * ratio

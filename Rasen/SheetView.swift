@@ -1324,7 +1324,7 @@ final class SheetView: BindableView, @unchecked Sendable {
     var id = UUID()
     
     let node: Node
-    let opacityNode = Node()
+    let opacityNode = Node(), otherNode = Node()
     let animationView: AnimationView
     var keyframeView: KeyframeView {
         animationView.elementViews[model.animation.index]
@@ -1346,6 +1346,8 @@ final class SheetView: BindableView, @unchecked Sendable {
     let textsView: ArrayView<SheetTextView>
     let bordersView: ArrayView<SheetBorderView>
     
+    let mainFrameNode = Node()
+    
     var notePlayer: NotePlayer?
     let tempoNode = Node()
     
@@ -1364,7 +1366,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         bordersView = ArrayView(binder: binder,
                                 keyPath: keyPath.appending(path: \Model.borders))
         
-        node = Node(children: [opacityNode,
+        node = Node(children: [opacityNode, otherNode,
                                animationView.node,
                                animationView.previousNextNode,
                                contentsView.node,
@@ -1372,11 +1374,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                                textsView.node,
                                bordersView.node,
                                animationView.timelineNode,
-                               animationView.captionNode])
+                               animationView.captionNode,
+                               mainFrameNode])
         
         updateBackground()
         updateWithKeyframeIndex()
         updateTimeline()
+        updateMainFrame()
         
         animationView.isSelected = true
     }
@@ -1409,6 +1413,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         
         updateBackground()
         updateTimeline()
+        updateMainFrame()
     }
     func updateWithKeyframeIndex() {
         updatePreviousNext()
@@ -1464,6 +1469,59 @@ final class SheetView: BindableView, @unchecked Sendable {
         } else {
             opacityNode.path = .init()
             node.fillType = nil
+        }
+    }
+    var mainFrame: Rect {
+        get { model.option.mainFrame }
+        set {
+            if newValue != self.mainFrame {
+                binder[keyPath: keyPath].option.mainFrame = newValue
+                updateMainFrame()
+            }
+        }
+    }
+    private func updateMainFrame() {
+        let f = mainFrame
+        if f == Sheet.defaultBounds {
+            if !mainFrameNode.children.isEmpty {
+                mainFrameNode.children = []
+            }
+        } else {
+            let lw = 8.0, hlw = 2.0, tlw = 1.0
+            let node = Node(path: .init([.init(Rect(x: f.minX, y: f.maxY,
+                                                    width: f.width, height: lw)),
+                                         .init(Rect(x: f.maxX, y: f.minY - lw,
+                                                    width: lw, height: f.height + lw * 2)),
+                                         .init(Rect(x: f.minX, y: f.minY - lw,
+                                                    width: f.width, height: lw)),
+                                         .init(Rect(x: f.minX - lw, y: f.minY - lw, width: lw, height: f.height + lw * 2))]),
+                            fillType: .color(.mainFrame))
+            let tNode = Node(path: .init([.init(Rect(x: f.minX + f.width / 3 - tlw / 2,
+                                                     y: f.maxY + lw - hlw,
+                                                     width: tlw, height: hlw)),
+                                          .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
+                                                     y: f.maxY + lw - hlw,
+                                                     width: tlw, height: hlw)),
+                                          .init(Rect(x: f.minX + f.width / 3 - tlw / 2,
+                                                     y: f.minY - lw,
+                                                     width: tlw, height: hlw)),
+                                          .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
+                                                     y: f.minY - lw,
+                                                     width: tlw, height: hlw)),
+                                          .init(Rect(x: f.minX - lw,
+                                                     y: f.minY + f.height / 3 - tlw / 2,
+                                                     width: hlw, height: tlw)),
+                                          .init(Rect(x: f.minX - lw,
+                                                     y: f.minY + f.height * 2 / 3 - tlw / 2,
+                                                     width: hlw, height: tlw)),
+                                          .init(Rect(x: f.maxX + lw - hlw,
+                                                     y: f.minY + f.height / 3 - tlw / 2,
+                                                     width: hlw, height: tlw)),
+                                          .init(Rect(x: f.maxX + lw - hlw,
+                                                     y: f.minY + f.height * 2 / 3 - tlw / 2,
+                                                     width: hlw, height: tlw))]),
+                             fillType: .color(.subBorder))
+            mainFrameNode.children = [node, tNode]
         }
     }
     
@@ -1802,11 +1860,11 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func mainFrameWithBottomAndTop() -> Rect {
-        if let f = model.mainFrame {
-            return f
+        if model.mainFrame != Sheet.defaultBounds {
+            return model.mainFrame
         }
         for sheetView in bottomSheetViews {
-            if let f = sheetView.element?.model.mainFrame {
+            if let f = sheetView.element?.model.mainFrame, f != Sheet.defaultBounds {
                 return f
             }
         }
@@ -1844,6 +1902,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         playingTimer = nil
         animationView.isPlaying = isPlaying
         animationView.previousNextNode.isHidden = isPlaying
+        otherNode.isHidden = isPlaying
         if isPlaying {
             let playingSec = firstSec ?? model.animation.sec(fromBeat: model.animation.mainBeat)
             self.playingSec = playingSec
@@ -3688,6 +3747,15 @@ final class SheetView: BindableView, @unchecked Sendable {
             if isMakeRect {
                 return (scoreView.transformedMainFrame, [])
             }
+        case .setSheetOption(let option):
+            stop()
+            
+            binder[keyPath: keyPath].option = option
+            updateMainFrame()
+            
+            if isMakeRect {
+                return (option.mainFrame, [])
+            }
         }
         return (nil, [])
     }
@@ -4332,6 +4400,18 @@ final class SheetView: BindableView, @unchecked Sendable {
     func capture(_ option: ScoreOption, old oldOption: ScoreOption) {
         let undoItem = SheetUndoItem.setScoreOption(oldOption)
         let redoItem = SheetUndoItem.setScoreOption(option)
+        append(undo: undoItem, redo: redoItem)
+    }
+    
+    func set(_ option: SheetOption) {
+        let undoItem = SheetUndoItem.setSheetOption(model.option)
+        let redoItem = SheetUndoItem.setSheetOption(option)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(_ option: SheetOption, old oldOption: SheetOption) {
+        let undoItem = SheetUndoItem.setSheetOption(oldOption)
+        let redoItem = SheetUndoItem.setSheetOption(option)
         append(undo: undoItem, redo: redoItem)
     }
     
@@ -5377,6 +5457,12 @@ final class SheetView: BindableView, @unchecked Sendable {
                 history[result.version].values[result.valueIndex]
                     .saveUndoItemValue?.set(.setScoreOption(oldOption), type: reversedType)
             }
+        case .setSheetOption(let option):
+            let oldOption = model.option
+            if oldOption != option {
+                history[result.version].values[result.valueIndex]
+                    .saveUndoItemValue?.set(.setSheetOption(oldOption), type: reversedType)
+            }
         }
         
         guard let nuiv = history[result.version].values[result.valueIndex]
@@ -6326,6 +6412,16 @@ final class SheetView: BindableView, @unchecked Sendable {
             case .redo:
                 history[result.version].values[result.valueIndex]
                     .undoItemValue?.undoItem = .setScoreOption(oldOption)
+            }
+        case .setSheetOption:
+            let oldOption = model.option
+            switch result.type {
+            case .undo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.redoItem = .setSheetOption(oldOption)
+            case .redo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.undoItem = .setSheetOption(oldOption)
             }
         }
     }

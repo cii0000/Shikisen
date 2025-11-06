@@ -723,7 +723,7 @@ final class IOAction: Action {
             return
         }
         let size = unionFrame?.size ??
-        (nvs.count >= 2 ? rootView.sheetView(at: fv.shp)?.model.mainFrame?.size : nil) ?? fv.bounds.size
+        (nvs.count >= 2 ? rootView.sheetView(at: fv.shp)?.model.mainFrame.size : nil) ?? fv.bounds.size
         guard size.width > 0 && size.height > 0 else {
             end()
             return
@@ -1226,7 +1226,7 @@ final class IOAction: Action {
                         let sheetBounds = rendering.mainItem.frame.bounds
                         let origin = rendering.mainItem.frame.origin
                         let ot = t
-                        let b = isMainFrame ? (sheet.mainFrame ?? rendering.bounds) : rendering.bounds
+                        let b = isMainFrame ? sheet.mainFrame : rendering.bounds
                         
                         maxEndSec = max(sheet.allEndSec, maxEndSec)
                     

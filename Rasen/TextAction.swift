@@ -299,10 +299,10 @@ final class LookUpAction: InputKeyEventAction {
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb.string(digitsCount: 2)) dB"
-                              + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))",
+                              + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))",
                               at: p)
             } else {
-                rootView.show("Background".localized + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))", at: p)
+                rootView.show("Background".localized + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))", at: p)
             }
         } else {
             rootView.show("Background".localized, at: p)

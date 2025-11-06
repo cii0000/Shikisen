@@ -74,6 +74,10 @@ extension Rect {
         self.init(origin: Point(p.x - distance, p.y - distance),
                   size: Size(square: distance * 2))
     }
+    init(_ p: Point, dx: Double, dy: Double) {
+        self.init(origin: Point(p.x - dx, p.y - dy),
+                  size: Size(width: dx * 2, height: dy * 2))
+    }
     init?(points: [Point]) {
         guard !points.isEmpty else { return nil }
         if points.count <= 1 {

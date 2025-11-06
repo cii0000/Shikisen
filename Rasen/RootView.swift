@@ -2940,7 +2940,11 @@ final class RootView: View, @unchecked Sendable {
     }
     
     func nearestAroundTempo(at p: Point) -> Rational {
-        let shps = aroundSheetPositions(atCenter: sheetPosition(at: p))
+        let shp = sheetPosition(at: p)
+        var shps = aroundSheetPositions(atCenter: shp)
+        sheetPositionFromVertical(at: shp) { nshp in
+            shps.append(nshp)
+        }
         var nnTempo: Rational?
         for shp in shps {
             if let sheetView = sheetViewValues[shp]?.sheetView,
@@ -2974,6 +2978,21 @@ final class RootView: View, @unchecked Sendable {
             return (Border(.vertical), rightEdge)
         }
         return nil
+    }
+    func mainFrame(at p: Point) -> (mainFrame: Rect, sheetView: SheetView?)? {
+        let d = 5 * screenToWorldScale
+        let shp = sheetPosition(at: p)
+        guard let sheetView = sheetView(at: shp) else {
+            let nb = sheetFrame(with: shp)
+            return nb.minXMinYPoint.distance(p) < d || nb.minXMaxYPoint.distance(p) < d
+            || nb.maxXMinYPoint.distance(p) < d || nb.maxXMaxYPoint.distance(p) < d ?
+            (nb, nil) : nil
+        }
+        let sheetP = sheetView.convertFromWorld(p)
+        let nb = sheetView.mainFrame != Sheet.defaultBounds ? sheetView.mainFrame : sheetView.bounds
+        return nb.minXMinYPoint.distance(sheetP) < d || nb.minXMaxYPoint.distance(sheetP) < d
+        || nb.maxXMinYPoint.distance(sheetP) < d || nb.maxXMaxYPoint.distance(sheetP) < d ?
+        (sheetView.mainFrame, sheetView) : nil
     }
     func border(at p: Point) -> (border: Border, index: Int,
                                  sheetView: SheetView, edge: Edge)? {
@@ -3165,7 +3184,8 @@ final class RootView: View, @unchecked Sendable {
     }
     func currentSampless(at shp: IntPoint,
                          sampleRate: Double = Audio.defaultSampleRate) -> [[Double]] {
-        guard let sheetView = sheetViewValue(at: shp)?.sheetView else { return [] }
+        guard let sheetView = sheetViewValue(at: shp)?.sheetView,
+                sheetView.model.enabledMusic else { return [] }
         
         updateFromAroundWithTimeline(at: shp)
         

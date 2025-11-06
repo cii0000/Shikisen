@@ -111,6 +111,7 @@ enum PastableObject: Sendable {
     case notesValue(_ notesValue: NotesValue)
     case stereo(_ stereo: Stereo)
     case tone(_ tone: Tone)
+    case rect(_ rect: Rect)
 }
 extension PastableObject {
     static func typeName(with obj: Any) -> String {
@@ -167,6 +168,8 @@ extension PastableObject {
              PastableObject.typeName(with: stereo)
         case .tone(let tone):
              PastableObject.typeName(with: tone)
+        case .rect(let rect):
+             PastableObject.typeName(with: rect)
         }
     }
     init(data: Data, typeName: String) throws {
@@ -214,6 +217,8 @@ extension PastableObject {
             self = .stereo(try Stereo(serializedData: data))
         case PastableObject.objectTypeName(with: Tone.self):
             self = .tone(try Tone(serializedData: data))
+        case PastableObject.objectTypeName(with: Rect.self):
+            self = .rect(try Rect(serializedData: data))
         default:
             throw PastableObject.PastableError()
         }
@@ -258,6 +263,8 @@ extension PastableObject {
              try? stereo.serializedData()
         case .tone(let tone):
              try? tone.serializedData()
+        case .rect(let rect):
+             try? rect.serializedData()
         }
     }
 }
@@ -305,6 +312,8 @@ extension PastableObject: Protobuf {
             self = .stereo(try Stereo(stereo))
         case .tone(let tone):
             self = .tone(try Tone(tone))
+        case .rect(let rect):
+            self = .rect(try Rect(rect))
         }
     }
     var pb: PBPastableObject {
@@ -348,6 +357,8 @@ extension PastableObject: Protobuf {
                 $0.value = .stereo(stereo.pb)
             case .tone(let tone):
                 $0.value = .tone(tone.pb)
+            case .rect(let rect):
+                $0.value = .rect(rect.pb)
             }
         }
     }
@@ -373,6 +384,7 @@ extension PastableObject: Codable {
         case notesValue = "13"
         case stereo = "22"
         case tone = "14"
+        case rect = "23"
     }
     init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -416,6 +428,8 @@ extension PastableObject: Codable {
             self = .stereo(try container.decode(Stereo.self))
         case .tone:
             self = .tone(try container.decode(Tone.self))
+        case .rect:
+            self = .rect(try container.decode(Rect.self))
         }
     }
     func encode(to encoder: any Encoder) throws {
@@ -478,6 +492,9 @@ extension PastableObject: Codable {
         case .tone(let tone):
             try container.encode(CodingTypeKey.tone)
             try container.encode(tone)
+        case .rect(let rect):
+            try container.encode(CodingTypeKey.rect)
+            try container.encode(rect)
         }
     }
 }
@@ -1031,6 +1048,19 @@ final class PastableAction: Action {
                     return true
                 }
             }
+        } else if let (mainFrame, sheetView) = rootView.mainFrame(at: p) {
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.rect(mainFrame)]
+            }
+            selectingLineNode.fillType = .color(.subSelected)
+            selectingLineNode.lineType = .color(.selected)
+            selectingLineNode.lineWidth = rootView.worldLineWidth * 8
+            if let sheetView {
+                selectingLineNode.path = Path([Pathline(sheetView.convertToWorld(mainFrame.outset(by: 4)))])
+            } else {
+                selectingLineNode.path = Path([Pathline(mainFrame.outset(by: 4))])
+            }
+            return true
         } else if let (sBorder, edge) = rootView.worldBorder(at: p) {
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.border(sBorder)]
@@ -1524,6 +1554,16 @@ final class PastableAction: Action {
                 sheetView.set(option)
                 return true
             }
+        } else if let (mainFrame, sheetView) = rootView.mainFrame(at: p), let sheetView {
+            Pasteboard.shared.copiedObjects = [.rect(mainFrame)]
+            
+            if mainFrame != Sheet.defaultBounds {
+                selectingLineNode.path = Path([Pathline(sheetView.convertToWorld(mainFrame))])
+                
+                sheetView.newUndoGroup()
+                sheetView.set(SheetOption(mainFrame: Sheet.defaultBounds))
+            }
+            return true
         } else if let (border, i, sheetView, edge) = rootView.border(at: p) {
             Pasteboard.shared.copiedObjects = [.border(border)]
             
@@ -2152,6 +2192,8 @@ final class PastableAction: Action {
         case .stereo:
             break
         case .tone:
+            break
+        case .rect:
             break
         }
     }
@@ -3056,6 +3098,12 @@ final class PastableAction: Action {
                     }
                 }
             }
+        case .rect(let rect):
+            guard let sheetView = rootView.madeSheetView(at: shp) else { return }
+            if sheetView.model.mainFrame != rect {
+                sheetView.newUndoGroup()
+                sheetView.set(SheetOption(mainFrame: rect))
+            }
         }
     }
     
@@ -3080,6 +3128,7 @@ final class PastableAction: Action {
         case .notesValue: true
         case .stereo: false
         case .tone: false
+        case .rect: false
         }
     }
     

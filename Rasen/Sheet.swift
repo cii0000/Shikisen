@@ -611,6 +611,7 @@ enum SheetUndoItem {
     case replaceContents(_ contentIndexValue: [IndexValue<Content>])
     case removeContents(contentIndexes: [Int])
     case setScoreOption(_ option: ScoreOption)
+    case setSheetOption(_ option: SheetOption)
 }
 extension SheetUndoItem: UndoItem {
     var type: UndoItemType {
@@ -663,6 +664,7 @@ extension SheetUndoItem: UndoItem {
         case .replaceContents: .lazyReversible
         case .removeContents: .unreversible
         case .setScoreOption: .lazyReversible
+        case .setSheetOption: .lazyReversible
         }
     }
     func reversed() -> SheetUndoItem? {
@@ -771,6 +773,9 @@ extension SheetUndoItem: UndoItem {
             
         case .setScoreOption:
              self
+            
+        case .setSheetOption:
+             self
         }
     }
 }
@@ -876,6 +881,8 @@ extension SheetUndoItem: Protobuf {
             self = .removeContents(contentIndexes: try [Int](contentIndexes))
         case .setScoreOption(let option):
             self = .setScoreOption(try ScoreOption(option))
+        case .setSheetOption(let option):
+            self = .setSheetOption(try SheetOption(option))
         }
     }
     var pb: PBSheetUndoItem {
@@ -977,6 +984,8 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .removeContents(cis.pb)
             case .setScoreOption(let option):
                 $0.value = .setScoreOption(option.pb)
+            case .setSheetOption(let option):
+                $0.value = .setSheetOption(option.pb)
             }
         }
     }
@@ -1031,6 +1040,7 @@ extension SheetUndoItem: Codable {
         case replaceContents = "46"
         case removeContents = "47"
         case setScoreOption = "48"
+        case setSheetOption = "51"
     }
     init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -1132,6 +1142,8 @@ extension SheetUndoItem: Codable {
             self = .removeContents(contentIndexes: try container.decode([Int].self))
         case .setScoreOption:
             self = .setScoreOption(try container.decode(ScoreOption.self))
+        case .setSheetOption:
+            self = .setSheetOption(try container.decode(SheetOption.self))
         }
     }
     func encode(to encoder: any Encoder) throws {
@@ -1281,6 +1293,9 @@ extension SheetUndoItem: Codable {
         case .setScoreOption(let option):
             try container.encode(CodingTypeKey.setScoreOption)
             try container.encode(option)
+        case .setSheetOption(let option):
+            try container.encode(CodingTypeKey.setSheetOption)
+            try container.encode(option)
         }
     }
 }
@@ -1335,6 +1350,7 @@ extension SheetUndoItem: CustomStringConvertible {
         case .replaceContents: "replaceContents"
         case .removeContents: "removeContents"
         case .setScoreOption: "setScoreOption"
+        case .setSheetOption: "setSheetOption"
         }
     }
 }
@@ -2187,12 +2203,31 @@ extension PreviousNext: Protobuf {
     }
 }
 
+struct SheetOption {
+    var mainFrame = Sheet.defaultBounds
+}
+extension SheetOption: Protobuf {
+    init(_ pb: PBSheetOption) throws {
+        let mainFrame = (try? Rect(pb.mainFrame)) ?? Sheet.defaultBounds
+        self.mainFrame = mainFrame.isEmpty ? Sheet.defaultBounds : mainFrame
+    }
+    var pb: PBSheetOption {
+        .with {
+            if mainFrame != Sheet.defaultBounds {
+                $0.mainFrame = mainFrame.pb
+            }
+        }
+    }
+}
+extension SheetOption: Hashable, Codable {}
+
 struct Sheet {
     var animation = Animation(keyframes: [Keyframe(beat: 0)])
     var score = Score()
     var texts = [Text]()
     var contents = [Content]()
     var borders = [Border]()
+    var mainFrame = Sheet.defaultBounds
     var backgroundUUColor = Sheet.defalutBackgroundUUColor
 }
 extension Sheet: Protobuf {
@@ -2212,6 +2247,8 @@ extension Sheet: Protobuf {
         texts = pb.texts.compactMap { try? Text($0) }
         contents = pb.contents.compactMap { try? .init($0) }
         borders = pb.borders.compactMap { try? Border($0) }
+        let mainFrame = (try? Rect(pb.mainFrame)) ?? Sheet.defaultBounds
+        self.mainFrame = mainFrame.isEmpty ? Sheet.defaultBounds : mainFrame
         backgroundUUColor = (try? UUColor(pb.backgroundUucolor))
             ?? Sheet.defalutBackgroundUUColor
     }
@@ -2227,6 +2264,9 @@ extension Sheet: Protobuf {
             $0.texts = texts.map { $0.pb }
             $0.contents = contents.map { $0.pb }
             $0.borders = borders.map { $0.pb }
+            if mainFrame != Sheet.defaultBounds {
+                $0.mainFrame = mainFrame.pb
+            }
             $0.backgroundUucolor = backgroundUUColor.pb
         }
     }
@@ -2304,9 +2344,16 @@ extension Sheet {
     
     func boundsTuple(at p: Point,
                      in bounds: Rect) -> (bounds: Rect, isAll: Bool) {
-        guard !borders.isEmpty else { return (bounds, true) }
+        guard !borders.isEmpty || mainFrame != Sheet.defaultBounds else { return (bounds, true) }
         var aabb = AABB(bounds)
-        borders.forEach {
+        
+        let mainBorders = mainFrame != Sheet.defaultBounds ?
+        [Border(location: mainFrame.minX, .vertical),
+         Border(location: mainFrame.maxX, .vertical),
+         Border(location: mainFrame.minY, .horizontal),
+         Border(location: mainFrame.maxY, .horizontal)] : []
+        
+        (borders + mainBorders).forEach {
             switch $0.orientation {
             case .horizontal:
                 if p.y > $0.location && aabb.minY < $0.location {
@@ -2323,35 +2370,6 @@ extension Sheet {
             }
         }
         return (aabb.rect, false)
-    }
-    func borderFrames(in bounds: Rect) -> [Rect] {
-        guard !borders.isEmpty else { return [] }
-        var xs = Set<Double>(), ys = Set<Double>()
-        borders.forEach {
-            switch $0.orientation {
-            case .horizontal:
-                ys.insert($0.location)
-            case .vertical:
-                xs.insert($0.location)
-            }
-        }
-        
-        xs.insert(bounds.width)
-        ys.insert(bounds.height)
-        let nxs = xs.sorted(), nys = ys.sorted()
-        var frames = [Rect]()
-        frames.reserveCapacity(nxs.count * nys.count)
-        var oldX = bounds.minX
-        for x in nxs {
-            var oldY = bounds.minY
-            for y in nys {
-                frames.append(Rect(x: oldX, y: oldY,
-                                   width: x - oldX, height: y - oldY))
-                oldY = y
-            }
-            oldX = x
-        }
-        return frames
     }
     
     static func clipped(_ lines: [Line], in bounds: Rect) -> [Line] {
@@ -2600,26 +2618,6 @@ extension Sheet {
     }
     var allSecRange: Range<Rational> { 0 ..< allEndSec }
     
-    var mainFrame: Rect? {
-        guard enabledAnimation else { return nil }
-        var xs = [Border](), ys = [Border]()
-        for border in borders {
-            switch border.orientation {
-            case .horizontal: ys.append(border)
-            case .vertical: xs.append(border)
-            }
-        }
-        if xs.count == 2 && ys.count == 2 {
-            let minX = min(xs[0].location, xs[1].location)
-            let maxX = max(xs[0].location, xs[1].location)
-            let minY = min(ys[0].location, ys[1].location)
-            let maxY = max(ys[0].location, ys[1].location)
-            return AABB(minX: minX, maxX: maxX, minY: minY, maxY: maxY).rect
-        } else {
-            return nil
-        }
-    }
-    
     init(message: String, in bounds: Rect = Sheet.defaultBounds) {
         var text = Text(string: message)
         if let textBounds = text.bounds {
@@ -2677,6 +2675,16 @@ extension Sheet {
                                                   with: sb)
             let (iss, x) = snapped(p.x, values: values)
             return (iss, Point(x, p.y).rounded())
+        }
+    }
+}
+extension Sheet {
+    var option: SheetOption {
+        get {
+            .init(mainFrame: mainFrame)
+        }
+        set {
+            mainFrame = newValue.mainFrame
         }
     }
 }
