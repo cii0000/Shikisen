@@ -1583,6 +1583,7 @@ struct AnimationOption {
     var tempo = Music.defaultTempo
     var previousNext = PreviousNext.none
     var timelineY = Sheet.timelineY
+    var cameras = [Camera]()
     var enabled = false
 }
 extension AnimationOption: Protobuf {
@@ -1592,6 +1593,7 @@ extension AnimationOption: Protobuf {
         tempo = (try? Rational(pb.tempo))?.clipped(Music.tempoRange) ?? Music.defaultTempo
         previousNext = (try? .init(pb.previousNext)) ?? .none
         timelineY = pb.timelineY
+        cameras = pb.cameras.compactMap { try? .init($0) }.sorted { $0.beat < $1.beat }
         enabled = pb.enabled
     }
     var pb: PBAnimationOption {
@@ -1601,6 +1603,7 @@ extension AnimationOption: Protobuf {
             $0.tempo = tempo.pb
             $0.previousNext = previousNext.pb
             $0.timelineY = timelineY
+            $0.cameras = cameras.map { $0.pb }
             $0.enabled = enabled
         }
     }
@@ -1664,6 +1667,24 @@ extension AnimationZipper: Protobuf {
     }
 }
 
+struct Camera {
+    var attitude = Attitude()
+    var beat = Rational(0)
+}
+extension Camera: Protobuf {
+    init(_ pb: PBCamera) throws {
+        attitude = (try? .init(pb.attitude)) ?? .init()
+        beat = (try? .init(pb.beat)) ?? .init()
+    }
+    var pb: PBCamera {
+        .with {
+            $0.attitude = attitude.pb
+            $0.beat = beat.pb
+        }
+    }
+}
+extension Camera: Hashable, Codable {}
+
 struct Animation {
     var keyframes = [Keyframe]()
 
@@ -1679,6 +1700,7 @@ struct Animation {
     var tempo = Music.defaultTempo
     var previousNext = PreviousNext.none
     var timelineY = Sheet.timelineY
+    var cameras = [Camera]()
     var enabled = false
     
     init(keyframes: [Keyframe] = [],
@@ -1688,6 +1710,7 @@ struct Animation {
          tempo: Rational = Music.defaultTempo,
          previousNext: PreviousNext = .none,
          timelineY: Double = Sheet.timelineY,
+         cameras: [Camera] = [],
          enabled: Bool = false) {
         
         self.keyframes = keyframes
@@ -1697,6 +1720,7 @@ struct Animation {
         self.tempo = tempo
         self.previousNext = previousNext
         self.timelineY = timelineY
+        self.cameras = cameras
         self.enabled = enabled
         index = keyframes.isEmpty ?
             0 : index(atRootBeat: rootBeat)
@@ -1744,6 +1768,7 @@ extension Animation: Protobuf {
         previousNext = (try? .init(pb.previousNext)) ?? .none
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
+        cameras = pb.cameras.compactMap { try? .init($0) }.sorted { $0.beat < $1.beat }
         enabled = pb.enabled
         index = keyframes.isEmpty ?
             0 : index(atRootBeat: rootBeat)
@@ -1821,6 +1846,7 @@ extension Animation: Protobuf {
             $0.tempo = tempo.pb
             $0.previousNext = previousNext.pb
             $0.timelineY = timelineY
+            $0.cameras = cameras.map { $0.pb }
             $0.enabled = enabled
         }
     }
@@ -2161,13 +2187,32 @@ extension Animation: BeatRangeType {
             minusStr + String(format: "%02d.%02d", iPart, idPart)
         }
     }
+    
+    var enabledCamera: Bool {
+        !cameras.isEmpty
+    }
+    var currentAttitude: Attitude? {
+        attitude(atBeat: localBeat)
+    }
+    func attitude(atSec sec: Rational) -> Attitude? {
+        guard !cameras.isEmpty else { return nil }
+        return attitude(atBeat: beat(fromSec: sec))
+    }
+    func attitude(atBeat beat: Rational) -> Attitude? {
+        guard !cameras.isEmpty else { return nil }
+        
+        let ip = Interpolation(keys: cameras.map { .init(value: $0.attitude,
+                                                         time: .init($0.beat), type: .spline) },
+                               duration: .init(endLoopDurBeat))
+        return ip.monoValue(withTime: .init(beat))
+    }
 }
 extension Animation {
     var option: AnimationOption {
         get {
             .init(beatRange: beatRange, loopDurBeat: loopDurBeat, tempo: tempo,
                   previousNext: previousNext,
-                  timelineY: timelineY, enabled: enabled)
+                  timelineY: timelineY, cameras: cameras, enabled: enabled)
         }
         set {
             beatRange = newValue.beatRange
@@ -2175,6 +2220,7 @@ extension Animation {
             tempo = newValue.tempo
             previousNext = newValue.previousNext
             timelineY = newValue.timelineY
+            cameras = newValue.cameras
             enabled = newValue.enabled
         }
     }
@@ -2317,6 +2363,9 @@ extension Sheet {
     }
     
     var mainFrameRate: Int {
+        if animation.enabledCamera {
+            return 60
+        }
         let qs = animation.keyframes.count.range
             .map { animation.rendableKeyframeDurBeat(at: $0).q }
             .filter { $0 != 0 }
@@ -2483,11 +2532,13 @@ extension Sheet {
             []
         }
         
+        let cameraAttitude = animation.attitude(atSec: sec)
+        
         let k = animation.keyframe(atRootBeat: rootBeat)
         return node(isBorder: isBorder, captionNodes: captionNodes,
                     picture: k?.picture ?? .init(), draftPicture: k?.draftPicture ?? .init(),
                     isBackground: isBackground,
-                    attitude: attitude,
+                    attitude: cameraAttitude != nil ? attitude + cameraAttitude! : attitude,
                     in: bounds)
     }
     func node(isBorder: Bool, captionNodes: [CPUNode] = [],
@@ -2624,6 +2675,22 @@ extension Sheet {
             text.origin = bounds.centerPoint - textBounds.centerPoint
         }
         self.init(texts: [text])
+    }
+    
+    var allMainFrame: Rect {
+        guard animation.enabledCamera else { return mainFrame }
+        
+        let mainFrame = mainFrame
+        var allFrame = mainFrame
+        let durSec = animation.sec(fromBeat: animation.endLoopDurBeat)
+        for i in 0 ..< Int((durSec * 60).rounded(.up)) {
+            let sec = Rational(i, 60)
+            let beat = animation.beat(fromSec: sec)
+            let camera = animation.attitude(atBeat: beat)!
+            let nFrame = mainFrame * camera.transform
+            allFrame.formUnion(nFrame)
+        }
+        return allFrame
     }
     
     static func snappableBorderLocations(from orientation: Orientation,

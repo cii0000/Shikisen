@@ -212,6 +212,23 @@ extension Size: Interpolatable {
                                        f2.height, t: t))
     }
 }
+extension Size: MonoInterpolatable {
+    static func firstMonospline(_ f1: Self,
+                                _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(width: .firstMonospline(f1.width, f2.width, f3.width, with: ms),
+              height: .firstMonospline(f1.height, f2.height, f3.height, with: ms))
+    }
+    static func monospline(_ f0: Self, _ f1: Self,
+                           _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(width: .monospline(f0.width, f1.width, f2.width, f3.width, with: ms),
+              height: .monospline(f0.height, f1.height, f2.height, f3.height, with: ms))
+    }
+    static func lastMonospline(_ f0: Self, _ f1: Self,
+                               _ f2: Self, with ms: Monospline) -> Self {
+        .init(width: .lastMonospline(f0.width, f1.width, f2.width, with: ms),
+              height: .lastMonospline(f0.height, f1.height, f2.height, with: ms))
+    }
+}
 extension Size {
     static func < (lhs: Size, rhs: Size) -> Bool {
         lhs.area < rhs.area

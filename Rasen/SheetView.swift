@@ -2060,6 +2060,9 @@ final class SheetView: BindableView, @unchecked Sendable {
                             if si < bottomNodes.count {
                                 bottomNodes[si]
                                 = bottomSheetView.animationView.elementViews[i].node.clone
+                                if let attitude = bottomSheetView.animationView.model.attitude(atSec: playingSec) {
+                                    topNodes[si].attitude = attitude
+                                }
                             }
                             bottomSheetView.playingOldKeyframeIndex = i
                         }
@@ -2077,7 +2080,11 @@ final class SheetView: BindableView, @unchecked Sendable {
             if let i {
                 if playingOldKeyframeIndex != i {
                     let node = sheetView.animationView.elementViews[i].node
-                    centerNode = playingSheetIndex == 0 ? node : node.clone
+                    centerNode = playingSheetIndex == 0
+                    && !sheetView.model.animation.enabledCamera ? node : node.clone
+                    if let attitude = sheetView.animationView.model.attitude(atSec: playingSec) {
+                        centerNode?.attitude = attitude
+                    }
                     playingOldKeyframeIndex = i
                 }
             } else {
@@ -2098,6 +2105,9 @@ final class SheetView: BindableView, @unchecked Sendable {
                             if si < topNodes.count {
                                 topNodes[si]
                                 = topSheetView.animationView.elementViews[i].node.clone
+                                if let attitude = topSheetView.animationView.model.attitude(atSec: playingSec) {
+                                    topNodes[si].attitude = attitude
+                                }
                             }
                             topSheetView.playingOldKeyframeIndex = i
                         }

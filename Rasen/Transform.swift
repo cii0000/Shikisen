@@ -454,6 +454,26 @@ extension Attitude: Interpolatable {
         return Attitude(position: position, scale: scale, rotation: rotation)
     }
 }
+extension Attitude: MonoInterpolatable {
+    static func firstMonospline(_ f1: Self,
+                                _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(position: .firstMonospline(f1.position, f2.position, f3.position, with: ms),
+              scale: .firstMonospline(f1.scale, f2.scale, f3.scale, with: ms),
+              rotation: .firstMonospline(f1.rotation, f2.rotation, f3.rotation, with: ms))
+    }
+    static func monospline(_ f0: Self, _ f1: Self,
+                           _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(position: .monospline(f0.position, f1.position, f2.position, f3.position, with: ms),
+              scale: .monospline(f0.scale, f1.scale, f2.scale, f3.scale, with: ms),
+              rotation: .monospline(f0.rotation, f1.rotation, f2.rotation, f3.rotation, with: ms))
+    }
+    static func lastMonospline(_ f0: Self, _ f1: Self,
+                               _ f2: Self, with ms: Monospline) -> Self {
+        .init(position: .lastMonospline(f0.position, f1.position, f2.position, with: ms),
+              scale: .lastMonospline(f0.scale, f1.scale, f2.scale, with: ms),
+              rotation: .lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms))
+    }
+}
 extension Attitude {
     var logScale: Double {
         get { .log2(scale.width) }
@@ -461,5 +481,11 @@ extension Attitude {
             let pow2 = 2 ** newValue
             scale = Size(width: pow2, height: pow2)
         }
+    }
+    static func + (lhs: Self, rhs: Self) -> Self {
+        .init(position: lhs.position + rhs.position,
+              scale: .init(width: lhs.scale.width * rhs.scale.width,
+                           height: lhs.scale.height * rhs.scale.height),
+              rotation: lhs.rotation + rhs.rotation)
     }
 }

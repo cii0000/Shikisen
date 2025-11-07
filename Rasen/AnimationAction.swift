@@ -496,7 +496,9 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                                         node.lineType = .color(.background)
                                         return node
                                     }
-                                    otherChildren.append(Node(children: nodes, isClippingChildren: true,
+                                    otherChildren.append(Node(children: nodes,
+                                                              isClippingChildren: true,
+                                                              attitude: oSheetView.animationView.model.attitude(atSec: sec) ?? .init(),
                                                 path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.25))))
                                 }
                             }

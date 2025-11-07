@@ -1624,6 +1624,37 @@ struct PBAnimationZipper: Sendable {
   init() {}
 }
 
+struct PBCamera: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var attitude: PBAttitude {
+    get {return _attitude ?? PBAttitude()}
+    set {_attitude = newValue}
+  }
+  /// Returns true if `attitude` has been explicitly set.
+  var hasAttitude: Bool {return self._attitude != nil}
+  /// Clears the value of `attitude`. Subsequent reads from it will return its default value.
+  mutating func clearAttitude() {self._attitude = nil}
+
+  var beat: PBRational {
+    get {return _beat ?? PBRational()}
+    set {_beat = newValue}
+  }
+  /// Returns true if `beat` has been explicitly set.
+  var hasBeat: Bool {return self._beat != nil}
+  /// Clears the value of `beat`. Subsequent reads from it will return its default value.
+  mutating func clearBeat() {self._beat = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _attitude: PBAttitude? = nil
+  fileprivate var _beat: PBRational? = nil
+}
+
 struct PBAnimationOption: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1659,6 +1690,8 @@ struct PBAnimationOption: Sendable {
   var previousNext: PBPreviousNext = .off
 
   var timelineY: Double = 0
+
+  var cameras: [PBCamera] = []
 
   var enabled: Bool = false
 
@@ -1739,6 +1772,11 @@ struct PBAnimation: @unchecked Sendable {
   var timelineY: Double {
     get {return _storage._timelineY}
     set {_uniqueStorage()._timelineY = newValue}
+  }
+
+  var cameras: [PBCamera] {
+    get {return _storage._cameras}
+    set {_uniqueStorage()._cameras = newValue}
   }
 
   var enabled: Bool {
@@ -6082,6 +6120,48 @@ extension PBAnimationZipper: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
   }
 }
 
+extension PBCamera: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBCamera"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "attitude"),
+    2: .same(proto: "beat"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._attitude) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._beat) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._attitude {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._beat {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBCamera, rhs: PBCamera) -> Bool {
+    if lhs._attitude != rhs._attitude {return false}
+    if lhs._beat != rhs._beat {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBAnimationOption"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -6090,6 +6170,7 @@ extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     2: .same(proto: "tempo"),
     6: .same(proto: "previousNext"),
     3: .same(proto: "timelineY"),
+    7: .same(proto: "cameras"),
     4: .same(proto: "enabled"),
   ]
 
@@ -6105,6 +6186,7 @@ extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       case 4: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._loopDurBeat) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.previousNext) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.cameras) }()
       default: break
       }
     }
@@ -6133,6 +6215,9 @@ extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if self.previousNext != .off {
       try visitor.visitSingularEnumField(value: self.previousNext, fieldNumber: 6)
     }
+    if !self.cameras.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.cameras, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6142,6 +6227,7 @@ extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if lhs._tempo != rhs._tempo {return false}
     if lhs.previousNext != rhs.previousNext {return false}
     if lhs.timelineY != rhs.timelineY {return false}
+    if lhs.cameras != rhs.cameras {return false}
     if lhs.enabled != rhs.enabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -6160,6 +6246,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
     10: .same(proto: "previousNext"),
     5: .same(proto: "isPlaying"),
     6: .same(proto: "timelineY"),
+    11: .same(proto: "cameras"),
     7: .same(proto: "enabled"),
   ]
 
@@ -6173,6 +6260,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
     var _previousNext: PBPreviousNext = .off
     var _isPlaying: Bool = false
     var _timelineY: Double = 0
+    var _cameras: [PBCamera] = []
     var _enabled: Bool = false
 
     #if swift(>=5.10)
@@ -6197,6 +6285,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
       _previousNext = source._previousNext
       _isPlaying = source._isPlaying
       _timelineY = source._timelineY
+      _cameras = source._cameras
       _enabled = source._enabled
     }
   }
@@ -6226,6 +6315,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._zipper) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._loopDurBeat) }()
         case 10: try { try decoder.decodeSingularEnumField(value: &_storage._previousNext) }()
+        case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._cameras) }()
         default: break
         }
       }
@@ -6268,6 +6358,9 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
       if _storage._previousNext != .off {
         try visitor.visitSingularEnumField(value: _storage._previousNext, fieldNumber: 10)
       }
+      if !_storage._cameras.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._cameras, fieldNumber: 11)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6286,6 +6379,7 @@ extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
         if _storage._previousNext != rhs_storage._previousNext {return false}
         if _storage._isPlaying != rhs_storage._isPlaying {return false}
         if _storage._timelineY != rhs_storage._timelineY {return false}
+        if _storage._cameras != rhs_storage._cameras {return false}
         if _storage._enabled != rhs_storage._enabled {return false}
         return true
       }
