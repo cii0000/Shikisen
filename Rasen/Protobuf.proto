@@ -328,18 +328,12 @@ message PBAnimationZipper {
     repeated PBPlane draftPlanes = 5;
 }
 
-message PBCamera {
-    PBAttitude attitude = 1;
-    PBRational beat = 2;
-}
-
 message PBAnimationOption {
     PBRationalRange beatRange = 1;
     PBRational loopDurBeat = 5;
     PBRational tempo = 2;
     PBPreviousNext previousNext = 6;
     double timelineY = 3;
-    repeated PBCamera cameras = 7;
     bool enabled = 4;
 }
 message PBAnimation {
@@ -352,8 +346,6 @@ message PBAnimation {
     PBPreviousNext previousNext = 10;
     bool isPlaying = 5;
     double timelineY = 6;
-    repeated PBCamera cameras = 11;
-    
     bool enabled = 7;
 }
 

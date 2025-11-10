@@ -25,7 +25,6 @@ import CoreImage
 struct Caption: Hashable, Codable {
     var string = ""
     var orientation = Orientation.horizontal
-    var isTitle = false
     var beatRange = 0 ..< Rational(0)
     var tempo = Music.defaultTempo
 }
@@ -49,11 +48,17 @@ extension Caption {
         }
     }
     
-    static let defaultFontSize = 11.0, defaultPadding = 8.0, defaultOutlineWidth = 2.0
-    func pathAndPosition(withFontSize fontSize: Double = defaultFontSize,
-                         in bounds: Rect, padding: Double = defaultPadding,
-                         outlineWidth: Double = defaultOutlineWidth) -> (path: Path, position: Point)? {
-        let fontSize = isTitle ? fontSize * 1.25 : fontSize
+    static let defaultPadding = 6.0, defaultOutlineWidth = 2.0
+    func pathAndPosition(withFontSize fontSize: Double = Font.defaultSize,
+                         in bounds: Rect,
+                         padding: Double = defaultPadding) -> (path: Path, position: Point)? {
+        let ratio = switch orientation {
+        case .horizontal: bounds.width < 444 ? bounds.width / 444 : 1
+        case .vertical: bounds.width < 240 ? bounds.height / 240 : 1
+        }
+        let fontSize = fontSize * ratio
+        let padding = padding * ratio
+        
         guard let tb = Text(string: string, size: fontSize,
                             widthCount: bounds.width).bounds else { return nil }
         switch orientation {
@@ -62,7 +67,6 @@ extension Caption {
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
-            typebute.font.isProportional = isTitle
             typebute.orientation = .horizontal
             typebute.maxTypelineWidth = .infinity
             typebute.spacing = typebute.font.size / 2
@@ -82,76 +86,49 @@ extension Caption {
         }
     }
     
-    static func cpuNodes(in bounds: Rect, from captions: [Caption]) -> [CPUNode] {
-        let ratio = min(bounds.width / 444, bounds.height / 240)
-        let fontSize = Self.defaultFontSize * ratio
-        let padding = Self.defaultPadding * ratio
-        let outlineWidth = Self.defaultOutlineWidth * ratio
-        return cpuNodes(withFontSize: fontSize, in: bounds, padding: padding,
-                        outlineWidth: outlineWidth, from: captions)
-    }
-    static func cpuNodes(withFontSize fontSize: Double,
-                         in bounds: Rect, padding: Double,
-                         outlineWidth: Double,
+    static func cpuNodes(withFontSize fontSize: Double = Font.defaultSize,
+                         in bounds: Rect,
+                         padding: Double = defaultPadding,
+                         outlineWidth: Double = defaultOutlineWidth,
                          from captions: [Caption]) -> [CPUNode] {
         captions
             .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
-            .enumerated().flatMap { $0.element.cpuNodes(withFontSize: fontSize, in: bounds,
+            .enumerated().flatMap { $0.element.cpuNodes(withFontSize: fontSize,
+                                                        in: bounds,
                                                         padding: padding * .init($0.offset * 3 + 1),
                                                         outlineWidth: outlineWidth) }
     }
     func cpuNodes(withFontSize fontSize: Double, in bounds: Rect, padding: Double,
                   outlineWidth: Double) -> [CPUNode] {
-        guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
-                                               padding: padding, outlineWidth: outlineWidth) else { return [] }
-        switch orientation {
-        case .horizontal:
-            return [.init(attitude: .init(position: tp), path: path,
-                          lineWidth: outlineWidth, lineType: .color(.content)),
-                    .init(attitude: .init(position: tp), path: path,
-                          fillType: .color(.background))]
-        case .vertical:
-            return [.init(attitude: .init(position: tp), path: path,
-                          lineWidth: outlineWidth, lineType: .color(.content)),
-                    .init(attitude: .init(position: tp), path: path,
-                          fillType: .color(.background))]
-        }
+        guard let (path, tp) = pathAndPosition(withFontSize: fontSize,
+                                               in: bounds,
+                                               padding: padding) else { return [] }
+        return [.init(attitude: .init(position: tp), path: path,
+                      lineWidth: outlineWidth, lineType: .color(.content)),
+                .init(attitude: .init(position: tp), path: path,
+                      fillType: .color(.background))]
     }
     
-    static func nodes(in bounds: Rect, from captions: [Caption]) -> [Node] {
-        let ratio = min(bounds.width / 444, bounds.height / 240)
-        let fontSize = Self.defaultFontSize * ratio
-        let padding = Self.defaultPadding * ratio
-        let outlineWidth = Self.defaultOutlineWidth * ratio
-        return nodes(withFontSize: fontSize, in: bounds, padding: padding,
-                     outlineWidth: outlineWidth, from: captions)
-    }
-    static func nodes(withFontSize fontSize: Double,
-                      in bounds: Rect, padding: Double,
-                      outlineWidth: Double,
+    static func nodes(withFontSize fontSize: Double = Font.defaultSize,
+                      in bounds: Rect,
+                      padding: Double = defaultPadding,
+                      outlineWidth: Double = defaultOutlineWidth,
                       from captions: [Caption]) -> [Node] {
         captions
             .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
-            .enumerated().flatMap { $0.element.nodes(withFontSize: fontSize, in: bounds,
+            .enumerated().flatMap { $0.element.nodes(withFontSize: fontSize,
+                                                     in: bounds,
                                                      padding: padding * .init($0.offset * 3 + 1),
                                                      outlineWidth: outlineWidth) }
     }
     func nodes(withFontSize fontSize: Double,
                in bounds: Rect, padding: Double, outlineWidth: Double) -> [Node] {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
-                                               padding: padding, outlineWidth: outlineWidth) else { return [] }
-        switch orientation {
-        case .horizontal:
-            return [.init(attitude: .init(position: tp), path: path,
-                          lineWidth: outlineWidth, lineType: .color(.content)),
-                    .init(attitude: .init(position: tp), path: path,
-                          fillType: .color(.background))]
-        case .vertical:
-            return [.init(attitude: .init(position: tp), path: path,
-                          lineWidth: outlineWidth, lineType: .color(.content)),
-                    .init(attitude: .init(position: tp), path: path,
-                          fillType: .color(.background))]
-        }
+                                               padding: padding) else { return [] }
+        return [.init(attitude: .init(position: tp), path: path,
+                      lineWidth: outlineWidth, lineType: .color(.content)),
+                .init(attitude: .init(position: tp), path: path,
+                      fillType: .color(.background))]
     }
     
     static func captions(atSec sec: Rational, in captions: [Caption]) -> [Caption] {

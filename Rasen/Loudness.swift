@@ -330,7 +330,7 @@ extension Loudness {
     // change to critical band
     private static let pitchClearVolm40Phons = [Point(0, 1),
                                                 Point(48, 1),
-                                                Point(92, 0.65),
+                                                Point(92, 0.75),
                                                 Point(120, 0.25)]
     static func clearVolm40Phon(fromPitch pitch: Double) -> Double {
         var prePitchVolm = pitchClearVolm40Phons.first!

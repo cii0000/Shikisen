@@ -724,6 +724,11 @@ final class MultiSelectFrameAction: DragEventAction {
     private var lastRootBeats = [(sec: Double, rootBeat: Rational)](capacity: 128)
     private var minLastSec = 1 / 12.0
     
+    private let progressWidth = {
+        let text = Text(string: "00.00", size: Font.defaultSize)
+        return text.frame?.width ?? 40
+    } ()
+    
     private func updateSelected(fromRootBeeat nRootBeat: Rational,
                                 in animationView: AnimationView) {
         var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
@@ -761,6 +766,7 @@ final class MultiSelectFrameAction: DragEventAction {
                 
                 var rbp = movedBeganRootBeatPosition
                 rbp.beat = animationView.beat(atX: sheetView.convertFromWorld(p).x)
+                - animationView.model.beatRange.start
                 let nRootBeat = animationView.model.rootBeat(at: rbp)
                 if animationView.rootBeat != nRootBeat {
                     sheetView.rootBeat = nRootBeat
@@ -785,6 +791,12 @@ final class MultiSelectFrameAction: DragEventAction {
                 beganSelectedFrameIndexes.forEach { isSelects[$0] = true }
                 let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
                 animationView.selectedFrameIndexes = fis
+                
+                self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
+                                                  progress: sheetView.currentTimeProgress(),
+                                                  progressWidth: self.progressWidth)
+            } else {
+                rootView.cursor = rootView.cursor(from: Animation.timeString(fromTime: 0, frameRate: 0))
             }
         case .changed:
             if let sheetView {
@@ -792,6 +804,7 @@ final class MultiSelectFrameAction: DragEventAction {
                 let oldKI = animationView.model.index
                 var bp = movedBeganRootBeatPosition
                 bp.beat = animationView.beat(atX: sheetView.convertFromWorld(p).x)
+                - animationView.model.beatRange.start
                 let nRootBeat = animationView.model.rootBeat(at: bp)
                 
                 if sheetView.rootBeat != nRootBeat {
@@ -813,6 +826,10 @@ final class MultiSelectFrameAction: DragEventAction {
                         animationView.shownInterTypeKeyframeIndex = animationView.model.index
                         
                         updateSelected(fromRootBeeat: nRootBeat, in: animationView)
+                        
+                        self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
+                                                          progress: sheetView.currentTimeProgress(),
+                                                          progressWidth: self.progressWidth)
                     }
                 }
             }

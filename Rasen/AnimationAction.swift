@@ -394,7 +394,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                 beganRootI = 0, beganRootBeat: Rational = 0, beganBeat = Rational(0),
                 beganSelectedFrameIndexes = [Int](), beganEventTime = 0.0, preEventTime: Double?
     private var allDX = 0.0, co = 0
-    private var snapEventTime: Double?
+    private var snapEventTime: Double?, otherIAndNodes = [SheetView: (i: Int, node: Node)]()
     private let progressWidth = {
         let text = Text(string: "00.00", size: Font.defaultSize)
         return text.frame?.width ?? 40
@@ -480,30 +480,45 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                         let animation = animationView.model
                         
                         func updateFromVertical() {
-                            let sec = animationView.model.sec(fromBeat: animationView.model.localBeat)
+                            let allSec = animationView.model.sec(fromBeat: animationView.model.mainBeat)
                             let bounds = sheetView.bounds
                             var otherChildren = [Node]()
                             let shp = rootView.sheetPosition(at: p)
                             rootView.sheetPositionFromVertical(at: shp) { nShp in
                                 if shp != nShp,
                                    let oSheetView = rootView.sheetView(at: nShp),
-                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.secRange.contains(sec) {
+                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.secRange.contains(allSec) {
                                     
-                                    let i = oSheetView.animationView.model.index(atSec: sec)
-                                    let keyframeView = oSheetView.animationView.elementViews[i]
-                                    let nodes = keyframeView.linesView.elementViews.map {
-                                        let node = $0.node.clone
-                                        node.lineType = .color(.background)
-                                        return node
+                                    let i = oSheetView.animationView.model.index(atSec: allSec - oSheetView.model.animation.secRange.start)
+                                    if otherIAndNodes[oSheetView] == nil || otherIAndNodes[oSheetView]?.i != i {
+                                        let keyframeView = oSheetView.animationView.elementViews[i]
+                                        let nodes = keyframeView.linesView.elementViews.map {
+                                            let node = $0.node.clone
+                                            node.lineType = .color(.background)
+                                            return node
+                                        }
+                                        let dNodes = keyframeView.draftLinesView.elementViews.map {
+                                            let node = $0.node.clone
+                                            node.lineType = .color(.background)
+                                            return node
+                                        }
+                                        let node = Node(children: [Node(children: dNodes, isClippingChildren: true,
+                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: 0.25))),
+                                                                   Node(children: nodes, isClippingChildren: true,
+                                                                               path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.25)))])
+                                        
+                                        otherChildren.append(node)
+                                        
+                                        otherIAndNodes[oSheetView] = (i, node)
+                                    } else if let (_, node) = otherIAndNodes[oSheetView] {
+                                        otherChildren.append(node)
                                     }
-                                    otherChildren.append(Node(children: nodes,
-                                                              isClippingChildren: true,
-                                                              attitude: oSheetView.animationView.model.attitude(atSec: sec) ?? .init(),
-                                                path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.25))))
                                 }
                             }
-                            if sheetView.otherNode.children.count != otherChildren.count {
+                            if !otherChildren.isEmpty {
                                 sheetView.otherNode.children = otherChildren
+                            } else if !sheetView.otherNode.children.isEmpty {
+                                sheetView.otherNode.children = []
                             }
                         }
                         

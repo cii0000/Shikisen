@@ -1274,8 +1274,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             }
         }
         
+        let enabledStartBeat = model.keyframes[0].beat == 0
         let sd = abs(p.x - x(atBeat: model.beatRange.start))
-        if sd < minD && sd < 10.0 * scale {
+        if sd < minD && sd < 10.0 * scale && enabledStartBeat {
             minD = sd
             minResult = .startBeat
         }
@@ -1288,7 +1289,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let md = Sheet.knobEditDistance * 2 * scale
         if let (minI, d) = slidableKeyframeIndex(at: p, maxDistance: md) {
-            if minI != 0, d < minD {
+            if enabledStartBeat ? minI != 0 : true, d < minD {
                 minD = d
                 minResult = .key(i: minI)
             }
@@ -1369,13 +1370,13 @@ final class SheetView: BindableView, @unchecked Sendable {
         node = Node(children: [opacityNode, otherNode,
                                animationView.node,
                                animationView.previousNextNode,
+                               mainFrameNode,
                                contentsView.node,
                                scoreView.node,
                                textsView.node,
                                bordersView.node,
                                animationView.timelineNode,
-                               animationView.captionNode,
-                               mainFrameNode])
+                               animationView.captionNode])
         
         updateBackground()
         updateWithKeyframeIndex()
@@ -1482,19 +1483,42 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     private func updateMainFrame() {
         let f = mainFrame
+        let lw = 6.0, hlw = 2.0, tlw = 1.0
         if f == Sheet.defaultBounds {
             if !mainFrameNode.children.isEmpty {
                 mainFrameNode.children = []
             }
-        } else {
-            let lw = 8.0, hlw = 2.0, tlw = 1.0
+        } else if isPlaying {
+            let b = bounds
+            let bf = f.outset(by: lw)
+            let bNode = Node(path: .init([.init(Rect(x: bf.minX, y: bf.maxY,
+                                                     width: bf.width, height: b.maxY - bf.maxY)),
+                                          .init(Rect(x: bf.maxX, y: b.minY,
+                                                     width: b.maxX - bf.maxX, height: b.height)),
+                                          .init(Rect(x: bf.minX, y: b.minY,
+                                                     width: bf.width, height: bf.minY - b.minY)),
+                                          .init(Rect(x: b.minX, y: b.minY,
+                                                     width: bf.minX - b.minX, height: b.height))]),
+                             fillType: .color(model.backgroundUUColor.value.with(opacity: 0.75)))
             let node = Node(path: .init([.init(Rect(x: f.minX, y: f.maxY,
                                                     width: f.width, height: lw)),
                                          .init(Rect(x: f.maxX, y: f.minY - lw,
                                                     width: lw, height: f.height + lw * 2)),
                                          .init(Rect(x: f.minX, y: f.minY - lw,
                                                     width: f.width, height: lw)),
-                                         .init(Rect(x: f.minX - lw, y: f.minY - lw, width: lw, height: f.height + lw * 2))]),
+                                         .init(Rect(x: f.minX - lw, y: f.minY - lw,
+                                                    width: lw, height: f.height + lw * 2))]),
+                            fillType: .color(.mainFrame))
+            mainFrameNode.children = [bNode, node]
+        } else {
+            let node = Node(path: .init([.init(Rect(x: f.minX, y: f.maxY,
+                                                    width: f.width, height: lw)),
+                                         .init(Rect(x: f.maxX, y: f.minY - lw,
+                                                    width: lw, height: f.height + lw * 2)),
+                                         .init(Rect(x: f.minX, y: f.minY - lw,
+                                                    width: f.width, height: lw)),
+                                         .init(Rect(x: f.minX - lw, y: f.minY - lw,
+                                                    width: lw, height: f.height + lw * 2))]),
                             fillType: .color(.mainFrame))
             let tNode = Node(path: .init([.init(Rect(x: f.minX + f.width / 3 - tlw / 2,
                                                      y: f.maxY + lw - hlw,
@@ -1581,6 +1605,10 @@ final class SheetView: BindableView, @unchecked Sendable {
     func currentTimeProgress() -> Double? {
         model.animation.localDurBeat != 0 && model.enabledAnimation ?
             .init(model.animation.localBeat / model.animation.localDurBeat) : nil
+    }
+    func timeProgress(fromBeat beat: Rational) -> Double? {
+        model.animation.localDurBeat != 0 && model.enabledAnimation ?
+            .init(beat / model.animation.localDurBeat) : nil
     }
     func currentTimeNodes() -> [Node] {
         Self.timeNodes(duration: model.animation.currentDurBeat,
@@ -1919,6 +1947,8 @@ final class SheetView: BindableView, @unchecked Sendable {
             updateCaption()
             setupTimeNodes(isVolume: true)
             
+            updateMainFrame()
+            
             var seqTracks = [Sequencer.Track]()
             var deltaSec: Rational = 0
             
@@ -2010,6 +2040,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             musicBackgroundNode = nil
             
             updateWithKeyframeIndex()
+            updateMainFrame()
             
             animationView.captionNode.children = []
             playingCaptions = []
@@ -2060,9 +2091,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                             if si < bottomNodes.count {
                                 bottomNodes[si]
                                 = bottomSheetView.animationView.elementViews[i].node.clone
-                                if let attitude = bottomSheetView.animationView.model.attitude(atSec: playingSec) {
-                                    topNodes[si].attitude = attitude
-                                }
                             }
                             bottomSheetView.playingOldKeyframeIndex = i
                         }
@@ -2080,11 +2108,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             if let i {
                 if playingOldKeyframeIndex != i {
                     let node = sheetView.animationView.elementViews[i].node
-                    centerNode = playingSheetIndex == 0
-                    && !sheetView.model.animation.enabledCamera ? node : node.clone
-                    if let attitude = sheetView.animationView.model.attitude(atSec: playingSec) {
-                        centerNode?.attitude = attitude
-                    }
+                    centerNode = playingSheetIndex == 0 ? node : node.clone
                     playingOldKeyframeIndex = i
                 }
             } else {
@@ -2105,9 +2129,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                             if si < topNodes.count {
                                 topNodes[si]
                                 = topSheetView.animationView.elementViews[i].node.clone
-                                if let attitude = topSheetView.animationView.model.attitude(atSec: playingSec) {
-                                    topNodes[si].attitude = attitude
-                                }
                             }
                             topSheetView.playingOldKeyframeIndex = i
                         }
@@ -2473,7 +2494,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         if captions != playingCaptions {
             playingCaptions = captions
             if !captions.isEmpty {
-                let nodes = Caption.nodes(in:  sheetView.mainFrameWithBottomAndTop(),
+                let nodes = Caption.nodes(in: sheetView.mainFrameWithBottomAndTop(),
                                           from: captions)
                 playingCaptionNodes = nodes
                 animationView.captionNode.children = nodes
