@@ -485,7 +485,10 @@ final class ColorAction: Action {
                         updatePitsWithSelection(noteI: noteI, pitI: nil, sprolI: nil, .stereo)
                         beganBeat = scoreView.beat(atX: scoreP.x)
                     case .pit(let pitI):
-                        if sheetView.isStraight(from: rootView.selections,
+                        let id = note.pits[pitI].stereo.id
+                        if !score.notes.enumerated()
+                            .contains(where: { $0.offset != noteI ? $0.element.pits.contains(where: { $0.stereo.id == id }) : false })
+                            && sheetView.isStraight(from: rootView.selections,
                                                     atPit: pitI, at: note) {
                             let note = score.notes[noteI]
                             let (pitIs, beat) = pitI + 1 < note.pits.count ? ([pitI, pitI + 1], note.pits[pitI].beat.mid(note.pits[pitI + 1].beat)) : ([pitI], note.pits[pitI].beat.mid(note.beatRange.length))
@@ -556,6 +559,10 @@ final class ColorAction: Action {
             let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let volm = (scoreResult?.isStereo ?? false) ?
             Double.linear(Volm.minVolm, Volm.safeVolm, t: t) : Double.linear(0, 1, t: t)
+            
+            let db = Volm.db(fromVolm: volm)
+            let ddb = db - Volm.db(fromVolm: beganVolm)
+            rootView.cursor = .arrowWith(string: "\(db.string(digitsCount: 2)) db (\((ddb > 0 ? "+" : "") + ddb.string(digitsCount: 2)) db)")
             let volmScale = beganVolm == 0 ? 1 : volm / beganVolm
             func newVolm(from otherVolm: Double, _ volmRange: ClosedRange<Double>) -> Double {
                 if beganVolm == otherVolm {

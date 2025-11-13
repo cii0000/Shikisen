@@ -2825,7 +2825,7 @@ extension ScoreView {
         
         let firstX = x(atBeat: Rational(0))
         let y = mainFrame.minY
-        let allBeat = score.beatRange.end
+        let allBeat = score.allBeatRange.end
         let allW = width(atDurBeat: allBeat)
         var nodes = [Node](), maxH = 0.0
         func spNode(width: Int, at xi: Int) -> Node? {

@@ -487,11 +487,11 @@ struct Spectlope: Hashable, Codable {
     static func defaultSprols(isRandom: Bool = false) -> [Sprol] {
         [Sprol(pitch: 12 * 0.75, volm: 0, noise: 0),
          Sprol(pitch: 12 * 2, volm: 0.75, noise: 0),
-         Sprol(pitch: 12 * 3, volm: !isRandom ? 1 : .random(in: 0.5 ... 1), noise: 0),
-         Sprol(pitch: 12 * 7, volm: 0.4, noise: 0),
-         Sprol(pitch: 12 * 7.25, volm: !isRandom ? 0.5 : .random(in: 0.5 ... 0.8), noise: 0),
-         Sprol(pitch: 12 * 8.15, volm: !isRandom ? 0.5 : .random(in: 0.5 ... 0.8), noise: 0),
-         Sprol(pitch: 12 * 8.75, volm: 0.125, noise: 0),
+         Sprol(pitch: 12 * 3.5, volm: !isRandom ? 1 : .random(in: 0.5 ... 1), noise: 0),
+         Sprol(pitch: 12 * 7, volm: 0.65, noise: 0),
+         Sprol(pitch: 12 * 7.25, volm: !isRandom ? 0.75 : .random(in: 0.5 ... 0.8), noise: 0),
+         Sprol(pitch: 12 * 8.15, volm: !isRandom ? 0.75 : .random(in: 0.5 ... 0.8), noise: 0),
+         Sprol(pitch: 12 * 9, volm: 0.35, noise: 0),
          Sprol(pitch: 12 * 10, volm: 0, noise: 0)]
     }
     
@@ -2381,8 +2381,8 @@ extension Volm {
 
 struct Audio: Hashable, Codable {
     static let defaultSampleRate = 44100.0
-    static let headroomDb = 1.0
-    static let headroomVolm = Volm.volm(fromDb: -headroomDb)
+    static let headroomDb = -0.0625
+    static let headroomVolm = Volm.volm(fromDb: headroomDb)
     static let headroomAmp = Volm.amp(fromVolm: headroomVolm)
     static let floatHeadroomAmp = Float(headroomAmp)
     static let limitLufs = -14.0

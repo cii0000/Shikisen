@@ -376,6 +376,7 @@ struct Rendnote {
     var secRange: Range<Double>
     var reverb: Reverb
     var waveclip: Waveclip
+    var isFitPhase = true
     var isStereoNoise = true
     var isRelease = false
     let id = UUID()
@@ -389,13 +390,15 @@ extension Rendnote {
         let (seed0, seed1) = note.containsNoise ? note.id.uInt64Values : (0, 0)
         let rootFq = Pitch.fq(fromPitch: .init(note.pitch))
         let pitbend = note.pitbend(fromTempo: score.tempo)
+        let isSmall = !note.isFullNoise && eSec - sSec < Waveclip.default.attackSec
         self.init(rootFq: rootFq,
                   firstFq: rootFq * pitbend.firstFqScale,
                   noiseSeed0: seed0, noiseSeed1: seed1,
                   pitbend: pitbend,
                   secRange: sSec ..< eSec,
                   reverb: .init(),
-                  waveclip: note.isOneOvertone && eSec - sSec < Waveclip.default.attackSec ? .small : .default)
+                  waveclip: isSmall ? .small : .default,
+                  isFitPhase: !isSmall)
     }
     
     var isStft: Bool {
@@ -590,7 +593,7 @@ extension Rendnote {
         let firstFq = firstFq.clipped(min: Score.minFq, max: cutFq)
         let cutPitch = Pitch.pitch(fromFq: cutFq)
         let rootPitch = Pitch.pitch(fromFq: rootFq)
-        let startPhase = secRange.start.isInfinite ? 0.0 : (secRange.start * firstFq * .pi2)
+        let startPhase = isFitPhase ? (secRange.start.isInfinite ? 0.0 : (secRange.start * firstFq * .pi2)) : 0
         let firstClearVolm = Loudness.clearVolm40Phon(fromPitch: Pitch.pitch(fromFq: firstFq))
         
         let isOneSin = pitbend.isOneOvertone

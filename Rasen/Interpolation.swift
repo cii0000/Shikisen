@@ -154,7 +154,7 @@ extension Interpolation {
             let t = timeResult.internalTime / timeResult.sectionTime
             return Value.linear(k1.value, k2.value, t: t)
         }
-        if !isLoop && i1 - 1 < 0 {
+        if !isLoop && (i1 - 1 < 0 || (keys[i1 - 1].time == k1.time)) {
             let t = timeResult.internalTime / timeResult.sectionTime
             if i1 + 2 >= keys.count {
                 return Value.linear(k1.value, k2.value, t: t)

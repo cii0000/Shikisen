@@ -292,14 +292,17 @@ final class LookUpAction: InputKeyEventAction {
             let bounds = sheetView.model.boundsTuple(at: sheetView.convertFromWorld(p),
                                                      in: rootView.sheetFrame(with: rootView.sheetPosition(at: p)).bounds).bounds.integral
             
-            let sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
+            var sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
             if !sampless.isEmpty {
-                let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
                 let peakDb = PCMBuffer.peakDb(sampless: sampless)
+                PCMBuffer.clip(amp: Audio.headroomAmp, sampless: &sampless)
+                let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb.string(digitsCount: 2)) dB"
-                              + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))",
+                              
+                              + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))"
+                              + (sheetView.mainFrame.bounds.size != bounds.size ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))" : ""),
                               at: p)
             } else {
                 rootView.show("Background".localized + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))", at: p)

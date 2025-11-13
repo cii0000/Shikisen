@@ -3204,7 +3204,9 @@ final class RootView: View, @unchecked Sendable {
             seqTracks.append(seqTrack)
         }
         
-        return Sequencer.sampless(from: seqTracks, sampleRate: sampleRate)
+        let seq = Sequencer(tracks: seqTracks, type: .normal)
+        let buffer = try? seq?.buffer(sampleRate: sampleRate, isClip: false) { d, flag in }
+        return buffer?.doubleSampless ?? []
     }
     
     var worldKnobEditDistance: Double {

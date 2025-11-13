@@ -576,14 +576,14 @@ extension Formant: MonoInterpolatable {
 
 struct FormantFilter: Hashable, Codable {
     /// f0: 4.03
-    var formants: [Formant] = [.init(sdVolm: 0.5 * 0.9, sdNoise: 0,
+    var formants: [Formant] = [.init(sdVolm: 0.5 * 0.8, sdNoise: 0,
                                      sdPitch: 9.1, sPitch: 67.8, ePitch: 74.5, edPitch: 6.3,
-                                     volm: 0.9 * 0.9, noise: 0.13,
-                                     edVolm: 0.5 * 0.9, edNoise: 0.18),
-                               .init(sdVolm: 0.5 * 0.9, sdNoise: 0.13,
+                                     volm: 0.9 * 0.8, noise: 0.13,
+                                     edVolm: 0.5 * 0.8, edNoise: 0.18),
+                               .init(sdVolm: 0.5 * 0.85, sdNoise: 0.13,
                                      sdPitch: 5.7, sPitch: 80, ePitch: 81.7, edPitch: 5.2,
-                                     volm: 0.9 * 0.9, noise: 0.3,
-                                     edVolm: 0.33 * 0.9, edNoise: 0.26),
+                                     volm: 0.9 * 0.85, noise: 0.3,
+                                     edVolm: 0.33 * 0.85, edNoise: 0.26),
                                .init(sdVolm: 0.3 * 0.9, sdNoise: 0.23,
                                      sdPitch: 1.6, sPitch: 94.5, ePitch: 96.5, edPitch: 1.1,
                                      volm: 1, noise: 0.35,

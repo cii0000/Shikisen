@@ -1020,8 +1020,20 @@ final class Sequencer {
                 scoreTrackItem.startSec = allDurSec
                 
                 let startI = Int((allDurSec * sampleRate).rounded(.down))
-                for (ci, samples) in scoreTrackItem.sampless.enumerated() {
-                    vDSP.add(in: &sampless[ci], from: samples, startI: startI)
+                
+                if scoreTrackItem.loopDurSec > 0 {
+                    var sec: Rational = 0
+                    while sec < scoreTrackItem.durSec + scoreTrackItem.loopDurSec {
+                        let dSampleI = Int((Double(sec) * sampleRate).rounded(.down))
+                        for (ci, samples) in scoreTrackItem.sampless.enumerated() {
+                            vDSP.add(in: &sampless[ci], from: samples, startI: startI + dSampleI)
+                        }
+                        sec += scoreTrackItem.durSec
+                    }
+                } else {
+                    for (ci, samples) in scoreTrackItem.sampless.enumerated() {
+                        vDSP.add(in: &sampless[ci], from: samples, startI: startI)
+                    }
                 }
             }
             
@@ -1294,7 +1306,7 @@ extension Sequencer {
                 sampleRate: Double,
                 headroomAmp: Double = Audio.headroomAmp,
                 waveclip: Waveclip? = .default,
-                isCompress: Bool = true,
+                isCompress: Bool = false,
                 isLinearPCM: Bool,
                 progressHandler: (Double, inout Bool) -> ()) throws {
         guard let buffer = try buffer(sampleRate: sampleRate,
@@ -1312,7 +1324,7 @@ extension Sequencer {
     func audio(sampleRate: Double,
                headroomAmp: Double = Audio.headroomAmp,
                waveclip: Waveclip? = .default,
-               isCompress: Bool = true,
+               isCompress: Bool = false,
                progressHandler: (Double, inout Bool) -> ()) throws -> Audio? {
         guard let buffer = try buffer(sampleRate: sampleRate,
                                       headroomAmp: headroomAmp,
@@ -1325,11 +1337,12 @@ extension Sequencer {
                 headroomAmp: Double = Audio.headroomAmp,
                 waveclip: Waveclip? = .default,
                 limitLufs: Double? = nil,
-                isCompress: Bool = true,
+                isClip: Bool = true,
+                isCompress: Bool = false,
                 progressHandler: (Double, inout Bool) -> ()) throws -> AVAudioPCMBuffer? {
         let oldHeadroomAmp = clippingAudioUnit.headroomAmp
         let oldEnabledAttack = clippingAudioUnit.enabledAttack
-        clippingAudioUnit.headroomAmp = isCompress ? nil : .init(headroomAmp)
+        clippingAudioUnit.headroomAmp = !isClip || isCompress ? nil : .init(headroomAmp)
         clippingAudioUnit.enabledAttack = false
         defer {
             clippingAudioUnit.headroomAmp = oldHeadroomAmp
@@ -1396,7 +1409,7 @@ extension Sequencer {
         }
         if isCompress {
             allBuffer.compress(targetAmp: Float(headroomAmp))
-        } else {
+        } else if isClip {
             allBuffer.clip(amp: Float(headroomAmp))
         }
         
@@ -1648,6 +1661,17 @@ extension AVAudioPCMBuffer {
                     if enabledRelease && rSec < waveclip.releaseSec {
                         sampless[ci][i] *= rSec * waveclip.rReleaseSec
                     }
+                }
+            }
+        }
+    }
+    static func clip(amp: Double, sampless: inout [[Double]]) {
+        let frameCount = sampless[0].count, channelCount = sampless.count
+        for ci in 0 ..< channelCount {
+            for i in 0 ..< frameCount {
+                let v = sampless[ci][i]
+                if abs(v) > amp {
+                    sampless[ci][i] = v < amp ? -amp : amp
                 }
             }
         }
