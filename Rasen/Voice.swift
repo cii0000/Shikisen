@@ -757,7 +757,7 @@ extension FormantFilter {
         case .j:
             var n = withSelfA(to: .i)
             n[1].pitch += -2.75
-            n[1].formMultiplyVolm(0.5)
+            n[1].formMultiplyVolm(0.75)
             n[2].pitch += -1
             return n
         case .ja:
@@ -1447,7 +1447,7 @@ struct Mora: Hashable, Codable {
             phonemes.removeLast()
             
             youonFf = baseFf.withSelfA(to: phoneme)
-            youonDurSec = 0.09
+            youonDurSec = 0.1
             isβ = false
         case .β:
             phonemes.removeLast()
@@ -1684,13 +1684,14 @@ struct Mora: Hashable, Codable {
                 kffs.append(.init(ff1, durSec: paddingSec * 0.5, pitch: pitch / 2))
                 centerI = kffs.count
                 if let youonFf {
-                    kffs.append(.init(youonFf, durSec: 0.0125))
-                    kffs.append(.init(.linear(youonFf, vowelFf,
-                                              t: 0.00625 / youonDurSec),
-                                      durSec: 0.00625, pitch: -pitch / 4))
-                    kffs.append(.init(.linear(youonFf, vowelFf,
-                                              t: 0.0125 / youonDurSec),
-                                      durSec: youonDurSec - 0.0125))
+                    kffs.append(.init(youonFf, durSec: 0.00625))
+                    kffs.append(.init(youonFf, durSec: 0.00625, pitch: -pitch / 4))
+                    
+                    kffs.append(.init(youonFf, durSec: youonDurSec * 2 / 3))
+                    var ff1 = FormantFilter.linear(youonFf, vowelFf, t: 0.75)
+                    ff1[1].formMultiplyVolm(0.75)
+                    let pitch = previousPitch != nil ? -(pitch - previousPitch!) / 8 : 0
+                    kffs.append(.init(ff1, durSec: youonDurSec / 3, pitch: pitch))
                 } else {
                     kffs.append(.init(vowelFf, durSec: 0.00625))
                     kffs.append(.init(vowelFf, durSec: 0.00625, pitch: -pitch / 4))

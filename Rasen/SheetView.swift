@@ -2290,7 +2290,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         let lufs = PCMBuffer.lufs(sampless: allSampless,
                                   sampleRate: sampleRate) ?? -.infinity
         let peakAmp = PCMBuffer.peakAmp(sampless: sampless)
-        let isPeak = peakAmp > Audio.headroomAmp
+        let isPeak = peakAmp > Audio.safetyAmp
         
         volumeColor = if isPeak {
             .warning

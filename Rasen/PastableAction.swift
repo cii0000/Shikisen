@@ -3001,7 +3001,42 @@ final class PastableAction: Action {
                         }
                     } else {
                         var note = scoreView.model.notes[noteI]
-                        if note.pits[pitI].stereo != stereo {
+                        let oID = note.pits[pitI].stereo.id
+                        if scoreView.model.notes.enumerated().contains(where: { i, nNote in
+                            nNote.pits.enumerated().contains(where: {
+                                !(i == noteI && $0.offset == pitI) ?
+                                $0.element.stereo.id == oID : false
+                            })
+                        }) {
+                            
+                            let score = scoreView.model
+                            let nis = score.notes.enumerated().reduce(into: [Int: [Int]]()) { n, v in
+                                let pitIs = v.element.pits.count.range
+                                    .filter { v.element.pits[$0].stereo.id == oID }
+                                if !pitIs.isEmpty {
+                                    n[v.offset] = pitIs
+                                }
+                            }
+                            var nivs = [IndexValue<Note>]()
+                            for (noteI, pitIs) in nis {
+                                var note = score.notes[noteI], isChanged = false
+                                for pitI in pitIs {
+                                    if note.pits[pitI].stereo != stereo {
+                                        note.pits[pitI].stereo = stereo
+                                        isChanged = true
+                                    }
+                                }
+                                if isChanged {
+                                    nivs.append(.init(value: note, index: noteI))
+                                }
+                            }
+                            if !nivs.isEmpty {
+                                sheetView.newUndoGroup()
+                                sheetView.replace(nivs)
+                                
+                                sheetView.updatePlaying()
+                            }
+                        } else if note.pits[pitI].stereo != stereo {
                             note.pits[pitI].stereo = stereo
                             
                             if sheetView.isStraight(from: rootView.selections,
@@ -3075,24 +3110,61 @@ final class PastableAction: Action {
                         }
                     case .pit(let pitI), .sprol(let pitI, _, _):
                         var note = scoreView.model.notes[noteI]
-                        var isChanged = false
-                        if note.pits[pitI].tone != tone {
-                            note.pits[pitI].tone = tone
-                            isChanged = true
-                        }
-                        if sheetView.isStraight(from: rootView.selections,
-                                                    atPit: pitI, at: note),
-                           pitI + 1 < note.pits.count,
-                            note.pits[pitI + 1].tone != tone {
+                        let oID = note.pits[pitI].tone.id
+                        if scoreView.model.notes.enumerated().contains(where: { i, nNote in
+                            nNote.pits.enumerated().contains(where: {
+                                !(i == noteI && $0.offset == pitI) ?
+                                $0.element.tone.id == oID : false
+                            })
+                        }) {
                             
-                            note.pits[pitI + 1].tone = tone
-                            isChanged = true
-                        }
-                        if isChanged {
-                            sheetView.newUndoGroup()
-                            sheetView.replace(note, at: noteI)
-                            
-                            sheetView.updatePlaying()
+                            let score = scoreView.model
+                            let nis = score.notes.enumerated().reduce(into: [Int: [Int]]()) { n, v in
+                                let pitIs = v.element.pits.count.range
+                                    .filter { v.element.pits[$0].tone.id == oID }
+                                if !pitIs.isEmpty {
+                                    n[v.offset] = pitIs
+                                }
+                            }
+                            var nivs = [IndexValue<Note>]()
+                            for (noteI, pitIs) in nis {
+                                var note = score.notes[noteI], isChanged = false
+                                for pitI in pitIs {
+                                    if note.pits[pitI].tone != tone {
+                                        note.pits[pitI].tone = tone
+                                        isChanged = true
+                                    }
+                                }
+                                if isChanged {
+                                    nivs.append(.init(value: note, index: noteI))
+                                }
+                            }
+                            if !nivs.isEmpty {
+                                sheetView.newUndoGroup()
+                                sheetView.replace(nivs)
+                                
+                                sheetView.updatePlaying()
+                            }
+                        } else {
+                            var isChanged = false
+                            if note.pits[pitI].tone != tone {
+                                note.pits[pitI].tone = tone
+                                isChanged = true
+                            }
+                            if sheetView.isStraight(from: rootView.selections,
+                                                        atPit: pitI, at: note),
+                               pitI + 1 < note.pits.count,
+                                note.pits[pitI + 1].tone != tone {
+                                
+                                note.pits[pitI + 1].tone = tone
+                                isChanged = true
+                            }
+                            if isChanged {
+                                sheetView.newUndoGroup()
+                                sheetView.replace(note, at: noteI)
+                                
+                                sheetView.updatePlaying()
+                            }
                         }
                     default: break
                     }

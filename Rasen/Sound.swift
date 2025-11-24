@@ -487,11 +487,11 @@ struct Spectlope: Hashable, Codable {
     static func defaultSprols(isRandom: Bool = false) -> [Sprol] {
         [Sprol(pitch: 12 * 0.75, volm: 0, noise: 0),
          Sprol(pitch: 12 * 2, volm: 0.75, noise: 0),
-         Sprol(pitch: 12 * 3.5, volm: !isRandom ? 1 : .random(in: 0.5 ... 1), noise: 0),
-         Sprol(pitch: 12 * 7, volm: 0.65, noise: 0),
-         Sprol(pitch: 12 * 7.25, volm: !isRandom ? 0.75 : .random(in: 0.5 ... 0.8), noise: 0),
-         Sprol(pitch: 12 * 8.15, volm: !isRandom ? 0.75 : .random(in: 0.5 ... 0.8), noise: 0),
-         Sprol(pitch: 12 * 9, volm: 0.35, noise: 0),
+         Sprol(pitch: 12 * 3, volm: !isRandom ? 1 : .random(in: 0.95 ... 1), noise: 0),
+         Sprol(pitch: 12 * 7, volm: 0.4, noise: 0),
+         Sprol(pitch: 12 * 7.25, volm: !isRandom ? 0.5 : .random(in: 0.5 ... 0.55), noise: 0),
+         Sprol(pitch: 12 * 8.15, volm: !isRandom ? 0.5 : .random(in: 0.5 ... 0.55), noise: 0),
+         Sprol(pitch: 12 * 8.75, volm: 0.125, noise: 0),
          Sprol(pitch: 12 * 10, volm: 0, noise: 0)]
     }
     
@@ -1270,60 +1270,84 @@ extension Note {
     private func chordResult(minBeatLength: Rational = .init(1, 8)) -> ChordResult? {
         if pits.count >= 2 {
             var ns = [ChordResult.Item]()
-            var preBeat = beatRange.start, prePitch = Int((pitch + pits[0].pitch).rounded())
-            var preVolm = pits[0].stereo.volm
-            var prePit = pits[0]
-            if preBeat < pits[0].beat + beatRange.start
-                && prePit.tone.spectlope.sumNoise < 0.75
-                && prePit.stereo.volm > 0.1 {
-                ns.append(.init(beatRange: preBeat ..< pits[0].beat + beatRange.start,
-                                roundedPitch: prePitch))
+            
+            let sumTones = pits.map { isOneOvertone ? 0 : $0.tone.spectlope.sumVolm }
+            let maxSumTone = sumTones.maxValue { $0 } ?? 0
+            func append(preBeat: Rational, nextBeat: Rational, preI: Int, nextI: Int, pitch: Int) {
+                guard preBeat < nextBeat else { return }
+                let prePit = pits[preI]
+                var preVolm = isOneOvertone ?
+                prePit.stereo.volm :
+                (prePit.stereo.volm * (maxSumTone == 0 ? 0 : sumTones[preI] / maxSumTone))
+                var preSpectlope = prePit.tone.spectlope
+                
+                var nPreBeat = preBeat
+                var isNPreEqual = false
+                if preI < nextI {
+                    for i in preI + 1 ... nextI {
+                        let pit = pits[i]
+                        let volm = isOneOvertone ?
+                        pit.stereo.volm :
+                        (pit.stereo.volm * (maxSumTone == 0 ? 0 : sumTones[i] / maxSumTone))
+                        let spectlope = pit.tone.spectlope
+                        
+                        let isFill = preSpectlope.mid(spectlope).sumNoise < 0.75
+                        && preVolm.mid(volm) > 0.1
+                        if !isFill {
+                            let nNextBeat = pits[i - 1].beat + beatRange.start
+                            if isNPreEqual, nPreBeat < nNextBeat {
+                                ns.append(.init(beatRange: nPreBeat ..< nNextBeat,
+                                                roundedPitch: pitch))
+                            }
+                            nPreBeat = pit.beat + beatRange.start
+                            isNPreEqual = false
+                        } else {
+                            isNPreEqual = true
+                        }
+                        
+                        preVolm = volm
+                        preSpectlope = spectlope
+                    }
+                    let isLastNPreEqual = nextI == pits.count - 1 ?
+                    preSpectlope.sumNoise < 0.75 && preVolm > 0.1 : false
+                    if isNPreEqual || isLastNPreEqual {
+                        let nNextBeat = isLastNPreEqual ?
+                        nextBeat : pits[nextI].beat + beatRange.start
+                        if nPreBeat < nNextBeat {
+                            ns.append(.init(beatRange: nPreBeat ..< nNextBeat,
+                                            roundedPitch: pitch))
+                        }
+                    }
+                } else if nextI == pits.count - 1,
+                          preSpectlope.sumNoise < 0.75 && preVolm > 0.1, nPreBeat < nextBeat {
+                    ns.append(.init(beatRange: nPreBeat ..< nextBeat,
+                                    roundedPitch: pitch))
+                }
             }
+            
+            var preBeat = beatRange.start, preI = 0
+            var prePitch = Int((pitch + pits[0].pitch).rounded())
             var isPreEqual = false
             for i in 1 ..< pits.count {
                 let pit = pits[i]
                 let pitch = Int((pitch + pit.pitch).rounded())
-                let volm = pit.stereo.volm
                 if pitch != prePitch {
-                    let pPit = pits[i - 1]
-                    let pBeat = pPit.beat + beatRange.start
-                    if isPreEqual && preBeat < pBeat
-                        && prePit.tone.spectlope.mid(pPit.tone.spectlope).sumNoise < 0.75
-                        && prePit.stereo.volm.mid(pPit.stereo.volm) > 0.1 {
-                        ns.append(.init(beatRange: preBeat ..< pBeat,
-                                        roundedPitch: prePitch))
+                    if isPreEqual {
+                        append(preBeat: preBeat, nextBeat: pits[i - 1].beat + beatRange.start,
+                               preI: preI, nextI: i - 1,
+                               pitch: prePitch)
                     }
-                    let beat = pit.beat + beatRange.start
-                    preBeat = beat
+                    preBeat = pit.beat + beatRange.start
+                    preI = i
                     prePitch = pitch
-                    preVolm = volm
-                    prePit = pit
-                    
-                    isPreEqual = false
-                } else if volm != preVolm {
-                    let beat = pit.beat + beatRange.start
-                    if preBeat < beat
-                        && prePit.tone.spectlope.mid(pit.tone.spectlope).sumNoise < 0.75
-                        && preVolm.mid(volm) > 0.1 {
-                        ns.append(.init(beatRange: preBeat ..< beat,
-                                        roundedPitch: pitch))
-                    }
-                    preBeat = beat
-                    prePitch = pitch
-                    preVolm = volm
-                    prePit = pit
-                    
                     isPreEqual = false
                 } else {
                     isPreEqual = true
                 }
             }
-            if preBeat < beatRange.end
-                && prePit.tone.spectlope.sumNoise < 0.75
-                && prePit.stereo.volm > 0.1 {
-                ns.append(.init(beatRange: preBeat ..< beatRange.end,
-                                roundedPitch: prePitch))
-            }
+            append(preBeat: preBeat, nextBeat: beatRange.end,
+                   preI: preI, nextI: pits.count - 1,
+                   pitch: prePitch)
             return .init(items: ns.filter { $0.beatRange.length >= minBeatLength })
         } else {
             return beatRange.length >= minBeatLength
@@ -2381,7 +2405,10 @@ extension Volm {
 
 struct Audio: Hashable, Codable {
     static let defaultSampleRate = 44100.0
-    static let headroomDb = -0.0625
+    static let safetyDb = -0.0625
+    static let safetyVolm = Volm.volm(fromDb: safetyDb)
+    static let safetyAmp = Volm.amp(fromVolm: safetyVolm)
+    static let headroomDb = 0.0
     static let headroomVolm = Volm.volm(fromDb: headroomDb)
     static let headroomAmp = Volm.amp(fromVolm: headroomVolm)
     static let floatHeadroomAmp = Float(headroomAmp)
