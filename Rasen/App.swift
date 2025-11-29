@@ -37,26 +37,25 @@ import UniformTypeIdentifiers
 
 final class SubNSApplication: NSApplication {
     // AppKit bug: nsEvent.allTouches() returns [] after sleep
-    @objc protocol HIDEvent {}
     static let cgHandle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW)
-    typealias CGEventCopyIOHIDEventType = @convention(c) (_ cgEvent: CGEvent) -> any HIDEvent
+    typealias CGEventCopyIOHIDEventType = @convention(c) (_ cgEvent: CGEvent) -> any CFTypeRef
     let CGEventCopyIOHIDEvent = unsafeBitCast(dlsym(cgHandle, "CGEventCopyIOHIDEvent"),
                                               to: CGEventCopyIOHIDEventType.self)
     
     static let ioKitHandle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW)
-    typealias IOHIDEventGetChildrenType = @convention(c) (_ event: any HIDEvent) -> CFArray
+    typealias IOHIDEventGetChildrenType = @convention(c) (_ event: any CFTypeRef) -> CFArray
     let IOHIDEventGetChildren = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetChildren"),
                                               to: IOHIDEventGetChildrenType.self)
-    typealias IOHIDEventGetTypeType = @convention(c) (_ event: any AnyObject) -> UInt32
+    typealias IOHIDEventGetTypeType = @convention(c) (_ event: any CFTypeRef) -> UInt32
     let IOHIDEventGetType = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetType"),
                                           to: IOHIDEventGetTypeType.self)
-    typealias IOHIDEventGetEventFlagsType = @convention(c) (_ event: any AnyObject) -> UInt64
+    typealias IOHIDEventGetEventFlagsType = @convention(c) (_ event: any CFTypeRef) -> UInt64
     let IOHIDEventGetEventFlags = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetEventFlags"),
                                                 to: IOHIDEventGetEventFlagsType.self)
-    typealias IOHIDEventGetIntegerValueType = @convention(c) (_ event: any AnyObject, UInt32) -> Int32
+    typealias IOHIDEventGetIntegerValueType = @convention(c) (_ event: any CFTypeRef, UInt32) -> Int32
     let IOHIDEventGetIntegerValue = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetIntegerValue"),
                                                   to: IOHIDEventGetIntegerValueType.self)
-    typealias IOHIDEventGetFloatValueType = @convention(c) (_ event: any AnyObject, UInt32) -> Double
+    typealias IOHIDEventGetFloatValueType = @convention(c) (_ event: any CFTypeRef, UInt32) -> Double
     let IOHIDEventGetFloatValue = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetFloatValue"),
                                                 to: IOHIDEventGetFloatValueType.self)
     

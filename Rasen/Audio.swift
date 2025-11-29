@@ -616,7 +616,7 @@ extension ScoreTrackItem {
             isChanged = false
         }
     }
-    mutating func updateSamples(limitLufs: Double = Audio.limitLufs) {
+    mutating func updateSamples() {
         guard isEnabledSamples else { return }
         let ranges = rendnotes.map { $0.releasedRange(sampleRate: sampleRate, startSec: startSec) }
         let startI = ranges.minValue { $0.start } ?? 0

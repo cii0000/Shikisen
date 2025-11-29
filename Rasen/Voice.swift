@@ -2206,14 +2206,14 @@ extension Phoneme {
             switch nextPhoneme {
             case .p, .pj, .pjRes, .pβRes, .b, .bj, .m, .mj: [.m]
             case .ta, .tj, .tɕ, .tβ, .ts, .te, .to, .tɕRes, .tsRes,
-                    .dza, .dʒ, .dzβ, .dze, .dzo, .n, .nj, .ɾ, .ɾj: [.n]
-            case .ka, .kj, .kβ, .ke, .ko, .kjRes, .kβRes, .ga, .gj, .gβ, .ge, .go: [.ŋ]
-            case .a, .sa, .ha: [.ã]
-            case .i, .j, .ja, .ɕ, .ɕRes, .ç, .çRes: [.ĩ]
-            case .ɯ, .β, .sβ, .sβRes, .ɸ, .ɸRes, .sokuon: [.ɯ̃]
-            case .e, .se, .he: [.ẽ]
-            case .o, .so, .ho: [.õ]
-            default: [.ɴ]
+                    .dza, .dʒ, .dzβ, .dze, .dzo, .n, .nj, .ɾ, .ɾj, .da, .dj, .dβ, .de, .do: [.n]
+            case .ka, .kj, .kβ, .ke, .ko, .kjRes, .kβRes, .ga, .gj, .gβ, .ge, .go, .ŋ: [.ŋ]
+            case .a, .sa, .ha, .haBreath, .aBreath, .ã: [.ã]
+            case .i, .j, .ja, .ɕ, .ɕRes, .ç, .çRes, .hiBreath, .iBreath, .ĩ: [.ĩ]
+            case .ɯ, .β, .sβ, .sβRes, .ɸ, .ɸRes, .hɯBreath, .ɯBreath, .sokuon, .ɯ̃: [.ɯ̃]
+            case .e, .se, .he, .heBreath, .eBreath, .ẽ: [.ẽ]
+            case .o, .so, .ho, .hoBreath, .oBreath, .õ: [.õ]
+            case .ɴ, .off, .voiceless, .none: [.ɴ]
             }
         case "nn": [.n]
         case "nm": [.m]
