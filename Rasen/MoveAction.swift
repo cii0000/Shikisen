@@ -590,6 +590,7 @@ final class MoveScoreAction: DragEventAction {
         case keyBeats, allBeat, endBeat, loopDurBeat, isShownSpectrogram, scale,
              startNoteBeat, endNoteBeat, note,
              pit, strightPit,
+             attack, decay, release,
              even, sprol, spectlopeHeight, f0
     }
     
@@ -837,6 +838,27 @@ final class MoveScoreAction: DragEventAction {
                             }
                             nv[nap.key] = (score.notes[nap.key], pit, pitDic)
                         }
+                    case .attack, .decay, .release:
+                        type = switch result {
+                        case .attack: .attack
+                        case .decay: .decay
+                        default: .release
+                        }
+                        
+                        if rootView.isSelect(at: p) {
+                            let noteIs = sheetView.noteIndexes(from: rootView.selections)
+                            beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
+                        } else if let id = score.notes[noteI].envelope?.id {
+                            beganNotes = score.notes.enumerated().reduce(into: [Int: Note]()) {
+                                if id == $1.element.envelope?.id {
+                                    $0[$1.offset] = $1.element
+                                }
+                            }
+                        }
+                        beganNotes[noteI] = score.notes[noteI]
+                        
+                        beganEnvelope = score.notes[noteI].envelope(fromTempo: score.tempo)
+                        
                     case .sprol(let pitI, let sprolI, let spectlopeY):
                         type = .sprol
                         
@@ -1541,6 +1563,29 @@ final class MoveScoreAction: DragEventAction {
                         
                         rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     }
+                case .attack, .decay, .release:
+                    let dBeat = scoreView.durBeat(atWidth: sheetP.x - beganSheetP.x)
+                    let oldSec = switch type {
+                    case .attack: beganEnvelope.attackSec
+                    case .decay: beganEnvelope.decaySec
+                    default: beganEnvelope.releaseSec
+                    }
+                    let sec = (oldSec + score.sec(fromBeat: dBeat)).clipped(min: 0, max: 10)
+                    let tempo = scoreView.model.tempo
+                    let nid = UUID()
+                    var eivs = [IndexValue<Envelope?>](capacity: beganNotes.count)
+                    for (noteI, note) in beganNotes {
+                        guard noteI < score.notes.count else { continue }
+                        var envelope = note.envelope(fromTempo: tempo)
+                        switch type {
+                        case .attack: envelope.attackSec = sec
+                        case .decay: envelope.decaySec = sec
+                        default: envelope.releaseSec = sec
+                        }
+                        envelope.id = nid
+                        eivs.append(.init(value: envelope, index: noteI))
+                    }
+                    scoreView.replace(eivs)
                 case .spectlopeHeight:
                     var nivs = [IndexValue<Note>](capacity: beganNotes.count)
                     for (noteI, beganNote) in beganNotes {

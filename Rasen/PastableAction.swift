@@ -111,6 +111,7 @@ enum PastableObject: Sendable {
     case notesValue(_ notesValue: NotesValue)
     case stereo(_ stereo: Stereo)
     case tone(_ tone: Tone)
+    case envelope(_ envelope: Envelope)
     case rect(_ rect: Rect)
 }
 extension PastableObject {
@@ -168,6 +169,8 @@ extension PastableObject {
              PastableObject.typeName(with: stereo)
         case .tone(let tone):
              PastableObject.typeName(with: tone)
+        case .envelope(let envelope):
+             PastableObject.typeName(with: envelope)
         case .rect(let rect):
              PastableObject.typeName(with: rect)
         }
@@ -217,6 +220,8 @@ extension PastableObject {
             self = .stereo(try Stereo(serializedData: data))
         case PastableObject.objectTypeName(with: Tone.self):
             self = .tone(try Tone(serializedData: data))
+        case PastableObject.objectTypeName(with: Envelope.self):
+            self = .envelope(try Envelope(serializedData: data))
         case PastableObject.objectTypeName(with: Rect.self):
             self = .rect(try Rect(serializedData: data))
         default:
@@ -263,6 +268,8 @@ extension PastableObject {
              try? stereo.serializedData()
         case .tone(let tone):
              try? tone.serializedData()
+        case .envelope(let envelope):
+             try? envelope.serializedData()
         case .rect(let rect):
              try? rect.serializedData()
         }
@@ -312,6 +319,8 @@ extension PastableObject: Protobuf {
             self = .stereo(try Stereo(stereo))
         case .tone(let tone):
             self = .tone(try Tone(tone))
+        case .envelope(let envelope):
+            self = .envelope(try Envelope(envelope))
         case .rect(let rect):
             self = .rect(try Rect(rect))
         }
@@ -357,6 +366,8 @@ extension PastableObject: Protobuf {
                 $0.value = .stereo(stereo.pb)
             case .tone(let tone):
                 $0.value = .tone(tone.pb)
+            case .envelope(let envelope):
+                $0.value = .envelope(envelope.pb)
             case .rect(let rect):
                 $0.value = .rect(rect.pb)
             }
@@ -384,6 +395,7 @@ extension PastableObject: Codable {
         case notesValue = "13"
         case stereo = "22"
         case tone = "14"
+        case envelope = "21"
         case rect = "23"
     }
     init(from decoder: any Decoder) throws {
@@ -428,6 +440,8 @@ extension PastableObject: Codable {
             self = .stereo(try container.decode(Stereo.self))
         case .tone:
             self = .tone(try container.decode(Tone.self))
+        case .envelope:
+            self = .envelope(try container.decode(Envelope.self))
         case .rect:
             self = .rect(try container.decode(Rect.self))
         }
@@ -492,6 +506,9 @@ extension PastableObject: Codable {
         case .tone(let tone):
             try container.encode(CodingTypeKey.tone)
             try container.encode(tone)
+        case .envelope(let envelope):
+            try container.encode(CodingTypeKey.envelope)
+            try container.encode(envelope)
         case .rect(let rect):
             try container.encode(CodingTypeKey.rect)
             try container.encode(rect)
@@ -918,6 +935,12 @@ final class PastableAction: Action {
                 let x = scoreView.x(atBeat: note.beatRange.start)
                 show([.init(x, scoreView.y(fromPitch: note.firstPitch) - 10),
                       .init(x, scoreView.y(fromPitch: note.f0Pitch))])
+            case .attack, .decay, .release:
+                let note = score.notes[noteI]
+                if isSendPasteboard {
+                    Pasteboard.shared.copiedObjects = [.envelope(note.envelope(fromTempo: score.tempo))]
+                }
+                
             case .lyric:
                 break
             case .even(let pitI):
@@ -1437,6 +1460,20 @@ final class PastableAction: Action {
                 
                 if note.f0Pitch != Note.defaultF0Pitch {
                     note.f0Pitch = Note.defaultF0Pitch
+                    
+                    sheetView.newUndoGroup()
+                    sheetView.replace(note, at: noteI)
+                    
+                    sheetView.updatePlaying()
+                }
+                return true
+                
+            case .attack, .decay, .release:
+                var note = score.notes[noteI]
+                Pasteboard.shared.copiedObjects = [.envelope(note.envelope(fromTempo: score.tempo))]
+                
+                if note.envelope != nil {
+                    note.envelope = nil
                     
                     sheetView.newUndoGroup()
                     sheetView.replace(note, at: noteI)
@@ -2192,6 +2229,8 @@ final class PastableAction: Action {
         case .stereo:
             break
         case .tone:
+            break
+        case .envelope:
             break
         case .rect:
             break
@@ -3170,6 +3209,43 @@ final class PastableAction: Action {
                     }
                 }
             }
+        case .envelope(let envelope):
+            guard let sheetView = rootView.sheetView(at: shp) else { return }
+            if sheetView.model.score.enabled {
+                let scoreView = sheetView.scoreView
+                if rootView.isSelect(at: p) {
+                    let score = scoreView.model
+                    let nis = sheetView.noteIndexes(from: rootView.selections)
+                    var nivs = [IndexValue<Note>]()
+                    for noteI in nis {
+                        var note = score.notes[noteI]
+                        if envelope != note.envelope(fromTempo: scoreView.model.tempo) {
+                            note.envelope = envelope
+                            nivs.append(.init(value: note, index: noteI))
+                        }
+                    }
+                    if !nivs.isEmpty {
+                        sheetView.newUndoGroup()
+                        sheetView.replace(nivs)
+                        
+                        sheetView.updatePlaying()
+                    }
+                } else {
+                    if let noteI = scoreView
+                        .noteIndex(at: scoreView.convertFromWorld(p),
+                                      scale: rootView.screenToWorldScale) {
+                        var note = scoreView.model.notes[noteI]
+                        if envelope != note.envelope(fromTempo: scoreView.model.tempo) {
+                            note.envelope = envelope
+                            
+                            sheetView.newUndoGroup()
+                            sheetView.replace(note, at: noteI)
+                            
+                            sheetView.updatePlaying()
+                        }
+                    }
+                }
+            }
         case .rect(let rect):
             guard let sheetView = rootView.madeSheetView(at: shp) else { return }
             if sheetView.model.mainFrame != rect {
@@ -3200,6 +3276,7 @@ final class PastableAction: Action {
         case .notesValue: true
         case .stereo: false
         case .tone: false
+        case .envelope: false
         case .rect: false
         }
     }

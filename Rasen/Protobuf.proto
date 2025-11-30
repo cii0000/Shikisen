@@ -234,6 +234,9 @@ message PBNote {
     PBRational f0Pitch = 11;
     repeated PBPit pits = 2;
     PBRationalRange beatRange = 3;
+    oneof envelopeOptional {
+        PBEnvelope envelope = 7;
+    }
     double spectlopeHeight = 10;
     PBUUID id = 9;
 }
@@ -676,6 +679,7 @@ message PBPastableObject {
         PBNotesValue notesValue = 14;
         PBStereo stereo = 24;
         PBTone tone = 15;
+        PBEnvelope envelope = 23;
         PBRect rect = 25;
     }
 }
