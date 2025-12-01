@@ -122,7 +122,7 @@ final class NotePlayer {
                                         overtone: note.tone.overtone,
                                         spectlope: note.tone.spectlope),
                          secRange: -.infinity ..< .infinity,
-                         reverb: .init(), envelopeMemo: .default)
+                         reverb: .init(), waveclip: .default)
         }
         rendnotes.forEach { noteIDs.insert($0.id) }
         
@@ -883,7 +883,7 @@ final class ScoreNoder: ObjectHashable {
                     contains = true
                     
                     let sampleCount = scoreTrackItem.sampleCount
-                    func update(envelopeMemo: EnvelopeMemo, startSec: Double, releaseSec: Double?,
+                    func update(startSec: Double, releaseSec: Double?,
                                 playingAttackStartSec: Double?,
                                 playingReleaseStartSec: Double?,
                                 range: Range<Int>, startI: Int) {
@@ -912,8 +912,7 @@ final class ScoreNoder: ObjectHashable {
                     if cLoopedNoteRange.intersects(loopedFrameRange)
                         || cLoopedNoteRange.intersects(preLoopedFrameRange)
                         || cLoopedNoteRange.intersects(nextLoopedFrameRange) {
-                        update(envelopeMemo: .init(.init()),
-                               startSec: startSec,
+                        update(startSec: startSec,
                                releaseSec: startSec + scoreDurSec,
                                playingAttackStartSec: playingAttackStartSec,
                                playingReleaseStartSec: playingReleaseStartSec,
@@ -922,8 +921,7 @@ final class ScoreNoder: ObjectHashable {
                     if type == .loop && isLooped,
                        cPreLoopedNoteRange.intersects(loopedFrameRange)
                         || cPreLoopedNoteRange.intersects(preLoopedFrameRange) {
-                        update(envelopeMemo: .init(.init()),
-                               startSec: startSec - seqDurSec,
+                        update(startSec: startSec - seqDurSec,
                                releaseSec: startSec + scoreDurSec - seqDurSec,
                                playingAttackStartSec: playingAttackStartSec,
                                playingReleaseStartSec: prePlayingReleaseStartSec,
@@ -932,8 +930,7 @@ final class ScoreNoder: ObjectHashable {
                     if type == .loop,
                        cNextLoopedNoteRange.intersects(loopedFrameRange)
                         || cNextLoopedNoteRange.intersects(nextLoopedFrameRange) {
-                        update(envelopeMemo: .init(.init()),
-                               startSec: startSec - seqDurSec,
+                        update(startSec: startSec - seqDurSec,
                                releaseSec: startSec + scoreDurSec - seqDurSec,
                                playingAttackStartSec: nextPlayingAttackStartSec,
                                playingReleaseStartSec: nextPlayingReleaseStartSec,

@@ -324,7 +324,7 @@ final class ColorAction: Action {
     private var isChangeVolm = false
     private var sheetView: SheetView?
     private var scoreResult: ScoreView.ColorHitResult?
-    private var beganEnvelope = Envelope(), beganNotes = [Int: Note]()
+    private var beganNotes = [Int: Note]()
     private var beganNotePits = [UUID: (nid: UUID, dic: [Int: (note: Note, pits: [Int: (pit: Pit, sprolIs: Set<Int>)])])]()
     private var beganContents = [Int: Content]()
     private var beganSP = Point(), beganVolm = 0.0, preEventTime = 0.0
@@ -501,22 +501,6 @@ final class ColorAction: Action {
                             updatePitsWithSelection(noteI: noteI, pitI: pitI, sprolI: nil, .stereo)
                             beganBeat = note.pits[pitI].beat + note.beatRange.start
                         }
-                    case .sustain:
-                        if rootView.isSelect(at: p) {
-                            let noteIs = sheetView.noteIndexes(from: rootView.selections)
-                            beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
-                        } else if let id = score.notes[noteI].envelope?.id {
-                            beganNotes = score.notes.enumerated().reduce(into: [Int: Note]()) {
-                                if id == $1.element.envelope?.id {
-                                    $0[$1.offset] = $1.element
-                                }
-                            }
-                        }
-                        beganNotes[noteI] = score.notes[noteI]
-                        
-                        beganEnvelope = score.notes[noteI].envelope ?? .default
-                        beganVolm = score.notes[noteI].envelope?.sustainVolm ?? 0
-                        beganBeat = scoreView.beat(atX: scoreP.x)
                     case .evenAmp(let pitI):
                         beganVolm = score.notes[noteI].pits[pitI].tone.overtone.evenAmp
                         updatePitsWithSelection(noteI: noteI, pitI: pitI, sprolI: nil, .tone)
@@ -607,16 +591,6 @@ final class ColorAction: Action {
                     }
                     let nivs = nvs.map { IndexValue(value: $0.value, index: $0.key) }
                     scoreView.replace(nivs)
-                case .sustain:
-                    let volm = newVolm(from: beganEnvelope.sustainVolm, Volm.volmRange)
-                    var eivs = [IndexValue<Envelope?>](capacity: beganNotes.count)
-                    for (noteI, beganNote) in beganNotes {
-                        var envelope = beganNote.envelope
-                        envelope?.sustainVolm = volm
-                        envelope?.id = beganEnvelope.id
-                        eivs.append(.init(value: envelope, index: noteI))
-                    }
-                    scoreView.replace(eivs)
                 case .evenAmp, .allEven:
                     var nvs = [Int: Note]()
                     for (_, v) in beganNotePits {
@@ -961,7 +935,7 @@ final class ColorAction: Action {
                             updatePitsWithSelection(noteI: noteI, pitI: pitI, sprolI: nil, .stereo)
                             beganBeat = note.pits[pitI].beat + note.beatRange.start
                         }
-                    case .evenAmp, .oddVolm, .allEven, .sustain: return
+                    case .evenAmp, .oddVolm, .allEven: return
                     case .allSprol(let sprolI, let sprol):
                         let volm = sprol.volm
                         beganNoise = sprol.noise

@@ -1150,38 +1150,11 @@ extension Reverb {
     }
 }
 
-struct Envelope: Hashable, Codable {
-    static let `default` = Self.init()
-    static let small = Self.init(attackSec: 0, decaySec: 0, sustainVolm: 1, releaseSec: 0.015625 / 4)
-    
-    var attackSec = 0.015625, decaySec = 0.03125, sustainVolm = 0.95, releaseSec = 0.015625
-    var id = UUID()
-}
-extension Envelope: Protobuf {
-    init(_ pb: PBEnvelope) throws {
-        attackSec = max(0, ((try? pb.attackSec.notNaN()) ?? 0))
-        decaySec = max(0, ((try? pb.decaySec.notNaN()) ?? 0))
-        sustainVolm = ((try? pb.sustainVolm.notNaN()) ?? 0).clipped(min: 0, max: 1)
-        releaseSec = max(0, ((try? pb.releaseSec.notNaN()) ?? 0))
-        id = (try? .init(pb.id)) ?? .init()
-    }
-    var pb: PBEnvelope {
-        .with {
-            $0.attackSec = attackSec
-            $0.decaySec = decaySec
-            $0.sustainVolm = sustainVolm
-            $0.releaseSec = releaseSec
-            $0.id = id.pb
-        }
-    }
-}
-
 struct Note {
     static let defaultF0Pitch = Rational(51), doubleDefaultF0Pitch = Double(defaultF0Pitch)
     var beatRange = 0 ..< Rational(1, 4)
     var pitch = Rational(0), f0Pitch = defaultF0Pitch
     var pits = [Pit()]
-    var envelope: Envelope?
     var spectlopeHeight = Sheet.spectlopeHeight
     var id = UUID()
 }
@@ -1194,8 +1167,6 @@ extension Note: Protobuf {
         if pits.isEmpty {
             pits = [Pit()]
         }
-        envelope = if case .envelope(let envelope)?
-                        = pb.envelopeOptional { try? .init(envelope) } else { nil }
         spectlopeHeight = ((try? pb.spectlopeHeight.notNaN()) ?? 0)
             .clipped(min: Sheet.spectlopeHeight, max: Sheet.maxSpectlopeHeight)
         id = (try? UUID(pb.id)) ?? UUID()
@@ -1208,7 +1179,6 @@ extension Note: Protobuf {
                 $0.f0Pitch = f0Pitch.pb
             }
             $0.pits = pits.map { $0.pb }
-            $0.envelopeOptional = if let envelope { .envelope(envelope.pb) } else { nil }
             $0.spectlopeHeight = spectlopeHeight
             $0.id = id.pb
         }
@@ -1236,13 +1206,6 @@ extension Note {
               isStraight: pits.count > 1 ? firstPit.pitch == pits[1].pitch : true,
               pitch: .rational(firstPit.pitch), stereo: firstStereo,
               tone: firstTone, lyric: firstPit.lyric, id: id)
-    }
-    
-    func envelope(fromTempo tempo: Rational) -> Envelope {
-        if let envelope { return envelope }
-        let sSec = Double(Score.sec(fromBeat: beatRange.start, tempo: tempo))
-        let eSec = Double(Score.sec(fromBeat: beatRange.end, tempo: tempo))
-        return !isFullNoise && eSec - sSec < Waveclip.default.attackSec ? .small : .default
     }
     
     var noiseRatio: Double {
