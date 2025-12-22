@@ -2594,7 +2594,7 @@ extension Sheet {
     var captions: [Caption] {
         texts.compactMap {
             if let timeOption = $0.timeOption {
-                return Caption(string: $0.string, orientation: $0.orientation,
+                return Caption(string: $0.string, origin: $0.origin, orientation: $0.orientation,
                                beatRange: timeOption.beatRange,
                                tempo: timeOption.tempo)
             } else {

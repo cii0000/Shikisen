@@ -68,6 +68,9 @@ extension Range where Bound: SignedNumeric {
         get { upperBound - lowerBound }
         set { self = lowerBound ..< (lowerBound + newValue) }
     }
+    func distance(_ v: Bound) -> Bound {
+        v < lowerBound ? lowerBound - v : (v > upperBound ? v - upperBound : 0)
+    }
     static func + (lhs: Self, rhs: Bound) -> Self {
         (lhs.lowerBound + rhs) ..< (lhs.upperBound + rhs)
     }
@@ -100,6 +103,9 @@ extension ClosedRange where Bound: SignedNumeric {
     var length: Bound {
         get { upperBound - lowerBound }
         set { self = lowerBound ... (lowerBound + newValue) }
+    }
+    func distance(_ v: Bound) -> Bound {
+        v < lowerBound ? lowerBound - v : (v > upperBound ? v - upperBound : 0)
     }
     static func + (lhs: Self, rhs: Bound) -> Self {
         (lhs.lowerBound + rhs) ... (lhs.upperBound + rhs)

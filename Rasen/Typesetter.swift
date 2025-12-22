@@ -21,7 +21,7 @@ enum Alignment {
 
 struct Typobute {
     static let minWidthCount = 4.0
-    static let defaultWidthCount = 25.0
+    static let defaultWidthCount = 40.0
     static let maxWidthCount = 40.0
     
     var font = Font.default,

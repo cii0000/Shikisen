@@ -634,16 +634,25 @@ extension Typesetter {
             let runs = v.ctLine.runs.map { Typerun(ctRun: $0,
                                                    mainFont: typobute.font) }
             
+            let nCFRange = CTLineGetStringRange(v.ctLine)
+            guard let range = string.range(fromCF: nCFRange) else { return nil }
+            let isReturnEnd = i == ls.count - 1 ?
+                isLastHasSuffix :
+                string[string.index(before: range.upperBound)] == "\u{000a}"
+            let isLastReturnEnd = i == ls.count - 1 && isLastHasSuffix
+            let w = (typobute.orientation == .vertical ? (isReturnEnd ? -6 : 0) : 0)
+                + v.width
+            
             var typelineOrigin = origin
             if typobute.alignment == .right {
                 switch typobute.orientation {
-                case .horizontal: typelineOrigin.x += width - v.width
-                case .vertical: typelineOrigin.y += width - v.width
+                case .horizontal: typelineOrigin.x += width - w
+                case .vertical: typelineOrigin.y += width - w
                 }
             } else if typobute.alignment == .center {
                 switch typobute.orientation {
-                case .horizontal: typelineOrigin.x += (width - v.width) / 2
-                case .vertical: typelineOrigin.y += (width - v.width) / 2
+                case .horizontal: typelineOrigin.x += (width - w) / 2
+                case .vertical: typelineOrigin.y -= (width - w) / 2
                 }
             }
             
@@ -655,14 +664,6 @@ extension Typesetter {
                 baseDeltaOrigin = Point()
             }
             
-            let nCFRange = CTLineGetStringRange(v.ctLine)
-            guard let range = string.range(fromCF: nCFRange) else { return nil }
-            let isReturnEnd = i == ls.count - 1 ?
-                isLastHasSuffix :
-                string[string.index(before: range.upperBound)] == "\u{000a}"
-            let isLastReturnEnd = i == ls.count - 1 && isLastHasSuffix
-            let w = (typobute.orientation == .vertical ? (isReturnEnd ? -6 : 0) : 0)
-                + v.width
             let result = Typeline(string: string,
                                   range: range,
                                   origin: typelineOrigin,

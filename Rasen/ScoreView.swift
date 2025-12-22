@@ -1224,7 +1224,6 @@ extension ScoreView {
         
         if note.isSimpleLyric {
             let nNote = note.withRendable(tempo: model.tempo)
-            let pitbend = nNote.pitbend(fromTempo: model.tempo)
             let (beats, pitIsDic) = beatsAndPitIsDic(from: nNote)
             let lHalfH = mainLineHalfH / 2
             var lmps = [LinePoint]()
@@ -1281,10 +1280,11 @@ extension ScoreView {
             eps.append(.init(nsx, evenY, overtoneHalfH, Self.color(fromScale: note.firstTone.overtone.evenAmp)))
             
             let tempo = model.tempo
-            let pitbend = note.pitbend(fromTempo: tempo)
+            let nNote = note.withRendable(tempo: tempo)
+            let pitbend = nNote.pitbend(fromTempo: tempo)
             let ns: [(beat: Rational, result: Note.PitResult, sumTone: Double)] = beats.map { beat in
-                let result = note.pitResult(atBeat: .init(beat - note.beatRange.start),
-                                            tempo: Double(tempo), from: pitbend)
+                let result = nNote.pitResult(atBeat: .init(beat - nNote.beatRange.start),
+                                             tempo: Double(tempo), from: pitbend)
                 return (beat, result, isOneOvertone ? 0 : result.sumTone)
             }
             let maxSumTone = ns.maxValue { $0.sumTone } ?? 0
@@ -1295,7 +1295,7 @@ extension ScoreView {
                 } else if !n.result.isStraight {
                     isPreJI = false
                 }
-                let noteX = x(atBeat: n.beat), noteY = noteY(from: n.result, from: note)
+                let noteX = x(atBeat: n.beat)
                 let evenAmp = Self.color(fromScale: n.result.tone.overtone.evenAmp)
                 if let pitIs = pitIsDic[n.beat] {
                     for pitI in pitIs {
@@ -1312,6 +1312,7 @@ extension ScoreView {
                         }
                     }
                 } else {
+                    let noteY = noteY(atBeat: n.beat, from: note)
                     var stereo = n.result.stereo
                     if !isOneOvertone {
                         stereo.volm *= maxSumTone == 0 ? 0 : n.sumTone / maxSumTone

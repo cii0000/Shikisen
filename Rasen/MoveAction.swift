@@ -666,55 +666,54 @@ final class MoveScoreAction: DragEventAction {
                     let noteIs = selectedNoteIs
                     beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
                     let interval = rootView.currentBeatInterval
-                    let nsBeat = scoreView.beat(atX: sheetP.x, interval: interval)
+                    let nBeat: Rational = scoreView.beat(atX: sheetP.x)
                     
-                    let minBV = beganNotes.min(by: { $0.value.beatRange.start < $1.value.beatRange.start })
-                    let maxBV = beganNotes.max(by: { $0.value.beatRange.end < $1.value.beatRange.end })
-                    let minBeat = minBV?.value.beatRange.start ?? 0
-                    let maxBeat = maxBV?.value.beatRange.end ?? 0
-                    let noteI = !beganNotes.contains(where: { nsBeat >= $0.value.beatRange.start }) ?
-                    minBV?.key :
-                    (!beganNotes.contains(where: { nsBeat < $0.value.beatRange.end }) ? maxBV?.key : beganNotes.first(where: { $0.value.beatRange.contains(nsBeat) })?.key)
-                    if let noteI {
-                        let score = scoreView.model
-                        let note = score.notes[noteI]
-                        
-                        beganStartBeat = nsBeat
-                        beganNote = note
-                        
-                        self.noteI = noteI
-                        type = .note
-                        beganPitch = note.pitch
-                        
-                        let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % EditGrid.beatInterval == 0 })
-                        let dBeat = isInterval ? (note.beatRange.start - note.beatRange.start.interval(scale: interval)) : 0
-                        beganDeltaNoteBeat = dBeat
-                        
-                        beganBeatRange = note.beatRange
-                        oldPitch = note.pitch
-                        beganBeatX = scoreView.x(atBeat: note.beatRange.start)
-                        beganPitchY = scoreView.y(fromPitch: note.pitch)
-                        
-                        beganNotes[noteI] = score.notes[noteI]
-                        
-                        let playerBeat: Rational = nsBeat.clipped(min: minBeat, max: maxBeat)
-                        let selectedNoteIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
-                        let noteIs = Set(beganNotes.keys).intersection(selectedNoteIs).sorted()
-                        let vs = score.noteIAndNormarizedPits(atBeat: playerBeat, selectedNoteI: noteI, in: noteIs)
-                        playerBeatNoteIndexes = vs.map { $0.noteI }
-                        
-                        updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
-                        
-                        let octaveNode = scoreView.octaveNode(noteIs: beganNotes.keys.sorted())
-                        octaveNode.attitude.position
-                        = sheetView.convertToWorld(scoreView.node.attitude.position)
-                        self.octaveNode = octaveNode
-                        rootView.node.append(child: octaveNode)
-                        
-                        let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
-                        let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                        rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
-                    }
+                    let minBV = beganNotes.min(by: { $0.value.beatRange.start < $1.value.beatRange.start })!
+                    let maxBV = beganNotes.max(by: { $0.value.beatRange.end < $1.value.beatRange.end })!
+                    let minBeat = minBV.value.beatRange.start
+                    let maxBeat = maxBV.value.beatRange.end
+                    let noteI = !beganNotes.contains(where: { nBeat >= $0.value.beatRange.start }) ?
+                    minBV.key :
+                    (!beganNotes.contains(where: { nBeat < $0.value.beatRange.end }) ? maxBV.key : beganNotes.min(by: { $0.value.beatRange.distance(nBeat) < $1.value.beatRange.distance(nBeat) })!.key)
+                    let nsBeat = scoreView.beat(atX: sheetP.x, interval: interval)
+                    let score = scoreView.model
+                    let note = score.notes[noteI]
+                    
+                    beganStartBeat = nsBeat
+                    beganNote = note
+                    
+                    self.noteI = noteI
+                    type = .note
+                    beganPitch = note.pitch
+                    
+                    let isInterval = note.pits.contains(where: { ($0.beat + note.beatRange.start) % EditGrid.beatInterval == 0 })
+                    let dBeat = isInterval ? (note.beatRange.start - note.beatRange.start.interval(scale: interval)) : 0
+                    beganDeltaNoteBeat = dBeat
+                    
+                    beganBeatRange = note.beatRange
+                    oldPitch = note.pitch
+                    beganBeatX = scoreView.x(atBeat: note.beatRange.start)
+                    beganPitchY = scoreView.y(fromPitch: note.pitch)
+                    
+                    beganNotes[noteI] = score.notes[noteI]
+                    
+                    let playerBeat: Rational = nsBeat.clipped(min: minBeat, max: maxBeat)
+                    let selectedNoteIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
+                    let nNoteIs = Set(beganNotes.keys).intersection(selectedNoteIs).sorted()
+                    let vs = score.noteIAndNormarizedPits(atBeat: playerBeat, selectedNoteI: noteI, in: nNoteIs)
+                    playerBeatNoteIndexes = vs.map { $0.noteI }
+                    
+                    updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
+                    
+                    let octaveNode = scoreView.octaveNode(noteIs: beganNotes.keys.sorted())
+                    octaveNode.attitude.position
+                    = sheetView.convertToWorld(scoreView.node.attitude.position)
+                    self.octaveNode = octaveNode
+                    rootView.node.append(child: octaveNode)
+                    
+                    let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
+                    let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
+                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
                 } else if let (noteI, result) = v {
                     self.noteI = noteI
                     
@@ -1908,18 +1907,20 @@ final class MoveTextAction: DragEventAction {
                 case .all:
                     let np = beganText.origin + sheetP - beganInP
                     let interval = rootView.currentBeatInterval
-                    let beat = max(min(sheetView.animationView.beat(atX: np.x, interval: interval),
+                    let tw = beganText.orientation == .vertical ? beganText.typesetter.height : 0
+                    let beat = max(min(sheetView.animationView.beat(atX: np.x - tw, interval: interval),
                                    sheetView.animationView.beat(atX: sheetView.animationView.bounds.width - Sheet.textPadding.width, interval: interval)),
                                    sheetView.animationView.beat(atX: Sheet.textPadding.width, interval: interval) - (text.timeOption?.beatRange.length ?? 0))
                     var timeOption = text.timeOption
                     timeOption?.beatRange.start = beat
-                    textView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat), np.y))
+                    textView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat) + tw, np.y))
                     rootView.updateSelects()
                 case .startBeat:
                     if var timeOption = text.timeOption {
                         let np = beganText.origin + sheetP - beganInP
                         let interval = rootView.currentBeatInterval
-                        let beat = min(sheetView.animationView.beat(atX: np.x, interval: interval),
+                        let tw = beganText.orientation == .vertical ? beganText.typesetter.height : 0
+                        let beat = min(sheetView.animationView.beat(atX: np.x - tw, interval: interval),
                                        sheetView.animationView.beat(atX: sheetView.animationView.bounds.width - Sheet.textPadding.width, interval: interval),
                                        timeOption.beatRange.end)
                         if beat != timeOption.beatRange.start {
@@ -1927,7 +1928,7 @@ final class MoveTextAction: DragEventAction {
                             timeOption.beatRange.start -= dBeat
                             timeOption.beatRange.length += dBeat
                             textView.set(timeOption, origin: .init(sheetView.animationView
-                                .x(atBeat: timeOption.beatRange.start), text.origin.y))
+                                .x(atBeat: timeOption.beatRange.start) + tw, text.origin.y))
                             rootView.updateSelects()
                         }
                     }

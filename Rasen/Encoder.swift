@@ -24,6 +24,7 @@ import CoreImage
 
 struct Caption: Hashable, Codable {
     var string = ""
+    var origin = Point()
     var orientation = Orientation.horizontal
     var beatRange = 0 ..< Rational(0)
     var tempo = Music.defaultTempo
@@ -54,7 +55,7 @@ extension Caption {
                          padding: Double = defaultPadding) -> (path: Path, position: Point)? {
         let ratio = switch orientation {
         case .horizontal: bounds.width < 444 ? bounds.width / 444 : 1
-        case .vertical: bounds.width < 240 ? bounds.height / 240 : 1
+        case .vertical: bounds.height < 330 ? bounds.height / 330 : 1
         }
         let fontSize = fontSize * ratio
         let padding = padding * ratio
@@ -63,24 +64,23 @@ extension Caption {
                             widthCount: bounds.width).bounds else { return nil }
         switch orientation {
         case .horizontal:
-            let tp = bounds.midXMinYPoint + Point(-tb.width / 2, padding + tb.height)
+            let tp = bounds.midXMinYPoint + Point(-tb.width / 2, padding + fontSize)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
             typebute.orientation = .horizontal
             typebute.maxTypelineWidth = .infinity
-            typebute.spacing = typebute.font.size / 2
             typebute.alignment = .center
             let path = Typesetter(string: string, typobute: typebute).path()
             return (path, tp)
         case .vertical:
-            let tp = bounds.maxXMidYPoint + Point(-padding - tb.height * 3, tb.width / 2)
+            let tp = bounds.maxXMidYPoint + Point(-padding - fontSize * 3, tb.width / 2)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
             typebute.orientation = .vertical
+            typebute.alignment = .center
             typebute.maxTypelineWidth = .infinity
-            typebute.spacing = typebute.font.size / 2
             let path = Typesetter(string: string, typobute: typebute).path()
             return (path, tp)
         }
@@ -92,7 +92,11 @@ extension Caption {
                          outlineWidth: Double = defaultOutlineWidth,
                          from captions: [Caption]) -> [CPUNode] {
         captions
-            .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
+            .sorted {
+                let s0 = $0.sec(fromBeat: $0.beatRange.start),
+                    s1 = $1.sec(fromBeat: $1.beatRange.start)
+                return s0 == s1 ? $0.origin.y > $1.origin.y : s0 < s1
+            }
             .enumerated().flatMap { $0.element.cpuNodes(withFontSize: fontSize,
                                                         in: bounds,
                                                         padding: padding * .init($0.offset * 3 + 1),
@@ -115,7 +119,11 @@ extension Caption {
                       outlineWidth: Double = defaultOutlineWidth,
                       from captions: [Caption]) -> [Node] {
         captions
-            .sorted { $0.sec(fromBeat: $0.beatRange.start) < $1.sec(fromBeat: $1.beatRange.start) }
+            .sorted {
+                let s0 = $0.sec(fromBeat: $0.beatRange.start),
+                    s1 = $1.sec(fromBeat: $1.beatRange.start)
+                return s0 == s1 ? $0.origin.y > $1.origin.y : s0 < s1
+            }
             .enumerated().flatMap { $0.element.nodes(withFontSize: fontSize,
                                                      in: bounds,
                                                      padding: padding * .init($0.offset * 3 + 1),

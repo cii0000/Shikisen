@@ -403,13 +403,18 @@ final class PCMNoder: ObjectHashable {
             
             let enabledWaveclip = self.enabledWaveclip
             let rSampleRate = 1 / sampleRate
+            let oFrameCount = pcmBuffer.frameCount
             for ci in 0 ..< min(outputBLP.count, pcmBuffer.channelCount) {
                 let oFrames = data[ci], nFrames = outputBLP[ci].mData!.assumingMemoryBound(to: Float.self)
                 var i = loopedFrameStartI
                 for ni in 0 ..< frameCount {
                     if loopedContentRange.contains(i) {
                         let oi = i - loopedContentRange.start + timeOption.contentLocalStartI
-                        
+                        let ooi = oi * pcmBuffer.stride
+                        guard ooi >= 0 && ooi < oFrameCount else {
+                            nFrames[ni] = 0
+                            continue
+                        }
                         let sec = Double(i) * rSampleRate
                         let amp = enabledWaveclip ?
                         Waveclip.default.scale(atSec: sec,
@@ -420,7 +425,7 @@ final class PCMNoder: ObjectHashable {
                             .scale(atSec: Double(ni + frameStartI) * rSampleRate,
                                  attackStartSec: playingAttackStartSec, releaseStartSec: playingReleaseStartSec)
                         
-                        nFrames[ni] = oFrames[oi * pcmBuffer.stride] * Float(amp * playingWaveclipAmp)
+                        nFrames[ni] = oFrames[ooi] * Float(amp * playingWaveclipAmp)
                     }
                     
                     i += 1
