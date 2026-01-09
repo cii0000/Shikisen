@@ -5,5 +5,8 @@
 
 Copyright 2025 [Cii](https://twitter.com/cii0000)
 
+## Privacy Policy
+[Privacy Policy (Japanese)](PrivacyPolicy.md)
+
 ## Acknowledgments
 [Acknowledgments](Rasen/Acknowledgments.txt)

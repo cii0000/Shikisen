@@ -138,7 +138,10 @@ final class LookUpAction: InputKeyEventAction {
     func show(for p: Point) {
         if !rootView.isEditingSheet {
             let shp = rootView.sheetPosition(at: p)
-            if let sid = rootView.sheetID(at: shp),
+            if rootView.isSelect(at: p), !rootView.selections.isEmpty {
+                let vs = rootView.sheetFramePositions(at: p, isUnselect: false)
+                rootView.show("Sheet".localized + "\n\t\("Count".localized): \(vs.count)", at: p)
+            } else if let sid = rootView.sheetID(at: shp),
                let recoder = rootView.model.sheetRecorders[sid],
                let updateDate = recoder.directory.updateDate,
                let createdDate = recoder.directory.createdDate {
@@ -733,10 +736,10 @@ final class TextAction: InputTextEventAction {
             let scoreView = sheetView.scoreView
             let scoreP = scoreView.convertFromWorld(p)
             
+            let key = (event.inputKeyType.name
+                .applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? "").lowercased()
             func appendLyric(atPit pitI: Int, atNote noteI: Int, isNewUndoGroup: Bool = true) {
                 var note = scoreView.model.notes[noteI]
-                let key = (event.inputKeyType.name
-                    .applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? "").lowercased()
                 var lyric = note.pits[pitI].lyric, pitI = pitI
                 let oPit = note.pits[pitI]
                 for (nPitI, pit) in note.pits.enumerated().reversed() {
@@ -800,7 +803,8 @@ final class TextAction: InputTextEventAction {
                     nPit.pitch = pitch - note.pitch
                 }
                 note.pits.insert(nPit, at: pitI + 1)
-                if pit.beat == note.beatRange.length {
+                if pit.beat == note.beatRange.length
+                    && (key != "^" && !note.pits[pitI].lyric.contains("^")) {
                     note.beatRange.end += .init(1, 2)
                 }
                 sheetView.newUndoGroup()

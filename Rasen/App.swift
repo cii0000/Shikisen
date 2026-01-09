@@ -1682,7 +1682,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     
     private var beganDragEvent: DragEvent?,
                 oldPressureStage = 0, isDrag = false, isStrongDrag = false,
-                firstTime = 0.0, firstP = Point(), isMovedDrag = false
+                firstTime = 0.0, firstP = Point(), isMovedDrag = false, maxPressure: Float = 0.0
     override func mouseDown(with nsEvent: NSEvent) {
         if beganSwipePosition != nil && nsEvent.subtype != .tabletPoint { return }
         isOneFlag = false
@@ -1694,11 +1694,14 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         firstTime = beganDragEvent.time
         firstP = beganDragEvent.screenPoint
         isMovedDrag = false
+        maxPressure = nsEvent.pressure
     }
     override func mouseDragged(with nsEvent: NSEvent) {
         guard let beganDragEvent = beganDragEvent else { return }
         isMovedDrag = true
+        maxPressure = max(maxPressure, nsEvent.pressure)
         if !isDrag {
+            guard nsEvent.pressure > 0 else { return }
             isDrag = true
             if oldPressureStage == 2 {
                 isStrongDrag = true
@@ -1726,7 +1729,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         } else {
             if oldPressureStage >= 2 {
                 quickLook(with: nsEvent)
-            } else {
+            } else if maxPressure > 0 {
                 guard let beganDragEvent = beganDragEvent else { return }
                 if isMovedDrag {
                     rootAction.drag(with: beganDragEvent)

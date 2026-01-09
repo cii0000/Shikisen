@@ -895,14 +895,14 @@ final class InsertKeyframeAction: InputKeyEventAction {
                     } else if let (i, iBeat) = animation.indexAndInternalBeat(atRootBeat: beat) {
                         let i = iBeat != 0 ?
                         i :
-                        (animationView.beat(atX: timelineP.x, interval: Rational(1, 60)) < beat ? i - 1 : i)
+                        (animationView.beat(atX: timelineP.x, interval: Rational(1, 60)) < beat ? max(i - 1, 0) : i)
                         let iBeat = {
                             if iBeat != 0 {
                                 return iBeat
                             } else {
                                 let nextBeat = !animation.keyframes[i].isKey ?
                                 animation.localBeat(at: animation.index(atInter: animation.interIndex(at: i) + 1)) :
-                                animation.localBeat(at: i + 1)
+                                (i + 1 < animation.keyframes.count ? animation.localBeat(at: i + 1) : animation.beatRange.length)
                                 let nb = nextBeat - animation.localBeat(at: i)
                                 return switch nb {
                                 case Rational(1, 4): Rational(1, 12)

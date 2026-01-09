@@ -110,6 +110,7 @@
 		236195A52B7C7EC500CF0B2F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2362826F21905D1E0080C224 /* Arc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Arc.swift; sourceTree = "<group>"; };
 		236855F22295106000958469 /* Sheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sheet.swift; sourceTree = "<group>"; };
+		2371F6622F11331600A81A45 /* PrivacyPolicy.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PrivacyPolicy.md; sourceTree = "<group>"; };
 		2379E032219C54910092892E /* License.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = License.md; sourceTree = "<group>"; };
 		237AEFA52214285E004EE702 /* Picture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Picture.swift; sourceTree = "<group>"; };
 		237EC77722467E9500AA634F /* PastableAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PastableAction.swift; sourceTree = "<group>"; };
@@ -206,6 +207,7 @@
 			children = (
 				23A728DE216CF481000A7350 /* Readme.md */,
 				2379E032219C54910092892E /* License.md */,
+				2371F6622F11331600A81A45 /* PrivacyPolicy.md */,
 				23A72875216CF1B5000A7350 /* Rasen */,
 				23A72874216CF1B5000A7350 /* Products */,
 				23A877A12A5EA8FB00855F0E /* Frameworks */,
