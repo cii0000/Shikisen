@@ -1198,14 +1198,14 @@ final class MoveScoreAction: DragEventAction {
                         }
                     }
                 case .note:
-                    if let beganBeatRange {
+                    if let _ = beganBeatRange {
                         let beatInterval = rootView.currentBeatInterval
                         let pitch = scoreView.pitch(atY: beganPitchY + sheetP.y - beganSheetP.y,
                                                     interval: rootView.currentPitchInterval)
-                        let nsBeat = scoreView.beat(atX: beganBeatX + sheetP.x - beganSheetP.x,
-                                                    interval: beatInterval)
+                        let nsBeat = scoreView.durBeat(atWidth: sheetP.x - beganSheetP.x,
+                                                       interval: beatInterval)
                         if pitch != oldPitch || nsBeat != oldBeat {
-                            let dBeat = nsBeat - beganBeatRange.start + beganDeltaNoteBeat
+                            let dBeat = nsBeat
                             let dPitch = pitch - beganPitch
                             
                             let startBeat = sheetView.animationView.beat(atX: Sheet.textPadding.width, interval: beatInterval)

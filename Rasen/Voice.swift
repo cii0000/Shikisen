@@ -825,12 +825,15 @@ extension FormantFilter {
             }
             var n = withSelfA(to: nPhoneme)
             n[0].formMultiplyVolm(0.85)
+            n[0].sdPitch *= 1.7
+            n[0].pitch += -5
+            n[0].edPitch *= 1.7
             n.formMultiplyEsVolm(0.37, at: 0)
             n[1].formMultiplyVolm(0.43)
             n.formMultiplyEsVolm(0.34, at: 1)
-            n[2].formMultiplyVolm(0.4)
+            n[2].formMultiplyVolm(0.5)
             n.formMultiplyEsVolm(0.06, at: 2)
-            n[3].formMultiplyVolm(0.3)
+            n[3].formMultiplyVolm(0.5)
             n.formMultiplyEsVolm(0.05, at: 3)
             n[4].formMultiplyVolm(0.25)
             n.formMultiplyEsVolm(0.05, at: 4)
@@ -1130,7 +1133,7 @@ extension FormantFilter {
             n[4].fillNoise(1)
             n[5].fillVolm(0)
             return .linear(self, n, t: opacity)
-        case .sa, .sβ, .se, .so, .dza, .dzβ, .dze, .dzo, .ts, .sβRes:
+        case .sa, .sβ, .se, .so, .dza, .dzβ, .dze, .dzo, .ts, .tsRes, .sβRes:
             var n = toNoise(from: 2)
             if phoneme.isDakuon {
                 n[0].fillAllVolm(0.6)
@@ -1151,6 +1154,9 @@ extension FormantFilter {
             n[5].sVolm = 0.8
             n[5].eVolm = 0.65
             n[5].edVolm = 0
+            if phoneme == .ts {
+                n = n.multiplyAllVolm(0.925)
+            }
             return .linear(self, n.multiplyAllVolm(0.85), t: opacity)
         case .ɕ, .dʒ, .tɕ, .ɕRes, .tɕRes:
             var n = toNoise(from: 2)
@@ -1172,6 +1178,9 @@ extension FormantFilter {
             n.formFillEsVolm(0.6, at: 4)
             n[5].fillVolm(0.45)
             n[5].edVolm = 0
+            if phoneme == .tɕ || phoneme == .tɕRes {
+                n = n.multiplyAllVolm(0.925)
+            }
             return .linear(self, n, t: opacity)
         case .ha, .he, .ho:
             var n = toNoise()

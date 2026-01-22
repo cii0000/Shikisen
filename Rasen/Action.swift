@@ -1376,7 +1376,7 @@ final class JustFitAction: InputKeyEventAction {
                             let result = note.pitResult(atBeat: beat - Double(note.beatRange.start))
                             if result.isStraight {
                                 note.pitch.round()
-                                let nPitch = Chord.approximationJustIntonation5Limit(pitch: (note.pits[result.pitI].pitch + note.pitch).rounded() - pitch) + pitch - note.pitch
+                                let nPitch = Chord.approximationJustIntonation(pitch: note.pits[result.pitI].pitch + note.pitch - pitch) + pitch - note.pitch
                                 note.pits[result.pitI].pitch = nPitch
                                 if result.pitI + 1 < note.pits.count {
                                     note.pits[result.pitI + 1].pitch = nPitch
@@ -1387,7 +1387,7 @@ final class JustFitAction: InputKeyEventAction {
                             }
                         } else {
                             note.pits[0].pitch.round()
-                            note.pitch = Chord.approximationJustIntonation5Limit(pitch: note.firstPitch.rounded() - pitch) + pitch - note.pits[0].pitch
+                            note.pitch = Chord.approximationJustIntonation(pitch: note.firstPitch - pitch) + pitch - note.pits[0].pitch
                             if oldNote.pitch != note.pitch {
                                 nivs.append(.init(value: note, index: ni))
                             }

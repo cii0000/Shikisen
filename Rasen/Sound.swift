@@ -168,7 +168,7 @@ extension Pitch {
         } else if hidableDecimal && deltaPitch.decimalPart == 0 {
             deltaStr = " (\(deltaDPartStr))"
         } else {
-            let ddPart = deltaPitch.decimalPart * 16
+            let ddPart = deltaPitch.decimalPart / EditGrid.fullEditPitchInterval
             let ddPartStr = ddPart.decimalPart == 0 ? String(format: "%d", Int(abs(ddPart))) : "\(abs(ddPart.decimalPart))"
             deltaStr = " (\(deltaDPartStr).\(ddPartStr))"
         }
@@ -176,7 +176,7 @@ extension Pitch {
         if hidableDecimal && dPart.decimalPart == 0 {
             return "\(iPart).\(dPartStr)" + deltaStr
         } else {
-            let ddPart = dPart.decimalPart * 16
+            let ddPart = dPart.decimalPart / EditGrid.fullEditPitchInterval
             let ddPartStr = String(format: "%d", Int(ddPart))
             return "\(iPart).\(dPartStr).\(ddPartStr)" + deltaStr
         }
@@ -1370,7 +1370,7 @@ extension Note {
         }
         var isJustIntonation: Bool {
             if isStraight, case .rational(let pitch) = pitch,
-               Chord.unisonFromApproximationJustIntonation5Limit(pitch: notePitch + pitch) != nil {
+               Chord.unisonFromApproximationJustIntonation(pitch: notePitch + pitch) != nil {
                 true
             } else {
                 false
@@ -1835,12 +1835,6 @@ extension Chord {
         }
         return nvs
     }
-    static func justIntonationRatios(at vs: [Int]) -> [Int] {
-        let vs = vs.map { i in Self.justIntonationRatio5Limit(unison: i) }
-        let ratios = Rational.toIntRatios(vs)
-        let gcd = Int.gcd(ratios)
-        return ratios.map { $0 / gcd }
-    }
     
     static func splitedTimeRanges(timeRanges: [(Range<Rational>, Int)]) -> [Range<Rational>: Set<Int>] {
         
@@ -1909,18 +1903,18 @@ extension Chord {
         return nRanges
     }
     
-    static func approximationJustIntonation5Limit(pitch: Rational) -> Rational {
+    static func approximationJustIntonation(pitch: Rational) -> Rational {
         let intPitch = (pitch / 12).rounded(.down)
-        return approximationJustIntonation5Limit(unison: pitch.mod(12)) + intPitch * 12
+        return approximationJustIntonation(unison: pitch.mod(12)) + intPitch * 12
     }
-    static func approximationJustIntonation5Limit(unison: Rational) -> Rational {
+    static func approximationJustIntonation(unison: Rational) -> Rational {
         switch unison {
         case 1: 1 + .init(1173, 10000)
         case 2: 2 + .init(391, 10000)
         case 3: 3 + .init(1564, 10000)
         case 4: 4 + .init(-1369, 10000)
         case 5: 5 + .init(-196, 10000)
-        case 6: 6 + .init(-978, 10000)
+        case 6: .init(58251, 10000)
         case 7: 7 + .init(196, 10000)
         case 8: 8 + .init(1369, 10000)
         case 9: 9 + .init(-1564, 10000)
@@ -1929,26 +1923,26 @@ extension Chord {
         default: 0
         }
     }
-    static func unisonFromApproximationJustIntonation5Limit(pitch: Rational) -> Int? {
+    static func unisonFromApproximationJustIntonation(pitch: Rational) -> Int? {
         guard !pitch.isInteger else { return nil }
         let unison = pitch.mod(12)
         let dUnison = unison.decimalPart
         for i in 1 ... 11 {
-            let n = approximationJustIntonation5Limit(unison: Rational(i))
+            let n = approximationJustIntonation(unison: Rational(i))
             if (n < Rational(i) ? n - Rational(i - 1) : n - Rational(i)) == dUnison {
                 return i
             }
         }
         return nil
     }
-    static func justIntonationRatio5Limit(unison: Int) -> Rational {
+    static func justIntonationRatio(unison: Int) -> Rational {
         switch unison {
         case 1: .init(16, 15)
         case 2: .init(9, 8)
         case 3: .init(6, 5)
         case 4: .init(5, 4)
         case 5: .init(4, 3)
-        case 6: .init(45, 32)
+        case 6: .init(7, 5)
         case 7: .init(3, 2)
         case 8: .init(8, 5)
         case 9: .init(5, 3)

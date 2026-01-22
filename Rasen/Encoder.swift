@@ -74,7 +74,7 @@ extension Caption {
             let path = Typesetter(string: string, typobute: typebute).path()
             return (path, tp)
         case .vertical:
-            let tp = bounds.maxXMidYPoint + Point(-padding - fontSize * 3, tb.width / 2)
+            let tp = bounds.maxXMidYPoint + Point(-padding - fontSize * 2, tb.width / 2)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute

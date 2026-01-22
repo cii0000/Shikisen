@@ -73,7 +73,7 @@ final class NotePlayer {
 //        self.notes = notes
         self.aNotes = notes
         
-        let count = scoreNoder.scoreTrackItem.rendnotes.count
+        let count = scoreNoder.scoreTrackItem.rendnoteManagers.count
         if notes.count <= count {
             scoreNoder.scoreTrackItem.replace(notes.enumerated().map { .init(value: $0.element.stereo,
                                                                              index: count - notes.count + $0.offset) })
@@ -91,7 +91,7 @@ final class NotePlayer {
         }
         self.aNotes = notes
         self.sequencer = sequencer
-        scoreNoder = sequencer.append(ScoreTrackItem(rendnotes: [], sampleRate: Audio.defaultSampleRate,
+        scoreNoder = sequencer.append(ScoreTrackItem(rendnoteManagers: [], sampleRate: Audio.defaultSampleRate,
                                                      startSec: 0, durSec: 0,
                                                      isEnabledSamples: false))
     }
@@ -111,28 +111,22 @@ final class NotePlayer {
     }
     private func playNote() {
         noteIDs = []
-        let rendnotes: [Rendnote] = notes.map { note in
-            let (seed0, seed1) = note.id.uInt64Values
-            let rootFq = Pitch.fq(fromPitch: .init(note.notePitch) + note.pitch.doubleValue)
-            return .init(rootFq: rootFq,
-                         firstFq: rootFq,
-                         noiseSeed0: seed0, noiseSeed1: seed1,
-                         pitbend: .init(pitch: 0,
-                                        stereo: note.stereo,
-                                        overtone: note.tone.overtone,
-                                        spectlope: note.tone.spectlope),
-                         secRange: -.infinity ..< .infinity,
-                         reverb: .init(), waveclip: .default)
+        let rendnoteManagers = notes.map { RendnoteManager(note: $0) }
+        rendnoteManagers.forEach {
+            $0.rendnotes.forEach {
+                noteIDs.insert($0.id)
+            }
         }
-        rendnotes.forEach { noteIDs.insert($0.id) }
         
-        scoreNoder.scoreTrackItem.rendnotes += rendnotes
+        scoreNoder.scoreTrackItem.rendnoteManagers += rendnoteManagers
         scoreNoder.scoreTrackItem.updateNotewaveDic()
     }
     private func stopNote() {
-        for (i, rendnote) in scoreNoder.scoreTrackItem.rendnotes.enumerated() {
-            if noteIDs.contains(rendnote.id) {
-                scoreNoder.scoreTrackItem.rendnotes[i].isRelease = true
+        for (i, rendnoteManager) in scoreNoder.scoreTrackItem.rendnoteManagers.enumerated() {
+            for (ri, rendnote) in rendnoteManager.rendnotes.enumerated() {
+                if noteIDs.contains(rendnote.id) {
+                    scoreNoder.scoreTrackItem.rendnoteManagers[i].rendnotes[ri].isRelease = true
+                }
             }
         }
         noteIDs = []
@@ -151,7 +145,7 @@ final class NotePlayer {
         } cancelClosure: {
         } endClosure: { [weak self] in
             self?.sequencer.stop()
-            self?.scoreNoder.scoreTrackItem.rendnotes = []
+            self?.scoreNoder.scoreTrackItem.rendnoteManagers = []
             self?.scoreNoder.scoreTrackItem.updateNotewaveDic()
             self?.scoreNoder.reset()
         }
@@ -470,7 +464,7 @@ private final class LockedNotewaves: @unchecked Sendable {
 }
 
 struct ScoreTrackItem {
-    var rendnotes = [Rendnote]() {
+    var rendnoteManagers = [RendnoteManager]() {
         didSet { isChanged = true }
     }
     var sampleRate = Audio.defaultSampleRate {
@@ -498,7 +492,7 @@ struct ScoreTrackItem {
 extension ScoreTrackItem {
     init(score: Score, startSec: Double = 0, sampleRate: Double, isUpdateNotewaveDic: Bool,
          isEnabledSamples: Bool = true) {
-        rendnotes = score.notes.map { .init(note: $0, score: score) }
+        rendnoteManagers = score.notes.map { .init(note: $0, score: score) }
         self.sampleRate = sampleRate
         self.startSec = startSec
         durSec = score.secRange.end
@@ -512,7 +506,7 @@ extension ScoreTrackItem {
     }
     
     var isEmpty: Bool {
-        rendnotes.isEmpty || durSec == 0
+        rendnoteManagers.isEmpty || durSec == 0
     }
     
     func notewave(from rendnote: Rendnote) -> Notewave? {
@@ -534,29 +528,31 @@ extension ScoreTrackItem {
     }
     
     mutating func insert(_ noteIVs: [IndexValue<Note>], with score: Score) {
-        rendnotes.insert(noteIVs.map {
-            IndexValue(value: Rendnote(note: $0.value, score: score), index: $0.index)
+        rendnoteManagers.insert(noteIVs.map {
+            IndexValue(value: .init(note: $0.value, score: score), index: $0.index)
         })
     }
     mutating func replace(_ note: Note, at i: Int, with score: Score) {
         replace([.init(value: note, index: i)], with: score)
     }
     mutating func replace(_ noteIVs: [IndexValue<Note>], with score: Score) {
-        rendnotes.replace(noteIVs.map {
-            IndexValue(value: Rendnote(note: $0.value, score: score), index: $0.index)
+        rendnoteManagers.replace(noteIVs.map {
+            IndexValue(value: .init(note: $0.value, score: score), index: $0.index)
         })
     }
     
     mutating func replace(_ sivs: [IndexValue<Stereo>]) {
         var isUpdate = false
         sivs.forEach {
-            let rendnote = rendnotes[$0.index]
-            let notewaveID = rendnote.id
-            if var notewave = notewaveDic[notewaveID] {
-                notewave = rendnote.notewave(from: notewave.noStereoSampless, stereo: $0.value,
-                                             sampleRate: sampleRate)
-                notewaveDic[notewaveID] = notewave
-                isUpdate = true
+            let rendnoteManager = rendnoteManagers[$0.index]
+            for rendnote in rendnoteManager.rendnotes {
+                let notewaveID = rendnote.id
+                if var notewave = notewaveDic[notewaveID] {
+                    notewave = rendnote.notewave(from: notewave.noStereoSampless, stereo: $0.value,
+                                                 sampleRate: sampleRate)
+                    notewaveDic[notewaveID] = notewave
+                    isUpdate = true
+                }
             }
         }
         if isUpdate {
@@ -565,11 +561,11 @@ extension ScoreTrackItem {
     }
     
     mutating func remove(at noteIs: [Int]) {
-        rendnotes.remove(at: noteIs)
+        rendnoteManagers.remove(at: noteIs)
     }
     
     mutating func updateNotewaveDic() {
-        let newNIDs = Set(rendnotes.map { $0.id })
+        let newNIDs = Set(rendnoteManagers.flatMap { $0.rendnotes.map { $0.id } })
         let oldNIDs = Set(notewaveDic.keys)
         
         for nid in oldNIDs {
@@ -577,7 +573,9 @@ extension ScoreTrackItem {
             notewaveDic[nid] = nil
         }
         
-        let ors = rendnotes.reduce(into: [UUID: Rendnote]()) { $0[$1.id] = $1 }
+        let ors = rendnoteManagers.reduce(into: [UUID: Rendnote]()) { (n, v) in
+            v.rendnotes.forEach { n[$0.id] = $0 }
+        }
         var newWillRenderRendnoteDic = [UUID: Rendnote]()
         for nid in newNIDs {
             guard notewaveDic[nid] == nil else { continue }
@@ -623,6 +621,7 @@ extension ScoreTrackItem {
     }
     mutating func updateSamples() {
         guard isEnabledSamples else { return }
+        let rendnotes = rendnoteManagers.flatMap { $0.rendnotes }
         let ranges = rendnotes.map { $0.releasedRange(sampleRate: sampleRate, startSec: startSec) }
         let startI = ranges.minValue { $0.start } ?? 0
         let endI = ranges.maxValue { $0.end } ?? 0
@@ -773,49 +772,51 @@ final class ScoreNoder: ObjectHashable {
             let frameStartI = Int(timestamp.pointee.mSampleTime - startSampleTime) + seqStartI
             var contains = false
             if type == .loopNote {
-                for rendnote in scoreTrackItem.rendnotes {
-                    let ei: Int?
-                    if rendnote.isRelease {
-                        guard loopNoteMemos[rendnote.id] != nil else { continue }
-                        if let oei = loopNoteMemos[rendnote.id]?.releaseI {
-                            ei = min(frameStartI, oei)
+                for rendnoteManager in scoreTrackItem.rendnoteManagers {
+                    for rendnote in rendnoteManager.rendnotes {
+                        let ei: Int?
+                        if rendnote.isRelease {
+                            guard loopNoteMemos[rendnote.id] != nil else { continue }
+                            if let oei = loopNoteMemos[rendnote.id]?.releaseI {
+                                ei = min(frameStartI, oei)
+                            } else {
+                                loopNoteMemos[rendnote.id]?.releaseI = frameStartI
+                                ei = frameStartI
+                            }
+                            let releaseCount = rendnote.releaseCount(sampleRate: sampleRate)
+                            if frameStartI >= ei! + releaseCount {
+                                loopNoteMemos[rendnote.id] = nil
+                                continue
+                            }
                         } else {
-                            loopNoteMemos[rendnote.id]?.releaseI = frameStartI
-                            ei = frameStartI
+                            ei = nil
                         }
-                        let releaseCount = rendnote.releaseCount(sampleRate: sampleRate)
-                        if frameStartI >= ei! + releaseCount {
-                            loopNoteMemos[rendnote.id] = nil
-                            continue
+                        
+                        guard let notewave = scoreTrackItem.notewave(from: rendnote) else { continue }
+                        contains = true
+                        
+                        var si: Int
+                        if let i = loopNoteMemos[rendnote.id]?.startI {
+                            si = min(frameStartI, i)
+                        } else {
+                            loopNoteMemos[rendnote.id] = (frameStartI, ei)
+                            si = frameStartI
                         }
-                    } else {
-                        ei = nil
-                    }
-                    
-                    guard let notewave = scoreTrackItem.notewave(from: rendnote) else { continue }
-                    contains = true
-                    
-                    var si: Int
-                    if let i = loopNoteMemos[rendnote.id]?.startI {
-                        si = min(frameStartI, i)
-                    } else {
-                        loopNoteMemos[rendnote.id] = (frameStartI, ei)
-                        si = frameStartI
-                    }
-                    
-                    let nStartSec = startSec + .init(si) * rSampleRate
-                    let releaseSec = ei != nil ? startSec + .init(ei!) * rSampleRate : nil
-                    var mi = (frameStartI - si) % notewave.sampleCount
-                    for ni in 0 ..< Int(frameCount) {
-                        updateF(i: ni + frameStartI, ui: ni + frameStartI, mi: mi, ni: ni,
-                                sampless: notewave.sampless,
-                                isPremultipliedEnvelope: !notewave.isLoop,
-                                allAttackStartSec: nil, allReleaseStartSec: nil,
-                                playingAttackStartSec: nil, playingReleaseStartSec: nil,
-                                startSec: nStartSec, releaseSec: releaseSec)
-                        mi += 1
-                        if mi >= notewave.sampleCount {
-                            mi -= notewave.sampleCount
+                        
+                        let nStartSec = startSec + .init(si) * rSampleRate
+                        let releaseSec = ei != nil ? startSec + .init(ei!) * rSampleRate : nil
+                        var mi = (frameStartI - si) % notewave.sampleCount
+                        for ni in 0 ..< Int(frameCount) {
+                            updateF(i: ni + frameStartI, ui: ni + frameStartI, mi: mi, ni: ni,
+                                    sampless: notewave.sampless,
+                                    isPremultipliedEnvelope: !notewave.isLoop,
+                                    allAttackStartSec: nil, allReleaseStartSec: nil,
+                                    playingAttackStartSec: nil, playingReleaseStartSec: nil,
+                                    startSec: nStartSec, releaseSec: releaseSec)
+                            mi += 1
+                            if mi >= notewave.sampleCount {
+                                mi -= notewave.sampleCount
+                            }
                         }
                     }
                 }

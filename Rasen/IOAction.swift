@@ -1263,7 +1263,7 @@ final class IOAction: Action {
                                                                   in: sheetBounds))
                                 }
                                 let captionNodes = Caption.cpuNodes(in: b, from: captions)
-                                node = CPUNode(children: children + captionNodes, attitude: .init(position: origin),
+                                node = CPUNode(children: children + [.init(children: captionNodes)], attitude: .init(position: origin),
                                                path: Path(sheetBounds))
                             } else {
                                 node = sheet.node(isBorder: false, atSec: sec,

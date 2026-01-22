@@ -78,6 +78,9 @@ extension TimelineView {
     func durBeat(atWidth w: Double) -> Double {
         w / Sheet.beatWidth
     }
+    func durBeat(atWidth w: Double, interval: Rational) -> Rational {
+        Rational(w / Sheet.beatWidth, intervalScale: interval)
+    }
     
     func sec(atX x: Double, interval: Rational) -> Rational {
         model.sec(fromBeat: beat(atX: x, interval: interval))
@@ -600,19 +603,19 @@ extension ScoreView {
         let scaleSet = Set(score.scales.map { $0.mod(12) })
         
         let roundedSPitch = pitchRange.start.rounded(.down)
-        let deltaPitch = Rational(1, 16)
-        let pitchR1 = Rational(1)
+        let deltaPitch = EditGrid.fullEditPitchInterval
+        let pitchR1 = EditGrid.pitchInterval
         var cPitch = roundedSPitch
         while cPitch <= pitchRange.end {
             if cPitch >= pitchRange.start {
                 let plw: Double = if cPitch % pitchR1 == 0 {
                     scaleSet.contains(cPitch.mod(12)) ? 0.5 : 0.25
                 } else {
-                    0.0625
+                    0.03125
                 }
                 let py = self.y(fromPitch: cPitch)
                 let rect = Rect(x: sx, y: py - plw / 2, width: ex - sx, height: plw)
-                if plw == 0.0625 {
+                if plw == 0.03125 {
                     fullEditBorderPathlines.append(Pathline(rect))
                 } else if plw == 0.5 {
                     subBorderPathlines.append(.init(rect))
@@ -1298,17 +1301,18 @@ extension ScoreView {
                 let noteX = x(atBeat: n.beat)
                 let evenAmp = Self.color(fromScale: n.result.tone.overtone.evenAmp)
                 if let pitIs = pitIsDic[n.beat] {
+                    let scale = pitIs.count >= 2 ? 0.5 : 1.0
                     for pitI in pitIs {
                         var stereo = note.pits[pitI].stereo
                         if !isOneOvertone {
                             stereo.volm *= maxSumTone == 0 ? 0 : n.sumTone / maxSumTone
                         }
                         let pitY = pitY(atPit: pitI, from: note)
-                        ps.append(.init(noteX, pitY, halfNH, Self.color(from: stereo)))
+                        ps.append(.init(noteX, pitY, halfNH * scale, Self.color(from: stereo)))
                         noteLinePs.append(.init(noteX, pitY))
-                        mps.append(.init(noteX, pitY, mainLineHalfH, isPreJI ? .justFit : .content))
+                        mps.append(.init(noteX, pitY, mainLineHalfH * scale, isPreJI ? .justFit : .content))
                         if isEven {
-                            meps.append(.init(noteX, pitY, mainEvenLineHalfH, evenAmp))
+                            meps.append(.init(noteX, pitY, mainEvenLineHalfH * scale, evenAmp))
                         }
                     }
                 } else {
@@ -1550,7 +1554,7 @@ extension ScoreView {
             stereoLinePath = .init(triangleStrip(ts))
             stereoLineColors = [color]
             
-            let mainLineColor = Chord.unisonFromApproximationJustIntonation5Limit(pitch: note.firstPitch) != nil ? Color.justFit : Color.content
+            let mainLineColor = Chord.unisonFromApproximationJustIntonation(pitch: note.firstPitch) != nil ? Color.justFit : Color.content
             mainLinePath = .init(triangleStrip([.init(nsx, ny, mainLineHalfH, mainLineColor),
                                                 .init(nsx + nw, ny, mainLineHalfH, mainLineColor)]))
             mainLineColors = [mainLineColor]

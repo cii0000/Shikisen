@@ -290,6 +290,70 @@ extension Pitbend {
     }
 }
 
+struct RendnoteManager {
+    var rendnotes: [Rendnote]
+    
+    init(note: Note.PitResult) {
+        rendnotes = [.init(note: note)]
+    }
+    init(note: Note, score: Score) {
+        let note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
+        let (seed0, seed1) = note.containsNoise ? note.id.uInt64Values : (0, 0)
+        var deltaPhase = 0.0
+        
+        func rendnote(from range: Range<Int>, endBeat: Rational) -> Rendnote {
+            var note = note
+            if !(range.start == 0 && range.end == note.pits.count) {
+                let startPitBeat = note.pits[range.start].beat
+                note.beatRange = (note.beatRange.start + startPitBeat)
+                ..< endBeat
+                note.pits = .init(note.pits[range].map {
+                    var pit = $0
+                    pit.beat -= startPitBeat
+                    return pit
+                })
+            }
+            
+            let rootFq = Pitch.fq(fromPitch: .init(note.pitch))
+            let pitbend = note.pitbend(fromTempo: score.tempo)
+            let sSec = Double(score.sec(fromBeat: note.beatRange.start))
+            let eSec = Double(score.sec(fromBeat: note.beatRange.end))
+            let isSmall = !note.isFullNoise && eSec - sSec < Waveclip.default.attackSec
+            
+            let nDeltaPhase = deltaPhase
+            deltaPhase += Double(score.sec(fromBeat: note.beatRange.length))
+            * Pitch.fq(fromPitch: .init(note.firstPitch)) * .pi2
+            return .init(rootFq: rootFq,
+                         firstFq: rootFq * pitbend.firstFqScale,
+                         noiseSeed0: seed0, noiseSeed1: seed1,
+                         pitbend: pitbend,
+                         secRange: sSec ..< eSec,
+                         reverb: .init(),
+                         waveclip: isSmall ? .small : .default,
+                         isFitPhase: !isSmall, deltaPhase: nDeltaPhase)
+        }
+        
+        var preI = 0, preBeat = note.beatRange.start, prePitch = note.firstPitch
+        var rendnotes = [Rendnote](), isAppend = true
+        for (i, pit) in note.pits.enumerated() {
+            if isAppend && i > 0 && pit.beat + note.beatRange.start == preBeat
+                && prePitch != pit.pitch + note.pitch {
+                
+                rendnotes.append(rendnote(from: preI ..< i,
+                                          endBeat: pit.beat + note.beatRange.start))
+                preI = i
+                isAppend = false
+            } else {
+                isAppend = true
+            }
+            preBeat = pit.beat + note.beatRange.start
+            prePitch = pit.pitch + note.pitch
+        }
+        rendnotes.append(rendnote(from: preI ..< note.pits.count, endBeat: note.beatRange.end))
+        self.rendnotes = rendnotes
+    }
+}
+
 struct Rendnote {
     var rootFq: Double, firstFq: Double
     var noiseSeed0, noiseSeed1: UInt64
@@ -298,12 +362,26 @@ struct Rendnote {
     var reverb: Reverb
     var waveclip: Waveclip
     var isFitPhase = true
+    var deltaPhase = 0.0
     var isStereoNoise = true
     var isRelease = false
     let id = UUID()
 }
 extension Rendnote {
-    init(note: Note, score: Score, snapBeatScale: Rational = .init(1, 4)) {
+    init(note: Note.PitResult) {
+        let (seed0, seed1) = note.id.uInt64Values
+        let rootFq = Pitch.fq(fromPitch: .init(note.notePitch) + note.pitch.doubleValue)
+        self.init(rootFq: rootFq,
+                  firstFq: rootFq,
+                  noiseSeed0: seed0, noiseSeed1: seed1,
+                  pitbend: .init(pitch: 0,
+                                 stereo: note.stereo,
+                                 overtone: note.tone.overtone,
+                                 spectlope: note.tone.spectlope),
+                  secRange: -.infinity ..< .infinity,
+                  reverb: .init(), waveclip: .default)
+    }
+    init(note: Note, score: Score, deltaPhase: Double) {
         let note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
         let sSec = Double(score.sec(fromBeat: note.beatRange.start))
         let eSec = Double(score.sec(fromBeat: note.beatRange.end))
@@ -319,7 +397,7 @@ extension Rendnote {
                   secRange: sSec ..< eSec,
                   reverb: .init(),
                   waveclip: isSmall ? .small : .default,
-                  isFitPhase: !isSmall)
+                  isFitPhase: !isSmall, deltaPhase: deltaPhase)
     }
     
     var isStft: Bool {

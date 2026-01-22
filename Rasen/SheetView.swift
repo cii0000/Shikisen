@@ -233,10 +233,10 @@ extension TimelineView {
                            secondEditBorderPathlines: inout [Pathline],
                            borderPathlines: inout [Pathline]) {
         let roundedSBeat = beatRange.start.rounded(.down)
-        let deltaBeat = Rational(1, 128)
+        let deltaBeat = EditGrid.fullEditBeatInterval
         let beatR0 = Rational(1, 2)
-        let beatR1 = Rational(1, 8)
-        let beatR2 = Rational(1, 16)
+        let beatR1 = EditGrid.beatInterval
+        let beatR2 = EditGrid.secondBeatInterval
         let beat0 = Rational(1)
         var cBeat = roundedSBeat
         while cBeat <= beatRange.end {
@@ -1880,7 +1880,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
         let mainDurSec = max(model.allEndSec, bottomEndSec, topEndSec,
                              seqTrack.durSec)
-        seqTrack.scoreTrackItems.append(.init(rendnotes: [],
+        seqTrack.scoreTrackItems.append(.init(rendnoteManagers: [],
                                               sampleRate: sampleRate,
                                               startSec: 0,
                                               durSec: mainDurSec))
