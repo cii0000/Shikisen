@@ -159,7 +159,7 @@ struct Pitbend: Codable, Hashable {
     let firstPitch: Double, firstFqScale: Double, isEqualAllPitch: Bool
     
     let stereoInterpolation: Interpolation<Stereo>
-    let firstStereo: Stereo, isEqualAllStereo: Bool
+    let firstStereo: Stereo, isEqualAllStereo: Bool, firstPan: Double, isEqualAllPan: Bool
     
     let overtoneInterpolation: Interpolation<Overtone>
     let firstOvertone: Overtone, isEqualAllOvertone: Bool
@@ -202,6 +202,9 @@ struct Pitbend: Codable, Hashable {
         let firstStereo = stereos.first!
         self.firstStereo = firstStereo
         isEqualAllStereo = stereos.allSatisfy { $0 == firstStereo }
+        let firstPan = firstStereo.pan
+        self.firstPan = firstPan
+        isEqualAllPan = stereos.allSatisfy { $0.pan == firstPan }
         stereoInterpolation = interpolation(isAll: isEqualAllStereo, stereos, .linear)
         
         let firstOvertone = overtones.first!
@@ -225,7 +228,9 @@ struct Pitbend: Codable, Hashable {
         
         stereoInterpolation = .init()
         firstStereo = stereo.with(id: .zero)
+        firstPan = firstStereo.pan
         isEqualAllStereo = true
+        isEqualAllPan = true
         
         overtoneInterpolation = .init()
         firstOvertone = overtone
@@ -475,88 +480,51 @@ extension Rendnote {
         }
     }
     func notewave(from sampless: [[Double]], stereo: Stereo? = nil, sampleRate: Double) -> Notewave {
-        let isReverb = !(isStereoNoise && pitbend.isFullNoise)
-        let rSampleRate = 1 / sampleRate
-        var nSampless: [[Double]]
         let stereoScale = Volm.volm(fromAmp: 1 / 2.0.squareRoot())
-        
+        let nSampless: [[Double]]
         if pitbend.isEqualAllStereo || stereo != nil {
             let stereo = (stereo ?? pitbend.firstStereo).multiply(volm: stereoScale)
             let stereoAmp = Volm.amp(fromVolm: stereo.volm)
             let oSampless = sampless.map { vDSP.multiply(stereoAmp, $0) }
-            let pan = stereo.pan
-            if oSampless.count == 1 {
-                let nSamples = oSampless[0]
-                if pan == 0 {
-                    nSampless = [nSamples, nSamples]
-                } else {
-                    let nPan = pan.clipped(min: -1, max: 1)
-                    if nPan < 0 {
-                        nSampless = [nSamples,
-                                     vDSP.multiply(Volm.amp(fromVolm: 1 + nPan), nSamples)]
-                    } else {
-                        nSampless = [vDSP.multiply(Volm.amp(fromVolm: 1 - nPan), nSamples),
-                                     nSamples]
-                    }
-                }
+            let (oSamples0, oSamples1) = oSampless.count == 1 ?
+            (oSampless[0], oSampless[0]) : (oSampless[0], oSampless[1])
+            let pan = stereo.pan.clipped(min: -1, max: 1)
+            nSampless = if pan == 0 {
+                [oSamples0, oSamples1]
+            } else if pan < 0 {
+                [oSamples0, vDSP.multiply(Volm.amp(fromVolm: 1 + pan), oSamples1)]
             } else {
-                if pan == 0 {
-                    nSampless = [oSampless[0], oSampless[1]]
-                } else {
-                    let nPan = pan.clipped(min: -1, max: 1)
-                    if nPan < 0 {
-                        nSampless = [oSampless[0],
-                                     vDSP.multiply(Volm.amp(fromVolm: 1 + nPan), oSampless[1])]
-                    } else {
-                        nSampless = [vDSP.multiply(Volm.amp(fromVolm: 1 - nPan), oSampless[0]),
-                                     oSampless[1]]
-                    }
-                }
+                [vDSP.multiply(Volm.amp(fromVolm: 1 - pan), oSamples0), oSamples1]
             }
         } else {
-            let stereos = sampless[0].count.range.map { pitbend.stereo(atSec: Double($0) * rSampleRate).multiply(volm: stereoScale) }
-            let stereoAmps = stereos.map { Volm.amp(fromVolm: $0.volm) }
+            let rSampleRate = 1 / sampleRate
+            let secs = vDSP.multiply(rSampleRate, sampless[0].count.range.map { Double($0) })
+            let stereos = secs.map { pitbend.stereo(atSec: $0) }
+            let stereoVolms = vDSP.multiply(stereoScale, stereos.map { $0.volm })
+            let stereoAmps = Volm.amps(fromVolms: stereoVolms)
             let oSampless = sampless.map { vDSP.multiply($0, stereoAmps) }
-            nSampless = [[Double](capacity: stereos.count), [Double](capacity: stereos.count)]
-            if oSampless.count == 1 {
-                for (sample, stereo) in zip(oSampless[0], stereos) {
-                    let pan = stereo.pan
-                    if pan == 0 {
-                        nSampless[0].append(sample)
-                        nSampless[1].append(sample)
-                    } else {
-                        let nPan = pan.clipped(min: -1, max: 1)
-                        if nPan < 0 {
-                            nSampless[0].append(sample)
-                            nSampless[1].append(sample * Volm.amp(fromVolm: 1 + nPan))
-                        } else {
-                            nSampless[0].append(sample * Volm.amp(fromVolm: 1 - nPan))
-                            nSampless[1].append(sample)
-                        }
-                    }
+            let (oSamples0, oSamples1) = oSampless.count == 1 ?
+            (oSampless[0], oSampless[0]) : (oSampless[0], oSampless[1])
+            if pitbend.isEqualAllPan {
+                let pan = pitbend.firstPan.clipped(min: -1, max: 1)
+                nSampless = if pan == 0 {
+                    [oSamples0, oSamples1]
+                } else if pan < 0 {
+                    [oSamples0, vDSP.multiply(Volm.amp(fromVolm: 1 + pan), oSamples1)]
+                } else {
+                    [vDSP.multiply(Volm.amp(fromVolm: 1 - pan), oSamples0), oSamples1]
                 }
             } else {
-                for (si, stereo) in stereos.enumerated() {
-                    let pan = stereo.pan
-                    if pan == 0 {
-                        nSampless[0].append(oSampless[0][si])
-                        nSampless[1].append(oSampless[1][si])
-                    } else {
-                        let nPan = pan.clipped(min: -1, max: 1)
-                        if nPan < 0 {
-                            nSampless[0].append(oSampless[0][si])
-                            nSampless[1].append(oSampless[1][si] * Volm.amp(fromVolm: 1 + nPan))
-                        } else {
-                            nSampless[0].append(oSampless[0][si] * Volm.amp(fromVolm: 1 - nPan))
-                            nSampless[1].append(oSampless[1][si])
-                        }
-                    }
-                }
+                let pans = stereos.map { $0.pan.clipped(min: -1, max: 1) }
+                let nPans = Volm.amps(fromVolms: pans.map { $0 < 0 ? 1 + $0 : 1 - $0 })
+                let pan0s = zip(pans, nPans).map { $0.0 <= 0 ? 1 : $0.1 }
+                let pan1s = zip(pans, nPans).map { $0.0 >= 0 ? 1 : $0.1 }
+                nSampless = [vDSP.multiply(oSamples0, pan0s), vDSP.multiply(oSamples1, pan1s)]
             }
         }
         
         var notewave = Notewave(noStereoSampless: sampless, sampless: nSampless, isLoop: isLoop)
-        if isReverb && !reverb.isEmpty {
+        if !(isStereoNoise && pitbend.isFullNoise) && !reverb.isEmpty {
             let sampleCount = notewave.sampleCount
             notewave.sampless = [vDSP.apply(fir: reverb.fir(sampleRate: sampleRate, channel: 0),
                                             in: notewave.sampless[0]),

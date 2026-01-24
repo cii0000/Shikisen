@@ -564,7 +564,7 @@ extension ScoreTrackItem {
         rendnoteManagers.remove(at: noteIs)
     }
     
-    mutating func updateNotewaveDic() {
+    mutating func updateNotewaveDic(threadCount: Int = 8) {
         let newNIDs = Set(rendnoteManagers.flatMap { $0.rendnotes.map { $0.id } })
         let oldNIDs = Set(notewaveDic.keys)
         
@@ -588,8 +588,11 @@ extension ScoreTrackItem {
             if nwrrs.count == 1 {
                 let notewave = nwrrs[0].1.notewave(sampleRate: sampleRate)
                 notewaveDic[nwrrs[0].0] = notewave
+            } else if threadCount == 1 {
+                for n in nwrrs {
+                    notewaveDic[n.0] = n.1.notewave(sampleRate: sampleRate)
+                }
             } else {
-                let threadCount = 8
                 let nThreadCount = min(nwrrs.count, threadCount)
                 
                 let lockedNotewaves = LockedNotewaves(nwrrs.count.range.reduce(into: .init()) { $0[$1] = .init() })

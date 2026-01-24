@@ -1222,6 +1222,8 @@ final class PastableAction: Action {
             rootView.updateSelects()
 
             Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
+            
+            return true
         } else if rootView.isSelectSelectedNoneCursor(at: p), !rootView.selections.isEmpty {
             if rootView.isSelectedText, rootView.selections.count == 1 {
                 rootAction.textAction.cut(from: rootView.selections[0], at: p)

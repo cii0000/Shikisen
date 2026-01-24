@@ -2626,7 +2626,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
         
         let fsi = scrollVs[..<(scrollVs.count - 1)]
-            .lastIndex(where: { event.time - $0.time > 0.05 }) ?? 0
+            .lastIndex(where: { event.time - $0.time > 0.1 }) ?? 0
         let lsv = scrollVs.last!
         let t = timeInterval + lsv.time
         

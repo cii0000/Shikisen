@@ -2353,6 +2353,13 @@ extension Volm {
         .log(1 + amp * 98.2558787375) * 0.2175
     }
     
+    static func amps(fromVolms volms: [Double]) -> [Double] {
+        var n = vDSP.multiply(4.5977011494, volms)
+        var count = Int32(n.count), nn = n
+        vvexpm1(&nn, &n, &count)
+        return vDSP.multiply(0.01017750808, nn)
+    }
+    
     static func db(fromAmp amp: Double) -> Double {
         20 * .log10(amp)
     }
