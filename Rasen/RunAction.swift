@@ -128,11 +128,11 @@ final class RunAction: InputKeyEventAction {
                         let firstX = -wx + pw
                         
                         let maxCount = 10000
-                        let xi = Int(Double(pcmBuffer.frameCount) * pw / tW)
+                        let xi = Int(Double(pcmBuffer.sampleCount) * pw / tW)
                         var pathlines = [Pathline](), y = 100.0
                         for ci in 0 ..< pcmBuffer.channelCount {
-                            let minX = min(xi, pcmBuffer.frameCount)
-                            let maxX = min(xi + maxCount, pcmBuffer.frameCount)
+                            let minX = min(xi, pcmBuffer.sampleCount)
+                            let maxX = min(xi + maxCount, pcmBuffer.sampleCount)
                             let ps = (minX ..< maxX).map { i in
                                 Point(-wx + allW * Double(i - minX) / Double(maxX - minX),
                                       y + Double(pcmBuffer[ci, i]) * 50)
@@ -144,7 +144,7 @@ final class RunAction: InputKeyEventAction {
                         }
                         
                         let rangeY = 10.0, edgeH = 3.0
-                        let endX = firstX + allW * Double(maxCount) / Double(pcmBuffer.frameCount)
+                        let endX = firstX + allW * Double(maxCount) / Double(pcmBuffer.sampleCount)
                         pathlines.append(.init(Edge(Point(firstX, rangeY),
                                                     Point(endX, rangeY))))
                         pathlines.append(.init(Edge(Point(firstX, rangeY - edgeH),

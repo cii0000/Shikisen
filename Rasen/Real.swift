@@ -620,6 +620,18 @@ extension Float {
             (self >= start && self < end ?
              self : (self - start).mod(end - start) + start)
     }
+    
+    var squared: Self { self * self }
+    var biquadratic: Self {
+        let n = squared
+        return n * n
+    }
+    
+    func string(digitsCount: Int, enabledZeroInteger: Bool = true) -> String {
+        !enabledZeroInteger && self.isInteger ?
+        "\(Int(self))" :
+        String(format: "%.\(digitsCount)f", self)
+    }
 }
 
 extension Range where Bound == Double {

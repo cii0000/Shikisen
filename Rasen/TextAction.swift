@@ -298,7 +298,7 @@ final class LookUpAction: InputKeyEventAction {
             var sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
             if !sampless.isEmpty {
                 let peakDb = PCMBuffer.peakDb(sampless: sampless)
-                PCMBuffer.clip(amp: Audio.headroomAmp, sampless: &sampless)
+                PCMBuffer.clip(amp: Audio.floatHeadroomAmp, sampless: &sampless)
                 let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"

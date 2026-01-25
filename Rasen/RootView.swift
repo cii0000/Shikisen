@@ -3183,7 +3183,7 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func currentSampless(at shp: IntPoint,
-                         sampleRate: Double = Audio.defaultSampleRate) -> [[Double]] {
+                         sampleRate: Double = Audio.defaultSampleRate) -> [[Float]] {
         guard let sheetView = sheetViewValue(at: shp)?.sheetView,
                 sheetView.model.enabledMusic else { return [] }
         
@@ -3206,7 +3206,7 @@ final class RootView: View, @unchecked Sendable {
         
         let seq = Sequencer(tracks: seqTracks, type: .normal)
         let buffer = try? seq?.buffer(sampleRate: sampleRate, isClip: false) { d, flag in }
-        return buffer?.doubleSampless ?? []
+        return buffer?.sampless ?? []
     }
     
     var worldKnobEditDistance: Double {

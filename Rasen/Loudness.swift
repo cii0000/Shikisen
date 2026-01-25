@@ -50,10 +50,10 @@ struct IIRfilter {
              highShelfDeMan, highPassDeMan
     }
     
-    var G, Q, fc, rate: Double, filterType: FilterType, passbandGain: Double
+    var G, Q, fc, rate: Double, filterType: FilterType, passbandGain: Float
     
     init(G: Double, Q: Double, fc: Double, rate: Double,
-         _ filterType: FilterType, passbandGain: Double = 1) {
+         _ filterType: FilterType, passbandGain: Float = 1) {
         self.G  = G
         self.Q  = Q
         self.fc = fc
@@ -135,10 +135,10 @@ struct IIRfilter {
         return [b0, b1, b2, a1, a2].map { $0 / a0 }
     }
 
-    func applyFilter(data: [Double]) -> [Double] {
-        var filter = Biquad(coefficients: generateCoefficients(),
-                            channelCount: 1,
-                            sectionCount: 1)
+    func applyFilter(data: [Float]) -> [Float] {
+        var filter = Biquad<Float>(coefficients: generateCoefficients(),
+                                   channelCount: 1,
+                                   sectionCount: 1)
         let nData = filter?.apply(input: data) ?? data
         return vDSP.multiply(passbandGain, nData)
     }
@@ -224,7 +224,7 @@ struct Loudness {
             self.string = str
         }
     }
-    func lufs(from data: [[Double]]) throws -> Double {
+    func lufs(from data: [[Float]]) throws -> Float {
         var inputData = data
         if inputData.count > 5 || inputData.isEmpty {
             throw ValueError("Audio must have five channels or less.")
@@ -242,24 +242,24 @@ struct Loudness {
                 inputData[ch] = filterStage.applyFilter(data: inputData[ch])
             }
         }
-        let G = [1.0, 1.0, 1.0, 1.41, 1.41] // channel gains
+        let G: [Float] = [1.0, 1.0, 1.0, 1.41, 1.41] // channel gains
         let T_g = blockSize // 400 ms gating block standard
-        let GammaA = -70.0 // -70 LKFS = absolute loudness threshold
+        let GammaA: Float = -70.0 // -70 LKFS = absolute loudness threshold
         let overlap = 0.75 // overlap of 75 % of the block duration
         let step = 1 - overlap // step size by percentage
         
         let T = Double(numSamples) / sampleRate // length of the input in seconds
         let numBlocks = Int((((T - T_g) / (T_g * step))).rounded() + 1) // total number of gated blocks (see end of eq. 3)
         let jRange = 0 ..< numBlocks // indexed list of total blocks
-        var z = Array(repeating: Array(repeating: 0.0, count: numBlocks),
-                      count: numChannels) // instantiate array - trasponse of input
+        var z: [[Float]] = Array(repeating: Array(repeating: 0.0, count: numBlocks),
+                                 count: numChannels) // instantiate array - trasponse of input
         
         for i in 0 ..< numChannels { // iterate over input channels
             for j in jRange { // iterate over total frames
                 let l = min(Int(T_g * (Double(j) * step) * sampleRate), numSamples) // lower bound of integration (in samples)
                 let u = min(Int(T_g * (Double(j) * step + 1) * sampleRate), numSamples) // upper bound of integration (in samples)
                 // caluate mean square of the filtered for each block (see eq. 1)
-                z[i][j] = (1.0 / (T_g * sampleRate)) * vDSP.sum(vDSP.square(inputData[i][l ..< u]))
+                z[i][j] = .init(1.0 / (T_g * sampleRate)) * vDSP.sum(vDSP.square(inputData[i][l ..< u]))
             }
         }
         
@@ -294,60 +294,69 @@ struct Loudness {
     }
 }
 extension Loudness {
+    private struct Item {
+        var pitch: Double, volm: Float
+        
+        init(_ pitch: Double, _ volm: Float) {
+            self.pitch = pitch
+            self.volm = volm
+        }
+    }
+    
     // Referenced definition:
     // ISO 226:2003. Acoustics — Normal equal-loudness-level contours.
-    private static let pitchVolm40Phons = [Point(22.5, 1.25),
-                                           Point(27.5, 1.2),
-                                           Point(43.3, 1.1),
-                                           Point(71.2, 1),
-                                           Point(75.0, 1.05),
-                                           Point(77.0, 0.975),
-                                           Point(91.0, 0.85),
-                                           Point(95.0, 0.75),
-                                           Point(109.0, 0.85),
-                                           Point(115.0, 0.9),
-                                           Point(118.0, 0.85)]
+    private static let pitchVolm40Phons = [Item(22.5, 1.25),
+                                           Item(27.5, 1.2),
+                                           Item(43.3, 1.1),
+                                           Item(71.2, 1),
+                                           Item(75.0, 1.05),
+                                           Item(77.0, 0.975),
+                                           Item(91.0, 0.85),
+                                           Item(95.0, 0.75),
+                                           Item(109.0, 0.85),
+                                           Item(115.0, 0.9),
+                                           Item(118.0, 0.85)]
     
-    static func volm40Phon(fromPitch pitch: Double) -> Double {
+    static func volm40Phon(fromPitch pitch: Double) -> Float {
         var prePitchVolm = pitchVolm40Phons.first!
-        if pitch < prePitchVolm.x {
-            return prePitchVolm.y
+        if pitch < prePitchVolm.pitch {
+            return prePitchVolm.volm
         }
         for i in 1 ..< pitchVolm40Phons.count {
             let pitchVolum = pitchVolm40Phons[i]
-            if pitch < pitchVolum.x {
-                let t = (pitch - prePitchVolm.x) / (pitchVolum.x - prePitchVolm.x)
-                return Double.linear(prePitchVolm.y, pitchVolum.y, t: t)
+            if pitch < pitchVolum.pitch {
+                let t = (pitch - prePitchVolm.pitch) / (pitchVolum.pitch - prePitchVolm.pitch)
+                return .linear(prePitchVolm.volm, pitchVolum.volm, t: t)
             }
             prePitchVolm = pitchVolum
         }
-        return prePitchVolm.y
+        return prePitchVolm.volm
     }
-    static func reverseVolm40Phon(fromPitch pitch: Double) -> Double {
+    static func reverseVolm40Phon(fromPitch pitch: Double) -> Float {
         1 / volm40Phon(fromPitch: pitch)
     }
     
     // change to critical band
-    private static let pitchClearVolm40Phons = [Point(0, 1),
-                                                Point(48, 1),
-                                                Point(92, 0.75),
-                                                Point(120, 0.25)]
-    static func clearVolm40Phon(fromPitch pitch: Double) -> Double {
+    private static let pitchClearVolm40Phons = [Item(0, 1),
+                                                Item(48, 1),
+                                                Item(92, 0.75),
+                                                Item(120, 0.25)]
+    static func clearVolm40Phon(fromPitch pitch: Double) -> Float {
         var prePitchVolm = pitchClearVolm40Phons.first!
-        if pitch < prePitchVolm.x {
-            return prePitchVolm.y
+        if pitch < prePitchVolm.pitch {
+            return prePitchVolm.volm
         }
         for i in 1 ..< pitchClearVolm40Phons.count {
             let pitchVolum = pitchClearVolm40Phons[i]
-            if pitch < pitchVolum.x {
-                let t = (pitch - prePitchVolm.x) / (pitchVolum.x - prePitchVolm.x)
-                return Double.linear(prePitchVolm.y, pitchVolum.y, t: t)
+            if pitch < pitchVolum.pitch {
+                let t = (pitch - prePitchVolm.pitch) / (pitchVolum.pitch - prePitchVolm.pitch)
+                return .linear(prePitchVolm.volm, pitchVolum.volm, t: t)
             }
             prePitchVolm = pitchVolum
         }
-        return prePitchVolm.y
+        return prePitchVolm.volm
     }
-    static func reverseClearVolm40Phon(fromPitch pitch: Double) -> Double {
+    static func reverseClearVolm40Phon(fromPitch pitch: Double) -> Float {
         1 / clearVolm40Phon(fromPitch: pitch)
     }
 }
