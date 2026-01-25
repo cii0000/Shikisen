@@ -344,7 +344,7 @@ final class Movie {
     }
     
     func writeAudio(from seq: Sequencer,
-                    headroomAmp: Float = Audio.floatHeadroomAmp,
+                    headroomAmp: Double = Audio.headroomAmp,
                     waveclip: Waveclip? = .default,
                     isCompress: Bool = true,
                     progressHandler: (Double, inout Bool) -> ()) throws {

@@ -23,36 +23,36 @@ import Accelerate.vecLib.vDSP
 //#endif
 
 extension vDSP {
-    static func linspace(start: Float, end: Float, count: Int) -> [Float] {
+    static func linspace(start: Double, end: Double, count: Int) -> [Double] {
         .init(unsafeUninitializedCapacity: count) { buffer, initializedCount in
             vDSP.linearInterpolate(values: [start, end],
-                                   atIndices: [0, Float(count - 1)],
+                                   atIndices: [0, Double(count - 1)],
                                    result: &buffer)
             initializedCount = count
         }
     }
     
-    static func fftfreq(_ n: Int, _ d: Float) -> [Float] {
-        let v = 1 / (.init(n) * d)
+    static func fftfreq(_ n: Int, _ d: Double) -> [Double] {
+        let v = 1 / (Double(n) * d)
         var results = [Int](capacityUninitialized: n)
         let nn = (n - 1) / 2 + 1
         (0 ..< nn).forEach { results[$0] = $0 }
         (nn ..< results.count).forEach { results[$0] = -(n / 2) + $0 - nn }
-        return results.map { .init($0) * v }
+        return results.map { Double($0) * v }
     }
     
-    static func window(_ type: WindowSequence, count: Int) -> [Float] {
-        Self.window(ofType: Float.self, usingSequence: type, count: count, isHalfWindow: false)
+    static func window(_ type: WindowSequence, count: Int) -> [Double] {
+        Self.window(ofType: Double.self, usingSequence: type, count: count, isHalfWindow: false)
     }
     
-    static func sinRMS<U>(_ vector: U) -> Float where U: AccelerateBuffer, U.Element == Float {
+    static func sinRMS<U>(_ vector: U) -> Double where U: AccelerateBuffer, U.Element == Double {
         (vDSP.sumOfSquares(vector) / 2).squareRoot()
     }
     
     enum FIRType {
         case normal, conv, slow//, overlap
     }
-    static func apply(fir h: [Float], in x: [Float], _ type: FIRType = .normal) -> [Float] {
+    static func apply(fir h: [Double], in x: [Double], _ type: FIRType = .normal) -> [Double] {
         switch type {
         case .normal:
             let nx = .init(repeating: 0, count: h.count) + x
@@ -66,15 +66,15 @@ extension vDSP {
             return Array(y[h.count..<(h.count + x.count + h.count - 1)])
         case .conv:
             let count = x.count + h.count - 1
-            var y = [Float](repeating:0.0, count: count)
-            let x = [Float](repeating: 0.0, count: count - x.count) + x
+            var y = [Double](repeating:0.0, count: count)
+            let x = [Double](repeating: 0.0, count: count - x.count) + x
             h.withUnsafeBufferPointer { ptr in
-                vDSP_conv(x, 1, ptr.baseAddress!.advanced(by: h.count - 1), -1,
-                          &y, 1, vDSP_Length(count), vDSP_Length(h.count))
+                vDSP_convD(x, 1, ptr.baseAddress!.advanced(by: h.count - 1), -1,
+                           &y, 1, vDSP_Length(count), vDSP_Length(h.count))
             }
             return y
         case .slow:
-            var y = [Float](repeating: 0, count: x.count + h.count - 1)
+            var y = [Double](repeating: 0, count: x.count + h.count - 1)
             let x = .init(repeating: 0, count: h.count) + x + .init(repeating: 0, count: h.count)
             for i in 0 ..< y.count {
                 y[i] = h.count.range.sum {
@@ -92,7 +92,7 @@ extension vDSP {
 }
 
 struct CompBox {
-    var res: [Float], ims: [Float]
+    var res: [Double], ims: [Double]
     
     static func *=(lhs: inout Self, rhs: Self) {
         formMultiply(&lhs, rhs, useConjugate: false)
@@ -104,12 +104,11 @@ struct CompBox {
             lIms.withUnsafeMutableBufferPointer { lImsPtr in
                 rRes.withUnsafeMutableBufferPointer { rResPtr in
                     rIms.withUnsafeMutableBufferPointer { rImsPtr in
-                        var ldsc = DSPSplitComplex(realp: lResPtr.baseAddress!,
-                                                   imagp: lImsPtr.baseAddress!)
-                        let rdsc = DSPSplitComplex(realp: rResPtr.baseAddress!,
-                                                   imagp: rImsPtr.baseAddress!)
-                        vDSP.multiply(ldsc, by: rdsc, count: count, useConjugate: useConjugate,
-                                      result: &ldsc)
+                        var ldsc = DSPDoubleSplitComplex(realp: lResPtr.baseAddress!,
+                                                         imagp: lImsPtr.baseAddress!)
+                        let rdsc = DSPDoubleSplitComplex(realp: rResPtr.baseAddress!,
+                                                         imagp: rImsPtr.baseAddress!)
+                        vDSP.multiply(ldsc, by: rdsc, count: count, useConjugate: useConjugate, result: &ldsc)
                     }
                 }
             }
@@ -128,12 +127,11 @@ struct CompBox {
             lIms.withUnsafeMutableBufferPointer { lImsPtr in
                 rRes.withUnsafeMutableBufferPointer { rResPtr in
                     rIms.withUnsafeMutableBufferPointer { rImsPtr in
-                        var ldsc = DSPSplitComplex(realp: lResPtr.baseAddress!,
-                                                   imagp: lImsPtr.baseAddress!)
-                        let rdsc = DSPSplitComplex(realp: rResPtr.baseAddress!,
-                                                   imagp: rImsPtr.baseAddress!)
-                        vDSP.multiply(ldsc, by: rdsc, count: count, useConjugate: useConjugate,
-                                      result: &ldsc)
+                        var ldsc = DSPDoubleSplitComplex(realp: lResPtr.baseAddress!,
+                                                         imagp: lImsPtr.baseAddress!)
+                        let rdsc = DSPDoubleSplitComplex(realp: rResPtr.baseAddress!,
+                                                         imagp: rImsPtr.baseAddress!)
+                        vDSP.multiply(ldsc, by: rdsc, count: count, useConjugate: useConjugate, result: &ldsc)
                     }
                 }
             }
@@ -143,59 +141,59 @@ struct CompBox {
 }
 
 struct FftFrame {
-    var dc: Float = 0.0
-    var amps = [Float]()
-    var phases = [Float]()
+    var dc = 0.0
+    var amps = [Double]()
+    var phases = [Double]()
 }
 
 typealias VDFT = vDSP.DiscreteFourierTransform
-typealias FftComp = Complex<Float>
+typealias FftComp = Complex<Double>
 struct Fft {
-    private let vdft: VDFT<Float>, count: Int, rdCount: Float, ims: [Float]
+    private let vdft: VDFT<Double>, count: Int, rdCount: Double, ims: [Double]
     
     init(count: Int) throws {
         self.vdft = try VDFT(previous: nil,
                              count: count,
                              direction: .forward,
                              transformType: .complexComplex,
-                             ofType: Float.self)
+                             ofType: Double.self)
         ims = .init(repeating: 0, count: count)
         self.count = count
-        self.rdCount = 1 / .init(count)
+        self.rdCount = 1 / Double(count)
     }
     
-    func mathTransform(_ x: [Float]) -> [FftComp] {
+    func mathTransform(_ x: [Double]) -> [FftComp] {
         let v = vdft.transform(real: x, imaginary: ims)
         return zip(v.real, v.imaginary).map { .init($0.0, $0.1) }
     }
-    func mathTransform(_ x: [Float]) -> CompBox {
+    func mathTransform(_ x: [Double]) -> CompBox {
         let v = vdft.transform(real: x, imaginary: ims)
         return .init(res: v.real, ims: v.imaginary)
     }
-    func transform(_ x: [Float]) -> [FftComp] {
+    func transform(_ x: [Double]) -> [FftComp] {
         var v = vdft.transform(real: x, imaginary: ims)
         vDSP.multiply(rdCount, v.real, result: &v.real)
         vDSP.multiply(rdCount, v.imaginary, result: &v.imaginary)
         return zip(v.real, v.imaginary).map { .init($0.0, $0.1) }
     }
-    func transform(_ x: [Float]) -> (res: [Float], ims: [Float]) {
+    func transform(_ x: [Double]) -> (res: [Double], ims: [Double]) {
         var v = vdft.transform(real: x, imaginary: ims)
         vDSP.multiply(rdCount, v.real, result: &v.real)
         vDSP.multiply(rdCount, v.imaginary, result: &v.imaginary)
         return (v.real, v.imaginary)
     }
-    func transform(_ x: [Float]) -> CompBox {
+    func transform(_ x: [Double]) -> CompBox {
         var v = vdft.transform(real: x, imaginary: ims)
         vDSP.multiply(rdCount, v.real, result: &v.real)
         vDSP.multiply(rdCount, v.imaginary, result: &v.imaginary)
         return .init(res: v.real, ims: v.imaginary)
     }
     
-    func mathTransform(res: [Float], ims: [Float]) -> [FftComp] {
+    func mathTransform(res: [Double], ims: [Double]) -> [FftComp] {
         let v = vdft.transform(real: res, imaginary: ims)
         return zip(v.real, v.imaginary).map { .init($0.0, $0.1) }
     }
-    func transform(res: [Float], ims: [Float]) -> [FftComp] {
+    func transform(res: [Double], ims: [Double]) -> [FftComp] {
         var v = vdft.transform(real: res, imaginary: ims)
         vDSP.multiply(rdCount, v.real, result: &v.real)
         vDSP.multiply(rdCount, v.imaginary, result: &v.imaginary)
@@ -213,16 +211,16 @@ struct Fft {
         return zip(v.real, v.imaginary).map { .init($0.0, $0.1) }
     }
     
-    func dcAndAmps(_ x: [Float]) -> (dc: Float, amps: [Float]) {
+    func dcAndAmps(_ x: [Double]) -> (dc: Double, amps: [Double]) {
         let vs: [FftComp] = transform(x), ni = x.count / 2
         return (vs[0].real, vs[1 ..< ni].map { $0.length * 2 } + [vs[ni].length])
     }
-    func dcAndAmps(_ x: [FftComp]) -> (dc: Float, amps: [Float]) {
+    func dcAndAmps(_ x: [FftComp]) -> (dc: Double, amps: [Double]) {
         let vs: [FftComp] = transform(x), ni = x.count / 2
         return (vs[0].real, vs[1 ..< ni].map { $0.length * 2 } + [vs[ni].length])
     }
     
-    func frame(_ x: [Float]) -> FftFrame {
+    func frame(_ x: [Double]) -> FftFrame {
         let vs: [FftComp] = transform(x), ni = x.count / 2
         return .init(dc: vs[0].real,
                      amps: vs[1 ..< ni].map { $0.length * 2 } + [vs[ni].length],
@@ -237,20 +235,20 @@ struct Fft {
 }
 
 struct Ifft {
-    private let vdft: VDFT<Float>, count: Int
+    private let vdft: VDFT<Double>, count: Int
     
     init(count: Int) throws {
         self.vdft = try VDFT(previous: nil,
                              count: count,
                              direction: .inverse,
                              transformType: .complexComplex,
-                             ofType: Float.self)
+                             ofType: Double.self)
         self.count = count
     }
     
-    func resAndImsTransform(dc: Float, amps: [Float], phases: [Float]) -> (res: [Float], ims: [Float]) {
-        var res = [Float](capacity: count)
-        var ims = [Float](capacity: count)
+    func resAndImsTransform(dc: Double, amps: [Double], phases: [Double]) -> (res: [Double], ims: [Double]) {
+        var res = [Double](capacity: count)
+        var ims = [Double](capacity: count)
         res.append(dc)
         ims.append(0)
         for i in amps.count.range {
@@ -264,24 +262,24 @@ struct Ifft {
         }
         return resAndImsTransform(res: res, ims: ims)
     }
-    func compsTransform(_ frame: FftFrame) -> (res: [Float], ims: [Float]) {
+    func compsTransform(_ frame: FftFrame) -> (res: [Double], ims: [Double]) {
         let v = resAndImsTransform(dc: frame.dc, amps: frame.amps, phases: frame.phases)
         return (v.res, v.ims)
     }
-    func resAndImsTransform(res: [Float], ims: [Float]) -> (res: [Float], ims: [Float]) {
+    func resAndImsTransform(res: [Double], ims: [Double]) -> (res: [Double], ims: [Double]) {
         let v = vdft.transform(real: res, imaginary: ims)
         return (v.real, v.imaginary)
     }
-    func resAndImsTransform(_ x: [FftComp]) -> (res: [Float], ims: [Float]) {
+    func resAndImsTransform(_ x: [FftComp]) -> (res: [Double], ims: [Double]) {
         let v = vdft.transform(real: x.map { $0.real }, imaginary: x.map { $0.imaginary })
         return (v.real, v.imaginary)
     }
-    func resAndImsTransform(_ x: CompBox) -> (res: [Float], ims: [Float]) {
+    func resAndImsTransform(_ x: CompBox) -> (res: [Double], ims: [Double]) {
         let v = vdft.transform(real: x.res, imaginary: x.ims)
         return (v.real, v.imaginary)
     }
     
-    func compsTransform(dc: Float, amps: [Float], phases: [Float]) -> [FftComp] {
+    func compsTransform(dc: Double, amps: [Double], phases: [Double]) -> [FftComp] {
         let v = resAndImsTransform(dc: dc, amps: amps, phases: phases)
         return zip(v.res, v.ims).map { .init($0.0, $0.1) }
     }
@@ -289,7 +287,7 @@ struct Ifft {
         let v = resAndImsTransform(dc: frame.dc, amps: frame.amps, phases: frame.phases)
         return zip(v.res, v.ims).map { .init($0.0, $0.1) }
     }
-    func compsTransform(res: [Float], ims: [Float]) -> [FftComp] {
+    func compsTransform(res: [Double], ims: [Double]) -> [FftComp] {
         let v = resAndImsTransform(res: res, ims: ims)
         return zip(v.res, v.ims).map { .init($0.0, $0.1) }
     }
@@ -298,27 +296,27 @@ struct Ifft {
         return zip(v.res, v.ims).map { .init($0.0, $0.1) }
     }
     
-    func resTransform(dc: Float, amps: [Float], phases: [Float]) -> [Float] {
+    func resTransform(dc: Double, amps: [Double], phases: [Double]) -> [Double] {
         resAndImsTransform(dc: dc, amps: amps, phases: phases).res
     }
-    func resTransform(_ frame: FftFrame) -> [Float] {
+    func resTransform(_ frame: FftFrame) -> [Double] {
         resAndImsTransform(dc: frame.dc, amps: frame.amps, phases: frame.phases).res
     }
-    func mathResTransform(_ x: CompBox) -> [Float] {
+    func mathResTransform(_ x: CompBox) -> [Double] {
         let v = vdft.transform(real: x.res, imaginary: x.ims)
-        return vDSP.multiply(1 / Float(count), v.real)
+        return vDSP.multiply(1 / Double(count), v.real)
     }
-    func resTransform(res: [Float], ims: [Float]) -> [Float] {
+    func resTransform(res: [Double], ims: [Double]) -> [Double] {
         resAndImsTransform(res: res, ims: ims).res
     }
-    func resTransform(_ x: [FftComp]) -> [Float] {
+    func resTransform(_ x: [FftComp]) -> [Double] {
         resAndImsTransform(x).res
     }
 }
 
 struct FilterBank {
     let type: BankType
-    private let filterBank: [Float]
+    private let filterBank: [Double]
     let sampleCount, filterBankCount, cutMinFqI, cutMaxFqI: Int
     
     enum BankType {
@@ -351,8 +349,8 @@ struct FilterBank {
             }
         }
         
-        var filterBank = [Float](repeating: 0, count: sampleCount * filterBankCount)
-        var baseValue: Float = 1.0, endValue: Float = 0.0
+        var filterBank = [Double](repeating: 0, count: sampleCount * filterBankCount)
+        var baseValue = 1.0, endValue = 0.0
         for i in 0 ..< filterBankFqs.count {
             let row = i * sampleCount
             
@@ -363,22 +361,22 @@ struct FilterBank {
             let attackWidth = centerFq - startFq + 1
             if attackWidth > 0 {
                 filterBank.withUnsafeMutableBufferPointer {
-                    vDSP_vgen(&endValue,
-                              &baseValue,
-                              $0.baseAddress!.advanced(by: row + startFq),
-                              1,
-                              vDSP_Length(attackWidth))
+                    vDSP_vgenD(&endValue,
+                               &baseValue,
+                               $0.baseAddress!.advanced(by: row + startFq),
+                               1,
+                               vDSP_Length(attackWidth))
                 }
             }
             
             let decayWidth = endFq - centerFq + 1
             if decayWidth > 0 {
                 filterBank.withUnsafeMutableBufferPointer {
-                    vDSP_vgen(&baseValue,
-                              &endValue,
-                              $0.baseAddress!.advanced(by: row + centerFq),
-                              1,
-                              vDSP_Length(decayWidth))
+                    vDSP_vgenD(&baseValue,
+                               &endValue,
+                               $0.baseAddress!.advanced(by: row + centerFq),
+                               1,
+                               vDSP_Length(decayWidth))
                 }
             }
         }
@@ -391,7 +389,7 @@ struct FilterBank {
         cutMaxFqI = filterBankFqs.last!
     }
     
-    func transform(_ input: [Float]) -> [Float] {
+    func transform(_ input: [Double]) -> [Double] {
         var input = input
         for i in 0 ..< cutMinFqI {
             input[i] = 0
@@ -400,10 +398,10 @@ struct FilterBank {
             input[i] = 0
         }
         
-        let nf = [Float](unsafeUninitializedCapacity: filterBankCount) { buffer, initializedCount in
+        let nf = [Double](unsafeUninitializedCapacity: filterBankCount) { buffer, initializedCount in
             input.withUnsafeBufferPointer { nPtr in
                 filterBank.withUnsafeBufferPointer { fPtr in
-                    cblas_sgemm(CblasRowMajor,
+                    cblas_dgemm(CblasRowMajor,
                                 CblasTrans, CblasTrans,
                                 1,
                                 filterBankCount,
@@ -422,7 +420,7 @@ struct FilterBank {
         }
         
         var output = input
-        let indices = vDSP.ramp(in: 0 ... Float(sampleCount), count: nf.count)
+        let indices = vDSP.ramp(in: 0 ... Double(sampleCount), count: nf.count)
         vDSP.linearInterpolate(values: nf, atIndices: indices, result: &output)
         return output
     }
@@ -463,14 +461,14 @@ struct Spectrogram {
         
         let channelCount = buffer.channelCount
         let sampleRate = buffer.sampleRate
-        let frameCount = min(buffer.sampleCount, Int(maxSecLength * oBuffer.sampleRate))
+        let frameCount = min(buffer.frameCount, Int(maxSecLength * oBuffer.sampleRate))
         guard channelCount >= 1, fftCount > 0, frameCount >= fftCount,
               let fft = try? Fft(count: fftCount) else { return }
         
         let overlapCount = Int(Double(fftCount) * (1 - windowOverlap))
         var windowSamples = vDSP.window(.hanningDenormalized, count: fftCount)
         if !isNormalized {
-            let racf = Float(fftCount) / vDSP.sum(windowSamples)
+            let racf = Double(fftCount) / vDSP.sum(windowSamples)
             vDSP.multiply(racf, windowSamples, result: &windowSamples)
         }
         
@@ -479,7 +477,7 @@ struct Spectrogram {
         
         let startFrameI = secRange != nil ?
         Int(secRange!.start * sampleRate).clipped(min: 0, max: frameCount) : 0
-        let endFrameI = secRange != nil ? 
+        let endFrameI = secRange != nil ?
         Int(secRange!.end * sampleRate).clipped(min: 0, max: frameCount) : frameCount
         
         let secs: [(i: Int, sec: Double)] = stride(from: startFrameI, to: endFrameI, by: overlapCount).map { i in
@@ -492,15 +490,16 @@ struct Spectrogram {
             return Loudness.reverseVolm40Phon(fromPitch: pitch)
         }
         
-        var chSecVolms: [[[Float]]]
+        var chSecVolms: [[[Double]]]
         switch type {
         case .linear:
             chSecVolms = channelCount.range.map { chI in
-                let samples = buffer.samples(atChannel: chI)
+                let amps = buffer.channelAmpsFromFloat(at: chI)
                 return secs.map { (i, sec) in
-                    let wave = ((i - hFftCount) ..< (i - hFftCount + fftCount)).map { j in
-                        j >= 0 && j < frameCount ? samples[j] : 0
+                    let wave: [Double] = ((i - hFftCount) ..< (i - hFftCount + fftCount)).map { j in
+                        j >= 0 && j < frameCount ? amps[j] : 0
                     }
+                    
                     let inputRs = vDSP.multiply(windowSamples, wave)
                     let (_, amps) = fft.dcAndAmps(inputRs)
                     
@@ -515,11 +514,12 @@ struct Spectrogram {
                                         maxFq: Self.maxLinearFq)
 
             chSecVolms = channelCount.range.map { chI in
-                let samples = buffer.samples(atChannel: chI)
+                let amps = buffer.channelAmpsFromFloat(at: chI)
                 return secs.map { (i, sec) in
-                    let wave = ((i - hFftCount) ..< (i - hFftCount + fftCount)).map { j in
-                        j >= 0 && j < frameCount ? samples[j] : 0
+                    let wave: [Double] = ((i - hFftCount) ..< (i - hFftCount + fftCount)).map { j in
+                        j >= 0 && j < frameCount ? amps[j] : 0
                     }
+                    
                     let inputRs = vDSP.multiply(windowSamples, wave)
                     let (_, amps) = fft.dcAndAmps(inputRs)
                     
@@ -536,7 +536,7 @@ struct Spectrogram {
                 let overlapCount2 = Int(Double(fftCount2) * (1 - windowOverlap))
                 var windowSamples2 = vDSP.window(.hanningDenormalized, count: fftCount2)
                 if !isNormalized {
-                    let racf = Float(fftCount2) / vDSP.sum(windowSamples2)
+                    let racf = Double(fftCount2) / vDSP.sum(windowSamples2)
                     vDSP.multiply(racf, windowSamples2, result: &windowSamples2)
                 }
                 let volmCount2 = fftCount2 / 2
@@ -556,9 +556,9 @@ struct Spectrogram {
                                              maxFq: Self.maxLinearFq)
 
                 channelCount.range.forEach { chI in
-                    let amps = buffer.samples(atChannel: chI)
+                    let amps = buffer.channelAmpsFromFloat(at: chI)
                     let tss2 = secs2.map { (i, sec) in
-                        let wave2: [Float] = ((i - hFftCount2) ..< (i - hFftCount2 + fftCount2)).map { j in
+                        let wave2: [Double] = ((i - hFftCount2) ..< (i - hFftCount2 + fftCount2)).map { j in
                             j >= 0 && j < frameCount ? amps[j] : 0
                         }
                         
@@ -574,23 +574,22 @@ struct Spectrogram {
                     secs.enumerated().forEach { secI, v in
                         let ti2 = min(Int((Double(tss2.count * secI) / Double(secs.count)).rounded()), tss2.count - 1)
                         for volmI in 0 ..< volmCount / 2 {
-                            let t: Float = volmI < volmCount * 3 / 8 ?
-                                .init(volmI).clipped(min: .init(volmCount * 1 / 8),
-                                                     max: .init(volmCount * 3 / 8),
-                                                     newMin: 0, newMax: 0.5) :
-                                .init(volmI).clipped(min: .init(volmCount * 3 / 8),
-                                                     max: .init(volmCount / 2),
-                                                     newMin: 0.5, newMax: 1)
-                            chSecVolms[chI][secI][volmI] = .linear(tss2[ti2][volmI],
-                                                                   chSecVolms[chI][secI][volmI],
-                                                                   t: t)
+                            let t = volmI < volmCount * 3 / 8 ?
+                            Double(volmI).clipped(min: Double(volmCount * 1 / 8),
+                                               max: Double(volmCount * 3 / 8),
+                                               newMin: 0, newMax: 0.5) :
+                            Double(volmI).clipped(min: Double(volmCount * 3 / 8),
+                                               max: Double(volmCount / 2),
+                                               newMin: 0.5, newMax: 1)
+                            chSecVolms[chI][secI][volmI] = Double.linear(tss2[ti2][volmI],
+                                                                   chSecVolms[chI][secI][volmI], t: t)
                         }
                     }
                 }
             }
         }
     
-        func stereo(fromVolms volms: [Float]) -> Stereo {
+        func stereo(fromVolms volms: [Double]) -> Stereo {
             if buffer.channelCount == 2 {
                 let leftVolm = volms[0]
                 let rightVolm = volms[1]
@@ -600,9 +599,9 @@ struct Spectrogram {
                  -(leftVolm / (leftVolm + rightVolm) - 0.5) * 2 :
                     (rightVolm / (leftVolm + rightVolm) - 0.5) * 2) :
                 0
-                return .init(volm: .init(volm), pan: .init(pan))
+                return .init(volm: volm, pan: pan)
             } else {
-                return .init(volm: .init(volms[0]), pan: 0)
+                return .init(volm: volms[0], pan: 0)
             }
         }
         

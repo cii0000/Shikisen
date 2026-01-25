@@ -149,7 +149,7 @@ extension Pitch {
     
     func displayString(hidableDecimal: Bool = true, deltaPitch: Rational = 0) -> String {
         let octavePitch = value / 12
-        let iPart = octavePitch.rounded(.down)        
+        let iPart = octavePitch.rounded(.down)
         let dPart = (octavePitch - iPart) * 12
         let dPartStr = String(format: "%02d", Int(dPart))
         
@@ -1071,7 +1071,7 @@ extension Reverb {
     
     static let defaulrFIR0 = Self.init().aFir(sampleRate: Audio.defaultSampleRate, channel: 0)
     static let defaulrFIR1 = Self.init().aFir(sampleRate: Audio.defaultSampleRate, channel: 1)
-    func fir(sampleRate: Double, channel: Int) -> [Float] {
+    func fir(sampleRate: Double, channel: Int) -> [Double] {
         if self == .init() && sampleRate == Audio.defaultSampleRate {
             if channel == 0 {
                 return Self.defaulrFIR0
@@ -1081,12 +1081,12 @@ extension Reverb {
         }
         return aFir(sampleRate: sampleRate, channel: channel)
     }
-    private func aFir(sampleRate: Double, channel: Int) -> [Float] {
+    private func aFir(sampleRate: Double, channel: Int) -> [Double] {
         guard !isEmpty else { return [] }
         
         let durSec = durSec
         let count = Int((durSec * sampleRate).rounded(.up))
-        var fir = [Float](repeating: 0, count: count)
+        var fir = [Double](repeating: 0, count: count)
         
         let seed = seedID.uInt64Values.value0
         var random = Random(seed: seed)
@@ -1126,8 +1126,8 @@ extension Reverb {
             
             let t2 = random.nextT()
             let sign = t2 > 0.5 ? 1.0 : -1.0
-            fir[i] = .init(sign * Volm.amp(fromVolm: nVolm)
-            * nScale.clipped(min: 1, max: 0, newMin: siMin, newMax: 1) / scale)
+            fir[i] = sign * Volm.amp(fromVolm: nVolm)
+            * nScale.clipped(min: 1, max: 0, newMin: siMin, newMax: 1) / scale
         }
         
         let x = earlySec * 0.5 * sampleRate
@@ -2346,26 +2346,13 @@ struct Volm: Hashable, Codable {
 }
 extension Volm {
     /// cutDb = -40, a = -cutDb, amp = (.exp(a * volm / 8.7) - 1) / (.exp(a / 8.7) - 1)
-    static func amp(fromVolm volm: Float) -> Float {
-        (.exp(4.5977011494 * volm) - 1) * 0.01017750808
-    }
     static func amp(fromVolm volm: Double) -> Double {
         (.exp(4.5977011494 * volm) - 1) * 0.01017750808
-    }
-    
-    static func volm(fromAmp amp: Float) -> Float {
-        .log(1 + amp * 98.2558787375) * 0.2175
     }
     static func volm(fromAmp amp: Double) -> Double {
         .log(1 + amp * 98.2558787375) * 0.2175
     }
     
-    static func amps(fromVolms volms: [Float]) -> [Float] {
-        var n = vDSP.multiply(4.5977011494, volms)
-        var count = Int32(n.count), nn = n
-        vvexpm1f(&nn, &n, &count)
-        return vDSP.multiply(0.01017750808, nn)
-    }
     static func amps(fromVolms volms: [Double]) -> [Double] {
         var n = vDSP.multiply(4.5977011494, volms)
         var count = Int32(n.count), nn = n
@@ -2373,21 +2360,8 @@ extension Volm {
         return vDSP.multiply(0.01017750808, nn)
     }
     
-    static func db(fromAmp amp: Float) -> Float {
-        20 * .log10(amp)
-    }
     static func db(fromAmp amp: Double) -> Double {
         20 * .log10(amp)
-    }
-    
-    static func amp(fromDb db: Float) -> Float {
-        if db == 0 {
-            1
-        } else if db == -.infinity {
-            0
-        } else {
-            10 ** (db / 20)
-        }
     }
     static func amp(fromDb db: Double) -> Double {
         if db == 0 {
@@ -2399,15 +2373,8 @@ extension Volm {
         }
     }
     
-    static func db(fromVolm volm: Float) -> Float {
-        db(fromAmp: amp(fromVolm: volm))
-    }
     static func db(fromVolm volm: Double) -> Double {
         db(fromAmp: amp(fromVolm: volm))
-    }
-    
-    static func volm(fromDb db: Float) -> Float {
-        volm(fromAmp: amp(fromDb: db))
     }
     static func volm(fromDb db: Double) -> Double {
         volm(fromAmp: amp(fromDb: db))
@@ -2423,7 +2390,7 @@ struct Audio: Hashable, Codable {
     static let headroomVolm = Volm.volm(fromDb: headroomDb)
     static let headroomAmp = Volm.amp(fromVolm: headroomVolm)
     static let floatHeadroomAmp = Float(headroomAmp)
-    static let limitLufs: Float = -14.0
+    static let limitLufs = -14.0
     
     var pcmData = Data()
 }

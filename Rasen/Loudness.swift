@@ -50,10 +50,10 @@ struct IIRfilter {
              highShelfDeMan, highPassDeMan
     }
     
-    var G, Q, fc, rate: Double, filterType: FilterType, passbandGain: Float
+    var G, Q, fc, rate: Double, filterType: FilterType, passbandGain: Double
     
     init(G: Double, Q: Double, fc: Double, rate: Double,
-         _ filterType: FilterType, passbandGain: Float = 1) {
+         _ filterType: FilterType, passbandGain: Double = 1) {
         self.G  = G
         self.Q  = Q
         self.fc = fc
@@ -135,10 +135,10 @@ struct IIRfilter {
         return [b0, b1, b2, a1, a2].map { $0 / a0 }
     }
 
-    func applyFilter(data: [Float]) -> [Float] {
-        var filter = Biquad<Float>(coefficients: generateCoefficients(),
-                                   channelCount: 1,
-                                   sectionCount: 1)
+    func applyFilter(data: [Double]) -> [Double] {
+        var filter = Biquad(coefficients: generateCoefficients(),
+                            channelCount: 1,
+                            sectionCount: 1)
         let nData = filter?.apply(input: data) ?? data
         return vDSP.multiply(passbandGain, nData)
     }
@@ -224,7 +224,7 @@ struct Loudness {
             self.string = str
         }
     }
-    func lufs(from data: [[Float]]) throws -> Float {
+    func lufs(from data: [[Double]]) throws -> Double {
         var inputData = data
         if inputData.count > 5 || inputData.isEmpty {
             throw ValueError("Audio must have five channels or less.")
@@ -242,24 +242,24 @@ struct Loudness {
                 inputData[ch] = filterStage.applyFilter(data: inputData[ch])
             }
         }
-        let G: [Float] = [1.0, 1.0, 1.0, 1.41, 1.41] // channel gains
+        let G = [1.0, 1.0, 1.0, 1.41, 1.41] // channel gains
         let T_g = blockSize // 400 ms gating block standard
-        let GammaA: Float = -70.0 // -70 LKFS = absolute loudness threshold
+        let GammaA = -70.0 // -70 LKFS = absolute loudness threshold
         let overlap = 0.75 // overlap of 75 % of the block duration
         let step = 1 - overlap // step size by percentage
         
         let T = Double(numSamples) / sampleRate // length of the input in seconds
         let numBlocks = Int((((T - T_g) / (T_g * step))).rounded() + 1) // total number of gated blocks (see end of eq. 3)
         let jRange = 0 ..< numBlocks // indexed list of total blocks
-        var z: [[Float]] = Array(repeating: Array(repeating: 0.0, count: numBlocks),
-                                 count: numChannels) // instantiate array - trasponse of input
+        var z = Array(repeating: Array(repeating: 0.0, count: numBlocks),
+                      count: numChannels) // instantiate array - trasponse of input
         
         for i in 0 ..< numChannels { // iterate over input channels
             for j in jRange { // iterate over total frames
                 let l = min(Int(T_g * (Double(j) * step) * sampleRate), numSamples) // lower bound of integration (in samples)
                 let u = min(Int(T_g * (Double(j) * step + 1) * sampleRate), numSamples) // upper bound of integration (in samples)
                 // caluate mean square of the filtered for each block (see eq. 1)
-                z[i][j] = .init(1.0 / (T_g * sampleRate)) * vDSP.sum(vDSP.square(inputData[i][l ..< u]))
+                z[i][j] = (1.0 / (T_g * sampleRate)) * vDSP.sum(vDSP.square(inputData[i][l ..< u]))
             }
         }
         
@@ -295,9 +295,9 @@ struct Loudness {
 }
 extension Loudness {
     private struct Item {
-        var pitch: Double, volm: Float
+        var pitch: Double, volm: Double
         
-        init(_ pitch: Double, _ volm: Float) {
+        init(_ pitch: Double, _ volm: Double) {
             self.pitch = pitch
             self.volm = volm
         }
@@ -317,7 +317,7 @@ extension Loudness {
                                            Item(115.0, 0.9),
                                            Item(118.0, 0.85)]
     
-    static func volm40Phon(fromPitch pitch: Double) -> Float {
+    static func volm40Phon(fromPitch pitch: Double) -> Double {
         var prePitchVolm = pitchVolm40Phons.first!
         if pitch < prePitchVolm.pitch {
             return prePitchVolm.volm
@@ -332,7 +332,7 @@ extension Loudness {
         }
         return prePitchVolm.volm
     }
-    static func reverseVolm40Phon(fromPitch pitch: Double) -> Float {
+    static func reverseVolm40Phon(fromPitch pitch: Double) -> Double {
         1 / volm40Phon(fromPitch: pitch)
     }
     
@@ -341,7 +341,7 @@ extension Loudness {
                                                 Item(48, 1),
                                                 Item(92, 0.75),
                                                 Item(120, 0.25)]
-    static func clearVolm40Phon(fromPitch pitch: Double) -> Float {
+    static func clearVolm40Phon(fromPitch pitch: Double) -> Double {
         var prePitchVolm = pitchClearVolm40Phons.first!
         if pitch < prePitchVolm.pitch {
             return prePitchVolm.volm
@@ -356,7 +356,7 @@ extension Loudness {
         }
         return prePitchVolm.volm
     }
-    static func reverseClearVolm40Phon(fromPitch pitch: Double) -> Float {
+    static func reverseClearVolm40Phon(fromPitch pitch: Double) -> Double {
         1 / clearVolm40Phon(fromPitch: pitch)
     }
 }

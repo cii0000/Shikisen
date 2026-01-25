@@ -174,9 +174,9 @@ struct Content: Hashable, Codable {
         self.timeOption = timeOption
     }
     
-    mutating func normalizeVolm(limitLufs: Float = Audio.limitLufs) {
+    mutating func normalizeVolm(limitLufs: Double = Audio.limitLufs) {
         if type == .sound, let lufs = lufs, lufs > limitLufs {
-            let scale = Double(PCMBuffer.normalizeScale(inputDb: lufs, targetDb: limitLufs))
+            let scale = PCMBuffer.normalizeScale(inputDb: lufs, targetDb: limitLufs)
             stereo.volm = Volm.volm(fromAmp: Volm.amp(fromVolm: stereo.volm) * scale)
         }
     }
@@ -234,7 +234,7 @@ extension Content {
     var pcmBuffer: PCMBuffer? {
         try? .from(url: url)
     }
-    var lufs: Float? {
+    var lufs: Double? {
         pcmBuffer?.lufs
     }
     

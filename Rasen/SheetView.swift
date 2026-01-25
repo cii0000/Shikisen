@@ -1997,7 +1997,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             }
             
-            allSampless = [[Float]](repeating: .init(repeating: 0, count: Self.tapSampleCount),
+            allSampless = [[Double]](repeating: .init(repeating: 0, count: Self.tapSampleCount),
                                      count: 2)
             
             if seqTracks.contains(where: { !$0.isEmpty }) {
@@ -2264,9 +2264,9 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     static let tapSampleCount = 16384
-    private var allSampless = [[Float]](repeating: .init(repeating: 0, count: tapSampleCount),
+    private var allSampless = [[Double]](repeating: .init(repeating: 0, count: tapSampleCount),
                                          count: 2)
-    private func updateTimeNodes(from sampless: [[Float]]?, sampleRate: Double) {
+    private func updateTimeNodes(from sampless: [[Double]]?, sampleRate: Double) {
         guard let sampless else {
             volumeColor = .background
             volumeNode?.children.forEach { $0.fillType = .color(volumeColor) }
@@ -2287,10 +2287,10 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         
-        let lufs = Double(PCMBuffer.lufs(sampless: allSampless,
-                                         sampleRate: sampleRate) ?? -.infinity)
+        let lufs = PCMBuffer.lufs(sampless: allSampless,
+                                  sampleRate: sampleRate) ?? -.infinity
         let peakAmp = PCMBuffer.peakAmp(sampless: sampless)
-        let isPeak = peakAmp > Float(Audio.safetyAmp)
+        let isPeak = peakAmp > Audio.safetyAmp
         
         volumeColor = if isPeak {
             .warning

@@ -148,7 +148,7 @@ final class LookUpAction: InputKeyEventAction {
                
                 let fileSize = recoder.fileSize
                 let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
-                rootView.show("Sheet".localized 
+                rootView.show("Sheet".localized
                               + "\n\t\("File Size".localized): \(string)"
                               + "\n\t\("Update Date".localized): \(updateDate.defaultString)"
                               + "\n\t\("Created Date".localized): \(createdDate.defaultString)"
@@ -298,7 +298,7 @@ final class LookUpAction: InputKeyEventAction {
             var sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
             if !sampless.isEmpty {
                 let peakDb = PCMBuffer.peakDb(sampless: sampless)
-                PCMBuffer.clip(amp: Audio.floatHeadroomAmp, sampless: &sampless)
+                PCMBuffer.clip(amp: Audio.headroomAmp, sampless: &sampless)
                 let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
