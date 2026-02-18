@@ -39,17 +39,17 @@ extension vDSP {
     }
 }
 
-struct Biquad {
-    private var filter: vDSP.Biquad<Double>
+struct Biquad<T: vDSP_FloatingPointBiquadFilterable> {
+    private var filter: vDSP.Biquad<T>
     init?(coefficients: [Double],
           channelCount: Int = 1, sectionCount: Int = 1) {
         guard let filter = vDSP.Biquad(coefficients: coefficients,
                                        channelCount: UInt(channelCount),
                                        sectionCount: UInt(sectionCount),
-                                       ofType: Double.self) else { return nil }
+                                       ofType: T.self) else { return nil }
         self.filter = filter
     }
-    mutating func apply(input data: [Double]) -> [Double] {
+    mutating func apply(input data: [T]) -> [T] {
         filter.apply(input: data)
     }
 }
@@ -169,7 +169,7 @@ struct PCMTrackItem {
              contentStartSec: Double, contentLocalStartSec: Double, contentDurSec: Double, lengthSec: Double) {
             
             let sampleRate = pcmBuffer.format.sampleRate
-            let frameCount = pcmBuffer.frameCount
+            let frameCount = pcmBuffer.sampleCount
             let clsI = Int(contentLocalStartSec * sampleRate)
             contentLocalStartI = min(-min(clsI, 0), frameCount)
             self.contentCount = Int(lengthSec * sampleRate)
@@ -397,7 +397,7 @@ final class PCMNoder: ObjectHashable {
             
             let enabledWaveclip = self.enabledWaveclip
             let rSampleRate = 1 / sampleRate
-            let oFrameCount = pcmBuffer.frameCount
+            let oFrameCount = pcmBuffer.sampleCount
             for ci in 0 ..< min(outputBLP.count, pcmBuffer.channelCount) {
                 let oFrames = data[ci], nFrames = outputBLP[ci].mData!.assumingMemoryBound(to: Float.self)
                 var i = loopedFrameStartI
@@ -484,7 +484,7 @@ struct ScoreTrackItem {
     
     fileprivate(set) var notewaveDic = [UUID: Notewave]()
     fileprivate(set) var isChanged = false
-    fileprivate(set) var sampless = [[Double]](), sampleStartI = 0
+    fileprivate(set) var sampless = [[Float]](), sampleStartI = 0
     var sampleCount: Int {
         sampless.isEmpty ? 0 : sampless[0].count
     }
@@ -514,10 +514,11 @@ extension ScoreTrackItem {
     }
     
     var lufs: Double? {
-        PCMBuffer.lufs(sampless: sampless, sampleRate: sampleRate)
+        let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: sampleRate)
+        return lufs != nil ? Double(lufs!) : nil
     }
     var peakDb: Double {
-        PCMBuffer.peakDb(sampless: sampless)
+        Double(PCMBuffer.peakDb(sampless: sampless))
     }
     
     mutating func changeTempo(with score: Score) {
@@ -548,8 +549,8 @@ extension ScoreTrackItem {
             for rendnote in rendnoteManager.rendnotes {
                 let notewaveID = rendnote.id
                 if var notewave = notewaveDic[notewaveID] {
-                    notewave = rendnote.notewave(from: notewave.noStereoSampless, stereo: $0.value,
-                                                 sampleRate: sampleRate)
+                    let ss = notewave.noStereoSampless.map { vDSP.floatToDouble($0) }
+                    notewave = rendnote.notewave(from: ss, stereo: $0.value, sampleRate: sampleRate)
                     notewaveDic[notewaveID] = notewave
                     isUpdate = true
                 }
@@ -630,8 +631,8 @@ extension ScoreTrackItem {
         let endI = ranges.maxValue { $0.end } ?? 0
         let count = endI - startI
         
-        var sampless = [[Double](repeating: 0, count: count),
-                        [Double](repeating: 0, count: count)]
+        var sampless = [[Float](repeating: 0, count: count),
+                        [Float](repeating: 0, count: count)]
         for (rendnote, range) in zip(rendnotes, ranges) {
             guard let notewave = notewave(from: rendnote),
                   range.length <= notewave.sampleCount else { continue }
@@ -738,35 +739,32 @@ final class ScoreNoder: ObjectHashable {
                 outputBLP[$0].mData!.assumingMemoryBound(to: Float.self)
             }
             
-            func updateF(i: Int, ui: Int, mi: Int, ni: Int, sampless: [[Double]],
+            func updateF(i: Int, ui: Int, mi: Int, ni: Int, sampless: [[Float]],
                          isPremultipliedEnvelope: Bool,
                          allAttackStartSec: Double?, allReleaseStartSec: Double?,
                          playingAttackStartSec: Double?, playingReleaseStartSec: Double?,
                          startSec: Double, releaseSec: Double?) {
                 let sec = Double(i) * rSampleRate
-                
                 let waveclipAmp = isPremultipliedEnvelope ?
                 1 : Waveclip.default.scale(atSec: sec, attackStartSec: startSec, releaseStartSec: releaseSec)
-                
                 let allWaveclipAmp = Waveclip.default
                     .scale(atSec: sec, attackStartSec: allAttackStartSec, releaseStartSec: allReleaseStartSec)
-                
                 let playingWaveclipAmp = Waveclip.default
                     .scale(atSec: Double(ui) * rSampleRate,
                          attackStartSec: playingAttackStartSec, releaseStartSec: playingReleaseStartSec)
+                let amp = Float(waveclipAmp * allWaveclipAmp * playingWaveclipAmp)
                 
-                let amp = waveclipAmp * allWaveclipAmp * playingWaveclipAmp
                 if nFramess.count >= 2 {
                     if sampless.count >= 2 {
-                        nFramess[0][ni] += Float(sampless[0][mi] * amp)
-                        nFramess[1][ni] += Float(sampless[1][mi] * amp)
+                        nFramess[0][ni] += sampless[0][mi] * amp
+                        nFramess[1][ni] += sampless[1][mi] * amp
                     } else {
-                        let nAmp = Float(sampless[0][mi] * amp)
+                        let nAmp = sampless[0][mi] * amp
                         nFramess[0][ni] += nAmp
                         nFramess[1][ni] += nAmp
                     }
                 } else {
-                    nFramess[0][ni] += Float(sampless[0][mi] * amp)
+                    nFramess[0][ni] += sampless[0][mi] * amp
                 }
             }
             
@@ -1009,48 +1007,6 @@ final class Sequencer {
         var isEmpty: Bool {
             durSec == 0 || (scoreTrackItems.allSatisfy { $0.isEmpty } && pcmTrackItems.isEmpty)
         }
-    }
-    static func sampless(from tracks: [Track], waveclip: Waveclip = .default,
-                         sampleRate: Double) -> [[Double]] {
-        var allDurSec = tracks.sum { Double($0.durSec) }
-        let count = Int((allDurSec * sampleRate).rounded(.up))
-        
-        var sampless = [[Double]](repeating: .init(repeating: 0, count: count), count: 2)
-        allDurSec = 0.0
-        for track in tracks {
-            let durSec = track.durSec
-            guard durSec > 0 else { continue }
-            for scoreTrackItem in track.scoreTrackItems {
-                guard scoreTrackItem.durSec > 0 else { continue }
-                var scoreTrackItem = scoreTrackItem
-                scoreTrackItem.startSec = allDurSec
-                
-                let startI = Int((allDurSec * sampleRate).rounded(.down))
-                
-                if scoreTrackItem.loopDurSec > 0 {
-                    var sec: Rational = 0
-                    while sec < scoreTrackItem.durSec + scoreTrackItem.loopDurSec {
-                        let dSampleI = Int((Double(sec) * sampleRate).rounded(.down))
-                        for (ci, samples) in scoreTrackItem.sampless.enumerated() {
-                            vDSP.add(in: &sampless[ci], from: samples, startI: startI + dSampleI)
-                        }
-                        sec += scoreTrackItem.durSec
-                    }
-                } else {
-                    for (ci, samples) in scoreTrackItem.sampless.enumerated() {
-                        vDSP.add(in: &sampless[ci], from: samples, startI: startI)
-                    }
-                }
-            }
-            
-            //pcm
-            
-            allDurSec += Double(durSec)
-        }
-        
-        PCMBuffer.apply(waveclip, sampless: &sampless, sampleRate: sampleRate)
-        
-        return sampless
     }
     
     enum RenderType {
@@ -1581,10 +1537,11 @@ extension AVAudioPCMBuffer {
     var channelCount: Int {
         Int(format.channelCount)
     }
-    var frameCount: Int {
+    var sampleCount: Int {
         Int(frameLength)
     }
-    var secondsDuration: Double {
+    
+    var durSec: Double {
         Double(frameLength) / format.sampleRate
     }
     var isEmpty: Bool {
@@ -1594,15 +1551,15 @@ extension AVAudioPCMBuffer {
         get { floatChannelData![ci][i * stride] }
         set { floatChannelData![ci][i * stride] = newValue }
     }
-    func enumerated(channelIndex ci: Int, _ handler: (Int, Float) throws -> ()) rethrows {
+    func enumerated(atChannel ci: Int, _ handler: (Int, Float) throws -> ()) rethrows {
         guard let samples = floatChannelData?[ci] else { return }
-        for i in 0 ..< frameCount {
+        for i in 0 ..< sampleCount {
             try handler(i, samples[i * stride])
         }
     }
     
-    func channelAmpsFromFloat(at ci: Int) -> [Double] {
-        frameCount.range.map { Double(self[ci, $0]) }
+    func doubleSamples(atChannel ci: Int) -> [Double] {
+        sampleCount.range.map { Double(self[ci, $0]) }
     }
     
     subscript(i: Int) -> Double {
@@ -1614,14 +1571,14 @@ extension AVAudioPCMBuffer {
     }
     func enumeratedDouble(_ handler: (Int, Double) throws -> ()) rethrows {
         guard let samples = doubleChannelData else { return }
-        for i in 0 ..< frameCount {
+        for i in 0 ..< sampleCount {
             try handler(i, samples[i * stride])
         }
     }
     
     func isOver(amp: Float) -> Bool {
         for ci in 0 ..< channelCount {
-            for i in 0 ..< frameCount {
+            for i in 0 ..< sampleCount {
                 if abs(self[ci, i]) > amp {
                     return true
                 }
@@ -1631,13 +1588,13 @@ extension AVAudioPCMBuffer {
     }
     func apply(_ waveclip: Waveclip) {
         let rSampleRate = 1 / sampleRate
-        let frameCount = frameCount
+        let frameCount = sampleCount
         guard frameCount > 0 else { return }
         for ci in 0 ..< channelCount {
             let enabledAttack = abs(self[ci, 0]) > 0.00001
             let enabledRelease = abs(self[ci, frameCount - 1]) > 0.00001
             if enabledAttack || enabledRelease {
-                enumerated(channelIndex: ci) { i, v in
+                enumerated(atChannel: ci) { i, v in
                     let aSec = Double(i) * rSampleRate
                     if enabledAttack && aSec < waveclip.attackSec {
                         self[ci, i] *= Float(aSec * waveclip.rAttackSec)
@@ -1684,7 +1641,7 @@ extension AVAudioPCMBuffer {
     }
     func clip(amp: Float) {
         for ci in 0 ..< channelCount {
-            enumerated(channelIndex: ci) { i, v in
+            enumerated(atChannel: ci) { i, v in
                 if abs(v) > amp {
                     self[ci, i] = v < amp ? -amp : amp
                 }
@@ -1694,7 +1651,7 @@ extension AVAudioPCMBuffer {
     var doubleSampless: [[Double]] {
         get {
             var ns = Array(repeating: Array(repeating: 0.0,
-                                            count: frameCount),
+                                            count: sampleCount),
                            count: channelCount)
             if format.commonFormat == .pcmFormatFloat64 {
                 for ci in 0 ..< channelCount {
@@ -1705,7 +1662,7 @@ extension AVAudioPCMBuffer {
                 return ns
             } else {
                 for ci in 0 ..< channelCount {
-                    enumerated(channelIndex: ci) { i, v in
+                    enumerated(atChannel: ci) { i, v in
                         ns[ci][i] = Double(v)
                     }
                 }
@@ -1721,7 +1678,7 @@ extension AVAudioPCMBuffer {
                 }
             } else {
                 for ci in 0 ..< channelCount {
-                    enumerated(channelIndex: ci) { i, v in
+                    enumerated(atChannel: ci) { i, v in
                         self[ci, i] = Float(newValue[ci][i])
                     }
                 }
@@ -1736,7 +1693,7 @@ extension AVAudioPCMBuffer {
     var peakAmp: Double {
         var peakAmp: Float = 0.0
         for ci in 0 ..< channelCount {
-            enumerated(channelIndex: ci) { _, v in
+            enumerated(atChannel: ci) { _, v in
                 peakAmp = max(abs(v), peakAmp)
             }
         }
@@ -1753,6 +1710,13 @@ extension AVAudioPCMBuffer {
         Volm.db(fromAmp: peakAmp(sampless: sampless))
     }
     
+    static func peakAmp(sampless: [[Float]]) -> Float {
+        sampless.map { cs in (cs.map { abs($0) }).max()! }.max()!
+    }
+    static func peakDb(sampless: [[Float]]) -> Float {
+        Volm.db(fromAmp: peakAmp(sampless: sampless))
+    }
+    
     var lufs: Double? {
         try? Loudness(sampleRate: sampleRate).lufs(from: doubleSampless)
     }
@@ -1763,6 +1727,9 @@ extension AVAudioPCMBuffer {
     }
     
     static func lufs(sampless: [[Double]], sampleRate: Double) -> Double? {
+        try? Loudness(sampleRate: sampleRate).lufs(from: sampless)
+    }
+    static func lufs(sampless: [[Float]], sampleRate: Double) -> Float? {
         try? Loudness(sampleRate: sampleRate).lufs(from: sampless)
     }
     static func normalizedLoudness(sampless: [[Double]], limitLufs: Double,
@@ -1850,7 +1817,7 @@ extension AVAudioPCMBuffer {
         }
         
         var minI: Int?, maxDAmp: Float = 0.0, ps = [P]()
-        for i in 0 ..< frameCount {
+        for i in 0 ..< sampleCount {
             var maxAmp: Float = 0.0
             for ci in 0 ..< channelCount {
                 let amp = self[ci, i]
@@ -1874,7 +1841,7 @@ extension AVAudioPCMBuffer {
         
         let attackCount = Int(attackSec * sampleRate)
         let releaseCount = Int(releaseSec * sampleRate)
-        var scales = [Float](repeating: 1, count: frameCount)
+        var scales = [Float](repeating: 1, count: sampleCount)
         for p in ps {
             let minI = max(0, p.minI - attackCount)
             for i in (minI ..< p.minI).reversed() {
@@ -1885,7 +1852,7 @@ extension AVAudioPCMBuffer {
             for i in p.minI ..< p.maxI {
                 scales[i] = min(p.scale, scales[i])
             }
-            let maxI = min(frameCount - 1, p.maxI + releaseCount)
+            let maxI = min(sampleCount - 1, p.maxI + releaseCount)
             for i in p.maxI ... maxI {
                 let t = Float(i - p.maxI) / Float(releaseCount)
                 let scale = Float.linear(p.scale, 1, t: t)
@@ -1894,7 +1861,7 @@ extension AVAudioPCMBuffer {
         }
         
         for ci in 0 ..< channelCount {
-            enumerated(channelIndex: ci) { i, v in
+            enumerated(atChannel: ci) { i, v in
                 self[ci, i] *= scales[i]
             }
         }
@@ -1903,9 +1870,9 @@ extension AVAudioPCMBuffer {
     static let volmFrameRate = Rational(Keyframe.defaultFrameRate)
     func volms(fromFrameRate frameRate: Rational = volmFrameRate) -> [Double] {
         let volmFrameCount = Int(sampleRate / Double(frameRate))
-        let count = frameCount / volmFrameCount
+        let count = sampleCount / volmFrameCount
         var volms = [Double](capacity: count)
-        let hvfc = volmFrameCount / 2, frameCount = frameCount
+        let hvfc = volmFrameCount / 2, frameCount = sampleCount
         for i in Swift.stride(from: 0, to: frameCount, by: volmFrameCount) {
             var x: Float = 0.0
             for j in (i - hvfc) ..< (i + hvfc) {

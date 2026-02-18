@@ -152,7 +152,7 @@ extension Picture {
         
         struct V {
             var plane: Plane,
-                oxs: SIMD16<Double>, oys: SIMD16<Double>,
+                oxs: SIMD16<Float16>, oys: SIMD16<Float16>,
                 pSet: Set<Point>,
                 centroid: Point, area: Double
         }
@@ -165,8 +165,8 @@ extension Picture {
                     let p16s = oldPlane.topolygon.polygon
                         .sortedTopCounterClockwise().edgePoints(count: 16)
                     return V(plane: oldPlane,
-                             oxs: SIMD16(p16s.map { $0.x }),
-                             oys: SIMD16(p16s.map { $0.y }),
+                             oxs: SIMD16(p16s.map { .init($0.x) }),
+                             oys: SIMD16(p16s.map { .init($0.y) }),
                              pSet: Set(oldPlane.topolygon.allPoints),
                              centroid: centroid,
                              area: area)
@@ -181,8 +181,8 @@ extension Picture {
                             = newPlaneValue.plane.topolygon.tripolygon.centroid else { return }
                     let p16s = newPlaneValue.plane.topolygon.polygon
                         .sortedTopCounterClockwise().edgePoints(count: 16)
-                    let nxs = SIMD16(p16s.map { $0.x })
-                    let nys = SIMD16(p16s.map { $0.y })
+                    let nxs = SIMD16(p16s.map { Float16($0.x) })
+                    let nys = SIMD16(p16s.map { Float16($0.y) })
                     let newArea = newPlaneValue.area
                     guard newArea > 0 else { return }
 
@@ -198,9 +198,11 @@ extension Picture {
                                 let dxs = nxs - oxs
                                 let dys = nys - oys
                                 let x2 = (dxs * dxs + dys * dys).squareRoot().sum()
-                                let x3 = nps.contains(where: { oldV.pSet.contains($0) }) ? 0.0 : 100000.0
-                                let s = x0 * 100 + x1 * 1000 + x2 * 1 + x3 * 1
-                                vs.append((oi, ni, s))
+                                if x2 < 50 * 16 {
+                                    let x3 = nps.contains(where: { oldV.pSet.contains($0) }) ? 0.0 : 100000.0
+                                    let s = x0 * 100 + x1 * 1000 + Double(x2) * 1 + x3 * 1
+                                    vs.append((oi, ni, s))
+                                }
                             }
                         }
                     }

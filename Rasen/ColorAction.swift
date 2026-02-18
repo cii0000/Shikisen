@@ -238,6 +238,7 @@ final class ColorAction: Action {
         } else {
             self.colorOwners = []
         }
+        rootView.selections = []
     }
     func updateTintPointNodes(with event: DragEvent) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
@@ -975,11 +976,11 @@ final class ColorAction: Action {
                 if let beganStereo {
                     beganPan = beganStereo.pan
                     
-                    let outlineColor: Color = beganStereo.volm < 0.5 ? .content : .background
+                    let outlineColor = Color.background
                     let outlineGradientNode = Node(path: .init([.init(-panWidth / 2, 0),
                                                                 .init(panWidth / 2, 0)]),
                                                    lineWidth: 5, lineType: .color(outlineColor))
-                    let gradient = panGradientWith(volm: beganStereo.volm)
+                    let gradient = panGradientWith(volm: 1)
                     let gradientNode = Node(path: .init([.init(panPointsWith(splitCount: .init(panWidth),
                                                                              width: panWidth))]),
                                             lineWidth: 3, lineType: .gradient(gradient))

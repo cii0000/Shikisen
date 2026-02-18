@@ -136,11 +136,18 @@ struct IIRfilter {
     }
 
     func applyFilter(data: [Double]) -> [Double] {
-        var filter = Biquad(coefficients: generateCoefficients(),
-                            channelCount: 1,
-                            sectionCount: 1)
+        var filter = Biquad<Double>(coefficients: generateCoefficients(),
+                                    channelCount: 1,
+                                    sectionCount: 1)
         let nData = filter?.apply(input: data) ?? data
         return vDSP.multiply(passbandGain, nData)
+    }
+    func applyFilter(data: [Float]) -> [Float] {
+        var filter = Biquad<Float>(coefficients: generateCoefficients(),
+                                   channelCount: 1,
+                                   sectionCount: 1)
+        let nData = filter?.apply(input: data) ?? data
+        return vDSP.multiply(Float(passbandGain), nData)
     }
 }
 
@@ -288,6 +295,56 @@ struct Loudness {
             .map { $0.isNaN || $0.isInfinite ? 0 : $0 }
         
         // calculate final loudness gated loudness (see eq. 7)
+        let n1 = (0 ..< numChannels).sum { i in G[i] * zAvgGated1[i] }
+        let lufs = -0.691 + 10 * .log10(n1)
+        return lufs
+    }
+    
+    func lufs(from data: [[Float]]) throws -> Float {
+        var inputData = data
+        if inputData.count > 5 || inputData.isEmpty {
+            throw ValueError("Audio must have five channels or less.")
+        }
+        if Double(inputData[0].count) < blockSize * sampleRate {
+            throw ValueError("Audio must have length greater than the block size.")
+        }
+        
+        let numChannels = inputData.count
+        let numSamples  = inputData[0].count
+        
+        for (_, filterStage) in filters {
+            for ch in 0 ..< numChannels {
+                inputData[ch] = filterStage.applyFilter(data: inputData[ch])
+            }
+        }
+        let G: [Float] = [1.0, 1.0, 1.0, 1.41, 1.41]
+        let T_g = blockSize, GammaA: Float = -70.0, overlap = 0.75, step = 1 - overlap
+        
+        let T = Double(numSamples) / sampleRate
+        let numBlocks = Int((((T - T_g) / (T_g * step))).rounded() + 1)
+        let jRange = 0 ..< numBlocks
+        var z: [[Float]] = Array(repeating: Array(repeating: 0.0, count: numBlocks),
+                                 count: numChannels)
+        
+        for i in 0 ..< numChannels {
+            for j in jRange {
+                let l = min(Int(T_g * (Double(j) * step) * sampleRate), numSamples)
+                let u = min(Int(T_g * (Double(j) * step + 1) * sampleRate), numSamples)
+                z[i][j] = .init(1.0 / (T_g * sampleRate)) * vDSP.sum(vDSP.square(inputData[i][l ..< u]))
+            }
+        }
+        let l = jRange.map { j in
+            let s = (0 ..< numChannels).sum { i in G[i] * z[i][j] }
+            return -0.691 + 10 * .log10(s)
+        }
+        let J_g0 = l.enumerated().compactMap { j, l_j in l_j >= GammaA ? j : nil }
+        let zAvgGated0 = (0 ..< numChannels).map { i in J_g0.mean { j in z[i][j] } ?? 0 }
+        let n0 = (0 ..< numChannels).sum { i in G[i] * zAvgGated0[i] }
+        let GammaR = -0.691 + 10 * .log10(n0) - 10
+        let J_g1 = l.enumerated().compactMap { j, l_j in (l_j > GammaR && l_j > GammaA) ? j : nil }
+        let zAvgGated1 = (0 ..< numChannels)
+            .map { i in J_g1.mean { j in z[i][j] } ?? 0 }
+            .map { $0.isNaN || $0.isInfinite ? 0 : $0 }
         let n1 = (0 ..< numChannels).sum { i in G[i] * zAvgGated1[i] }
         let lufs = -0.691 + 10 * .log10(n1)
         return lufs

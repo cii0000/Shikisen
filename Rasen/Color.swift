@@ -156,6 +156,7 @@ extension Color {
 
     static let removing = Color(white: 0.7)
     static let subRemoving = Color(white: 1, opacity: 0.8)
+    static let musicBacground = Color(white: 1, opacity: 0.95)
     static let loading = Color(white: 1, opacity: 0.35)
     static let mainFrame = Color(white: 0, opacity: 0.75)
     static let content = Color(lightness: 10)

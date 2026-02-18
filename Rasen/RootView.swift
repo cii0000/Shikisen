@@ -3044,12 +3044,14 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func madeColorOwner(at p: Point,
+                        enabledLine: Bool = true,
                         removingUUColor: UUColor? = Line.defaultUUColor) -> [SheetColorOwner] {
         guard let sheetView = madeSheetView(at: p) else {
             return []
         }
         let inP = sheetView.convertFromWorld(p)
         return [sheetView.sheetColorOwner(at: inP,
+                                          enabledLine: enabledLine,
                                           removingUUColor: removingUUColor,
                                           scale: screenToWorldScale).value]
     }

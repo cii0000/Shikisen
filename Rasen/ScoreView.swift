@@ -115,7 +115,7 @@ enum EditGrid {
     case main, second, full
     
     static let fullEditBeatInterval = Rational(1, 128),
-               secondBeatInterval = Rational(1, 16),
+               secondBeatInterval = Rational(1, 48),
                beatInterval = Rational(1, 8)
     static let fullEditPitchInterval = Rational(1, 16),
                pitchInterval = Rational(1)
@@ -2756,10 +2756,22 @@ extension ScoreView {
         case .real(let real):
             Rational(real, intervalScale: pitchInterval)
         }
+        
+        let stereo: Stereo, tone: Tone
+        if result.pitI + 1 < note.pits.count {
+            let prePit = note.pits[result.pitI]
+            let nextPit = note.pits[result.pitI + 1]
+            stereo = prePit.stereo == nextPit.stereo ?
+            prePit.stereo : result.stereo.with(id: .init())
+            tone = prePit.tone == nextPit.tone ?
+            prePit.tone : result.tone.with(id: .init())
+        } else {
+            stereo = result.stereo
+            tone = result.tone
+        }
+        
         return .init(beat: self.beat(atX: p.x, interval: beatInterval) - note.beatRange.start,
-                     pitch: pitch,
-                     stereo: result.stereo.with(id: .init()),
-                     tone: result.tone.with(id: .init()))
+                     pitch: pitch, stereo: stereo, tone: tone)
     }
     func insertablePitIndex(atBeat beat: Rational, at noteI: Int) -> Int {
         let note = model.notes[noteI]

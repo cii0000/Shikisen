@@ -588,7 +588,7 @@ final class PastableAction: Action {
                                        isCutColor: false)
             case .paste:
                 let p = rootView.convertScreenToWorld(editingSP)
-                updateWithPaste(at: p, atScreen: editingSP, .changed)
+                updateWithPaste(at: p, atScreen: editingSP, .changed, time: <#Double#>)
             }
         }
     }
@@ -909,6 +909,9 @@ final class PastableAction: Action {
                         scoreView.pitPosition(atPit: $0.offset, from: note) : nil
                     }
                 }
+                
+                let db = Volm.db(fromVolm: stereo.volm)
+                rootView.cursor = .arrowWith(string: "\(db.string(digitsCount: 2)) db")
                 show(ps)
             case .f0:
                 let note = score.notes[noteI]
@@ -1629,12 +1632,13 @@ final class PastableAction: Action {
                 oldSnapP: Point?, oldFillSnapP: Point?,
                 beganPitch = Rational(0), beganBeat = Rational(0),
                 octaveNode: Node?, beganNotes = [Int: Note](), beganSheetView: SheetView?,
-                textNode: Node?, imageNode: Node?, textFrame: Rect?, textScale = 1.0
-    var snapDistance = 1.0
+                textNode: Node?, imageNode: Node?, textFrame: Rect?, textScale = 1.0,
+                filledSheetViews = [UUID: SheetView](), beganTime: Double
+    var snapDistance = 2.0
     private var notePlayer: NotePlayer?, playerBeatNoteIndexes = [Int](),
                 oldPitch: Rational?, oldBeat: Rational?
     
-    func updateWithPaste(at p: Point, atScreen sp: Point, _ phase: Phase) {
+    func updateWithPaste(at p: Point, atScreen sp: Point, _ phase: Phase, time: Double) {
         let shp = rootView.sheetPosition(at: p)
         let sheetFrame = rootView.sheetFrame(with: shp)
         let sheetView = rootView.sheetView(at: shp)
@@ -2169,7 +2173,25 @@ final class PastableAction: Action {
             updateWithText(text)
         case .border(let border):
             updateBorder(with: border)
-        case .uuColor:
+        case .uuColor(let uuColor):
+            guard rootView.isSelect(at: p) else {
+                guard let _ = rootView.madeSheetView(at: shp) else { return }
+                let colorOwners = rootView.madeColorOwner(at: p, enabledLine: false,
+                                                          removingUUColor: uuColor)
+                colorOwners.forEach {
+                    if $0.uuColor != uuColor {
+                        let oldUUColor = $0.uuColor
+                        
+                        $0.uuColor = uuColor
+                        
+                        $0.captureUUColor(isNewUndoGroup: filledSheetViews[$0.sheetView.id] == nil)
+                        $0.moveLine(with: uuColor, old: oldUUColor)
+                        filledSheetViews[$0.sheetView.id] = $0.sheetView
+                    }
+                }
+                rootView.updateSelects()
+                break
+            }
             break
         case .animation:
             break
@@ -2200,7 +2222,7 @@ final class PastableAction: Action {
         }
     }
     
-    func paste(at p: Point, atScreen sp: Point) {
+    func paste(at p: Point, atScreen sp: Point, time: Double) {
         let shp = rootView.sheetPosition(at: p)
         
         var isRootNewUndoGroup = true
@@ -2690,43 +2712,21 @@ final class PastableAction: Action {
                 sheetView.newUndoGroup()
                 sheetView.append(Border(position: np, border: border))
             }
-        case .uuColor(let uuColor):
-            func moveLine(oldUUColor: UUColor, from owner: SheetColorOwner) {
-                if oldUUColor == Line.defaultUUColor && uuColor != Line.defaultUUColor {
-                    if owner.colorValue.lineAnimationIndexes.count == 1 {
-                        let v = owner.colorValue.lineAnimationIndexes[0]
-                        if v.index == owner.sheetView.model.animation.index {
-                            let lis = owner.colorValue.lineIndexes.filter { $0 != 0 }
-                            if !lis.isEmpty {
-                                let livs = owner.sheetView.model.picture.lines[lis].enumerated()
-                                    .map { IndexValue(value: $0.element, index: $0.offset) }
-                                owner.sheetView.removeLines(at: lis)
-                                owner.sheetView.insert(livs)
-                            }
-                        }
-                    } else {
-                        let lis = owner.colorValue.lineIndexes.filter { $0 != 0 }
-                        if !lis.isEmpty {
-                            let livs = owner.sheetView.model.picture.lines[lis].enumerated()
-                                .map { IndexValue(value: $0.element, index: $0.offset) }
-                            owner.sheetView.removeLines(at: lis)
-                            owner.sheetView.insert(livs)
-                        }
-                    }
-                }
-            }
-            
+        case .uuColor(let uuColor):            
             guard rootView.isSelect(at: p) else {
-                guard let _ = rootView.madeSheetView(at: shp) else { return }
-                let colorOwners = rootView.madeColorOwner(at: p, removingUUColor: uuColor)
+                guard time - beganTime > 0.1,
+                      let _ = rootView.madeSheetView(at: shp) else { return }
+                let colorOwners = rootView.madeColorOwner(at: p, enabledLine: false,
+                                                          removingUUColor: uuColor)
                 colorOwners.forEach {
                     if $0.uuColor != uuColor {
                         let oldUUColor = $0.uuColor
                         
                         $0.uuColor = uuColor
-                        $0.captureUUColor(isNewUndoGroup: true)
+                        $0.captureUUColor(isNewUndoGroup: filledSheetViews[$0.sheetView.id] == nil)
                         
-                        moveLine(oldUUColor: oldUUColor, from: $0)
+                        $0.moveLine(with: uuColor, old: oldUUColor)
+                        filledSheetViews[$0.sheetView.id] = $0.sheetView
                     }
                 }
                 rootView.updateSelects()
@@ -2743,16 +2743,15 @@ final class PastableAction: Action {
                 }
             }
             for (_, owners) in ownerDic {
-                var isNewUndoGroup = true
                 owners.forEach {
                     if $0.uuColor != uuColor {
                         let oldUUColor = $0.uuColor
                         
                         $0.uuColor = uuColor
-                        $0.captureUUColor(isNewUndoGroup: isNewUndoGroup)
-                        isNewUndoGroup = false
+                        $0.captureUUColor(isNewUndoGroup: filledSheetViews[$0.sheetView.id] == nil)
                         
-                        moveLine(oldUUColor: oldUUColor, from: $0)
+                        $0.moveLine(with: uuColor, old: oldUUColor)
+                        filledSheetViews[$0.sheetView.id] = $0.sheetView
                     }
                 }
             }
@@ -2763,7 +2762,7 @@ final class PastableAction: Action {
             let beat: Rational = sheetView.animationView.beat(atX: sheetView.convertFromWorld(p).x)
             var ni = 0
             for (i, kf) in sheetView.model.animation.keyframes.enumerated().reversed() {
-                if kf.beat <= beat {
+                if kf.beat + sheetView.model.animation.beatRange.start <= beat {
                     ni = i + 1
                     break
                 }
@@ -3190,7 +3189,7 @@ final class PastableAction: Action {
         case .string: true
         case .text: true
         case .border: true
-        case .uuColor: false
+        case .uuColor: true
         case .animation: true
         case .ids: true
         case .score: true
@@ -3333,6 +3332,7 @@ final class PastableAction: Action {
             firstRotation = rootView.pov.rotation
             textScale = firstScale
             editingSP = sp
+            beganTime = event.time
             editingP = rootView.convertScreenToWorld(sp)
             guard let o = Pasteboard.shared.copiedObjects.first else { return }
             pasteObject = o
@@ -3340,18 +3340,18 @@ final class PastableAction: Action {
                 selectingLineNode.lineWidth = rootView.worldLineWidth
                 snapLineNode.lineWidth = selectingLineNode.lineWidth
                 updateWithPaste(at: editingP, atScreen: sp,
-                                event.phase)
+                                event.phase, time: event.time)
                 rootView.node.append(child: snapLineNode)
                 rootView.node.append(child: selectingLineNode)
             } else {
-                paste(at: editingP, atScreen: sp)
+                paste(at: editingP, atScreen: sp, time: event.time)
             }
         case .changed:
             if isMovePasteObject {
                 editingSP = sp
                 editingP = rootView.convertScreenToWorld(sp)
                 updateWithPaste(at: editingP, atScreen: sp,
-                                event.phase)
+                                event.phase, time: event.time)
             }
         case .ended:
             notePlayer?.stop()
@@ -3359,7 +3359,7 @@ final class PastableAction: Action {
             if isMovePasteObject {
                 editingSP = sp
                 editingP = rootView.convertScreenToWorld(sp)
-                paste(at: editingP, atScreen: sp)
+                paste(at: editingP, atScreen: sp, time: event.time)
                 snapLineNode.removeFromParent()
                 selectingLineNode.removeFromParent()
             }

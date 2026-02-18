@@ -523,19 +523,25 @@ extension Rendnote {
             }
         }
         
-        var notewave = Notewave(noStereoSampless: sampless, sampless: nSampless, isLoop: isLoop)
+        let nnSampless: [[Double]]
         if !(isStereoNoise && pitbend.isFullNoise) && !reverb.isEmpty {
-            let sampleCount = notewave.sampleCount
-            notewave.sampless = [vDSP.apply(fir: reverb.fir(sampleRate: sampleRate, channel: 0),
-                                            in: notewave.sampless[0]),
-                                 vDSP.apply(fir: reverb.fir(sampleRate: sampleRate, channel: 1),
-                                            in: notewave.sampless[1])]
-            if isLoop && notewave.sampleCount > sampleCount {
-                let count = notewave.sampleCount - sampleCount
-                notewave.sampless[0].removeLast(count)
-                notewave.sampless[1].removeLast(count)
+            let sampleCount = nSampless[0].count
+            var oSampless = [vDSP.apply(fir: reverb.fir(sampleRate: sampleRate, channel: 0),
+                                        in: nSampless[0]),
+                             vDSP.apply(fir: reverb.fir(sampleRate: sampleRate, channel: 1),
+                                        in: nSampless[1])]
+            if isLoop && oSampless[0].count > sampleCount {
+                let count = oSampless[0].count - sampleCount
+                oSampless[0].removeLast(count)
+                oSampless[1].removeLast(count)
             }
+            nnSampless = oSampless
+        } else {
+            nnSampless = nSampless
         }
+        let notewave = Notewave(noStereoSampless: sampless.map { vDSP.doubleToFloat($0) },
+                                sampless: nnSampless.map { vDSP.doubleToFloat($0) },
+                                isLoop: isLoop)
         
         notewave.sampless.forEach { samples in
             if samples.contains(where: { $0.isNaN || $0.isInfinite }) {
@@ -992,7 +998,7 @@ extension vDSP {
         let fftCount = halfFftCount * 2
         let fft = try! Fft(count: fftCount)
         let ifft = try! Ifft(count: fftCount)
-        let windowSamples = vDSP.window(.hanningDenormalized, count: fftCount)
+        let windowSamples: [Double] = vDSP.window(.hanningDenormalized, count: fftCount)
         
         let overlapSamplesCount = overlapSamplesCount(fftCount: fftCount, windowOverlap: windowOverlap)
         let sampleCount = samples.count - fftCount
@@ -1033,8 +1039,8 @@ extension vDSP {
 }
 
 struct Notewave {
-    var noStereoSampless = [[Double]]()
-    var sampless = [[Double]]()
+    var noStereoSampless = [[Float]]()
+    var sampless = [[Float]]()
     var isLoop = false
 }
 extension Notewave {

@@ -1971,7 +1971,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             seqTracks.append(seqTrack)
             
             if model.enabledMusic {
-                musicBackgroundNode = Node(path: .init(bounds), fillType: .color(.subRemoving))
+                musicBackgroundNode = Node(path: .init(bounds), fillType: .color(.musicBacground))
             }
             
             deltaSec += playingSec
@@ -2733,9 +2733,11 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     func sheetColorOwner(at p: Point,
+                         enabledLine: Bool = true,
                          removingUUColor: UUColor? = Line.defaultUUColor,
                          scale: Double) -> (isLine: Bool, value: SheetColorOwner) {
-        if let (lineView, li) = lineTuple(at: p,
+        if enabledLine,
+           let (lineView, li) = lineTuple(at: p,
                                           enabledPlane: true, removingUUColor: removingUUColor,
                                           scale: scale) {
             let uuColor = lineView.model.uuColor
@@ -7547,5 +7549,30 @@ final class SheetColorOwner {
         sheetView.colorPathValue(with: colorValue,
                                  toColor: toColor,
                                  color: color, subColor: subColor)
+    }
+    
+    func moveLine(with uuColor: UUColor, old oldUUColor: UUColor) {
+        if oldUUColor == Line.defaultUUColor && uuColor != Line.defaultUUColor {
+            if colorValue.lineAnimationIndexes.count == 1 {
+                let v = colorValue.lineAnimationIndexes[0]
+                if v.index == sheetView.model.animation.index {
+                    let lis = colorValue.lineIndexes.filter { $0 != 0 }
+                    if !lis.isEmpty {
+                        let livs = sheetView.model.picture.lines[lis].enumerated()
+                            .map { IndexValue(value: $0.element, index: $0.offset) }
+                        sheetView.removeLines(at: lis)
+                        sheetView.insert(livs)
+                    }
+                }
+            } else {
+                let lis = colorValue.lineIndexes.filter { $0 != 0 }
+                if !lis.isEmpty {
+                    let livs = sheetView.model.picture.lines[lis].enumerated()
+                        .map { IndexValue(value: $0.element, index: $0.offset) }
+                    sheetView.removeLines(at: lis)
+                    sheetView.insert(livs)
+                }
+            }
+        }
     }
 }

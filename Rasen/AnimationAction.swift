@@ -533,7 +533,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                             
                             if let beatRange = animationView.beatRange {
                                 let roundedSBeat = beatRange.start.rounded(.down)
-                                let deltaBeat = animationView.editGrid.beatInterval
+                                let deltaBeat = EditGrid.main.beatInterval
                                 var cBeat = roundedSBeat
                                 while cBeat < beatRange.end {
                                     if cBeat >= beatRange.start {

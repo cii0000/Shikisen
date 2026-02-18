@@ -975,7 +975,7 @@ extension Tone: MonoInterpolatable {
 }
 
 struct Pit: Codable, Hashable {
-    var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.5), tone = Tone(), lyric = ""
+    var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.475), tone = Tone(), lyric = ""
 }
 extension Pit: Protobuf {
     init(_ pb: PBPit) throws {
@@ -2346,13 +2346,26 @@ struct Volm: Hashable, Codable {
 }
 extension Volm {
     /// cutDb = -40, a = -cutDb, amp = (.exp(a * volm / 8.7) - 1) / (.exp(a / 8.7) - 1)
+    static func amp(fromVolm volm: Float) -> Float {
+        (.exp(4.5977011494 * volm) - 1) * 0.01017750808
+    }
     static func amp(fromVolm volm: Double) -> Double {
         (.exp(4.5977011494 * volm) - 1) * 0.01017750808
+    }
+    
+    static func volm(fromAmp amp: Float) -> Float {
+        .log(1 + amp * 98.2558787375) * 0.2175
     }
     static func volm(fromAmp amp: Double) -> Double {
         .log(1 + amp * 98.2558787375) * 0.2175
     }
     
+    static func amps(fromVolms volms: [Float]) -> [Float] {
+        var n = vDSP.multiply(4.5977011494, volms)
+        var count = Int32(n.count), nn = n
+        vvexpm1f(&nn, &n, &count)
+        return vDSP.multiply(0.01017750808, nn)
+    }
     static func amps(fromVolms volms: [Double]) -> [Double] {
         var n = vDSP.multiply(4.5977011494, volms)
         var count = Int32(n.count), nn = n
@@ -2360,8 +2373,21 @@ extension Volm {
         return vDSP.multiply(0.01017750808, nn)
     }
     
+    static func db(fromAmp amp: Float) -> Float {
+        20 * .log10(amp)
+    }
     static func db(fromAmp amp: Double) -> Double {
         20 * .log10(amp)
+    }
+    
+    static func amp(fromDb db: Float) -> Float {
+        if db == 0 {
+            1
+        } else if db == -.infinity {
+            0
+        } else {
+            10 ** (db / 20)
+        }
     }
     static func amp(fromDb db: Double) -> Double {
         if db == 0 {
@@ -2373,8 +2399,15 @@ extension Volm {
         }
     }
     
+    static func db(fromVolm volm: Float) -> Float {
+        db(fromAmp: amp(fromVolm: volm))
+    }
     static func db(fromVolm volm: Double) -> Double {
         db(fromAmp: amp(fromVolm: volm))
+    }
+    
+    static func volm(fromDb db: Float) -> Float {
+        volm(fromAmp: amp(fromDb: db))
     }
     static func volm(fromDb db: Double) -> Double {
         volm(fromAmp: amp(fromDb: db))
