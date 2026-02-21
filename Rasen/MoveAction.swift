@@ -282,7 +282,8 @@ final class MoveAnimationAction: DragEventAction {
     }
     
     enum SlideType {
-        case key, all, startBeat, endBeat, loopDurBeat, previousNext, none
+        case key, all, startBeat, endBeat, loopDurBeat, previousNext,
+             previousPosition, nextPosition, none
     }
     
     private let indexInterval = 10.0
@@ -293,6 +294,7 @@ final class MoveAnimationAction: DragEventAction {
     private var beganSP = Point(), beganSheetP = Point(), beganKeyframeOptions = [Int: KeyframeOption](), maxBeat = Rational(0),
                 beganTimelineX = 0.0, beganKeyframeX = 0.0, beganBeatX = 0.0,
                 beganKeyframeBeat = Rational(0), beganRootBeatIndex = Animation.RootBeatIndex()
+    private var oldPnP: Point?, beganKeyframeOption: KeyframeOption?
     private var beganAnimationOption: AnimationOption?
     private var minLastSec = 1 / 12.0
     
@@ -351,6 +353,29 @@ final class MoveAnimationAction: DragEventAction {
                         type = .previousNext
                         
                         beganAnimationOption = sheetView.model.animation.option
+                    case .previousPosition, .nextPosition:
+                        let isPrevious = if case .previousPosition = result { true } else { false }
+                        type = isPrevious ? .previousPosition : .nextPosition
+                        
+                        let keyframeIndex = sheetView.model.animation.index
+                        self.keyframeIndex = keyframeIndex
+                        let option = sheetView.model.animation.keyframes[keyframeIndex].option
+                        beganKeyframeOption = option
+                        beganSheetP = sheetP
+                        
+                        let pnP = isPrevious ? option.previousPosition : option.nextPosition
+                        let isSnapped = pnP == .init()
+                        let scale = rootView.screenToWorldScale
+                        node.children = [Node(path: Path(Edge(sheetView.convertToWorld(beganSheetP - pnP),
+                                                              sheetView.convertToWorld(sheetP))),
+                                              lineWidth: 1 * scale, lineType: .color(.content)),
+                                         Node(attitude: .init(position: sheetView.convertToWorld(sheetP),
+                                                              scale: Size(square: 1.0 * scale)),
+                                              path: .init(circleRadius: isSnapped ? 6 : 4.5),
+                                              lineWidth: 1 * scale, lineType: .color(.background),
+                                              fillType: .color(isSnapped ? .selected : .content))]
+                        oldPnP = pnP
+                        rootView.node.append(child: node)
                     case .startBeat:
                         type = .startBeat
                         
@@ -485,6 +510,43 @@ final class MoveAnimationAction: DragEventAction {
                     }
                 case .previousNext:
                     animationView.previousNext = animationView.previousNext(at: sheetP)
+                case .previousPosition, .nextPosition:
+                    if let beganKeyframeOption,
+                        keyframeIndex < sheetView.model.animation.keyframes.count {
+                        
+                        let isPrevious = type == .previousPosition
+                        let sheetP = sheetView.convertFromWorld(p)
+                        let bpnP = isPrevious ? beganKeyframeOption.previousPosition :
+                        beganKeyframeOption.nextPosition
+                        let op = sheetP - beganSheetP + bpnP
+                        let pnP = op.distance(.init()) < 5 * rootView.screenToWorldScale ?
+                        Point() : op
+                        if isPrevious {
+                            sheetView.binder[keyPath: sheetView.keyPath].animation
+                                .keyframes[keyframeIndex].option.previousPosition = pnP
+                        } else {
+                            sheetView.binder[keyPath: sheetView.keyPath].animation
+                                .keyframes[keyframeIndex].option.nextPosition = pnP
+                        }
+                        sheetView.updatePreviousNext()
+                        sheetView.updateTimeline()
+                        
+                        let isSnapped = pnP == .init()
+                        if isSnapped, pnP != oldPnP {
+                            Feedback.performAlignment()
+                        }
+                        oldPnP = pnP
+                        let scale = rootView.screenToWorldScale
+                        node.children = [Node(path: Path(Edge(sheetView.convertToWorld(beganSheetP - bpnP),
+                                                              sheetView.convertToWorld(beganSheetP - bpnP + pnP))),
+                                              lineWidth: 1 * scale, lineType: .color(.content)),
+                                         Node(attitude: .init(position: sheetView.convertToWorld(beganSheetP - bpnP + pnP),
+                                                              scale: Size(square: 1.0 * scale)),
+                                              path: .init(circleRadius: isSnapped ? 6 : 4.5),
+                                              lineWidth: 1 * scale, lineType: .color(.background),
+                                              fillType: .color(isSnapped ? .selected : .content))]
+                    }
+                    
                 case .key:
                     let interval = rootView.currentKeyframeBeatInterval
                     let durBeat = animationView.model.beatRange.length
@@ -556,6 +618,18 @@ final class MoveAnimationAction: DragEventAction {
                     }
                 }
                 switch type {
+                case .previousPosition, .nextPosition:
+                    if let beganKeyframeOption,
+                        keyframeIndex < sheetView.model.animation.keyframes.count {
+                        
+                        let option = sheetView.model.animation.keyframes[keyframeIndex].option
+                        if option != beganKeyframeOption {
+                            sheetView.newUndoGroup()
+                            sheetView.capture([.init(value: option, index: keyframeIndex)],
+                                              old: [.init(value: beganKeyframeOption,
+                                                          index: keyframeIndex)])
+                        }
+                    }
                 case .all, .startBeat, .endBeat, .loopDurBeat, .previousNext:
                     if let beganAnimationOption, sheetView.model.animation.option != beganAnimationOption {
                         updateUndoGroup()
@@ -2308,12 +2382,10 @@ final class MoveLineAction: DragEventAction {
     }
     
     enum MoveType {
-        case point, warp, all, previousNext
+        case point, warp, all
     }
     
-    private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0,
-                oldPnP: Point?
-    private var beganKeyframeOption: KeyframeOption?, keyframeIndex: Int?, isPrevious = false
+    private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0
     private var beganLine = Line(), beganMainP = Point(), beganSheetP = Point(), isPressure = false
     private var pressures = [(time: Double, pressure: Double)]()
     private var node = Node()
@@ -2339,34 +2411,11 @@ final class MoveLineAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
                 
-                if let (lineView, li, rki) = sheetView.lineTuple(at: sheetP,
-                                                               enabledPreviousNext: true,
+                if let (lineView, li, _) = sheetView.lineTuple(at: sheetP,
+                                                               enabledPreviousNext: false,
                                                                  scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
-                    if rki != sheetView.rootKeyframeIndex {
-                        type = .previousNext
-                        
-                        let keyframeIndex = sheetView.model.animation.index
-                        self.keyframeIndex = keyframeIndex
-                        let option = sheetView.model.animation.keyframes[keyframeIndex].option
-                        beganKeyframeOption = option
-                        isPrevious = rki < sheetView.rootKeyframeIndex
-                        beganSheetP = sheetP
-                        
-                        let pnP = isPrevious ? option.previousPosition : option.nextPosition
-                        let isSnapped = pnP == .init()
-                        let scale = rootView.screenToWorldScale
-                        node.children = [Node(path: Path(Edge(sheetView.convertToWorld(beganSheetP - pnP),
-                                                              sheetView.convertToWorld(sheetP))),
-                                              lineWidth: 1 * scale, lineType: .color(.content)),
-                                         Node(attitude: .init(position: sheetView.convertToWorld(sheetP),
-                                                              scale: Size(square: 1.0 * scale)),
-                                              path: .init(circleRadius: isSnapped ? 6 : 4.5),
-                                              lineWidth: 1 * scale, lineType: .color(.background),
-                                              fillType: .color(isSnapped ? .selected : .content))]
-                        oldPnP = pnP
-                        rootView.node.append(child: node)
-                    } else if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
+                    if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
                         beganLine = lineView.model
                         lineIndex = li
                         pointIndex = pi
@@ -2401,45 +2450,10 @@ final class MoveLineAction: DragEventAction {
             }
         case .changed:
             if let sheetView {
-                if type == .previousNext {
-                    if let beganKeyframeOption, let keyframeIndex,
-                        keyframeIndex < sheetView.model.animation.keyframes.count {
-                        
-                        let sheetP = sheetView.convertFromWorld(p)
-                        let bpnP = isPrevious ? beganKeyframeOption.previousPosition :
-                        beganKeyframeOption.nextPosition
-                        let op = sheetP - beganSheetP + bpnP
-                        let pnP = op.distance(.init()) < 5 * rootView.screenToWorldScale ?
-                        Point() : op
-                        if isPrevious {
-                            sheetView.binder[keyPath: sheetView.keyPath].animation
-                                .keyframes[keyframeIndex].option.previousPosition = pnP
-                        } else {
-                            sheetView.binder[keyPath: sheetView.keyPath].animation
-                                .keyframes[keyframeIndex].option.nextPosition = pnP
-                        }
-                        sheetView.updatePreviousNext()
-                        
-                        let isSnapped = pnP == .init()
-                        if isSnapped, pnP != oldPnP {
-                            Feedback.performAlignment()
-                        }
-                        oldPnP = pnP
-                        let scale = rootView.screenToWorldScale
-                        node.children = [Node(path: Path(Edge(sheetView.convertToWorld(beganSheetP - bpnP),
-                                                              sheetView.convertToWorld(beganSheetP - bpnP + pnP))),
-                                              lineWidth: 1 * scale, lineType: .color(.content)),
-                                         Node(attitude: .init(position: sheetView.convertToWorld(beganSheetP - bpnP + pnP),
-                                                              scale: Size(square: 1.0 * scale)),
-                                              path: .init(circleRadius: isSnapped ? 6 : 4.5),
-                                              lineWidth: 1 * scale, lineType: .color(.background),
-                                              fillType: .color(isSnapped ? .selected : .content))]
-                    }
-                } else if lineIndex < sheetView.linesView.elementViews.count {
-                        let lineView = sheetView.linesView.elementViews[lineIndex]
+                if lineIndex < sheetView.linesView.elementViews.count {
+                    let lineView = sheetView.linesView.elementViews[lineIndex]
                     
                     switch type {
-                    case .previousNext: break
                     case .point:
                         var line = lineView.model
                         if pointIndex < line.mainPointCount {
@@ -2496,26 +2510,11 @@ final class MoveLineAction: DragEventAction {
             node.removeFromParent()
             
             if let sheetView {
-                switch type {
-                case .previousNext:
-                    if let beganKeyframeOption, let keyframeIndex,
-                        keyframeIndex < sheetView.model.animation.keyframes.count {
-                        
-                        let option = sheetView.model.animation.keyframes[keyframeIndex].option
-                        if option != beganKeyframeOption {
-                            sheetView.newUndoGroup()
-                            sheetView.capture([.init(value: option, index: keyframeIndex)],
-                                              old: [.init(value: beganKeyframeOption,
-                                                          index: keyframeIndex)])
-                        }
-                    }
-                default:
-                    if lineIndex < sheetView.linesView.elementViews.count {
-                        let line = sheetView.linesView.elementViews[lineIndex].model
-                        if line != beganLine {
-                            sheetView.newUndoGroup()
-                            sheetView.captureLine(line, old: beganLine, at: lineIndex)
-                        }
+                if lineIndex < sheetView.linesView.elementViews.count {
+                    let line = sheetView.linesView.elementViews[lineIndex].model
+                    if line != beganLine {
+                        sheetView.newUndoGroup()
+                        sheetView.captureLine(line, old: beganLine, at: lineIndex)
                     }
                 }
             }

@@ -545,7 +545,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let sx = x(atBeat: sBeat)
         let ey = Sheet.timelineHalfHeight
         let pnW = 20.0, pnnH = 12.0, spnW = 3.0, pnY = ey + 12
-        return Rect(x: sx, y: pnY - pnnH / 2, width: pnW * 3 + spnW, height: pnnH)
+        return Rect(x: sx, y: pnY - pnnH / 2, width: pnW * 6 + spnW, height: pnnH)
     }
     var paddingPreviousNextFrame: Rect {
         previousNextFrame.outset(by: Sheet.timelinePadding)
@@ -833,11 +833,34 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         case .next: pnW * 2
         case .previousAndNext: pnW * 3
         }
-        contentPathlines.append(.init(Rect(x: pnX + sx - nKnobW / 2,
+        contentPathlines.append(.init(Rect(x: pnX + sx - knobW / 2,
                                            y: pnY - pnnH / 2,
-                                           width: Sheet.knobWidth, height: pnnH)))
+                                           width: knobW, height: pnnH)))
         
         var nodes = [Node]()
+        
+        let preP = model.currentKeyframe.previousPosition
+        let nextP = model.currentKeyframe.nextPosition
+        let prePP = Point(pnW * 5 + sx, pnY)
+        if preP != .init() {
+            let p = prePP.movedWith(distance: spnW, angle: preP.angle())
+            nodes.append(.init(path: .init(Edge(prePP, p)),
+                               lineWidth: lw, lineType: .color(.content)))
+            contentPathlines.append(.init(Edge(prePP, p)))
+            contentPathlines.append(.init(circleRadius: knobW, position: p))
+        } else {
+            contentPathlines.append(.init(circleRadius: knobW, position: prePP))
+        }
+        let nextPP = Point(pnW * 6 + sx, pnY)
+        if nextP != .init() {
+            let p = nextPP.movedWith(distance: spnW, angle: nextP.angle())
+            nodes.append(.init(path: .init(Edge(nextPP, p)),
+                               lineWidth: lw, lineType: .color(.content)))
+            contentPathlines.append(.init(circleRadius: knobW, position: p))
+        } else {
+            contentPathlines.append(.init(circleRadius: knobW, position: nextPP))
+        }
+        
         if !fullEditBorderPathlines.isEmpty {
             nodes.append(Node(name: "fullGrid",
                               isHidden: editGrid != .full,
@@ -1252,6 +1275,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     enum HitResult {
         case key(i: Int)
         case previousNext(PreviousNext)
+        case previousPosition
+        case nextPosition
         case startBeat
         case endBeat
         case loopDurBeat
@@ -1263,7 +1288,16 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         if pnD < minD && pnD < 3 + scale * 5 {
             minD = pnD
-            minResult = .previousNext(previousNext(at: p))
+            
+            let beatRange = model.beatRange
+            let sBeat = max(beatRange.start, -10000)
+            let sx = x(atBeat: sBeat)
+            let pnW = 20.0
+            if p.x >= sx + pnW * 4.5 {
+                minResult = p.x < sx + pnW * 5.5 ? .previousPosition : .nextPosition
+            } else {
+                minResult = .previousNext(previousNext(at: p))
+            }
         }
         
         if p.y > Sheet.timelineHalfHeight - 3 {
@@ -2733,12 +2767,13 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     func sheetColorOwner(at p: Point,
-                         enabledLine: Bool = true,
+                         enabledLine: Bool = true, enabledLinePlane: Bool = true,
                          removingUUColor: UUColor? = Line.defaultUUColor,
                          scale: Double) -> (isLine: Bool, value: SheetColorOwner) {
         if enabledLine,
            let (lineView, li) = lineTuple(at: p,
-                                          enabledPlane: true, removingUUColor: removingUUColor,
+                                          enabledPlane: enabledLinePlane,
+                                          removingUUColor: removingUUColor,
                                           scale: scale) {
             let uuColor = lineView.model.uuColor
             
@@ -6525,10 +6560,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                 let nd = smallScale != nil ?
                 (line.size / 2 + ds) / smallScale! : line.size / 2 + ds * 5
                 let ldSquared = nd * nd
-                let mdSquared = line.minDistanceSquared(at: p - dp)
-                let dSquared = isPNLine ?
+                let np = p - dp
+                let mdSquared = line.minDistanceSquared(at: np)
+                let dSq0 = (line.controls.minValue { $0.point.distanceSquared(np) } ?? 0)
+                let dSq1 = isPNLine ?
                 (min(mdSquared, Edge(line.firstPoint, line.firstPoint - dp).distanceSquared(from: p - dp))) :
                 mdSquared
+                let dSquared = dSq0 < (line.size / 2).squared ? 0 : dSq1
                 if dSquared < minDSquared && dSquared < ldSquared {
                     minI = i
                     minRKI = rki

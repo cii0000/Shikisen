@@ -730,7 +730,16 @@ final class PlayAction: InputKeyEventAction {
                     || (!cSheetView.model.enabledAnimation && cSheetView.model.enabledMusic)) {
                     
                     if cSheetView.model.enabledTimeline {
-                        cSheetView.play()
+                        var secRange = cSheetView.model.animation.secRange
+                        let secRanges = cSheetView.bottomSheetViews
+                            .compactMap { $0.element?.model.animation.secRange }
+                        + cSheetView.topSheetViews
+                            .compactMap { $0.element?.model.animation.secRange }
+                        secRanges.forEach { secRange = $0.formUnion(secRange) }
+                        cSheetView.play(inSec: secRange.start > 0
+                                        && cSheetView.previousSheetViews.isEmpty
+                                        && cSheetView.nextSheetViews.isEmpty
+                                        ? secRange : nil)
                     }
                 } else {
                     let sheetP = cSheetView.convertFromWorld(p)

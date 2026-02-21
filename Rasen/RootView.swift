@@ -3056,6 +3056,7 @@ final class RootView: View, @unchecked Sendable {
                                           scale: screenToWorldScale).value]
     }
     func madeColorOwnersWithSelection(at p: Point,
+                                      enabledLinePlane: Bool = true,
                                       removingUUColor: UUColor? = Line.defaultUUColor) -> (firstUUColor: UUColor,
                                                                                            owners: [SheetColorOwner])? {
         guard let sheetView = madeSheetView(at: p) else {
@@ -3064,6 +3065,7 @@ final class RootView: View, @unchecked Sendable {
         
         let inP = sheetView.convertFromWorld(p)
         let (isLine, topOwner) = sheetView.sheetColorOwner(at: inP,
+                                                           enabledLinePlane: enabledLinePlane,
                                                            removingUUColor: removingUUColor,
                                                            scale: screenToWorldScale)
         let uuColor = topOwner.uuColor

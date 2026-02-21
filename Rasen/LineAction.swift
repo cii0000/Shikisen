@@ -277,7 +277,7 @@ final class LineAction: Action {
     nonisolated
     private static func revision(pressure: Double,
                                  minPressure: Double = 0.3,
-                                 revisonMinPressure: Double = 0.125) -> Double {
+                                 revisonMinPressure: Double = 0.1875) -> Double {
         if pressure < minPressure {
             return revisonMinPressure
         } else {
