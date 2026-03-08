@@ -220,11 +220,11 @@ final class LineAction: Action {
                                           minSpeed: Double = 300.0,
                                           maxSpeed: Double = 1000.0,
                                           exp: Double = 2.0,
-                                          minTime: Double = 0.1,
-                                          maxTime: Double = 0.03,
+                                          minTime: Double = 0.125,
+                                          maxTime: Double = 0.125,
                                           minDistance: Double = 1.5,
                                           maxDistance: Double = 1.5,
-                                          maxPressureDistance maxPrD: Double = 0.05) -> Bool {
+                                          maxPressureDistance maxPrD: Double = 0.0625) -> Bool {
         guard deltaTime > 0 else {
             return false
         }
@@ -368,7 +368,7 @@ final class LineAction: Action {
         var temps = [Temp](), times = [Double]()
         var oldPoint = Point(), tempDistance = 0.0
         var oldFirstChangedTime: Double?, oldTime = 0.0, oldTempTime = 0.0
-        var prs = [Double](), snapDC: Line.Control?, snapSize = 0.0, isStopFirstPressure = false
+        var snapDC: Line.Control?, snapSize = 0.0, isStopFirstPressure = false
         var tempLineWidth = Line.defaultLineWidth
         
         func drawLine(for p: Point, sp: Point, pressure: Double,
@@ -441,8 +441,6 @@ final class LineAction: Action {
                 let d = p.distance(oldPoint)
                 tempDistance += d
                 
-                prs.append(pressure)
-                
                 let speed = d / (time - oldTime)
                 let lc = Line.Control(point: p, weight: 0.5, pressure: pressure)
                 var lb = nLine.bezier(at: nLine.maxBezierIndex - 1)
@@ -472,7 +470,7 @@ final class LineAction: Action {
                         }
                     }
                 }
-                if time - firstChangedTime > 0.075 {
+                if time - firstChangedTime > 0.1 {
                      isStopFirstPressure = true
                 }
                 
@@ -671,7 +669,7 @@ final class LineAction: Action {
                       _ phase: Phase) {
             let wtsScale = worldToScreenScale
             var p = RootView.roundedPoint(from: p, scale: wtsScale)
-            let pressure = Self.revision(pressure: pressure).rounded(decimalPlaces: 2)
+            var pressure = Self.revision(pressure: pressure).rounded(decimalPlaces: 2)
             
             switch phase {
             case .began:
@@ -724,6 +722,18 @@ final class LineAction: Action {
                 tempDistance += d
                 
                 prs.append(pressure)
+                
+                if prs.count == temps.count {
+                    var fpre = prs.last!
+                    for (i, oldTemp) in temps.enumerated().reversed() {
+                        if time - oldTemp.time < 0.5 {
+                            fpre = max(fpre, prs[i])
+                        } else {
+                            break
+                        }
+                    }
+                    pressure = fpre
+                }
                 
                 let speed = d / (time - oldTime)
                 let lc = Line.Control(point: p, weight: 0.5, pressure: pressure)
@@ -785,18 +795,6 @@ final class LineAction: Action {
                     }
                 }
                 
-                if prs.count == temps.count {
-                    var fpre = prs.last!
-                    for (i, oldTemp) in temps.enumerated().reversed() {
-                        if time - oldTemp.time < 0.3 {
-                            fpre = max(fpre, prs[i])
-                        } else {
-                            break
-                        }
-                    }
-                    nLine.controls[.last].pressure = fpre
-                }
-                
                 if let aLine = snapStraightLine(with: nLine, fp: fp, lp: llp) {
                     nLine = aLine
                 }
@@ -809,14 +807,11 @@ final class LineAction: Action {
                 if prs.count == temps.count {
                     var fpre = prs.last!
                     for (i, oldTemp) in temps.enumerated().reversed() {
-                        if time - oldTemp.time < 0.3 {
+                        if time - oldTemp.time < 0.5 {
                             fpre = max(fpre, prs[i])
                         } else {
                             break
                         }
-                    }
-                    if abs(nLine.controls.first!.pressure - fpre) < 0.2 {
-                        fpre = nLine.controls.first!.pressure
                     }
                     nLine.controls[.last].pressure = fpre
                 }

@@ -1697,11 +1697,15 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         maxPressure = nsEvent.pressure
     }
     override func mouseDragged(with nsEvent: NSEvent) {
-        guard let beganDragEvent = beganDragEvent else { return }
+        guard var beganDragEvent = beganDragEvent else { return }
         isMovedDrag = true
         maxPressure = max(maxPressure, nsEvent.pressure)
         if !isDrag {
-            guard nsEvent.pressure > 0 else { return }
+            guard nsEvent.pressure > 0 else {
+                beganDragEvent = dragEventWith(nsEvent, .began)
+                self.beganDragEvent = beganDragEvent
+                return
+            }
             isDrag = true
             if oldPressureStage == 2 {
                 isStrongDrag = true

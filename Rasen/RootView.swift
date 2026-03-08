@@ -745,7 +745,7 @@ final class RootView: View, @unchecked Sendable {
     var multiSelection: MultiSelection {
         MultiSelection(selections: selections)
     }
-    func sheetposWithSelection() -> [IntPoint] {
+    func sheetPositionsWithSelection() -> [IntPoint] {
         world.sheetIDs.keys.compactMap {
             multiSelection
                 .intersects(sheetFrame(with: $0)) ? $0 : nil
@@ -1095,8 +1095,8 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func updateSelectedColor(isMain: Bool) {
+        let selectedColor = isMain ? Color.selected : Color.diselected
         if !selections.isEmpty {
-            let selectedColor = isMain ? Color.selected : Color.diselected
             let subSelectedColor = isMain ? Color.subSelected : Color.subDiselected
             selectedNode?.children.forEach {
                 $0.fillType = .color(subSelectedColor)
@@ -1117,6 +1117,10 @@ final class RootView: View, @unchecked Sendable {
             selectedOrientationNode?.children.forEach {
                 $0.fillType = .color(selectedColor)
             }
+        }
+        
+        sheetViewValues.values.forEach {
+            $0.sheetView?.animationView.selectedColor = selectedColor
         }
     }
     
@@ -2980,7 +2984,7 @@ final class RootView: View, @unchecked Sendable {
         return nil
     }
     func mainFrame(at p: Point) -> (mainFrame: Rect, sheetView: SheetView?)? {
-        let d = 5 * screenToWorldScale
+        let d = 10 * screenToWorldScale
         let shp = sheetPosition(at: p)
         guard let sheetView = sheetView(at: shp) else {
             let nb = sheetFrame(with: shp)
@@ -2989,7 +2993,8 @@ final class RootView: View, @unchecked Sendable {
             (nb, nil) : nil
         }
         let sheetP = sheetView.convertFromWorld(p)
-        let nb = sheetView.mainFrame != Sheet.defaultBounds ? sheetView.mainFrame : sheetView.bounds
+        let nb = sheetView.mainFrame != Sheet.defaultBounds ?
+        sheetView.mainFrame.intersection(sheetView.bounds) ?? sheetView.bounds : sheetView.bounds
         return nb.minXMinYPoint.distance(sheetP) < d || nb.minXMaxYPoint.distance(sheetP) < d
         || nb.maxXMinYPoint.distance(sheetP) < d || nb.maxXMaxYPoint.distance(sheetP) < d ?
         (sheetView.mainFrame, sheetView) : nil
@@ -3170,7 +3175,8 @@ final class RootView: View, @unchecked Sendable {
             
             var ncShp = cShp, psvs = [WeakElement<SheetView>]()
             while let preShp = nearestVerticalSheetPosition(at: ncShp, deltaX: -1) {
-                guard let ncSheetView = sheetView(at: preShp) else { break }
+                guard let ncSheetView = sheetView(at: preShp),
+                      ncSheetView.model.enabledAnimation else { break }
                 psvs.append(.init(element: ncSheetView))
                 ncShp = preShp
             }
@@ -3179,7 +3185,8 @@ final class RootView: View, @unchecked Sendable {
             ncShp = cShp
             var nsvs = [WeakElement<SheetView>]()
             while let nextShp = nearestVerticalSheetPosition(at: ncShp, deltaX: 1) {
-                guard let ncSheetView = sheetView(at: nextShp) else { break }
+                guard let ncSheetView = sheetView(at: nextShp),
+                      ncSheetView.model.enabledAnimation else { break }
                 nsvs.append(.init(element: ncSheetView))
                 ncShp = nextShp
             }

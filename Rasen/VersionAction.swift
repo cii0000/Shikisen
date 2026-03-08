@@ -621,7 +621,7 @@ final class ClearHistoryAction: InputKeyEventAction {
             break
         case .ended:
             if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                let shps = rootView.sheetposWithSelection()
+                let shps = rootView.sheetPositionsWithSelection()
                 
                 let mes = shps.count == 1 ?
                     "Do you want to clear history of this sheet?".localized :

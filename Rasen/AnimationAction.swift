@@ -51,6 +51,8 @@ final class GoPreviousAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
+            rootAction.rootView.closeLookingUp()
+            
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
                 if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
@@ -136,6 +138,8 @@ final class GoNextAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
+            rootAction.rootView.closeLookingUp()
+            
             sheetView = rootView.sheetView(at: p)
         
             if let sheetView {
@@ -221,6 +225,8 @@ final class GoPreviousFrameAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
+            rootAction.rootView.closeLookingUp()
+            
             sheetView = rootView.sheetView(at: p)
             
             if let sheetView {
@@ -307,6 +313,8 @@ final class GoNextFrameAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
+            rootAction.rootView.closeLookingUp()
+            
             sheetView = rootView.sheetView(at: p)
             
             if let sheetView {
@@ -375,7 +383,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
     private let correction = 3.5
     
     enum MoveType {
-        case frame, time
+        case keyframe, frame, time
     }
     
     var type = MoveType.frame
@@ -480,16 +488,16 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                         let animation = animationView.model
                         
                         func updateFromVertical() {
-                            let allSec = animationView.model.sec(fromBeat: animationView.model.mainBeat)
+                            let allSec = animationView.model.mainSec
                             let bounds = sheetView.bounds
                             var otherChildren = [Node]()
                             let shp = rootView.sheetPosition(at: p)
                             rootView.sheetPositionFromVertical(at: shp) { nShp in
                                 if shp != nShp,
                                    let oSheetView = rootView.sheetView(at: nShp),
-                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.secRange.contains(allSec) {
+                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.allSecRange.contains(allSec) {
                                     
-                                    let i = oSheetView.animationView.model.index(atSec: allSec - oSheetView.model.animation.secRange.start)
+                                    let i = oSheetView.animationView.model.index(atSec: allSec)
                                     if otherIAndNodes[oSheetView] == nil || otherIAndNodes[oSheetView]?.i != i {
                                         let keyframeView = oSheetView.animationView.elementViews[i]
                                         let nodes = keyframeView.linesView.elementViews.map {
@@ -525,20 +533,76 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                         let oldKI = animationView.model.index
                         var isChangedRootI = false
                         switch type {
+                        case .keyframe:
+                            let bws = animation.keyframes.count.range.reduce(into: [Rational: Double]()) {
+                                $0[animation.keyframes[$1].beat] =
+                                (animation.keyframes[$1].isKey ? 0.25 : 0.125) * 50
+                            }
+                            let beatAndWidths = bws.sorted(by: { $0.key < $1.key })
+                            if !beatAndWidths.isEmpty {
+                                let localbeat = animation.localBeat(atRootBeat: beganRootBeat)
+                                var bwI = 0
+                                for (i, v) in beatAndWidths.enumerated().reversed() {
+                                    if localbeat >= v.key {
+                                        bwI = i
+                                        break
+                                    }
+                                }
+                                var nRootBeat = animation.rootLoopIndexBeat(atRootLoop: animation.rootLoopIndex(atRootBeat: beganRootBeat))
+                                + beatAndWidths[bwI].key
+                                var x = -beatAndWidths[bwI].value / 2
+                                
+                                while true {
+                                    x += beatAndWidths[bwI].value
+                                    guard abs(x) < abs(allDX) else { break }
+                                    
+                                    let dBeat = if allDX < 0 {
+                                        if bwI - 1 >= 0 {
+                                            -(beatAndWidths[bwI].key - beatAndWidths[bwI - 1].key)
+                                        } else {
+                                            -(beatAndWidths[bwI].key
+                                            + animation.beatRange.length - beatAndWidths[.last].key)
+                                        }
+                                    } else {
+                                        if bwI + 1 < beatAndWidths.count {
+                                            beatAndWidths[bwI + 1].key - beatAndWidths[bwI].key
+                                        } else {
+                                            animation.beatRange.length - beatAndWidths[bwI].key
+                                            + beatAndWidths[0].key
+                                        }
+                                    }
+                                    nRootBeat = Rational.saftyAdd(nRootBeat, dBeat)
+                                    
+                                    bwI = (allDX < 0 ? bwI - 1 : bwI + 1)
+                                        .loop(start: 0, end: beatAndWidths.count)
+                                }
+                                
+                                let oldRKI = animationView.rootKeyframeIndex
+                                if sheetView.isPlaying {
+                                    sheetView.stop()
+                                }
+                                sheetView.rootBeat = nRootBeat
+                                sheetView.updateTimeNodesWithMainSec()
+                                if oldRKI != sheetView.rootKeyframeIndex {
+                                    isChangedRootI = true
+                                }
+                                
+                                updateFromVertical()
+                            }
                         case .frame:
                             var bws = animation.keyframes.count.range.reduce(into: [Rational: Double]()) {
                                 $0[animation.keyframes[$1].beat] =
-                                (animation.keyframes[$1].isKey ? 0.25 : 0.125) * 50
+                                (animation.keyframes[$1].isKey ? 0.25 : 0.125) * 70
                             }
                             
                             if let beatRange = animationView.beatRange {
                                 let roundedSBeat = beatRange.start.rounded(.down)
-                                let deltaBeat = EditGrid.main.beatInterval
+                                let deltaBeat: Rational = 1
                                 var cBeat = roundedSBeat
                                 while cBeat < beatRange.end {
                                     if cBeat >= beatRange.start {
                                         if bws[cBeat - beatRange.start] == nil {
-                                            bws[cBeat - beatRange.start] = 0.125 * 50
+                                            bws[cBeat - beatRange.start] = 0.125 * 70
                                         }
                                     }
                                     cBeat += deltaBeat

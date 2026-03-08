@@ -2287,9 +2287,7 @@ final class MoveSheetAction: DragEventAction {
                     .translated(by: typeRect.centerPoint - sheetOrigin)
                 }
                 for (li, oldLine) in zip(lineIs, oldLines) {
-                    var nLine = oldLine * transform
-                    nLine.size *= transform.absXScale
-                    sheetView.linesView.elementViews[li].model = nLine
+                    sheetView.linesView.elementViews[li].model = oldLine * transform
                 }
                 for (pi, oldPlane) in zip(planeIs, oldPlanes) {
                     sheetView.planesView.elementViews[pi].model = oldPlane * transform
@@ -2444,6 +2442,13 @@ final class MoveLineAction: DragEventAction {
                                              fillType: .color(.background))]
                             }
                             rootView.node.append(child: node)
+                        } else if type == .warp && beganLine.mainPointCount >= 5 {
+                            let count = beganLine.mainPointCount / 5
+                            if pointIndex < count {
+                                pointIndex = 0
+                            } else if pointIndex >= beganLine.mainPointCount - count {
+                                pointIndex = beganLine.mainPointCount - 1
+                            }
                         }
                     }
                 }

@@ -582,10 +582,10 @@ final class PastableAction: Action {
         }
         if isEditingSheet {
             switch type {
-            case .cut: updateWithCopy(for: editingP, isSendPasteboard: false,
-                                      isCutColor: true)
-            case .copy: updateWithCopy(for: editingP, isSendPasteboard: true,
-                                       isCutColor: false)
+            case .cut:
+                selectingLineNode.path = .init()
+                selectingLineNode.children = []
+            case .copy: updateWithCopy(for: editingP, isSendPasteboard: true)
             case .paste:
                 let p = rootView.convertScreenToWorld(editingSP)
                 updateWithPaste(at: p, atScreen: editingSP, .changed, nil)
@@ -594,7 +594,7 @@ final class PastableAction: Action {
     }
     
     @discardableResult
-    func updateWithCopy(for p: Point, isSendPasteboard: Bool, isCutColor: Bool) -> Bool {
+    func updateWithCopy(for p: Point, isSendPasteboard: Bool) -> Bool {
         if let sheetView = rootView.sheetView(at: p),
            sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
            let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p)) {
@@ -2263,12 +2263,7 @@ final class PastableAction: Action {
         func pasteLines(_ lines: [Line], at p: Point) {
             let p = rootView.roundedPoint(from: p)
             let pt = firstTransform(at: p)
-            let ratio = firstScale / rootView.worldToScreenScale
-            let pLines: [Line] = lines.map {
-                var l = $0 * pt
-                l.size *= ratio
-                return l
-            }
+            let pLines: [Line] = lines.map { $0 * pt }
             guard !pLines.isEmpty, let rect = pLines.bounds else { return }
             
             let minXMinYSHP = rootView.sheetPosition(at: rect.minXMinYPoint)
@@ -2288,13 +2283,8 @@ final class PastableAction: Action {
                         
                         let frame = rootView.sheetFrame(with: nshp)
                         let t = transform(in: frame, at: p)
-                        let oLines: [Line] = lines.map {
-                            var l = $0 * t
-                            l.size *= ratio
-                            return l
-                        }
-                        var nLines = Sheet.clipped(oLines,
-                                                   in: Rect(size: frame.size))
+                        let oLines: [Line] = lines.map { $0 * t }
+                        var nLines = Sheet.clipped(oLines, in: Rect(size: frame.size))
                         if !nLines.isEmpty,
                            let (sheetView, isNew) = rootView
                             .madeSheetViewIsNew(at: nshp, isNewUndoGroup: isRootNewUndoGroup) {
@@ -2553,11 +2543,7 @@ final class PastableAction: Action {
                         
                         let oldLines = (isDraft ?
                                         $0.draftPicture : $0.picture).lines
-                        let pLines: [Line] = oldLines.map {
-                            var l = $0 * pt
-                            l.size *= ratio
-                            return l
-                        }
+                        let pLines: [Line] = oldLines.map { $0 * pt }
                         guard !pLines.isEmpty else { return nil }
                         
                         let t = transform(in: frame, at: np)
@@ -3265,8 +3251,7 @@ final class PastableAction: Action {
             firstScale = rootView.worldToScreenScale
             editingSP = sp
             editingP = rootView.convertScreenToWorld(sp)
-            updateWithCopy(for: editingP,
-                           isSendPasteboard: true, isCutColor: false)
+            updateWithCopy(for: editingP, isSendPasteboard: true)
             rootView.node.append(child: selectingLineNode)
         case .changed:
             break
@@ -3639,8 +3624,7 @@ final class CopyLineColorAction: InputKeyEventAction {
             }
         }
         if isEditingSheet {
-            updateWithCopy(for: editingP, isSendPasteboard: true,
-                                       isCutColor: false)
+            updateWithCopy(for: editingP, isSendPasteboard: true)
         }
     }
     
@@ -3657,8 +3641,7 @@ final class CopyLineColorAction: InputKeyEventAction {
             firstScale = rootView.worldToScreenScale
             editingSP = sp
             editingP = rootView.convertScreenToWorld(sp)
-            updateWithCopy(for: editingP,
-                           isSendPasteboard: true, isCutColor: false)
+            updateWithCopy(for: editingP, isSendPasteboard: true)
             rootView.node.append(child: selectingLineNode)
         case .changed:
             break
@@ -3670,7 +3653,7 @@ final class CopyLineColorAction: InputKeyEventAction {
     }
     
     @discardableResult
-    func updateWithCopy(for p: Point, isSendPasteboard: Bool, isCutColor: Bool) -> Bool {
+    func updateWithCopy(for p: Point, isSendPasteboard: Bool) -> Bool {
         if let sheetView = rootView.sheetView(at: p),
            let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
                                               scale: 1 / rootView.worldToScreenScale)?.lineView {

@@ -573,11 +573,9 @@ final class IOAction: Action {
                         if let rf = selection.rect.intersection(frame) {
                             if rootView.isEditingSheet {
                                 let nf = rf - frame.origin
-                                return SelectingValue(shp: shp,
-                                                      bounds: nf)
+                                return SelectingValue(shp: shp, bounds: nf)
                             } else {
-                                return SelectingValue(shp: shp,
-                                                      bounds: frame.bounds)
+                                return SelectingValue(shp: shp, bounds: frame.bounds)
                             }
                         } else {
                             return nil

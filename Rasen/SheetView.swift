@@ -328,6 +328,15 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     
+    var selectedColor = Color.selected {
+        didSet {
+            timelineNode.children.forEach {
+                if $0.name == "selected" {
+                    $0.fillType = .color(selectedColor)
+                }
+            }
+        }
+    }
     var selectedFrameIndexes = [Int]() {
         didSet {
             guard selectedFrameIndexes != oldValue else { return }
@@ -886,7 +895,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                               fillType: .color(.content)))
         }
         if !selectedPathlines.isEmpty {
-            nodes.append(Node(path: Path(selectedPathlines),
+            nodes.append(Node(name: "selected",
+                              path: Path(selectedPathlines),
                               fillType: .color(.selected)))
         }
         return nodes
@@ -3573,6 +3583,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
                 return (rect, nodes)
             } else {
                 for kv in kvs {
@@ -3581,6 +3592,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                                      atKeyframeIndex: kv.index)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
             }
         case .removeDraftKeyLines(let iivs):
             stop()
@@ -3601,6 +3613,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     animationView.elementViews[iv.index].draftLinesView.remove(at: iv.value)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
                 
                 return (rect, nodes)
             } else {
@@ -3608,6 +3621,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     animationView.elementViews[iv.index].draftLinesView.remove(at: iv.value)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
             }
             
         case .insertDraftKeyPlanes(let kvs):
@@ -3627,6 +3641,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
                 return (rect, nodes)
             } else {
                 for kv in kvs {
@@ -3635,6 +3650,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                                       atKeyframeIndex: kv.index)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
             }
         case .removeDraftKeyPlanes(let iivs):
             stop()
@@ -3651,6 +3667,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     animationView.elementViews[iv.index].draftPlanesView.remove(at: iv.value)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
                 
                 return (rect, nodes)
             } else {
@@ -3658,6 +3675,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     animationView.elementViews[iv.index].draftPlanesView.remove(at: iv.value)
                 }
                 updateWithKeyframeIndex()
+                updateTimeline()
             }
             
         case .setLineIDs(let kvs):
