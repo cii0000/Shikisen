@@ -3176,7 +3176,7 @@ final class RootView: View, @unchecked Sendable {
             var ncShp = cShp, psvs = [WeakElement<SheetView>]()
             while let preShp = nearestVerticalSheetPosition(at: ncShp, deltaX: -1) {
                 guard let ncSheetView = sheetView(at: preShp),
-                      ncSheetView.model.enabledAnimation else { break }
+                      ncSheetView.model.enabledTimeline else { break }
                 psvs.append(.init(element: ncSheetView))
                 ncShp = preShp
             }
@@ -3186,7 +3186,7 @@ final class RootView: View, @unchecked Sendable {
             var nsvs = [WeakElement<SheetView>]()
             while let nextShp = nearestVerticalSheetPosition(at: ncShp, deltaX: 1) {
                 guard let ncSheetView = sheetView(at: nextShp),
-                      ncSheetView.model.enabledAnimation else { break }
+                      ncSheetView.model.enabledTimeline else { break }
                 nsvs.append(.init(element: ncSheetView))
                 ncShp = nextShp
             }

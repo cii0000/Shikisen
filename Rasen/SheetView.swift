@@ -195,6 +195,10 @@ final class KeyframeView: BindableView, @unchecked Sendable {
         draftPlanesView = ArrayView(binder: binder,
                                     keyPath: keyPath.appending(path: \Model.draftPicture.planes))
         
+        draftLinesView.node.isClippingChildren = true
+        draftLinesView.node.path = .init(Sheet.defaultBounds)
+        draftLinesView.node.fillType = .color(.draftLine)
+        
         node = Node(children: [draftPlanesView.node, draftLinesView.node,
                                planesView.node, linesView.node])
         
@@ -210,10 +214,8 @@ final class KeyframeView: BindableView, @unchecked Sendable {
         updateDraft()
     }
     func updateDraft() {
-        if !draftLinesView.model.isEmpty {
-            draftLinesView.elementViews.forEach {
-                $0.node.lineType = .color(.draftLine)
-            }
+        draftLinesView.elementViews.forEach {
+            $0.node.lineType = .color(.background)
         }
         if !draftPlanesView.model.isEmpty {
             draftPlanesView.elementViews.forEach {
@@ -3883,9 +3885,8 @@ final class SheetView: BindableView, @unchecked Sendable {
         draftLinesView.model = lines
         
         if !lines.isEmpty {
-            let lineColor = model.draftLinesColor()
             draftLinesView.elementViews.forEach {
-                $0.node.lineType = .color(lineColor)
+                $0.node.lineType = .color(.background)
             }
         }
     }
@@ -3903,10 +3904,9 @@ final class SheetView: BindableView, @unchecked Sendable {
     private func updateDraftLines(from livs: [Int],
                                   atKeyframeIndex ki: Int) {
         if !livs.isEmpty {
-            let lineColor = model.draftLinesColor()
             let draftLinesView = animationView.elementViews[ki].draftLinesView
             livs.forEach {
-                draftLinesView.elementViews[$0].node.lineType = .color(lineColor)
+                draftLinesView.elementViews[$0].node.lineType = .color(.background)
             }
         }
     }

@@ -71,8 +71,8 @@ final class ColorAction: Action {
     
     var colorOwners = [SheetColorOwner]()
     var fp = Point()
-    var beganUUColor = UU(Color())
-    var editingUUColor = UU(Color())
+    var beganMainUUColor = UU(Color())
+    var editingMainUUColor = UU(Color())
     
     let isEditableMaxLightness = ColorSpace.default.isHDR
     let maxLightness = ColorSpace.default.maxLightness
@@ -142,7 +142,7 @@ final class ColorAction: Action {
     }
     let opacityWidth = 100.0, opaqueWidth = 10.0
     var opacityNodeX: Double {
-        editingUUColor.value.opacity
+        editingMainUUColor.value.opacity
             .clipped(min: 0, max: 1,
                      newMin: -opaqueWidth - opaqueWidth,
                      newMax: -opaqueWidth)
@@ -158,7 +158,7 @@ final class ColorAction: Action {
         didSet {
             guard isEditingLightness != oldValue else { return }
             if isEditingLightness {
-                let color = beganUUColor.value
+                let color = beganMainUUColor.value
                 
                 if isEditableOpacity {
                     let gradient = opacityGradientWith(color: color)
@@ -233,7 +233,7 @@ final class ColorAction: Action {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         
         if let (uuColor, owners) = rootView.madeColorOwnersWithSelection(at: p) {
-            self.beganUUColor = uuColor
+            self.beganMainUUColor = uuColor
             self.colorOwners = owners
         } else {
             self.colorOwners = []
@@ -1474,14 +1474,14 @@ final class ColorAction: Action {
             updateNode()
             updateOwners(with: event)
             fp = event.screenPoint
-            let g = lightnessGradientWith(chroma: beganUUColor.value.chroma,
-                                          hue: beganUUColor.value.hue)
+            let g = lightnessGradientWith(chroma: beganMainUUColor.value.chroma,
+                                          hue: beganMainUUColor.value.hue)
             lightnessNode.lineType = .gradient(g)
             lightnessNode.path = Path([Pathline(lightnessPointsWith(splitCount: Int(maxLightnessHeight)))])
-            oldEditingLightness = beganUUColor.value.lightness
+            oldEditingLightness = beganMainUUColor.value.lightness
             editingLightness = oldEditingLightness
             beganLightnessPosition = rootView.convertScreenToWorld(fp)
-            editingUUColor = beganUUColor
+            editingMainUUColor = beganMainUUColor
             isEditingLightness = true
         case .changed:
             let wp = rootView.convertScreenToWorld(event.screenPoint)
@@ -1512,13 +1512,24 @@ final class ColorAction: Action {
                               maxLightness,
                               t: t)
             
-            var uuColor = beganUUColor
+            var uuColor = beganMainUUColor
             uuColor.value.lightness = lightness
             if isEditableOpacity {
                 uuColor.value.opacity = opacity(atX: p.x)
             }
-            editingUUColor = uuColor
-            colorOwners.forEach { $0.uuColor = uuColor }
+            editingMainUUColor = uuColor
+            
+            let dLightness = lightness - beganMainUUColor.value.lightness
+            colorOwners.forEach {
+                if $0.oldUUColor == beganMainUUColor {
+                    $0.uuColor = uuColor
+                } else {
+                    var nUUColor = $0.oldUUColor
+                    nUUColor.value.lightness = ($0.oldUUColor.value.lightness + dLightness)
+                        .clipped(min: Color.minLightness, max: Color.whiteLightness)
+                    $0.uuColor = nUUColor
+                }
+            }
             
             editingLightness = lightness
         case .ended:
@@ -1657,12 +1668,12 @@ final class ColorAction: Action {
                 updateTintPointNodes(with: event)
             }
             fp = event.screenPoint
-            tintLightness = beganUUColor.value.lightness
-            oldEditingTintPosition = PolarPoint(beganUUColor.value.chroma,
-                                              beganUUColor.value.hue).rectangular
+            tintLightness = beganMainUUColor.value.lightness
+            oldEditingTintPosition = PolarPoint(beganMainUUColor.value.chroma,
+                                              beganMainUUColor.value.hue).rectangular
             editingTintPosition = oldEditingTintPosition
             beganTintPosition = rootView.convertScreenToWorld(fp)
-            editingUUColor = beganUUColor
+            editingMainUUColor = beganMainUUColor
             isEditingTint = true
         case .changed:
             let wp = rootView.convertScreenToWorld(event.screenPoint)
@@ -1670,7 +1681,7 @@ final class ColorAction: Action {
             let fTintP = Point()
             let r = fTintP.distance(p)
             let theta = fTintP.angle(p)
-            var uuColor = beganUUColor
+            var uuColor = beganMainUUColor
             if r < snappableDistance {
                 if let lastTintSnapTime = lastTintSnapTime {
                     if event.time - lastTintSnapTime > 1 {
@@ -1692,8 +1703,22 @@ final class ColorAction: Action {
             let polarPoint = Point(uuColor.value.a, uuColor.value.b).polar
             uuColor.value.hue = polarPoint.theta
             uuColor.value.chroma = min(polarPoint.r, Color.maxChroma)
-            editingUUColor = uuColor
-            colorOwners.forEach { $0.uuColor = uuColor }
+            editingMainUUColor = uuColor
+            
+            let da = uuColor.value.a - beganMainUUColor.value.a
+            let db = uuColor.value.b - beganMainUUColor.value.b
+            colorOwners.forEach {
+                if $0.oldUUColor == beganMainUUColor {
+                    $0.uuColor = uuColor
+                } else {
+                    let polarPoint = Point($0.oldUUColor.value.a + da,
+                                           $0.oldUUColor.value.b + db).polar
+                    var nUUColor = $0.oldUUColor
+                    nUUColor.value.hue = polarPoint.theta
+                    nUUColor.value.chroma = min(polarPoint.r, Color.maxChroma)
+                    $0.uuColor = nUUColor
+                }
+            }
             
             editingTintPosition = PolarPoint(uuColor.value.chroma,
                                              uuColor.value.hue).rectangular
@@ -1747,12 +1772,12 @@ final class ColorAction: Action {
             updateNode()
             updateOwners(with: event)
             fp = event.screenPoint
-            lightnessNode.lineType = .gradient(opacityGradientWith(color: beganUUColor.value))
+            lightnessNode.lineType = .gradient(opacityGradientWith(color: beganMainUUColor.value))
             lightnessNode.path = Path([Pathline(opacityPointsWith())])
-            oldEditingLightness = beganUUColor.value.opacity
+            oldEditingLightness = beganMainUUColor.value.opacity
             editingLightness = oldEditingLightness
             beganLightnessPosition = rootView.convertScreenToWorld(fp)
-            editingUUColor = beganUUColor
+            editingMainUUColor = beganMainUUColor
             isEditingLightness = true
         case .changed:
             let wp = rootView.convertScreenToWorld(event.screenPoint)
@@ -1760,11 +1785,22 @@ final class ColorAction: Action {
             let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let opacity = Double.linear(0, 1, t: t)
             
-            var uuColor = beganUUColor
+            var uuColor = beganMainUUColor
             uuColor.value.opacity = opacity
             
-            editingUUColor = uuColor
-            colorOwners.forEach { $0.uuColor = uuColor }
+            editingMainUUColor = uuColor
+            
+            let dOpacity = opacity - beganMainUUColor.value.opacity
+            colorOwners.forEach {
+                if $0.oldUUColor == beganMainUUColor {
+                    $0.uuColor = uuColor
+                } else {
+                    var nUUColor = $0.oldUUColor
+                    nUUColor.value.opacity = ($0.oldUUColor.value.opacity + dOpacity)
+                        .clipped(min: 0, max: 1)
+                    $0.uuColor = nUUColor
+                }
+            }
             
             editingLightness = opacity
         case .ended:

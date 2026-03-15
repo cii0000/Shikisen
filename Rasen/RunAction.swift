@@ -452,6 +452,9 @@ extension RunAction {
         func lineCount(_ line: Line) -> Int {
             line.controls.count * MemoryLayout<Point>.size
         }
+        func planeCount(_ plane: Plane) -> Int {
+            (plane.topolygon.holePolygons.sum { $0.points.count } + plane.topolygon.polygon.points.count) * MemoryLayout<Point>.size
+        }
         func textCount(_ text: Text) -> Int {
             text.string.utf8.count * MemoryLayout<UInt8>.size
         }
@@ -483,6 +486,12 @@ extension RunAction {
                 sheetView.insert(livs)
             case .removeLines(let lineIndexes):
                 sheetView.removeLines(at: lineIndexes)
+            case .appendPlanes(let planes):
+                si += planes.reduce(0) { $0 + planeCount($1) }
+                if isMax() { return }
+                sheetView.append(planes)
+            case .removePlanes(let planeIndexes):
+                sheetView.removePlanes(at: planeIndexes)
             case .insertTexts(let tivs):
                 si += tivs.reduce(0) { $0 + textCount($1.value) }
                 if isMax() { return }

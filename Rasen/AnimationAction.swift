@@ -1291,6 +1291,77 @@ final class InterpolateAction: InputKeyEventAction {
                         }
                     }
                     return
+                } else if case .sheetValue(let v) = co, !v.planes.isEmpty {
+                    if let sheetView = rootView.sheetView(at: p),
+                       sheetView.id == v.id {
+                        if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
+                            let nlis = sheetView.lineIndexes(from: rootView.selections)
+                            let npis = sheetView.planeIndexes(from: rootView.selections)
+                            let animationView = sheetView.animationView
+                            let animation = animationView.model
+                            let ok = animation.keyframe(atRoot: v.rootKeyframeIndex)
+                            let ops = ok.picture.planes, ols = ok.picture.lines
+                            if nlis.count == ols.count && npis.count == ops.count {
+                                let orki = v.rootKeyframeIndex,
+                                    nrki = animationView.rootKeyframeIndex
+                                let di = abs(nrki - orki)
+                                if di > 1 {
+                                    var skis = [Int: Double]()
+                                    for dri in 1 ..< di {
+                                        let t = Double(dri) / Double(di)
+                                        let ri = orki < nrki ? orki + dri : orki - dri
+                                        skis[animation.index(atRoot: ri)] = t
+                                    }
+                                    let kis = skis.sorted { $0.key < $1.key }
+                                    if !kis.isEmpty {
+                                        let nps = animation.currentKeyframe.picture.planes
+                                        let nls = animation.currentKeyframe.picture.lines
+                                        var removeLIVs = [IndexValue<[Int]>]()
+                                        var removePIVs = [IndexValue<[Int]>]()
+                                        var insertLIVs = [IndexValue<[IndexValue<Line>]>]()
+                                        var insertPIVs = [IndexValue<[IndexValue<Plane>]>]()
+                                        for kv in kis {
+                                            let ki = kv.key, t = kv.value
+                                            let ls = nlis.enumerated().map { (oli, nli) in
+                                                var line = Line.linear(ols[oli], nls[nli], t: t)
+                                                line.id = nls[nli].id
+                                                line.interType = .interpolated
+                                                return line
+                                            }
+                                            let ps = npis.enumerated().map { (opi, npi) in
+                                                var plane = Plane.linear(ops[opi], nps[npi], t: t)
+                                                plane.uuColor = .init(plane.uuColor.value,
+                                                                      id: ops[opi].uuColor.id)
+                                                return plane
+                                            }
+                                            removeLIVs.append(.init(value: .init(animation.keyframes[ki].picture.lines.count.range), index: ki))
+                                            removePIVs.append(.init(value: .init(animation.keyframes[ki].picture.planes.count.range), index: ki))
+                                            insertLIVs.append(.init(value: ls.enumerated().map { .init(value: $0.element, index: $0.offset) }, index: ki))
+                                            insertPIVs.append(.init(value: ps.enumerated().map { .init(value: $0.element, index: $0.offset) }, index: ki))
+                                        }
+                                        let nols = nlis.enumerated().map { (oli, nli) in
+                                            IndexValue(value: InterOption(id: nls[nli].id,
+                                                                          interType: .key),
+                                                       index: oli)
+                                        }
+                                        let nnls = nlis.enumerated().map { (oli, nli) in
+                                            IndexValue(value: InterOption(id: nls[nli].id,
+                                                                          interType: .key),
+                                                       index: oli)
+                                        }
+                                        sheetView.newUndoGroup()
+                                        sheetView.set([.init(value: nols, index: animation.index(atRoot: orki))])
+                                        sheetView.set([.init(value: nnls, index: animation.index(atRoot: nrki))])
+                                        sheetView.removeKeyLines(removeLIVs)
+                                        sheetView.insertKeyLines(insertLIVs)
+                                        sheetView.removeKeyPlanes(removePIVs)
+                                        sheetView.insertKeyPlanes(insertPIVs)
+                                    }
+                                }
+                            }
+                            return
+                        }
+                    }
                 }
             }
             guard let o = cos.first else { return }

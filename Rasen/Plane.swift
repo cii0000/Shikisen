@@ -66,6 +66,13 @@ extension Plane: AppliableTransform {
     }
 }
 extension Plane {
+    static func linear(_ f0: Self, _ f1: Self, t: Double) -> Self {
+        .init(topolygon: .init(polygon: .linear(f0.topolygon.polygon, f1.topolygon.polygon, t: t),
+                               holePolygons: .linear(f0.topolygon.holePolygons, f1.topolygon.holePolygons, t: t)),
+              uuColor: .linear(f0.uuColor, f1.uuColor, t: t))
+    }
+}
+extension Plane {
     var path: Path {
         Path(topolygon)
     }

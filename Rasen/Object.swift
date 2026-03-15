@@ -51,6 +51,10 @@ extension OSheet {
             value.picture.lines.insert(livs)
         case .removeLines(let lineIndexes):
             value.picture.lines.remove(at: lineIndexes)
+        case .appendPlanes(let planes):
+            value.picture.planes += planes
+        case .removePlanes(planeIndexes: let planeIndexes):
+            value.picture.planes.remove(at: planeIndexes)
         case .insertTexts(let tivs):
             value.texts.insert(tivs)
         case .removeTexts(let textIndexes):
@@ -102,6 +106,21 @@ extension OSheet {
         }
         let undoItem = SheetUndoItem.insertLines(livs)
         let redoItem = SheetUndoItem.removeLines(lineIndexes: lineIndexes)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    mutating func append(_ planes: [Plane]) {
+        let undoItem = SheetUndoItem.removeLastPlanes(count: planes.count)
+        let redoItem = SheetUndoItem.appendPlanes(planes)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    mutating func removePlanes(at planeIndexes: [Int]) {
+        let pivs = planeIndexes.map {
+            IndexValue(value: value.picture.planes[$0], index: $0)
+        }
+        let undoItem = SheetUndoItem.insertPlanes(pivs)
+        let redoItem = SheetUndoItem.removePlanes(planeIndexes: planeIndexes)
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
@@ -611,7 +630,7 @@ struct F: Hashable, Sendable {
              counta, at, select, set, insert, remove, makeMatrix, releaseMatrix, `is`,
              random, asLabel, asString, asError, isError,
              send, showAboutRun, showAllDefinitions,
-             draw, drawAxes, plot, flip, map, filter, reduce, custom
+             draw, drawAxes, plot, flip, translate, map, filter, reduce, custom
         
         var isSelectable: Bool {
             switch self {
@@ -849,6 +868,7 @@ extension F {
         case .asError: args[0].asError
         case .isError: args[0].isErrorO
         case .flip: O.flip(args[0], args[1])
+        case .translate: O.translate(args[0], args[1], args[2], scaleXO: args[3], scaleYO: args[4], rotationO: args[5])
         case .drawAxes: O.drawAxes(args[0], base: args[1], args[2], args[3])
         case .plot: O.plot(args[0], base: args[1], args[2])
         case .draw: O.draw(args[0], args[1])
@@ -1400,6 +1420,8 @@ extension O {
                F(left: [""], right: ["base", ""], .plot))
         append(flipName, OKeyInfo(sheetGroup, "Flip sheet based on $0, e.g. sheet horizontal flip".localized),
                F(left: 1, right: 1, .flip))
+        append(translateName, OKeyInfo(sheetGroup, "".localized),
+               F(left: 1, right: 5, .translate))
         
         let otherGroup = OKeyInfo.Group(name: "Other".localized)
         append(asLabelName, OKeyInfo(otherGroup, "Make label.".localized),
@@ -5378,21 +5400,54 @@ extension O {
         }
         
         let lines = sheet.value.picture.lines
+        let planes = sheet.value.picture.planes
         sheet.removeLines(at: Array(0 ..< lines.count))
+        sheet.removePlanes(at: Array(0 ..< planes.count))
+        var t = Transform.identity
         switch orientation {
         case .horizontal:
-            var t = Transform.identity
             t.translate(by: -sheet.bounds.centerPoint)
             t.scaleBy(x: -1, y: 1)
             t.translate(by: sheet.bounds.centerPoint)
-            sheet.append(lines.map { $0 * t })
         case .vertical:
             var t = Transform.identity
             t.translate(by: -sheet.bounds.centerPoint)
             t.scaleBy(x: 1, y: -1)
             t.translate(by: sheet.bounds.centerPoint)
-            sheet.append(lines.map { $0 * t })
         }
+        sheet.append(lines.map { $0 * t })
+        sheet.append(planes.map {
+            var n = $0 * t
+            n.topolygon = n.topolygon.sortedTopCounterClockwise()
+            return n
+        })
+        return O(sheet)
+    }
+    
+    static let translateName = "translate"
+    static func translate(_ ao: O, _ xo: O, _ yo: O, scaleXO: O, scaleYO: O, rotationO: O) -> O {
+        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard let x = xo.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, xo.name))) }
+        guard let y = yo.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, yo.name))) }
+        guard let scaleX = scaleXO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleXO.name))) }
+        guard let scaleY = scaleYO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleYO.name))) }
+        guard let rotation = rotationO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleYO.name))) }
+        
+        let lines = sheet.value.picture.lines
+        let planes = sheet.value.picture.planes
+        sheet.removeLines(at: Array(0 ..< lines.count))
+        sheet.removePlanes(at: Array(0 ..< planes.count))
+        var t = Transform.identity
+        t.translate(by: -sheet.bounds.centerPoint)
+        if scaleX != 1 || scaleY != 1 {
+            t.scaleBy(x: scaleX, y: scaleY)
+        }
+        if rotation != 0 {
+            t.rotate(by: rotation)
+        }
+        t.translate(by: sheet.bounds.centerPoint + .init(x, y))
+        sheet.append(lines.map { $0 * t })
+        sheet.append(planes.map { $0 * t })
         return O(sheet)
     }
 }

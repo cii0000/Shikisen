@@ -558,7 +558,12 @@ extension Line: Interpolatable {
                 split(lines: ls1)
             }
         }
-        split(lines: lines)
+        
+        if lines.allSatisfy({ lines[0].controls.count == $0.controls.count }) {
+            lss = lines.map { FLine(lines: [$0]) }
+        } else {
+            split(lines: lines)
+        }
         
         let lines = (0 ..< lss[0].lines.count).map { i in handler(lss.map { $0.lines[i] }) }
         return Line(lines: lines)

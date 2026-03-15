@@ -124,6 +124,20 @@ extension Polygon: AppliableTransform {
         Polygon(points: lhs.points.map { $0 * rhs })
     }
 }
+extension Polygon: Interpolatable {
+    static func linear(_ f0: Self, _ f1: Self, t: Double) -> Self {
+        .init(points: .linear(f0.points, f1.points, t: t))
+    }
+    static func firstSpline(_ f1: Polygon, _ f2: Polygon, _ f3: Polygon, t: Double) -> Polygon {
+        .init(points: .firstSpline(f1.points, f2.points, f3.points, t: t))
+    }
+    static func spline(_ f0: Polygon, _ f1: Polygon, _ f2: Polygon, _ f3: Polygon, t: Double) -> Polygon {
+        .init(points: .spline(f0.points, f1.points, f2.points, f3.points, t: t))
+    }
+    static func lastSpline(_ f0: Polygon, _ f1: Polygon, _ f2: Polygon, t: Double) -> Polygon {
+        .init(points: .lastSpline(f0.points, f1.points, f2.points, t: t))
+    }
+}
 extension Polygon {
     init(_ rect: Rect) {
         self.init(points: [rect.minXMaxYPoint, rect.minXMinYPoint,
@@ -1132,6 +1146,10 @@ extension Topolygon {
         } else {
             return .init()
         }
+    }
+    func sortedTopCounterClockwise() -> Self {
+        .init(polygon: polygon.sortedTopCounterClockwise(),
+              holePolygons: holePolygons.map { $0.sortedTopCounterClockwise().inverted() })
     }
 }
 
