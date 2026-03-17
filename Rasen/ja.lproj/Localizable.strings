@@ -67,7 +67,7 @@
 "Change to Vertical Text" = "縦書きに変更";
 "Change to Horizontal Text" = "横書きに変更";
 
-"Insert Keyframe" = "キーフレームを追加";
+"Insert Control Point" = "制御点を追加";
 "Add Score" = "楽譜を追加";
 
 "Interpolate" = "補間";
@@ -143,6 +143,7 @@
 "Export as 4K Movie..." = "4K動画として書き出す...";
 "Export as Sound..." = "サウンドとして書き出す...";
 "Export as Linear PCM..." = "リニアPCMとして書き出す...";
+"Export as Caption..." = "キャプションとして書き出す...";
 
 "Export as Document..." = "書類として書き出す...";
 "Export as Document with History..." = "履歴付き書類として書き出す...";
@@ -160,6 +161,7 @@
 "Export as 4K Movie" = "4K動画として書き出す";
 "Export as Sound" = "サウンドとして書き出す";
 "Export as Linear PCM" = "リニアPCMとして書き出す";
+"Export as Caption" = "キャプションとして書き出す";
 
 "Export as Document" = "書類として書き出す";
 "Export as Document with History" = "履歴付き書類として書き出す";
@@ -188,6 +190,7 @@
 "Exporting 4K Movie" = "4K動画を書き出し中";
 "Exporting Sound" = "サウンドを書き出し中";
 "Exporting Linear PCM" = "リニアPCMを書き出し中";
+"Exporting Caption" = "キャプションを書き出し中";
 "Exporting Document" = "書類を書き出し中";
 "Exporting Document with History" = "履歴付き書類を書き出し中";
 

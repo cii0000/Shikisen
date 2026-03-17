@@ -2071,7 +2071,7 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
             }
         }
     }
-    private let ctx: CGContext
+    let ctx: CGContext
     let data: UnsafeMutablePointer<Value>
     let offsetPerRow: Int, offsetPerPixel: Int
     let width: Int, height: Int

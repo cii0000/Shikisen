@@ -1956,6 +1956,9 @@ extension Animation: BeatRangeType {
             beat < durBeat ? min(nextBeat, durBeat) - beat : 0
         }
     }
+    func rendableKeyframeDurSec(at i: Int) -> Rational {
+        sec(fromBeat: rendableKeyframeDurBeat(at: i))
+    }
     
     func rootBeat(atRoot rootI: Int) -> Rational {
         let ki = index(atRoot: rootI)
@@ -1990,31 +1993,67 @@ extension Animation: BeatRangeType {
             }
         }
     }
-    mutating func moveNextInterKeyframe() {
-        let fki = index, ks = keyframes
-        var rki = rootIndex.addingReportingOverflow(1).partialValue
-        while true {
-            let ki = index(atRoot: rki)
-            if ki == fki { break }
-            if ks[ki].isKey {
-                self.rootIndex = rki
-                return
-            }
-            rki = rki.addingReportingOverflow(1).partialValue
-        }
+    mutating func goNext() {
+        self.rootBeat = rootBeat(dx: 1, fromRoot: rootBeat, keyD: 1, otherD: 1)
     }
-    mutating func movePreviousInterKeyframe() {
-        let fki = index, ks = keyframes
-        var rki = rootIndex.subtractingReportingOverflow(1).partialValue
-        while true {
-            let ki = index(atRoot: rki)
-            if ki == fki { break }
-            if ks[ki].isKey {
-                self.rootIndex = rki
-                return
-            }
-            rki = rki.subtractingReportingOverflow(1).partialValue
+    mutating func goPrevious() {
+        self.rootBeat = rootBeat(dx: -1, fromRoot: rootBeat, keyD: 1, otherD: 1)
+    }
+    func rootBeat(dx: Double, fromRoot beganRootBeat: Rational,
+                  keyD: Double = 17.5, otherD: Double = 8.75) -> Rational {
+        var bws = keyframes.count.range.reduce(into: [Rational: Double]()) {
+            $0[keyframes[$1].beat] = keyframes[$1].isKey ? keyD : otherD
         }
+        let roundedSBeat = beatRange.start.rounded(.down)
+        let deltaBeat: Rational = 1
+        var cBeat = roundedSBeat
+        while cBeat < beatRange.end {
+            if cBeat >= beatRange.start {
+                if bws[cBeat - beatRange.start] == nil {
+                    bws[cBeat - beatRange.start] = otherD
+                }
+            }
+            cBeat += deltaBeat
+        }
+        let beatAndWidths = bws.sorted(by: { $0.key < $1.key })
+        guard !beatAndWidths.isEmpty else { return beganRootBeat }
+        let localbeat = localBeat(atRootBeat: beganRootBeat)
+        var bwI = 0
+        for (i, v) in beatAndWidths.enumerated().reversed() {
+            if localbeat >= v.key {
+                bwI = i
+                break
+            }
+        }
+        var nRootBeat = rootLoopIndexBeat(atRootLoop: rootLoopIndex(atRootBeat: beganRootBeat))
+        + beatAndWidths[bwI].key
+        var x = -beatAndWidths[bwI].value / 2
+        
+        while true {
+            x += beatAndWidths[bwI].value
+            guard abs(x) < abs(dx) else { break }
+            
+            let dBeat = if dx < 0 {
+                if bwI - 1 >= 0 {
+                    -(beatAndWidths[bwI].key - beatAndWidths[bwI - 1].key)
+                } else {
+                    -(beatAndWidths[bwI].key
+                      + beatRange.length - beatAndWidths[.last].key)
+                }
+            } else {
+                if bwI + 1 < beatAndWidths.count {
+                    beatAndWidths[bwI + 1].key - beatAndWidths[bwI].key
+                } else {
+                    beatRange.length - beatAndWidths[bwI].key
+                    + beatAndWidths[0].key
+                }
+            }
+            nRootBeat = Rational.saftyAdd(nRootBeat, dBeat)
+            
+            bwI = (dx < 0 ? bwI - 1 : bwI + 1)
+                .loop(start: 0, end: beatAndWidths.count)
+        }
+        return nRootBeat
     }
     
     var rootLoopIndex: Int {
@@ -2316,20 +2355,28 @@ extension Sheet {
         || texts.contains { $0.timeOption != nil }
     }
     
-    var mainFrameRate: Int {
-        let qs = animation.keyframes.count.range
-            .map { animation.rendableKeyframeDurBeat(at: $0).q }
-            .filter { $0 != 0 }
-        if !qs.isEmpty {
-            let minFrame = Int.lcd(qs)
-            let frameRate = animation.sec(fromBeat: Rational(1, minFrame))
-            for i in 1 ..< 60 {
-                if (frameRate * Rational(i)).decimalPart == 0 {
-                    return i
+    static func frameRate(from sheets: [Sheet]) -> Int {
+        let qs = sheets
+            .flatMap { sheet in
+                if sheet.enabledAnimation {
+                    sheet.animation.keyframes.count.range
+                        .map { sheet.animation.rendableKeyframeDurSec(at: $0).q }
+                        .filter { $0 != 0 }
+                } else {
+                    sheet.captions.flatMap { [$0.secRange.start.q, $0.secRange.length.q] }
+                        .filter { $0 != 0 }
                 }
-            }
+        }
+        if !qs.isEmpty {
+            let frameRate = Int.lcd(qs)
+            print("fr", frameRate)
+            return frameRate <= 60 ? frameRate : 60
         }
         return 60
+    }
+    static func standardFrameRate(from sheets: [Sheet]) -> Int {
+        let frameRate = frameRate(from: sheets)
+        return [24, 25, 30, 50, 60].first(where: { $0 % frameRate == 0 }) ?? 60
     }
     
     var mainLineUUColor: UUColor? {
@@ -2594,14 +2641,13 @@ extension Sheet {
     var captions: [Caption] {
         texts.compactMap {
             if let timeOption = $0.timeOption {
-                return Caption(string: $0.string, origin: $0.origin, orientation: $0.orientation,
-                               beatRange: timeOption.beatRange,
-                               tempo: timeOption.tempo)
+                Caption(string: $0.string, origin: $0.origin, orientation: $0.orientation,
+                        secRange: timeOption.secRange)
             } else {
-                return nil
+                nil
             }
         }.sorted {
-            $0.beatRange.start < $1.beatRange.start
+            $0.secRange.start < $1.secRange.start
         }
     }
     func captions(atSec sec: Rational) -> [Caption] {

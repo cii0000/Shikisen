@@ -1861,6 +1861,13 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(SubNSMenuItem(title: "Export as Caption...".localized, closure: { [weak self] in
+            guard let self else { return }
+            let action = ExportAsCaptionAction(self.rootAction)
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
+        }))
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(SubNSMenuItem(title: "Export as Document...".localized, closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsDocumentAction(self.rootAction)

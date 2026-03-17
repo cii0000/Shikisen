@@ -26,30 +26,30 @@ struct Caption: Hashable, Codable {
     var string = ""
     var origin = Point()
     var orientation = Orientation.horizontal
-    var beatRange = 0 ..< Rational(0)
-    var tempo = Music.defaultTempo
-}
-extension Caption: TempoType {
-    var secRange: Range<Rational> {
-        secRange(fromBeat: beatRange)
-    }
+    var secRange = 0 ..< Rational(0)
 }
 extension Caption {
     enum FileType: FileTypeProtocol, CaseIterable {
-        case scc
+        case itt
         var name: String {
             switch self {
-            case .scc: "SCC"
+            case .itt: "ITT"
             }
         }
         var utType: UTType {
             switch self {
-            case .scc: AVFileType.SCC.utType
+            case .itt: UTType.init(filenameExtension: "itt")!
             }
         }
     }
     
-    static let defaultPadding = 6.0, defaultOutlineWidth = 2.0
+    func move(sec: Rational) -> Self {
+        var n = self
+        n.secRange.start += sec
+        return n
+    }
+    
+    static let defaultPadding = 8.0, defaultOutlineWidth = 3.0
     func pathAndPosition(withFontSize fontSize: Double = Font.defaultSize,
                          in bounds: Rect,
                          padding: Double = defaultPadding) -> (path: Path, position: Point)? {
@@ -93,8 +93,7 @@ extension Caption {
                          from captions: [Caption]) -> [CPUNode] {
         captions
             .sorted {
-                let s0 = $0.sec(fromBeat: $0.beatRange.start),
-                    s1 = $1.sec(fromBeat: $1.beatRange.start)
+                let s0 = $0.secRange.start, s1 = $1.secRange.start
                 return s0 == s1 ? $0.origin.y > $1.origin.y : s0 < s1
             }
             .enumerated().flatMap { $0.element.cpuNodes(withFontSize: fontSize,
@@ -108,7 +107,7 @@ extension Caption {
                                                in: bounds,
                                                padding: padding) else { return [] }
         return [.init(attitude: .init(position: tp), path: path,
-                      lineWidth: outlineWidth, lineType: .color(.content)),
+                      lineWidth: outlineWidth, lineType: .color(.captionOutline)),
                 .init(attitude: .init(position: tp), path: path,
                       fillType: .color(.background))]
     }
@@ -120,8 +119,7 @@ extension Caption {
                       from captions: [Caption]) -> [Node] {
         captions
             .sorted {
-                let s0 = $0.sec(fromBeat: $0.beatRange.start),
-                    s1 = $1.sec(fromBeat: $1.beatRange.start)
+                let s0 = $0.secRange.start, s1 = $1.secRange.start
                 return s0 == s1 ? $0.origin.y > $1.origin.y : s0 < s1
             }
             .enumerated().flatMap { $0.element.nodes(withFontSize: fontSize,
@@ -134,13 +132,13 @@ extension Caption {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
                                                padding: padding) else { return [] }
         return [.init(attitude: .init(position: tp), path: path,
-                      lineWidth: outlineWidth, lineType: .color(.content)),
+                      lineWidth: outlineWidth, lineType: .color(.captionOutline)),
                 .init(attitude: .init(position: tp), path: path,
                       fillType: .color(.background))]
     }
     
     static func captions(atSec sec: Rational, in captions: [Caption]) -> [Caption] {
-        captions.filter { $0.beatRange.contains($0.beat(fromSec: sec)) }
+        captions.filter { $0.secRange.contains(sec) }
     }
 }
 
@@ -182,7 +180,7 @@ final class Movie {
     static let exportError = NSError(domain: AVFoundationErrorDomain,
                                      code: AVError.Code.exportFailed.rawValue)
     
-    let url: URL
+    let url: URL, frameRate: Int
     let fileType: AVFileType, codec: AVVideoCodecType
     let renderSize: Size, isHDR: Bool
     let sampleRate = Audio.defaultSampleRate, audioChannelCount = 2
@@ -193,13 +191,13 @@ final class Movie {
     private let pbAdaptor: AVAssetWriterInputPixelBufferAdaptor
     let isAlphaChannel: Bool
     
-    private var //currentTime = Rational(0),
-                lastCMTime = CMTime(value: 0, timescale: 60), append = false, stop = false
-    private var deltaTime = Rational(0)
+    private var frameI = 0, isAppend = false, isStop = false
     private var settings = [Setting]()
     
-    init(url: URL, renderSize: Size, isAlphaChannel: Bool, isLinearPCM: Bool, _ colorSpace: ColorSpace) throws {
+    init(url: URL, renderSize: Size, isAlphaChannel: Bool, isLinearPCM: Bool,
+         _ colorSpace: ColorSpace, frameRate: Int) throws {
         self.url = url
+        self.frameRate = frameRate
         self.renderSize = renderSize
         
         isHDR = colorSpace.isHDR
@@ -266,81 +264,65 @@ final class Movie {
         writer.startSession(atSourceTime: .zero)
     }
     
-    func writeMovie(frameCount: Int, duration: Rational,
-                    frameRate: Int,
-                    imageHandler: (Rational) -> (Image?),
-                    progressHandler: (Double, inout Bool) -> ()) {
-        for i in 0 ..< frameCount {
-            autoreleasepool {
-                while !videoInput.isReadyForMoreMediaData {
-                    progressHandler(Double(i) / Double(frameCount - 1), &stop)
-                    if stop { return }
-                    Thread.sleep(forTimeInterval: 0.1)
-                }
-                guard let bufferPool = pbAdaptor.pixelBufferPool else { return }
-                var pixelBuffer: CVPixelBuffer?
-                CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,
-                                                   bufferPool, &pixelBuffer)
-                if let pb = pixelBuffer {
-                    if isAlphaChannel {
-                        CVBufferSetAttachment(pb,
-                                              kCVImageBufferAlphaChannelModeKey,
-                                              kCVImageBufferAlphaChannelMode_PremultipliedAlpha,
-                                              .shouldPropagate)
-                    }
-                    CVBufferSetAttachment(pb,
-                                          kCVImageBufferICCProfileKey,
-                                          colorSpaceProfile,
-                                          .shouldPropagate)
-                    CVPixelBufferLockBaseAddress(pb,
-                                                 CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
-                    
-                    let it = Rational(i, frameRate) + deltaTime
-                    if isHDR {
-                        if let image = imageHandler(it) {
-                            let ciImage = CIImage(cgImage: image.cg)
-                            let ctx = CIContext(options: [.workingColorSpace: colorSpace])
-                            ctx.render(ciImage, to: pb)
-                        }
-                    } else {
-                        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-                        if let ctx
-                            = CGContext(data: CVPixelBufferGetBaseAddress(pb),
-                                        width: CVPixelBufferGetWidth(pb),
-                                        height: CVPixelBufferGetHeight(pb),
-                                        bitsPerComponent: 8,
-                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
-                                        space: colorSpace,
-                                        bitmapInfo: bitmapInfo.rawValue) {
-                            if isAlphaChannel {
-                                ctx.clear(.init(x: 0, y: 0, width: ctx.width, height: ctx.height))
-                            }
-                            if let image = imageHandler(it) {
-                                ctx.draw(image.cg,
-                                         in: CGRect(x: 0, y: 0,
-                                                    width: image.size.width,
-                                                    height: image.size.height))
-                            }
-                        }
-                    }
-                    
-                    CVPixelBufferUnlockBaseAddress(pb,
-                                                   CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
-                    let time = CMTime(value: Int64(i),
-                                      timescale: Int32(frameRate)) + lastCMTime
-                    append = pbAdaptor.append(pb, withPresentationTime: time)
-                    if !append { return }
-                    progressHandler(Double(i) / Double(frameCount - 1), &stop)
-                    if stop { return }
-                }
-            }
-            if !append || stop { break }
+    func write(_ image: Image, progressHandler: (inout Bool) -> ()) -> Bool {
+        while !videoInput.isReadyForMoreMediaData {
+            progressHandler(&isStop)
+            if isStop { return true }
+            Thread.sleep(forTimeInterval: 0.1)
         }
         
-        lastCMTime = CMTime(value: Int64(frameCount),
-                            timescale: Int32(frameRate)) + lastCMTime
-        let d = duration - Rational(frameCount) / Rational(frameRate)
-        deltaTime = d < Rational(1, 100000) ? 0 : d
+        guard let bufferPool = pbAdaptor.pixelBufferPool else {
+            isAppend = false
+            return false
+        }
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,
+                                           bufferPool, &pixelBuffer)
+        if let pb = pixelBuffer {
+            if isAlphaChannel {
+                CVBufferSetAttachment(pb,
+                                      kCVImageBufferAlphaChannelModeKey,
+                                      kCVImageBufferAlphaChannelMode_PremultipliedAlpha,
+                                      .shouldPropagate)
+            }
+            CVBufferSetAttachment(pb,
+                                  kCVImageBufferICCProfileKey,
+                                  colorSpaceProfile,
+                                  .shouldPropagate)
+            CVPixelBufferLockBaseAddress(pb,
+                                         CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
+            
+            if isHDR {
+                let ciImage = CIImage(cgImage: image.cg)
+                let ctx = CIContext(options: [.workingColorSpace: colorSpace])
+                ctx.render(ciImage, to: pb)
+            } else {
+                let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+                if let ctx
+                    = CGContext(data: CVPixelBufferGetBaseAddress(pb),
+                                width: CVPixelBufferGetWidth(pb),
+                                height: CVPixelBufferGetHeight(pb),
+                                bitsPerComponent: 8,
+                                bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
+                                space: colorSpace,
+                                bitmapInfo: bitmapInfo.rawValue) {
+                    if isAlphaChannel {
+                        ctx.clear(.init(x: 0, y: 0, width: ctx.width, height: ctx.height))
+                    }
+                    ctx.draw(image.cg,
+                             in: CGRect(x: 0, y: 0,
+                                        width: image.size.width,
+                                        height: image.size.height))
+                }
+            }
+            
+            CVPixelBufferUnlockBaseAddress(pb,
+                                           CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
+            let time = CMTime(value: Int64(frameI), timescale: Int32(frameRate))
+            isAppend = pbAdaptor.append(pb, withPresentationTime: time)
+            frameI += 1
+        }
+        return isAppend
     }
     
     func writeAudio(from seq: Sequencer,
@@ -361,7 +343,7 @@ final class Movie {
         videoInput.markAsFinished()
         audioInput.markAsFinished()
         
-        if !append || stop {
+        if !isAppend || isStop {
             writer.cancelWriting()
             let fileManager = FileManager.default
             if fileManager.fileExists(atPath: url.path) {
@@ -371,18 +353,34 @@ final class Movie {
                     throw error
                 }
             }
-            if !append && !stop {
+            if !isAppend && !isStop {
                 throw Self.exportError
             } else {
-                return stop
+                return isStop
             }
         } else {
-            writer.endSession(atSourceTime: lastCMTime)
+            writer.endSession(atSourceTime: CMTime(value: .init(frameI),
+                                                   timescale: .init(frameRate)))
             await writer.finishWriting()
             if let error = writer.error {
                 throw error
             }
-            return stop
+            return isStop
+        }
+    }
+}
+
+extension Caption {
+    static func avCaptions(from captions: [Caption], frameRate: Int,
+                           deltaSec: Rational) -> [AVCaption] {
+        captions.map { caption in
+            let startTime = (caption.secRange.start + deltaSec)
+                .cm(timescale: Int32(frameRate))
+            let duration = caption.secRange.length.cm(timescale: Int32(frameRate))
+            let range = CMTimeRange(start: startTime, duration: duration)
+            let avCaption = AVMutableCaption(caption.string, timeRange: range)
+            avCaption.region = caption.orientation == .vertical ? .appleITTRight : .appleITTBottom
+            return avCaption
         }
     }
 }
@@ -390,29 +388,27 @@ final class Movie {
 final class CaptionRenderer {
     struct ExportError: Error {}
     
-    let url: URL
+    let url: URL, frameRate: Int
     private let writer: AVAssetWriter,
                 captionInput: AVAssetWriterInput,
                 cAdaptor: AVAssetWriterInputCaptionAdaptor
-    private var isAppend = false, isStop = false,
-                lastCMTime = CMTime(),
-                allDuration = Rational(), currentTime = Rational()
+    private var isAppend = false, isStop = false, currentSec = Rational()
 
-    init(url: URL) throws {
+    init(url: URL, frameRate: Int) throws {
         self.url = url
-
+        self.frameRate = frameRate
+        
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: url.path) {
             try fileManager.removeItem(at: url)
         }
 
-        writer = try AVAssetWriter(outputURL: url, fileType: .SCC)
-        captionInput = AVAssetWriterInput(mediaType: .closedCaption,
-                                         outputSettings: [:])
-        captionInput.expectsMediaDataInRealTime = true
+        writer = try AVAssetWriter(outputURL: url, fileType: .appleiTT)
+        captionInput = AVAssetWriterInput(mediaType: .text,
+                                          outputSettings: [AVCaptionSettingsKey.timeCodeFrameDuration.rawValue: CMTime(value: 1, timescale: CMTimeScale(frameRate))])
         captionInput.languageCode = Locale.current.language.languageCode?.identifier
         writer.add(captionInput)
-
+        
         cAdaptor = AVAssetWriterInputCaptionAdaptor(assetWriterInput: captionInput)
 
         if !writer.startWriting() {
@@ -422,37 +418,26 @@ final class CaptionRenderer {
     }
 
     func write(captions: [Caption], duration: Rational = Rational(),
-               frameRate: Int,
                progressHandler: (Double, inout Bool) -> ()) {
-        for (i, caption) in captions.enumerated() {
+        let avCaptions = Caption.avCaptions(from: captions, frameRate: frameRate,
+                                            deltaSec: currentSec)
+        for (i, avCaption) in avCaptions.enumerated() {
             autoreleasepool {
                 while !captionInput.isReadyForMoreMediaData {
-                    progressHandler(Double(i) / Double(captions.count - 1), &isStop)
+                    progressHandler(Double(i) / Double(avCaptions.count - 1), &isStop)
                     if isStop { return }
                     Thread.sleep(forTimeInterval: 0.1)
                 }
                 
-                let startTime = (caption.beatRange.start + allDuration)
-                    .cm(timescale: Int32(frameRate))
-                
-                let duration = (caption.beatRange.end - caption.beatRange.start)
-                    .cm(timescale: Int32(frameRate))
-                
-                let range = CMTimeRange(start: startTime,
-                                        duration: duration)
-                let avCaption = AVCaption(caption.string, timeRange: range)
                 isAppend = cAdaptor.append(avCaption)
                 
                 if !isAppend { return }
-                progressHandler(Double(i) / Double(captions.count - 1), &isStop)
+                progressHandler(Double(i + 1) / Double(avCaptions.count), &isStop)
                 if isStop { return }
             }
             if !isAppend || isStop { break }
         }
-        
-        lastCMTime = duration.cm(timescale: Int32(frameRate)) + lastCMTime
-        allDuration += duration
-        currentTime += duration
+        currentSec += duration
     }
     func finish() async throws {
         captionInput.markAsFinished()
@@ -471,7 +456,7 @@ final class CaptionRenderer {
                 throw ExportError()
             }
         } else {
-            writer.endSession(atSourceTime: lastCMTime)
+            writer.endSession(atSourceTime: currentSec.cm(timescale: CMTimeScale(frameRate)))
             await writer.finishWriting()
             if let error = writer.error {
                 throw error

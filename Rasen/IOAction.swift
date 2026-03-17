@@ -160,6 +160,20 @@ final class ExportAsLinearPCMAction: InputKeyEventAction {
         action.updateNode()
     }
 }
+final class ExportAsCaptionAction: InputKeyEventAction {
+    let action: IOAction
+    
+    init(_ rootAction: RootAction) {
+        action = IOAction(rootAction)
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        action.exportFile(with: event, .caption)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
 final class ExportAsDocumentAction: InputKeyEventAction {
     let action: IOAction
     
@@ -549,7 +563,7 @@ final class IOAction: Action {
     
     enum ExportType {
         case image, image4K, pdf, gif, movie, movie4K,
-             sound, linearPCM, document, documentWithHistory
+             sound, linearPCM, document, documentWithHistory, caption
         var isDocument: Bool {
             self == .document || self == .documentWithHistory
         }
@@ -746,7 +760,7 @@ final class IOAction: Action {
                 }
             }
             documentRecorders = []
-        case .gif, .movie, .movie4K, .sound, .linearPCM:
+        case .gif, .movie, .movie4K, .sound, .linearPCM, .caption:
             renderings = nvs.map {
                 var filledShps = Set<IntPoint>()
                 
@@ -816,6 +830,7 @@ final class IOAction: Action {
         case .movie, .movie4K: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
         case .sound: Content.FileType.m4a
         case .linearPCM: Content.FileType.wav
+        case .caption: Caption.FileType.itt
         case .document: Document.FileType.rasendoc
         case .documentWithHistory: Document.FileType.rasendoch
         }
@@ -854,6 +869,7 @@ final class IOAction: Action {
                 }
             case .gif, .movie, .movie4K: return nil
             case .sound, .linearPCM: return nil
+            case .caption: return nil
             case .document:
                 return documentRecorders.sum { $0.fileSizeWithoutHistory }
             case .documentWithHistory:
@@ -870,6 +886,7 @@ final class IOAction: Action {
         case .movie4K: "Export as 4K Movie".localized
         case .sound: "Export as Sound".localized
         case .linearPCM: "Export as Linear PCM".localized
+        case .caption: "Export as Caption".localized
         case .document: "Export as Document".localized
         case .documentWithHistory: "Export as Document with History".localized
         }
@@ -915,6 +932,8 @@ final class IOAction: Action {
                     exportSound(from: renderings, isLinearPCM: false, at: ioResult)
                 case .linearPCM:
                     exportSound(from: renderings, isLinearPCM: true, at: ioResult)
+                case .caption:
+                    exportCaption(from: renderings, at: ioResult)
                 case .document:
                     exportDocument(from: nvs, isHistory: false, at: ioResult)
                 case .documentWithHistory:
@@ -1198,113 +1217,141 @@ final class IOAction: Action {
         @Sendable func export(progressHandler: (Double, inout Bool) -> (),
                               completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
             do {
-                let movie = try Movie(url: ioResult.url, renderSize: size, isAlphaChannel: isAlphaChannel,
-                                      isLinearPCM: is4K, colorSpace)
-                var isStop = false, t = 0.0
-                var durSecs = [Rational]()
-                for rendering in renderings {
+                var isStop = false
+                var durSecs = [Rational](), allDurSec: Rational = 0
+                struct Track {
+                    var captions: [Caption]
+                    var sheets: [(sheet: Sheet, sheetBounds: Rect)]
+                    var secRange: Range<Rational>
+                    var sheetOrigin: Point
+                    var sheetBounds: Rect
+                    var renderBounds: Rect
+                }
+                var tracks = [Track]()
+                for (i, rendering) in renderings.enumerated() {
+                    var maxEndSec: Rational = 0
                     if let sheet = rendering.mainItem.decodedSheet() {
-                        var frameRate = sheet.mainFrameRate
-                        var bottomSheets = [(sheet: Sheet, bounds: Rect)]()
-                        var maxEndSec: Rational = 0
-                        for item in rendering.bottomItems {
+                        var captions = sheet.captions
+                        
+                        var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
+                        for item in rendering.bottomItems.reversed() {
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            frameRate = max(frameRate, sheet.mainFrameRate)
-                            bottomSheets.append((sheet, item.frame.bounds))
-                            maxEndSec = max(sheet.allEndSec, maxEndSec)
-                        }
-                        var topSheets = [(sheet: Sheet, bounds: Rect)] ()
-                        for item in rendering.topItems {
-                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            frameRate = max(frameRate, sheet.mainFrameRate)
-                            topSheets.append((sheet, item.frame.bounds))
-                            maxEndSec = max(sheet.allEndSec, maxEndSec)
+                            captions += sheet.captions
+                            if sheet.enabledAnimation {
+                                sheets.append((sheet, item.frame.bounds))
+                                maxEndSec = max(sheet.allEndSec, maxEndSec)
+                            }
                         }
                         
                         let sheetBounds = rendering.mainItem.frame.bounds
-                        let origin = rendering.mainItem.frame.origin
-                        let ot = t
-                        let b = isMainFrame ? sheet.mainFrame : rendering.bounds
-                        
+                        sheets.append((sheet, sheetBounds))
                         maxEndSec = max(sheet.allEndSec, maxEndSec)
-                    
-                        durSecs.append(maxEndSec)
-                        let frameCount = sheet.animation.count(fromSec: maxEndSec,
-                                                               frameRate: frameRate)
                         
-                        movie.writeMovie(frameCount: frameCount,
-                                         duration: maxEndSec,
-                                         frameRate: frameRate) { (sec) -> (Image?) in
-                            //tempo -> startTime
-                            let node: CPUNode
-                            if !bottomSheets.isEmpty || !topSheets.isEmpty {
-                                var children = [CPUNode](), captions = [Caption]()
-                                for (bottomSheet, sheetBounds) in bottomSheets.reversed() {
-                                    captions += bottomSheet.captions(atSec: sec)
-                                    guard bottomSheet.enabledAnimation else { continue }
-                                    children.append(bottomSheet.node(isBorder: false, atSec: sec,
-                                                                     enabledCaption: false,
-                                                                     isBackground: false,
-                                                                     in: sheetBounds))
-                                }
-                                captions += sheet.captions(atSec: sec)
-                                children.append(sheet.node(isBorder: false, atSec: sec,
-                                                           enabledCaption: false,
-                                                           isBackground: false,
-                                                           in: sheetBounds))
-                                for (topSheet, sheetBounds) in topSheets {
-                                    captions += topSheet.captions(atSec: sec)
-                                    guard topSheet.enabledAnimation else { continue }
-                                    children.append(topSheet.node(isBorder: false, atSec: sec,
-                                                                  enabledCaption: false,
-                                                                  isBackground: false,
-                                                                  in: sheetBounds))
-                                }
-                                let captionNodes = Caption.cpuNodes(in: b, from: captions)
-                                node = CPUNode(children: children + [.init(children: captionNodes)], attitude: .init(position: origin),
-                                               path: Path(sheetBounds))
-                            } else {
-                                node = sheet.node(isBorder: false, atSec: sec,
-                                                  enabledCaption: true,
-                                                  renderingCaptionFrame: b,
-                                                  attitude: .init(position: origin),
-                                                  in: sheetBounds)
-                            }
-                           
-                            return node.renderedAntialiasFillImage(in: b, to: size, colorSpace)
-                        } progressHandler: { (d, stop) in
-                            t = ot + d / Double(renderings.count)
-                            progressHandler(t * 0.7, &isStop)
-                            if isStop {
-                                stop = true
+                        for item in rendering.topItems {
+                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                            captions += sheet.captions
+                            if sheet.enabledAnimation {
+                                sheets.append((sheet, item.frame.bounds))
+                                maxEndSec = max(sheet.allEndSec, maxEndSec)
                             }
                         }
+                        
+                        let origin = rendering.mainItem.frame.origin
+                        let b = isMainFrame ? sheet.mainFrame : rendering.bounds
+                        tracks.append(.init(captions: captions, sheets: sheets,
+                                            secRange: allDurSec ..< (allDurSec + maxEndSec),
+                                            sheetOrigin: origin, sheetBounds: sheetBounds,
+                                            renderBounds: b))
                     } else {
-                        let ot = t
-                        let node = CPUNode(path: Path(rendering.bounds), fillType: .color(.background))
-                        let duration = Animation.sec(fromBeat: Keyframe.defaultDurBeat,
-                                                    tempo: Music.defaultTempo)
-                        if let image = node.image(in: rendering.bounds, size: size,
-                                                  backgroundColor: .background, colorSpace) {
-                            let frameCount = Animation.count(fromBeat: Keyframe.defaultDurBeat,
-                                                         tempo: Music.defaultTempo,
-                                                         frameRate: 24)
-                            movie.writeMovie(frameCount: frameCount,
-                                             duration: duration,
-                                             frameRate: 24) { (time) -> (Image?) in
-                                image
-                            } progressHandler: { (d, stop) in
-                                t = ot + d / Double(renderings.count)
-                                progressHandler(t * 0.7, &isStop)
-                                if isStop {
-                                    stop = true
-                                }
-                            }
+                        maxEndSec = Animation.sec(fromBeat: Keyframe.defaultDurBeat,
+                                                  tempo: Music.defaultTempo)
+                        
+                        let origin = rendering.mainItem.frame.origin
+                        tracks.append(.init(captions: [], sheets: [(.init(), rendering.bounds)],
+                                            secRange: allDurSec ..< (allDurSec + maxEndSec),
+                                            sheetOrigin: origin,
+                                            sheetBounds: rendering.bounds,
+                                            renderBounds: rendering.bounds))
+                    }
+                    durSecs.append(maxEndSec)
+                    allDurSec += maxEndSec
+                    
+                    progressHandler(.init(i) / .init(renderings.count) * 0.3, &isStop)
+                    if isStop { break }
+                }
+                
+                let frameRate = Sheet.frameRate(from: tracks.flatMap { $0.sheets.map { $0.sheet }})
+                let movie = try Movie(url: ioResult.url, renderSize: size,
+                                      isAlphaChannel: isAlphaChannel,
+                                      isLinearPCM: is4K, colorSpace, frameRate: frameRate)
+                let frameCount = Int(allDurSec * Rational(frameRate).rounded(.up))
+                var oldImage: Image?, oldCaptionNodes = [CPUNode](), oldCaptions = [Caption]()
+                var oldTrackI: Int?, oldSheetNodes = [(oki: Int?, oldNode: CPUNode?)]()
+                for i in frameCount.range {
+                    let allSec = Rational(i, frameRate)
+                    
+                    let trackI = tracks.firstIndex { $0.secRange.contains(allSec) } ?? tracks.count - 1
+                    if trackI != oldTrackI {
+                        oldTrackI = trackI
+                        
+                        oldCaptionNodes = []
+                        oldCaptions = []
+                        oldImage = nil
+                        oldSheetNodes = tracks[trackI].sheets.map { _ in (nil, nil) }
+                    }
+                    let track = tracks[trackI]
+                    let sec = allSec - track.secRange.start
+                    
+                    var isChanged = false
+                    
+                    var children = [CPUNode]()
+                    for si in track.sheets.count.range {
+                        let (sheet, sheetBounds) = track.sheets[si]
+                        let (oki, oldNode) = oldSheetNodes[si]
+                        let ki = sheet.animation.indexInBeatRange(atSec: sec)
+                        if oki != ki {
+                            let node = sheet.node(isBorder: false, atSec: sec,
+                                                  enabledCaption: false,
+                                                  isBackground: false,
+                                                  in: sheetBounds)
+                            children.append(node)
+                            oldSheetNodes[si] = (ki, node)
+                            isChanged = true
+                        } else if let oldNode {
+                            children.append(oldNode)
                         }
-                        durSecs.append(duration)
                     }
                     
-                    if isStop { break }
+                    let captions = Caption.captions(atSec: sec, in: track.captions)
+                    let captionNodes: [CPUNode]
+                    if captions != oldCaptions {
+                        captionNodes = Caption.cpuNodes(in: track.renderBounds, from: captions)
+                        oldCaptionNodes = captionNodes
+                        oldCaptions = captions
+                        isChanged = true
+                    } else {
+                        captionNodes = oldCaptionNodes
+                    }
+                    
+                    let image: Image?
+                    if isChanged {
+                        let node = CPUNode(children: children + [.init(children: captionNodes)], attitude: .init(position: track.sheetOrigin),
+                                           path: Path(track.sheetBounds))
+                        image = node.renderedAntialiasFillImage(in: track.renderBounds,
+                                                                to: size, colorSpace)
+                        oldImage = image
+                    } else {
+                        image = oldImage
+                    }
+                    
+                    guard let image else { throw Movie.exportError }
+                    let isAppend = movie.write(image) { (stop) in
+                        progressHandler(.init(i) / .init(frameCount) * 0.4 + 0.3, &isStop)
+                        if isStop {
+                            stop = true
+                        }
+                    }
+                    if isStop || !isAppend { break }
                 }
                 
                 var audiotracks = [Audiotrack]()
@@ -1347,8 +1394,8 @@ final class IOAction: Action {
                 }
                 
                 do {
-                    let stop = try await movie.finish()
-                    handler(stop, nil)
+                    let isStop = try await movie.finish()
+                    handler(isStop, nil)
                 } catch {
                     handler(true, error)
                 }
@@ -1475,6 +1522,120 @@ final class IOAction: Action {
                         self.end()
                     }
                 })
+            }
+            progressPanel.cancelHandler = { task.cancel() }
+        } catch {
+            rootView.node.show(error)
+            progressPanel.closePanel()
+            end()
+        }
+    }
+    
+    func exportCaption(from renderings: [Rendering], at ioResult: IOResult) {
+        @Sendable func export(progressHandler: (Double, inout Bool) -> ()) async throws -> Bool {
+            var isStop = false,
+                sheets = [Sheet](), currentSec: Rational = 0, captions = [Caption]()
+            for (ri, rendering) in renderings.enumerated() {
+                if let sheet = rendering.mainItem.decodedSheet() {
+                    var maxEndSec: Rational = 0
+                    for item in rendering.bottomItems {
+                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        maxEndSec = max(sheet.allEndSec, maxEndSec)
+                        captions += sheet.captions.map { $0.move(sec: currentSec) }
+                        sheets.append(sheet)
+                    }
+                    for item in rendering.topItems {
+                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        maxEndSec = max(sheet.allEndSec, maxEndSec)
+                        captions += sheet.captions.map { $0.move(sec: currentSec) }
+                        sheets.append(sheet)
+                    }
+                    
+                    maxEndSec = max(sheet.allEndSec, maxEndSec)
+                    captions += sheet.captions.map { $0.move(sec: currentSec) }
+                    sheets.append(sheet)
+                    
+                    currentSec += maxEndSec
+                } else {
+                    let maxEndSec = Animation.sec(fromBeat: Keyframe.defaultDurBeat,
+                                                  tempo: Music.defaultTempo)
+                    currentSec += maxEndSec
+                }
+                
+                let t = Double(ri) / Double(renderings.count)
+                progressHandler(t * 0.7, &isStop)
+                if isStop {
+                    return true
+                }
+            }
+            
+            captions.sort { $0.secRange.start < $1.secRange.start }
+            var nCaptions = [Caption]()
+            if !captions.isEmpty {
+                var preCaption = captions[0]
+                for i in 1 ..< captions.count {
+                    let caption = captions[i]
+                    if preCaption.secRange.end == caption.secRange.start
+                        && preCaption.string == caption.string {
+                        
+                        preCaption.secRange.end = caption.secRange.end
+                    } else {
+                        nCaptions.append(preCaption)
+                        preCaption = caption
+                    }
+                }
+                nCaptions.append(preCaption)
+            }
+            
+            let frameRate = Sheet.standardFrameRate(from: sheets)
+            let renderer = try CaptionRenderer(url: ioResult.url, frameRate: frameRate)
+            renderer.write(captions: nCaptions, duration: currentSec,
+                           progressHandler: { (t, stop) in
+                progressHandler(t * 0.3 + 0.7, &isStop)
+                if isStop {
+                    stop = true
+                }
+            })
+            try await renderer.finish()
+            return isStop
+        }
+        
+        let progressPanel = ProgressPanel(message: "Exporting Caption".localized)
+        rootView.node.show(progressPanel)
+        do {
+            try ioResult.remove()
+            
+            let task = Task.detached(priority: .high) {
+                do {
+                    let isStop = try await export(progressHandler: { (progress, isStop) in
+                        if Task.isCancelled {
+                            isStop = true
+                            return
+                        }
+                        Task { @MainActor in
+                            progressPanel.progress = progress
+                        }
+                    })
+                    Task { @MainActor in
+                        if !isStop {
+                            do {
+                                try ioResult.setAttributes()
+                            } catch {
+                                self.rootView.node.show(error)
+                            }
+                        }
+                        
+                        progressPanel.closePanel()
+                        self.end()
+                    }
+                } catch {
+                    Task { @MainActor in
+                        self.rootView.node.show(error)
+                        
+                        progressPanel.closePanel()
+                        self.end()
+                    }
+                }
             }
             progressPanel.cancelHandler = { task.cancel() }
         } catch {

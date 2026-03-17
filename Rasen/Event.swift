@@ -364,15 +364,10 @@ extension Quasimode {
     
     static let selectFrame = Self(.swipe)
     static let keySelectFrame = Self(modifier: [.control, .command], .drag)
+    static let goPrevious = Self(modifier: [.control], .z)
+    static let goNext = Self(modifier: [.control], .x)
     static let play = Self(.fourFingersTap)
-    
-    static let goPrevious = Self(modifier: [.control], .z)//
-    static let goNext = Self(modifier: [.control], .x)//
-    static let goPreviousFrame = Self(modifier: [.control, .option], .z)//
-    static let goNextFrame = Self(modifier: [.control, .option], .x)//
-    static let controlCopy = Self(modifier: [.control], .c)//
-    static let controlInterpolate = Self(modifier: [.control], .s)//
-    static let controlPlay = Self(modifier: [.control], .a)//
+    static let keyPlay = Self(modifier: [.control], .a)
     
     static let zoom = Self(.pinch)
     static let keyZoom = Self(modifier: [.control, .option, .command], .drag)
@@ -398,7 +393,7 @@ extension Quasimode {
     static let redo = Self(modifier: [.shift, .command], .z)
     
     static let cut = Self(modifier: [.command], .x)
-    static let cutLinePoint = Self(modifier: [.option, .command], .x)
+    static let cutLinePoint = Self(modifier: [.shift, .command], .x)
     static let copy = Self(modifier: [.command], .c)
     static let copyLineColor = Self(modifier: [.option, .command], .c)
     static let paste = Self(modifier: [.command], .v)
@@ -414,10 +409,10 @@ extension Quasimode {
     static let changeToVerticalText = Self(modifier: [.command], .l)
     static let changeToHorizontalText = Self(modifier: [.shift, .command], .l)
     
-    static let insertKeyframe = Self(modifier: [.command], .e)
+    static let insertControlPoint = Self(modifier: [.command], .e)
     static let addScore = Self(modifier: [.shift, .command], .e)
     
-    static let justFit = Self(modifier: [.command], .no3)
+    static let justFit = Self(modifier: [.command], .j)
     
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
@@ -554,7 +549,7 @@ extension ActionList {
         [.init(name: "Change to Vertical Text".localized, .changeToVerticalText),
          .init(name: "Change to Horizontal Text".localized, .changeToHorizontalText)],
         
-        [.init(name: "Insert Keyframe".localized, .insertKeyframe),
+        [.init(name: "Insert Control Point".localized, .insertControlPoint),
          .init(name: "Add Score".localized, .addScore)],
         
         [.init(name: "Interpolate".localized, .interpolate),

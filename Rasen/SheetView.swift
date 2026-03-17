@@ -522,13 +522,13 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             updateTimeline()
         }
     }
-    func moveNextInterKeyframe() {
-        binder[keyPath: keyPath].moveNextInterKeyframe()
+    func goNext() {
+        binder[keyPath: keyPath].goNext()
         updateWithKeyframeIndex()
         updateTimeline()
     }
-    func movePreviousInterKeyframe() {
-        binder[keyPath: keyPath].movePreviousInterKeyframe()
+    func goPrevious() {
+        binder[keyPath: keyPath].goPrevious()
         updateWithKeyframeIndex()
         updateTimeline()
     }
@@ -1830,29 +1830,17 @@ final class SheetView: BindableView, @unchecked Sendable {
         set { animationView.selectedFrameIndexes = newValue }
     }
     
-    func moveNextKeyframe() {
+    func goNext() {
         if isPlaying {
             stop()
         }
-        rootKeyframeIndex += 1
+        animationView.goNext()
     }
-    func movePreviousKeyframe() {
+    func goPrevious() {
         if isPlaying {
             stop()
         }
-        rootKeyframeIndex -= 1
-    }
-    func moveNextInterKeyframe() {
-        if isPlaying {
-            stop()
-        }
-        animationView.moveNextInterKeyframe()
-    }
-    func movePreviousInterKeyframe() {
-        if isPlaying {
-            stop()
-        }
-        animationView.movePreviousInterKeyframe()
+        animationView.goPrevious()
     }
     func goNextFrame() {
         if isPlaying {
@@ -1999,7 +1987,6 @@ final class SheetView: BindableView, @unchecked Sendable {
             var deltaSec: Rational = 0
             
             let sampleRate = Audio.defaultSampleRate
-            var minFrameRate = model.mainFrameRate
             
             for weakElement in previousSheetViews {
                 guard let sheetView = weakElement.element else { continue }
@@ -2007,8 +1994,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                 sheetView.mainDurSec = seqTrack.durSec
                 seqTracks.append(seqTrack)
                 deltaSec += seqTrack.durSec
-                
-                minFrameRate = min(minFrameRate, sheetView.model.mainFrameRate)
             }
             firstDeltaSec = deltaSec
             
@@ -2028,8 +2013,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                 let seqTrack = sheetView.seqTrack(sampleRate: sampleRate)
                 sheetView.mainDurSec = seqTrack.durSec
                 seqTracks.append(seqTrack)
-                
-                minFrameRate = min(minFrameRate, sheetView.model.mainFrameRate)
             }
             
             if !playingOtherTimelineIDs.isEmpty {
@@ -7011,9 +6994,17 @@ final class SheetView: BindableView, @unchecked Sendable {
         
         if isEnablePlane {
             let planesView = isDraft ? self.draftPlanesView : self.planesView
-            let indexValues = planesView.elementViews.enumerated().compactMap {
-                nPath.contains($0.element.node.path) ?
-                    IndexValue(value: $0.element.model, index: $0.offset) : nil
+            let indexValues = planesView.elementViews.enumerated().compactMap { (pi, planeView) in
+                if selections.isEmpty {
+                    nPath.contains(planeView.node.path) ?
+                        IndexValue(value: planeView.model, index: pi) : nil
+                } else if selections.contains(where: { selection in
+                    planeView.model.path.intersects(convertFromWorld(selection.rect))
+                }) {
+                    IndexValue(value: planeView.model, index: pi)
+                } else {
+                    nil
+                }
             }
             if !indexValues.isEmpty {
                 if isRemove {

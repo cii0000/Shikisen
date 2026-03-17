@@ -63,7 +63,7 @@ final class GoPreviousAction: InputKeyEventAction {
                 }
                 
                 if contentIndex == nil {
-                    move(from: sheetView, at: p)
+                    goPrevious(from: sheetView, at: p)
                     rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
                     sheetView.setupTimeNodes(isVolume: false)
                     sheetView.updateTimeNodesWithMainSec()
@@ -82,7 +82,7 @@ final class GoPreviousAction: InputKeyEventAction {
                     
                     rootView.cursor = .circle(string: contentView.currentTimeString(isInter: true))
                 } else {
-                    move(from: sheetView, at: p)
+                    goPrevious(from: sheetView, at: p)
                     sheetView.updateTimeNodesWithMainSec()
                     sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
                     
@@ -99,8 +99,8 @@ final class GoPreviousAction: InputKeyEventAction {
         }
     }
     
-    func move(from sheetView: SheetView?, at sp: Point) {
-        sheetView?.movePreviousInterKeyframe()
+    func goPrevious(from sheetView: SheetView?, at sp: Point) {
+        sheetView?.goPrevious()
         rootAction.updateActionNode()
         rootView.updateSelects()
     }
@@ -151,7 +151,7 @@ final class GoNextAction: InputKeyEventAction {
                 }
                 
                 if contentIndex == nil {
-                    move(from: sheetView, at: p)
+                    goNext(from: sheetView, at: p)
                     rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
                     sheetView.setupTimeNodes(isVolume: false)
                     sheetView.updateTimeNodesWithMainSec()
@@ -170,7 +170,7 @@ final class GoNextAction: InputKeyEventAction {
                     
                     rootView.cursor = .circle(string: contentView.currentTimeString(isInter: true))
                 } else {
-                    move(from: sheetView, at: p)
+                    goNext(from: sheetView, at: p)
                     sheetView.updateTimeNodesWithMainSec()
                     sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
                     
@@ -187,183 +187,8 @@ final class GoNextAction: InputKeyEventAction {
         }
     }
     
-    func move(from sheetView: SheetView?, at sp: Point) {
-        sheetView?.moveNextInterKeyframe()
-        rootAction.updateActionNode()
-        rootView.updateSelects()
-    }
-}
-
-final class GoPreviousFrameAction: InputKeyEventAction {
-    let rootAction: RootAction, rootView: RootView
-    let isEditingSheet: Bool
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-        isEditingSheet = rootView.isEditingSheet
-    }
-    
-    private var sheetView: SheetView?, contentIndex: Int?
-    private var contentView: SheetContentView? {
-        guard let sheetView, let contentIndex,
-              contentIndex < sheetView.contentsView.elementViews.count else { return nil }
-        return sheetView.contentsView.elementViews[contentIndex]
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        guard isEditingSheet else {
-            rootAction.keepOut(with: event)
-            return
-        }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
-        
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
-        switch event.phase {
-        case .began:
-            rootAction.rootView.closeLookingUp()
-            
-            sheetView = rootView.sheetView(at: p)
-            
-            if let sheetView {
-                if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
-                                                             scale: rootView.screenToWorldScale),
-                   sheetView.contentsView.elementViews[contentIndex].model.type == .movie {
-                    self.contentIndex = contentIndex
-                    contentView?.movePreviousKeyframe()
-                }
-                
-                if contentIndex == nil {
-                    move(from: sheetView, at: p)
-                    rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
-                    sheetView.setupTimeNodes(isVolume: false)
-                    sheetView.updateTimeNodesWithMainSec()
-                    sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
-                }
-            }
-            
-            rootView.cursor = rootView.cursor(from: contentView?.currentTimeString(isInter: false)
-                                              ?? sheetView?.currentKeyframeString()
-                                              ?? Animation.timeString(fromTime: 0, frameRate: 0))
-        case .changed:
-            if event.isRepeat, let sheetView {
-                if let contentView {
-                    contentView.movePreviousKeyframe()
-                    sheetView.updateTimeNodesWithMainSec()
-                    
-                    rootView.cursor = .circle(string: contentView.currentTimeString(isInter: false))
-                } else {
-                    move(from: sheetView, at: p)
-                    sheetView.updateTimeNodesWithMainSec()
-                    sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
-                    
-                    rootView.cursor = rootView.cursor(from: sheetView.currentKeyframeString())
-                }
-            }
-        case .ended:
-            if let sheetView {
-                sheetView.endTimeNodes()
-                sheetView.animationView.shownInterTypeKeyframeIndex = nil
-            }
-            
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-    
-    func move(from sheetView: SheetView?, at sp: Point) {
-        sheetView?.movePreviousKeyframe()
-        rootAction.updateActionNode()
-        rootView.updateSelects()
-    }
-}
-
-final class GoNextFrameAction: InputKeyEventAction {
-    let rootAction: RootAction, rootView: RootView
-    let isEditingSheet: Bool
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-        isEditingSheet = rootView.isEditingSheet
-    }
-    
-    private var sheetView: SheetView?, contentIndex: Int?
-    private var contentView: SheetContentView? {
-        guard let sheetView, let contentIndex,
-              contentIndex < sheetView.contentsView.elementViews.count else { return nil }
-        return sheetView.contentsView.elementViews[contentIndex]
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        guard isEditingSheet else {
-            rootAction.keepOut(with: event)
-            return
-        }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
-        
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-        ?? event.screenPoint
-        
-        let p = rootView.convertScreenToWorld(sp)
-        switch event.phase {
-        case .began:
-            rootAction.rootView.closeLookingUp()
-            
-            sheetView = rootView.sheetView(at: p)
-            
-            if let sheetView {
-                if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
-                                                             scale: rootView.screenToWorldScale),
-                   sheetView.contentsView.elementViews[contentIndex].model.type == .movie {
-                    self.contentIndex = contentIndex
-                    contentView?.moveNextKeyframe()
-                }
-                
-                if contentIndex == nil {
-                    move(from: sheetView, at: p)
-                    rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
-                    sheetView.setupTimeNodes(isVolume: false)
-                    sheetView.updateTimeNodesWithMainSec()
-                    sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
-                }
-            }
-            
-            rootView.cursor = rootView.cursor(from: contentView?.currentTimeString(isInter: false)
-                                              ?? sheetView?.currentKeyframeString()
-                                              ?? Animation.timeString(fromTime: 0, frameRate: 0))
-        case .changed:
-            if event.isRepeat, let sheetView {
-                if let contentView {
-                    contentView.moveNextKeyframe()
-                    sheetView.updateTimeNodesWithMainSec()
-                    
-                    rootView.cursor = .circle(string: contentView.currentTimeString(isInter: false))
-                } else {
-                    move(from: sheetView, at: p)
-                    sheetView.updateTimeNodesWithMainSec()
-                    sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
-                    
-                    rootView.cursor = rootView.cursor(from: sheetView.currentKeyframeString())
-                }
-            }
-        case .ended:
-            if let sheetView {
-                sheetView.endTimeNodes()
-                sheetView.animationView.shownInterTypeKeyframeIndex = nil
-            }
-            
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-    
-    func move(from sheetView: SheetView?, at sp: Point) {
-        sheetView?.moveNextKeyframe()
+    func goNext(from sheetView: SheetView?, at sp: Point) {
+        sheetView?.goNext()
         rootAction.updateActionNode()
         rootView.updateSelects()
     }
@@ -530,156 +355,39 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                             }
                         }
                         
+                        if sheetView.isPlaying {
+                            sheetView.stop()
+                        }
+                        
                         let oldKI = animationView.model.index
+                        let oldRB = animationView.rootBeat
+                        let oldRKI = animationView.rootKeyframeIndex
                         var isChangedRootI = false
                         switch type {
                         case .keyframe:
-                            let bws = animation.keyframes.count.range.reduce(into: [Rational: Double]()) {
-                                $0[animation.keyframes[$1].beat] =
-                                (animation.keyframes[$1].isKey ? 0.25 : 0.125) * 50
-                            }
-                            let beatAndWidths = bws.sorted(by: { $0.key < $1.key })
-                            if !beatAndWidths.isEmpty {
-                                let localbeat = animation.localBeat(atRootBeat: beganRootBeat)
-                                var bwI = 0
-                                for (i, v) in beatAndWidths.enumerated().reversed() {
-                                    if localbeat >= v.key {
-                                        bwI = i
-                                        break
-                                    }
-                                }
-                                var nRootBeat = animation.rootLoopIndexBeat(atRootLoop: animation.rootLoopIndex(atRootBeat: beganRootBeat))
-                                + beatAndWidths[bwI].key
-                                var x = -beatAndWidths[bwI].value / 2
-                                
-                                while true {
-                                    x += beatAndWidths[bwI].value
-                                    guard abs(x) < abs(allDX) else { break }
-                                    
-                                    let dBeat = if allDX < 0 {
-                                        if bwI - 1 >= 0 {
-                                            -(beatAndWidths[bwI].key - beatAndWidths[bwI - 1].key)
-                                        } else {
-                                            -(beatAndWidths[bwI].key
-                                            + animation.beatRange.length - beatAndWidths[.last].key)
-                                        }
-                                    } else {
-                                        if bwI + 1 < beatAndWidths.count {
-                                            beatAndWidths[bwI + 1].key - beatAndWidths[bwI].key
-                                        } else {
-                                            animation.beatRange.length - beatAndWidths[bwI].key
-                                            + beatAndWidths[0].key
-                                        }
-                                    }
-                                    nRootBeat = Rational.saftyAdd(nRootBeat, dBeat)
-                                    
-                                    bwI = (allDX < 0 ? bwI - 1 : bwI + 1)
-                                        .loop(start: 0, end: beatAndWidths.count)
-                                }
-                                
-                                let oldRKI = animationView.rootKeyframeIndex
-                                if sheetView.isPlaying {
-                                    sheetView.stop()
-                                }
-                                sheetView.rootBeat = nRootBeat
-                                sheetView.updateTimeNodesWithMainSec()
-                                if oldRKI != sheetView.rootKeyframeIndex {
-                                    isChangedRootI = true
-                                }
-                                
-                                updateFromVertical()
-                            }
+                            sheetView.rootBeat = animation.rootBeat(dx: allDX,
+                                                                    fromRoot: beganRootBeat,
+                                                                    keyD: 12.5,
+                                                                    otherD: 0)
                         case .frame:
-                            var bws = animation.keyframes.count.range.reduce(into: [Rational: Double]()) {
-                                $0[animation.keyframes[$1].beat] =
-                                (animation.keyframes[$1].isKey ? 0.25 : 0.125) * 70
-                            }
-                            
-                            if let beatRange = animationView.beatRange {
-                                let roundedSBeat = beatRange.start.rounded(.down)
-                                let deltaBeat: Rational = 1
-                                var cBeat = roundedSBeat
-                                while cBeat < beatRange.end {
-                                    if cBeat >= beatRange.start {
-                                        if bws[cBeat - beatRange.start] == nil {
-                                            bws[cBeat - beatRange.start] = 0.125 * 70
-                                        }
-                                    }
-                                    cBeat += deltaBeat
-                                }
-                            }
-                            let beatAndWidths = bws.sorted(by: { $0.key < $1.key })
-                            if !beatAndWidths.isEmpty {
-                                let localbeat = animation.localBeat(atRootBeat: beganRootBeat)
-                                var bwI = 0
-                                for (i, v) in beatAndWidths.enumerated().reversed() {
-                                    if localbeat >= v.key {
-                                        bwI = i
-                                        break
-                                    }
-                                }
-                                var nRootBeat = animation.rootLoopIndexBeat(atRootLoop: animation.rootLoopIndex(atRootBeat: beganRootBeat))
-                                + beatAndWidths[bwI].key
-                                var x = beatAndWidths[bwI].value / 2
-                                
-                                while true {
-                                    x += beatAndWidths[bwI].value
-                                    guard abs(x) < abs(allDX) else { break }
-                                    
-                                    let dBeat = if allDX < 0 {
-                                        if bwI - 1 >= 0 {
-                                            -(beatAndWidths[bwI].key - beatAndWidths[bwI - 1].key)
-                                        } else {
-                                            -(beatAndWidths[bwI].key
-                                            + animation.beatRange.length - beatAndWidths[.last].key)
-                                        }
-                                    } else {
-                                        if bwI + 1 < beatAndWidths.count {
-                                            beatAndWidths[bwI + 1].key - beatAndWidths[bwI].key
-                                        } else {
-                                            animation.beatRange.length - beatAndWidths[bwI].key
-                                            + beatAndWidths[0].key
-                                        }
-                                    }
-                                    nRootBeat = Rational.saftyAdd(nRootBeat, dBeat)
-                                    
-                                    bwI = (allDX < 0 ? bwI - 1 : bwI + 1)
-                                        .loop(start: 0, end: beatAndWidths.count)
-                                }
-                                
-                                let oldRKI = animationView.rootKeyframeIndex
-                                if sheetView.isPlaying {
-                                    sheetView.stop()
-                                }
-                                sheetView.rootBeat = nRootBeat
-                                sheetView.updateTimeNodesWithMainSec()
-                                if oldRKI != sheetView.rootKeyframeIndex {
-                                    isChangedRootI = true
-                                }
-                                
-                                updateFromVertical()
-                            }
+                            sheetView.rootBeat = animation.rootBeat(dx: allDX,
+                                                                    fromRoot: beganRootBeat)
                         case .time:
                             let deltaI = Int((allDX / animationIndexInterval).rounded())
                             if deltaI != oldDeltaI {
                                 oldDeltaI = deltaI
                                 
                                 let frameBeat = EditGrid.fullEditBeatInterval
-                                let nRootBeat = (beganRootBeat + .init(deltaI) * frameBeat)
+                                sheetView.rootBeat = (beganRootBeat + .init(deltaI) * frameBeat)
                                     .interval(scale: frameBeat)
-                                
-                                let oldRKI = animationView.rootKeyframeIndex
-                                if sheetView.isPlaying {
-                                    sheetView.stop()
-                                }
-                                sheetView.rootBeat = nRootBeat
-                                sheetView.updateTimeNodesWithMainSec()
-                                if oldRKI != sheetView.rootKeyframeIndex {
-                                    isChangedRootI = true
-                                }
-                                
-                                updateFromVertical()
                             }
+                        }
+                        sheetView.updateTimeNodesWithMainSec()
+                        if oldRKI != sheetView.rootKeyframeIndex {
+                            isChangedRootI = true
+                        }
+                        if oldRB != sheetView.rootBeat {
+                            updateFromVertical()
                         }
                         
                         if isChangedRootI {
@@ -834,7 +542,7 @@ final class PlayAction: InputKeyEventAction {
     }
 }
 
-final class InsertKeyframeAction: InputKeyEventAction {
+final class InsertControlPointAction: InputKeyEventAction {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
