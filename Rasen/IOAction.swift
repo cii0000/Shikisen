@@ -1234,7 +1234,7 @@ final class IOAction: Action {
                         var captions = sheet.captions
                         
                         var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
-                        for item in rendering.bottomItems.reversed() {
+                        for item in rendering.bottomItems {
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                             captions += sheet.captions
                             if sheet.enabledAnimation {
@@ -1242,6 +1242,7 @@ final class IOAction: Action {
                                 maxEndSec = max(sheet.allEndSec, maxEndSec)
                             }
                         }
+                        sheets.reverse()
                         
                         let sheetBounds = rendering.mainItem.frame.bounds
                         sheets.append((sheet, sheetBounds))
@@ -1276,7 +1277,7 @@ final class IOAction: Action {
                     durSecs.append(maxEndSec)
                     allDurSec += maxEndSec
                     
-                    progressHandler(.init(i) / .init(renderings.count) * 0.3, &isStop)
+                    progressHandler(.init(i) / .init(renderings.count) * 0.1, &isStop)
                     if isStop { break }
                 }
                 
@@ -1346,7 +1347,7 @@ final class IOAction: Action {
                     
                     guard let image else { throw Movie.exportError }
                     let isAppend = movie.write(image) { (stop) in
-                        progressHandler(.init(i) / .init(frameCount) * 0.4 + 0.3, &isStop)
+                        progressHandler(.init(i) / .init(frameCount) * 0.6 + 0.1, &isStop)
                         if isStop {
                             stop = true
                         }

@@ -2376,7 +2376,42 @@ extension Sheet {
     }
     static func standardFrameRate(from sheets: [Sheet]) -> Int {
         let frameRate = frameRate(from: sheets)
-        return [24, 25, 30, 50, 60].first(where: { $0 % frameRate == 0 }) ?? 60
+        return [24, 25, 30, 48, 50, 60].first(where: { $0 % frameRate == 0 }) ?? 60
+    }
+    
+    static func temposFromStandardFrameRate() -> [Rational] {
+        func tempo(fps: Int, k: Int) -> Rational {
+            Rational(60 * fps, k)
+        }
+        return Set((1 ... 48).map { tempo(fps: 24, k: $0) }
+                   + (1 ... 50).map { tempo(fps: 25, k: $0) }
+                   + (1 ... 60).map { tempo(fps: 30, k: $0) }
+                   + (1 ... 96).map { tempo(fps: 48, k: $0) }
+                   + (1 ... 100).map { tempo(fps: 50, k: $0) }
+                   + (1 ... 120).map { tempo(fps: 60, k: $0) }).sorted()
+    }
+    static func tempoNameFromStandardFrameRate(withTempo tempo: Rational) -> String {
+        func fpb(fps: Int) -> Int? {
+            let v = Rational(60 * fps) / tempo
+            return v.isInteger ? v.integralPart : nil
+        }
+        var fpbName = ""
+        func append(fps: Int) {
+            if let fpb = fpb(fps: fps) {
+                if !fpbName.isEmpty {
+                    fpbName += " / "
+                }
+                fpbName += "\(fpb) fpb, \(fps)fps"
+            }
+        }
+        append(fps: 24)
+        append(fps: 25)
+        append(fps: 30)
+        append(fps: 48)
+        append(fps: 50)
+        append(fps: 60)
+        return Double(tempo).string(digitsCount: 2) + " bpm"
+        + (fpbName.isEmpty ? "" : " (\(fpbName))")
     }
     
     var mainLineUUColor: UUColor? {

@@ -555,7 +555,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let sBeat = max(beatRange.start, -10000)
         let sx = x(atBeat: sBeat)
         let ey = Sheet.timelineHalfHeight
-        let pnW = 20.0, pnnH = 12.0, spnW = 3.0, pnY = ey + 12
+        let pnW = 14.0, pnnH = 12.0, spnW = 3.0, pnY = ey + 12
         return Rect(x: sx, y: pnY - pnnH / 2, width: pnW * 6 + spnW, height: pnnH)
     }
     var paddingPreviousNextFrame: Rect {
@@ -573,7 +573,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let beatRange = model.beatRange
         let sBeat = max(beatRange.start, -10000)
         let sx = x(atBeat: sBeat)
-        let pnW = 20.0
+        let pnW = 14.0
         return if p.x < sx + pnW * 0.5 {
             .none
         } else if p.x < sx + pnW * 1.5 {
@@ -805,7 +805,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                                width: lw, height: rulerH)))
         }
         
-        let pnW = 20.0, pnH = 6.0, spnW = 3.0, spnH = 3.0, pnnH = Sheet.knobHeight,
+        let pnW = 14.0, pnH = 6.0, spnW = 2.5, spnH = 3.0, pnnH = Sheet.knobHeight,
             pnY = ey + Sheet.timelineMargin / 2
         contentPathlines.append(.init(Rect(x: sx,
                                            y: pnY - lw / 2,
@@ -1304,7 +1304,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             let beatRange = model.beatRange
             let sBeat = max(beatRange.start, -10000)
             let sx = x(atBeat: sBeat)
-            let pnW = 20.0
+            let pnW = 14.0
             if p.x >= sx + pnW * 4.5 {
                 minResult = p.x < sx + pnW * 5.5 ? .previousPosition : .nextPosition
             } else {
@@ -1717,29 +1717,6 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         return nil
-    }
-    
-    func tempoString(from animationView: AnimationView) -> String {
-        Self.tempoString(fromTempo: animationView.model.tempo)
-    }
-    func tempoNode(from animationView: AnimationView) -> Node {
-        Self.tempoNode(fromTempo: animationView.model.tempo)
-    }
-    static func tempoString(fromTempo tempo: Rational) -> String {
-        Double(tempo).string(digitsCount: 2) + " bpm"
-    }
-    static func tempoNode(fromTempo tempo: Rational) -> Node {
-        let u = tempoString(fromTempo: tempo)
-        let text = Text(string: u, size: Font.defaultSize)
-        let b = text.frame ?? Rect()
-        let tp = Point(-b.width / 2, -b.height - 7)
-        let path = Text(string: u, size: Font.defaultSize).typesetter.path()
-        return Node(children: [Node(attitude: Attitude(position: tp),
-                                    path: path,
-                                    lineWidth: 2, lineType: .color(.background)),
-                               Node(attitude: Attitude(position: tp),
-                                    path: path,
-                                    fillType: .color(.content))])
     }
     
     func containsOtherTimeline(_ p: Point, scale: Double) -> Bool {

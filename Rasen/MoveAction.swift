@@ -2061,7 +2061,7 @@ final class MoveTempoAction: DragEventAction {
         isEditingSheet = rootView.isEditingSheet
     }
     
-    private let editableTempoInterval = 10.0
+    private let editableTempoInterval = 20.0
     
     private var node = Node()
     private var sheetView: SheetView?
@@ -2070,6 +2070,7 @@ final class MoveTempoAction: DragEventAction {
     private var beganAnimationOption: AnimationOption?, beganScoreOption: ScoreOption?,
                 beganContents = [Int: Content](),
                 beganTexts = [Int: Text]()
+    private var tempos = [Rational](), beganTempoI = 0
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -2114,14 +2115,23 @@ final class MoveTempoAction: DragEventAction {
                         beganScoreOption = sheetView.model.score.option
                     }
                     
-                    rootView.cursor = .arrowWith(string: SheetView.tempoString(fromTempo: beganTempo))
+                    tempos = Sheet.temposFromStandardFrameRate()
+                    var ni: Int?
+                    for (i, tempo) in tempos.enumerated().reversed() {
+                        if beganTempo >= tempo {
+                            ni = i
+                            break
+                        }
+                    }
+                    beganTempoI = ni ?? 0
+                    
+                    rootView.cursor = .arrowWith(string: Sheet.tempoNameFromStandardFrameRate(withTempo: beganTempo))
                 }
             }
         case .changed:
             if let sheetView = sheetView {
-                let di = (sp.x - beganSP.x) / editableTempoInterval
-                let tempo = Rational(Double(beganTempo) + di, intervalScale: Rational(1, 4))
-                    .clipped(Music.tempoRange)
+                let di = Int((sp.x - beganSP.x) / editableTempoInterval)
+                let tempo = tempos[(beganTempoI + di).clipped(min: 0, max: tempos.count - 1)]
                 if tempo != oldTempo {
                     beganContents.forEach {
                         sheetView.contentsView.elementViews[$0.key].tempo = tempo
@@ -2138,7 +2148,7 @@ final class MoveTempoAction: DragEventAction {
                     
                     rootView.updateSelects()
                     
-                    rootView.cursor = .arrowWith(string: SheetView.tempoString(fromTempo: tempo))
+                    rootView.cursor = .arrowWith(string: Sheet.tempoNameFromStandardFrameRate(withTempo: tempo))
                     
                     oldTempo = tempo
                 }

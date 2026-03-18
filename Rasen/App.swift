@@ -4315,7 +4315,7 @@ struct Cursor {
         
         let tPath: Path?, tSize: Size
         if !string.isEmpty {
-            let text = Text(string: string, size: Font.defaultSize)
+            let text = Text(string: string, size: Font.defaultSize, widthCount: .infinity)
             let tb = text.frame ?? Rect()
             tSize = tb.size + Size(width: 0, height: 3)
             tPath = text.typesetter.path()
