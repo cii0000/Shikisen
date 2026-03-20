@@ -1935,6 +1935,37 @@ extension Animation: BeatRangeType {
         }
         return nil
     }
+    func indexInBeatRange(atFrame fi: Int, startSec: Rational, frameRate: Int) -> Int? {
+        let beatRange = beatRange, loopDurBeat = loopDurBeat
+        let sBeat = beatRange.start, eBeat = beatRange.end
+        let sfi = Animation.frame(fromSec: sec(fromBeat: sBeat) + startSec, frameRate: frameRate)
+        let efi = Animation.frame(fromSec: sec(fromBeat: eBeat + loopDurBeat) + startSec, frameRate: frameRate)
+        guard fi >= sfi && fi < efi, !keyframes.isEmpty else { return nil }
+        for (i, keyframe) in keyframes.enumerated() {
+            let kfi = Animation.frame(fromSec: sec(fromBeat: keyframe.beat + beatRange.start) + startSec,
+                                      frameRate: frameRate)
+            if fi < kfi {
+                return max(i - 1, 0)
+            }
+        }
+        let neBeat = eBeat + loopDurBeat
+        if loopDurBeat > 0 {
+            var beat = eBeat
+            loop: while true {
+                for (i, keyframe) in keyframes.enumerated() {
+                    let nBeat = keyframe.beat + beat
+                    guard nBeat < neBeat else { return i - 1 >= 0 ? i - 1 : keyframes.count - 1 }
+                    let kfi = Animation.frame(fromSec: sec(fromBeat: nBeat) + startSec, frameRate: frameRate)
+                    if fi < kfi {
+                        return i - 1 >= 0 ? i - 1 : keyframes.count - 1
+                    }
+                }
+                beat += beatRange.length
+            }
+        } else {
+            return keyframes.count - 1
+        }
+    }
     
     func keyframeDurBeat(at i: Int) -> Rational {
         if i + 1 < keyframes.count {
@@ -2369,7 +2400,6 @@ extension Sheet {
         }
         if !qs.isEmpty {
             let frameRate = Int.lcd(qs)
-            print("fr", frameRate)
             return frameRate <= 60 ? frameRate : 60
         }
         return 60
@@ -2391,13 +2421,9 @@ extension Sheet {
                    + (1 ... 120).map { tempo(fps: 60, k: $0) }).sorted()
     }
     static func tempoNameFromStandardFrameRate(withTempo tempo: Rational) -> String {
-        func fpb(fps: Int) -> Int? {
-            let v = Rational(60 * fps) / tempo
-            return v.isInteger ? v.integralPart : nil
-        }
         var fpbName = ""
         func append(fps: Int) {
-            if let fpb = fpb(fps: fps) {
+            if let fpb = fpb(fromTempo: tempo, fps: fps) {
                 if !fpbName.isEmpty {
                     fpbName += " / "
                 }
@@ -2412,6 +2438,15 @@ extension Sheet {
         append(fps: 60)
         return Double(tempo).string(digitsCount: 2) + " bpm"
         + (fpbName.isEmpty ? "" : " (\(fpbName))")
+    }
+    static func fpb(fromTempo tempo: Rational, fps: Int) -> Int? {
+        let v = Rational(60 * fps) / tempo
+        return v.isInteger ? v.integralPart : nil
+    }
+    static func fpb(fromTempo tempo: Rational) -> Int? {
+        fpb(fromTempo: tempo, fps: 48)
+        ?? fpb(fromTempo: tempo, fps: 50)
+        ?? fpb(fromTempo: tempo, fps: 60)
     }
     
     var mainLineUUColor: UUColor? {
@@ -2550,6 +2585,18 @@ extension Sheet {
              isBackground: isBackground,
              attitude: attitude,
              in: bounds)
+    }
+    
+    func node(isBorder: Bool, atKeyframe ki: Int?,
+              isBackground: Bool = true,
+              attitude: Attitude = .init(),
+              in bounds: Rect) -> CPUNode {
+        let k = ki != nil ? animation.keyframes[ki!] : nil
+        return node(isBorder: isBorder, captionNodes: [],
+                    picture: k?.picture ?? .init(), draftPicture: k?.draftPicture ?? .init(),
+                    isBackground: isBackground,
+                    attitude: attitude,
+                    in: bounds)
     }
     func node(isBorder: Bool, atSec sec: Rational,
               enabledCaption: Bool, renderingCaptionFrame: Rect? = nil,

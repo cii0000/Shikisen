@@ -140,6 +140,14 @@ extension Caption {
     static func captions(atSec sec: Rational, in captions: [Caption]) -> [Caption] {
         captions.filter { $0.secRange.contains(sec) }
     }
+    static func captions(atFrame i: Int, frameRate: Int, startSec: Rational,
+                         in captions: [Caption]) -> [Caption] {
+        captions.filter {
+            (Animation.frame(fromSec: $0.secRange.start + startSec, frameRate: frameRate)
+             ..< Animation.frame(fromSec: $0.secRange.end + startSec, frameRate: frameRate))
+                .contains(i)
+        }
+    }
 }
 
 extension AVFileType: FileTypeProtocol {
@@ -180,7 +188,7 @@ final class Movie {
     static let exportError = NSError(domain: AVFoundationErrorDomain,
                                      code: AVError.Code.exportFailed.rawValue)
     
-    let url: URL, frameRate: Int
+    let url: URL
     let fileType: AVFileType, codec: AVVideoCodecType
     let renderSize: Size, isHDR: Bool
     let sampleRate = Audio.defaultSampleRate, audioChannelCount = 2
@@ -191,13 +199,12 @@ final class Movie {
     private let pbAdaptor: AVAssetWriterInputPixelBufferAdaptor
     let isAlphaChannel: Bool
     
-    private var frameI = 0, isAppend = false, isStop = false
-    private var settings = [Setting]()
+    private var isAppend = false, isStop = false
+    private var settings = [Setting](), currentTime = CMTime(value: 0, timescale: 1)
     
     init(url: URL, renderSize: Size, isAlphaChannel: Bool, isLinearPCM: Bool,
          _ colorSpace: ColorSpace, frameRate: Int) throws {
         self.url = url
-        self.frameRate = frameRate
         self.renderSize = renderSize
         
         isHDR = colorSpace.isHDR
@@ -227,13 +234,15 @@ final class Movie {
              AVVideoColorPropertiesKey: [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
                                          AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
                                          AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020],
-             AVVideoCompressionPropertiesKey: [AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel]]
+             AVVideoCompressionPropertiesKey: [AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel,
+                                               AVVideoExpectedSourceFrameRateKey: frameRate]]
             : [AVVideoCodecKey: codec,
                AVVideoWidthKey: width,
                AVVideoHeightKey: height,
                AVVideoColorPropertiesKey: [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
                                            AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
-                                           AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2]]
+                                           AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2],
+               AVVideoCompressionPropertiesKey: [AVVideoExpectedSourceFrameRateKey: frameRate]]
         
         videoInput = AVAssetWriterInput(mediaType: .video,
                                          outputSettings: setting)
@@ -264,7 +273,8 @@ final class Movie {
         writer.startSession(atSourceTime: .zero)
     }
     
-    func write(_ image: Image, progressHandler: (inout Bool) -> ()) -> Bool {
+    func write(_ image: Image, duration: Int, timeScale: Int,
+               progressHandler: (inout Bool) -> ()) -> Bool {
         while !videoInput.isReadyForMoreMediaData {
             progressHandler(&isStop)
             if isStop { return true }
@@ -318,22 +328,19 @@ final class Movie {
             
             CVPixelBufferUnlockBaseAddress(pb,
                                            CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
-            let time = CMTime(value: Int64(frameI), timescale: Int32(frameRate))
-            isAppend = pbAdaptor.append(pb, withPresentationTime: time)
-            frameI += 1
+            if currentTime.value == 0 {
+                currentTime = .init(value: 0, timescale: .init(timeScale))
+            }
+            isAppend = pbAdaptor.append(pb, withPresentationTime: currentTime)
+            currentTime = currentTime + .init(value: .init(duration),
+                                              timescale: .init(timeScale))
         }
         return isAppend
     }
     
     func writeAudio(from seq: Sequencer,
-                    headroomAmp: Double = Audio.headroomAmp,
-                    waveclip: Waveclip? = .default,
-                    isCompress: Bool = true,
                     progressHandler: (Double, inout Bool) -> ()) throws {
         guard let buffer = try seq.buffer(sampleRate: sampleRate,
-                                          headroomAmp: headroomAmp,
-                                          waveclip: waveclip,
-                                          isCompress: isCompress,
                                           progressHandler: progressHandler) else { return }
         guard let cmBuffer = buffer.cmSampleBuffer else { return }
         audioInput.append(cmBuffer)
@@ -359,8 +366,7 @@ final class Movie {
                 return isStop
             }
         } else {
-            writer.endSession(atSourceTime: CMTime(value: .init(frameI),
-                                                   timescale: .init(frameRate)))
+            writer.endSession(atSourceTime: currentTime)
             await writer.finishWriting()
             if let error = writer.error {
                 throw error

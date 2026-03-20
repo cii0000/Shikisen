@@ -669,5 +669,6 @@ message PBPastableObject {
         PBStereo stereo = 24;
         PBTone tone = 15;
         PBRect rect = 25;
+        PBRational tempo = 26;
     }
 }

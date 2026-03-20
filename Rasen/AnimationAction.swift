@@ -65,7 +65,7 @@ final class GoPreviousAction: InputKeyEventAction {
                 if contentIndex == nil {
                     goPrevious(from: sheetView, at: p)
                     rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
-                    sheetView.setupTimeNodes(isVolume: false)
+                    sheetView.setupTimeNodes()
                     sheetView.updateTimeNodesWithMainSec()
                     sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
                 }
@@ -153,7 +153,7 @@ final class GoNextAction: InputKeyEventAction {
                 if contentIndex == nil {
                     goNext(from: sheetView, at: p)
                     rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
-                    sheetView.setupTimeNodes(isVolume: false)
+                    sheetView.setupTimeNodes()
                     sheetView.updateTimeNodesWithMainSec()
                     sheetView.animationView.shownInterTypeKeyframeIndex = sheetView.animationView.model.index
                 }
@@ -287,7 +287,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
             }
             
             rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
-            sheetView?.setupTimeNodes(isVolume: false)
+            sheetView?.setupTimeNodes()
         case .changed:
             if let sheetView {
                 if let contentView {
@@ -1010,6 +1010,9 @@ final class InterpolateAction: InputKeyEventAction {
                             let ok = animation.keyframe(atRoot: v.rootKeyframeIndex)
                             let ops = ok.picture.planes, ols = ok.picture.lines
                             if nlis.count == ols.count && npis.count == ops.count {
+                                let olDic = ols.reduce(into: [UUID: Line]()) {
+                                    $0[$1.id] = $1
+                                }
                                 let orki = v.rootKeyframeIndex,
                                     nrki = animationView.rootKeyframeIndex
                                 let di = abs(nrki - orki)
@@ -1030,9 +1033,10 @@ final class InterpolateAction: InputKeyEventAction {
                                         var insertPIVs = [IndexValue<[IndexValue<Plane>]>]()
                                         for kv in kis {
                                             let ki = kv.key, t = kv.value
-                                            let ls = nlis.enumerated().map { (oli, nli) in
-                                                var line = Line.linear(ols[oli], nls[nli], t: t)
-                                                line.id = nls[nli].id
+                                            let ls: [Line] = nlis.compactMap {
+                                                guard let ol = olDic[nls[$0].id] else { return nil }
+                                                var line = Line.linear(ol, nls[$0], t: t)
+                                                line.id = nls[$0].id
                                                 line.interType = .interpolated
                                                 return line
                                             }
@@ -1066,8 +1070,8 @@ final class InterpolateAction: InputKeyEventAction {
                                         sheetView.insertKeyPlanes(insertPIVs)
                                     }
                                 }
+                                return
                             }
-                            return
                         }
                     }
                 }

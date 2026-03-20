@@ -1379,7 +1379,7 @@ final class RootView: View, @unchecked Sendable {
                 recordCount += 1
             }
         }
-        if recordCount > 0 {
+        if findingChildNodeDic.count >= 2 {
             for (shp, _) in findingChildNodeDic {
                 if sheetViewValues[shp]?.sheetView != nil,
                    let sid = sheetID(at: shp), model.sheetRecorders[sid] != nil {
@@ -1470,6 +1470,147 @@ final class RootView: View, @unchecked Sendable {
                 }
             }
             finding.string = toStr
+        }
+    }
+    
+    func replaceTempo(fromTempo tempo: Rational, in shps: [IntPoint]) {
+        let shps = Array(Set(shps))
+        @Sendable func make(_ sheetView: SheetView) -> Bool {
+            var isNewUndoGroup = false
+            func updateUndoGroup() {
+                if !isNewUndoGroup {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = true
+                }
+            }
+            
+            if sheetView.model.animation.enabled, sheetView.model.animation.tempo != tempo {
+                updateUndoGroup()
+                var option = sheetView.model.animation.option
+                option.tempo = tempo
+                sheetView.set(option)
+            }
+            if sheetView.model.score.enabled, sheetView.model.score.tempo != tempo {
+                updateUndoGroup()
+                var option = sheetView.model.score.option
+                option.tempo = tempo
+                sheetView.set(option)
+            }
+            for (ci, content) in sheetView.model.contents.enumerated() {
+                if content.timeOption != nil, content.tempo != tempo {
+                    updateUndoGroup()
+                    var content = content
+                    content.timeOption?.tempo = tempo
+                    sheetView.replace(content, at: ci)
+                }
+            }
+            for (ti, text) in sheetView.model.texts.enumerated() {
+                if text.timeOption != nil, text.tempo != tempo {
+                    updateUndoGroup()
+                    var text = text
+                    text.timeOption?.tempo = tempo
+                    sheetView.replace([IndexValue(value: text, index: ti)])
+                }
+            }
+            return isNewUndoGroup
+        }
+        
+        var recordCount = 0
+        for shp in shps {
+            if sheetViewValues[shp]?.sheetView == nil,
+                let sid = sheetID(at: shp), model.sheetRecorders[sid] != nil {
+                
+                recordCount += 1
+            }
+        }
+        if shps.count >= 2 {
+            for shp in shps {
+                if sheetViewValues[shp]?.sheetView != nil,
+                   let sid = sheetID(at: shp), model.sheetRecorders[sid] != nil {
+                    
+                    recordCount += 1
+                }
+            }
+            let nRecordCount = recordCount
+            
+            Task { @MainActor in
+                let result = await node
+                    .show(message: String(format: "Do you want to change the tempo of %1$d sheets to %2$@?".localized, nRecordCount, Sheet.tempoNameFromStandardFrameRate(withTempo: tempo)),
+                          infomation: "This operation can be undone for each sheet, but not for all sheets at once.".localized,
+                          okTitle: "Replace".localized,
+                          isDefaultButton: true)
+                guard result == .ok else { return }
+                
+                syncSave()
+                
+                let progressPanel = ProgressPanel(message: "Replacing tempos".localized)
+                node.show(progressPanel)
+                let task = Task.detached(priority: .high) {
+                    let progress = ActorProgress(total: shps.count)
+                    for shp in shps {
+                        Task { @MainActor in
+                            if let sheetView = self.sheetViewValues[shp]?.sheetView {
+                                _ = make(sheetView)
+                            } else if let sid = self.sheetID(at: shp),
+                                      let sheetRecorder = self.model.sheetRecorders[sid] {
+                                let record = sheetRecorder.sheetRecord
+                                guard let sheet = record.decodedValue else { return }
+                                
+                                let sheetBinder = RecordBinder(value: sheet, record: record)
+                                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+                                let frame = self.sheetFrame(with: shp)
+                                sheetView.bounds = Rect(size: frame.size)
+                                sheetView.node.allChildrenAndSelf { $0.updateDatas() }
+                                
+                                if make(sheetView) {
+                                    if self.savingItem != nil {
+                                        self.savingFuncs.append { [model = sheetView.model, um = sheetView.history,
+                                                                   tm = self.thumbnailMipmap(from: sheetView),
+                                                                   weak self] in
+                                            
+                                            sheetRecorder.sheetRecord.value = model
+                                            sheetRecorder.sheetRecord.isWillwrite = true
+                                            sheetRecorder.sheetHistoryRecord.value = um
+                                            sheetRecorder.sheetHistoryRecord.isWillwrite = true
+                                            self?.updateStringRecord(at: sid, with: sheetView)
+                                            if let tm = tm {
+                                                self?.saveThumbnailRecord(tm, in: sheetRecorder)
+                                                self?.baseThumbnailBlocks[sid]
+                                                = try? Texture.block(from: tm.thumbnail4Data)
+                                            }
+                                        }
+                                    } else {
+                                        sheetRecorder.sheetRecord.value = sheetView.model
+                                        sheetRecorder.sheetHistoryRecord.value = sheetView.history
+                                        sheetRecorder.sheetHistoryRecord.isWillwrite = true
+                                        self.makeThumbnailRecord(at: sid, with: sheetView)
+                                        sheetRecorder.sheetRecord.willwriteClosure = { (_) in }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        guard !Task.isCancelled else { return }
+                        Sleep.start(atTime: 0.1)
+                        
+                        await progress.addCount()
+                        Task { @MainActor in
+                            progressPanel.progress = await progress.fractionCompleted
+                        }
+                    }
+                    
+                    Task { @MainActor in
+                        progressPanel.closePanel()
+                    }
+                }
+                progressPanel.cancelHandler = { task.cancel() }
+            }
+        } else {
+            for shp in shps {
+                if let sheetView = sheetViewValues[shp]?.sheetView {
+                    _ = make(sheetView)
+                }
+            }
         }
     }
     
@@ -3216,7 +3357,8 @@ final class RootView: View, @unchecked Sendable {
         }
         
         let seq = Sequencer(tracks: seqTracks, type: .normal)
-        let buffer = try? seq?.buffer(sampleRate: sampleRate, isClip: false) { d, flag in }
+        let buffer = try? seq?.buffer(sampleRate: sampleRate, headroomType: .none, limitLufs: nil,
+                                      isClip: false) { d, flag in }
         return buffer?.doubleSampless ?? []
     }
     

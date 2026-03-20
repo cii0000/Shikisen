@@ -302,7 +302,8 @@ struct RendnoteManager {
         rendnotes = [.init(note: note)]
     }
     init(note: Note, score: Score) {
-        let note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
+        var note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
+        note.pits.sort { $0.beat < $1.beat }
         let (seed0, seed1) = note.containsNoise ? note.id.uInt64Values : (0, 0)
         var deltaPhase = 0.0
         
@@ -387,7 +388,8 @@ extension Rendnote {
                   reverb: .init(), waveclip: .default)
     }
     init(note: Note, score: Score, deltaPhase: Double) {
-        let note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
+        var note = note.isSimpleLyric ? note.withRendable(tempo: score.tempo) : note
+        note.pits.sort { $0.beat < $1.beat }
         let sSec = Double(score.sec(fromBeat: note.beatRange.start))
         let eSec = Double(score.sec(fromBeat: note.beatRange.end))
         
@@ -770,7 +772,7 @@ extension Rendnote {
                 for (i, volm) in volms.enumerated() {
                     if volm.sumVolm == maxSumVolm {
                         if preSec == nil {
-                            preSec = i == 0 ? 0 : volm.sec
+                            preSec = i == 0 ? min(0, volm.sec) : volm.sec
                         }
                     } else if let nPreSec = preSec {
                         append(nPreSec ..< volms[i - 1].sec)

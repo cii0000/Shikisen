@@ -300,6 +300,10 @@ extension Stereo {
         v.volm *= volm
         return v
     }
+    
+    var displayName: String {
+        "\(Volm.db(fromVolm: volm).string(digitsCount: 2)) db, \(pan.string(digitsCount: 2))"
+    }
 }
 extension Stereo: Protobuf {
     init(_ pb: PBStereo) throws {
@@ -975,7 +979,7 @@ extension Tone: MonoInterpolatable {
 }
 
 struct Pit: Codable, Hashable {
-    var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.475), tone = Tone(), lyric = ""
+    var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.453125), tone = Tone(), lyric = ""
 }
 extension Pit: Protobuf {
     init(_ pb: PBPit) throws {
@@ -2281,6 +2285,10 @@ extension TempoType {
     func count(fromSec sec: Rational, frameRate: Int) -> Int {
         Int(Double(sec * .init(frameRate)))
     }
+    
+    static func frame(fromSec sec: Rational, frameRate: Int) -> Int {
+        Int((sec * Rational(frameRate)).rounded())
+    }
 }
 protocol BeatRangeType: TempoType {
     var beatRange: Range<Rational> { get }
@@ -2415,11 +2423,8 @@ extension Volm {
 }
 
 struct Audio: Hashable, Codable {
-    static let defaultSampleRate = 44100.0
-    static let safetyDb = -0.0625
-    static let safetyVolm = Volm.volm(fromDb: safetyDb)
-    static let safetyAmp = Volm.amp(fromVolm: safetyVolm)
-    static let headroomDb = 0.0
+    static let defaultSampleRate = 48000.0
+    static let headroomDb = -1.0
     static let headroomVolm = Volm.volm(fromDb: headroomDb)
     static let headroomAmp = Volm.amp(fromVolm: headroomVolm)
     static let floatHeadroomAmp = Float(headroomAmp)

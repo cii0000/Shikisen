@@ -92,6 +92,12 @@ extension TimelineView {
         sec(atX: x, interval: Rational(1, frameRate))
     }
     
+    func tempoFrame() -> Rect? {
+        guard let beatRange, model.secRange(fromBeat: beatRange).contains(1) else { return nil }
+        let secX = x(atSec: Rational(1)) + origin.x
+        let sy = timelineCenterY - Sheet.timelineHalfHeight - Sheet.rulerHeight / 2 + origin.y
+        return Rect(Point(secX, sy), dx: 5, dy: 5)
+    }
     func containsTempo(_ p: Point, scale: Double) -> Bool {
         guard let beatRange, model.secRange(fromBeat: beatRange).contains(1) else { return false }
         let secX = x(atSec: Rational(1)) + origin.x
@@ -114,10 +120,10 @@ extension TimelineView {
 enum EditGrid {
     case main, second, full
     
-    static let fullEditBeatInterval = Rational(1, 128),
+    static let fullEditBeatInterval = Rational(1, 384),
                secondBeatInterval = Rational(1, 48),
                beatInterval = Rational(1, 8)
-    static let fullEditPitchInterval = Rational(1, 16),
+    static let fullEditPitchInterval = Rational(1, 48),
                pitchInterval = Rational(1)
     
     init(logScale: Double) {
@@ -1819,6 +1825,7 @@ extension ScoreView {
         color(fromPan: stereo.pan, volm: stereo.volm)
     }
     static func color(fromPan pan: Double, volm: Double) -> Color {
+        let volm = Spectrogram.mainVolm(fromVolum: volm)
         let lightness = volm.clipped(min: Volm.minVolm, max: Volm.safeVolm,
                                      newMin: 100, newMax: Color.content.lightness)
         let l = Double(Color(lightness: lightness).rgba.r)

@@ -239,6 +239,9 @@ extension PCMTrackItem {
     var peakDb: Double {
         pcmBuffer.peakDb
     }
+    var truePeakDb: Double {
+        pcmBuffer.truePeakDb
+    }
     
     mutating func change(from timeOption: ContentTimeOption) {
         guard pcmBuffer.sampleRate > 0 else { return }
@@ -519,6 +522,9 @@ extension ScoreTrackItem {
     }
     var peakDb: Double {
         Double(PCMBuffer.peakDb(sampless: sampless))
+    }
+    var truePeakDb: Double {
+        Double(PCMBuffer.truePeakDb(sampless: sampless))
     }
     
     mutating func changeTempo(with score: Score) {
@@ -1264,16 +1270,23 @@ extension Sequencer {
              AVEncoderBitRateKey: 320000]
     }
     
+    enum HeadroomType {
+        case compress, normalized, none
+    }
     func export(url: URL,
                 sampleRate: Double,
+                headroomType: HeadroomType = .none,
                 headroomAmp: Double = Audio.headroomAmp,
                 waveclip: Waveclip? = .default,
-                isCompress: Bool = false,
+                limitLufs: Double? = Audio.limitLufs,
                 isLinearPCM: Bool,
+                isClip: Bool = true,
                 progressHandler: (Double, inout Bool) -> ()) throws {
         guard let buffer = try buffer(sampleRate: sampleRate,
+                                      headroomType: headroomType,
                                       headroomAmp: headroomAmp,
-                                      isCompress: isCompress,
+                                      waveclip: waveclip,
+                                      limitLufs: limitLufs,
                                       progressHandler: progressHandler) else { return }
         
         let settings = Self.audioSettings(isLinearPCM: isLinearPCM,
@@ -1284,27 +1297,30 @@ extension Sequencer {
         try file.write(from: buffer)
     }
     func audio(sampleRate: Double,
+               headroomType: HeadroomType = .none,
                headroomAmp: Double = Audio.headroomAmp,
                waveclip: Waveclip? = .default,
-               isCompress: Bool = false,
+               limitLufs: Double? = Audio.limitLufs,
+               isClip: Bool = true,
                progressHandler: (Double, inout Bool) -> ()) throws -> Audio? {
         guard let buffer = try buffer(sampleRate: sampleRate,
+                                      headroomType: headroomType,
                                       headroomAmp: headroomAmp,
                                       waveclip: waveclip,
-                                      isCompress: isCompress,
+                                      limitLufs: limitLufs,
                                       progressHandler: progressHandler) else { return nil }
         return Audio(pcmData: buffer.pcmData)
     }
     func buffer(sampleRate: Double,
+                headroomType: HeadroomType = .none,
                 headroomAmp: Double = Audio.headroomAmp,
                 waveclip: Waveclip? = .default,
-                limitLufs: Double? = nil,
+                limitLufs: Double? = Audio.limitLufs,
                 isClip: Bool = true,
-                isCompress: Bool = false,
                 progressHandler: (Double, inout Bool) -> ()) throws -> AVAudioPCMBuffer? {
         let oldHeadroomAmp = clippingAudioUnit.headroomAmp
         let oldEnabledAttack = clippingAudioUnit.enabledAttack
-        clippingAudioUnit.headroomAmp = !isClip || isCompress ? nil : .init(headroomAmp)
+        clippingAudioUnit.headroomAmp = nil
         clippingAudioUnit.enabledAttack = false
         defer {
             clippingAudioUnit.headroomAmp = oldHeadroomAmp
@@ -1369,9 +1385,14 @@ extension Sequencer {
         if let limitLufs {
             allBuffer.normalizeLoudness(limitLufs: limitLufs)
         }
-        if isCompress {
+        switch headroomType {
+        case .compress:
             allBuffer.compress(targetAmp: Float(headroomAmp))
-        } else if isClip {
+        case .normalized:
+            allBuffer.normalize(headroomAmp: headroomAmp)
+        case .none: break
+        }
+        if isClip {
             allBuffer.clip(amp: Float(headroomAmp))
         }
         
@@ -1715,6 +1736,103 @@ extension AVAudioPCMBuffer {
     }
     static func peakDb(sampless: [[Float]]) -> Float {
         Volm.db(fromAmp: peakAmp(sampless: sampless))
+    }
+    
+    func normalize(headroomAmp: Double) {
+        let peakAmp = peakAmp
+        if peakAmp == 0 || peakAmp <= headroomAmp { return }
+        self *= Float(headroomAmp / peakAmp)
+    }
+    
+    static let upsampleFactor = 4, filterCount = 48 * upsampleFactor
+    static let doubleTruePeakFilter = {
+        var filter = [Double](repeating: 0.0, count: filterCount)
+        for i in 0 ..< filterCount {
+            let x = Double(i) - Double(filterCount - 1) / 2
+            if x == 0 {
+                filter[i] = 1
+            } else {
+                let v = .pi * x / Double(upsampleFactor)
+                filter[i] = .sin(v) / v
+                let window: Double = 0.54 - 0.46 * .cos(2 * .pi * .init(i) / .init(filterCount - 1))
+                filter[i] *= window
+            }
+        }
+        filter.reverse()
+        return filter
+    } ()
+    static let floatTruePeakFilter = {
+        var filter = [Float](repeating: 0.0, count: filterCount)
+        for i in 0 ..< filterCount {
+            let x = Float(i) - Float(filterCount - 1) / 2
+            if x == 0 {
+                filter[i] = 1
+            } else {
+                let v = .pi * x / Float(upsampleFactor)
+                filter[i] = .sin(v) / v
+                let window: Float = 0.54 - 0.46 * .cos(2 * .pi * .init(i) / .init(filterCount - 1))
+                filter[i] *= window
+            }
+        }
+        filter.reverse()
+        return filter
+    } ()
+    
+    static func truePeakAmp(sampless: [[Double]]) -> Double {
+        sampless.maxValue { truePeakAmp(samples: $0) } ?? 0
+    }
+    static func truePeakAmp(samples: [Double]) -> Double {
+        guard !samples.isEmpty else { return 0 }
+        
+        let samples = vDSP.multiply(1 / Double(upsampleFactor), samples)
+        
+        let upsampledCount = samples.count * upsampleFactor
+        var upsampledSamples = [Double](repeating: 0.0, count: upsampledCount)
+        for i in 0 ..< samples.count {
+            upsampledSamples[i * upsampleFactor] = samples[i]
+        }
+        
+        let nSamples = vDSP.convolve(upsampledSamples, withKernel: doubleTruePeakFilter)
+        let nnSamples = vDSP.multiply(Double(upsampleFactor), nSamples)
+        return vDSP.maximumMagnitude(nnSamples)
+    }
+    static func truePeakDb(samples: [Double]) -> Double {
+        Volm.db(fromAmp: truePeakAmp(samples: samples))
+    }
+    static func truePeakDb(sampless: [[Double]], upsampleFactor: Int = 4) -> Double {
+        Volm.db(fromAmp: truePeakAmp(sampless: sampless))
+    }
+    
+    static func truePeakAmp(sampless: [[Float]]) -> Float {
+        sampless.maxValue { truePeakAmp(samples: $0) } ?? 0
+    }
+    static func truePeakAmp(samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+        
+        let samples = vDSP.multiply(1 / Float(upsampleFactor), samples)
+        
+        let upsampledCount = samples.count * upsampleFactor
+        var upsampledSamples = [Float](repeating: 0.0, count: upsampledCount)
+        for i in 0 ..< samples.count {
+            upsampledSamples[i * upsampleFactor] = samples[i]
+        }
+        
+        let nSamples = vDSP.convolve(upsampledSamples, withKernel: floatTruePeakFilter)
+        let nnSamples = vDSP.multiply(Float(upsampleFactor), nSamples)
+        return vDSP.maximumMagnitude(nnSamples)
+    }
+    static func truePeakDb(samples: [Float]) -> Float {
+        Volm.db(fromAmp: truePeakAmp(samples: samples))
+    }
+    static func truePeakDb(sampless: [[Float]]) -> Float {
+        Volm.db(fromAmp: truePeakAmp(sampless: sampless))
+    }
+    
+    var truePeakAmp: Double {
+        Self.truePeakAmp(sampless: doubleSampless)
+    }
+    var truePeakDb: Double {
+        Volm.db(fromAmp: truePeakAmp)
     }
     
     var lufs: Double? {

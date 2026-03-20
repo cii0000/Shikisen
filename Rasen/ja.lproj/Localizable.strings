@@ -122,6 +122,7 @@
 "Sound" = "サウンド";
 "Loudness" = "ラウドネス";
 "Sample Peak" = "サンプルピーク";
+"True Peak" = "トゥルーピーク";
 
 "Movie" = "動画";
 "Image" = "画像";
@@ -167,8 +168,10 @@
 "Export as Document with History" = "履歴付き書類として書き出す";
 
 "Do you want to replace the \"%2$@\" written on the %1$d sheets with the \"%3$@\"?" = "%1$d枚のシートに書き込まれた「%2$@」を「%3$@」に置換えますか？";
+"Do you want to change the tempo of %1$d sheets to %2$@?" = "%1$d枚のシートのテンポを %2$@ に変更しますか？";
 "This operation can be undone for each sheet, but not for all sheets at once." = "この操作はそれぞれのシートでは取り消せますが、一括では取り消せません。";
 "Replacing sheets" = "シートを置き換え中";
+"Replacing tempos" = "テンポを置き換え中";
 
 "MOV (HEVC with Alpha)" = "MOV (透過HEVC)";
 

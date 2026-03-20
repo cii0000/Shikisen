@@ -235,7 +235,7 @@ extension TimelineView {
                            secondEditBorderPathlines: inout [Pathline],
                            borderPathlines: inout [Pathline]) {
         let roundedSBeat = beatRange.start.rounded(.down)
-        let deltaBeat = EditGrid.fullEditBeatInterval
+        let deltaBeat = Rational(1, 128)
         let beatR0 = Rational(1, 2)
         let beatR1 = EditGrid.beatInterval
         let beatR2 = EditGrid.secondBeatInterval
@@ -681,7 +681,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let iSet = Set(selectedFrameIndexes)
         
-        var contentPathlines = [Pathline](),
+        var contentPathlines = [Pathline](), warningPathlines = [Pathline](),
             borderPathlines = [Pathline](), subBorderPathlines = [Pathline]()
         var fullEditBorderPathlines = [Pathline](), secondEditBorderPathlines = [Pathline]()
         var selectedPathlines = [Pathline]()
@@ -697,11 +697,15 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let mainBeatX = x(atBeat: model.mainBeat)
         
+        let fpb = Sheet.fpb(fromTempo: model.tempo)
         for (i, keyframe) in model.keyframes.enumerated() {
-            let kx = x(atBeat: keyframe.beat + beatRange.start)
+            let beat = keyframe.beat + beatRange.start
+            let kx = x(atBeat: beat)
             
             let nKnobH = keyframe.isKey ? knobH : iKnobH
-            let nKnobW = (keyframe.beat + beatRange.start) % EditGrid.beatInterval == 0 ? knobW : knobW / 2
+            let nKnobW = beat % EditGrid.beatInterval == 0 ?
+            knobW :
+            (beat % EditGrid.secondBeatInterval == 0 ? knobW / 2 : knobW / 4)
             let topD: Double
             if !keyframe.draftPicture.isEmpty {
                 let pathline = Pathline(Rect(x: kx - nKnobW / 2,
@@ -729,6 +733,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                           width: niKnobW, height: nKnobH - bottomD - topD))
             if iSet.contains(i) {
                 selectedPathlines.append(pathline)
+            } else if let fpb, !(Rational(fpb) * beat).isInteger {
+                warningPathlines.append(pathline)
             } else {
                 contentPathlines.append(pathline)
             }
@@ -736,9 +742,13 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let kx = ex
         let nKnobW = eBeat % EditGrid.beatInterval == 0 ? knobW : knobW / 2
         let eKnobMinY = centerY - knobH / 2 - 1
-        contentPathlines.append(.init(Rect(x: kx - nKnobW / 2,
-                                           y: eKnobMinY,
-                                           width: nKnobW, height: knobH + 2)))
+        let lkb = Rect(x: kx - nKnobW / 2, y: eKnobMinY,
+                       width: nKnobW, height: knobH + 2)
+        if let fpb, !(Rational(fpb) * eBeat).isInteger {
+            warningPathlines.append(.init(lkb))
+        } else {
+            contentPathlines.append(.init(lkb))
+        }
         
         let loopKnobH = 4.0
         let neBeat = eBeat + loopDurBeat
@@ -761,9 +771,13 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                 beat += beatRange.length
             }
         }
-        contentPathlines.append(.init(Rect(x: lkx - nKnobW / 2,
-                                           y: ey - loopKnobH / 2,
-                                           width: nKnobW, height: loopKnobH)))
+        let llkb = Rect(x: lkx - nKnobW / 2, y: ey - loopKnobH / 2,
+                        width: nKnobW, height: loopKnobH)
+        if let fpb, !(Rational(fpb) * neBeat).isInteger {
+            warningPathlines.append(.init(llkb))
+        } else {
+            contentPathlines.append(.init(llkb))
+        }
         
         if isSelected {
             let d = knobH / 2
@@ -895,6 +909,10 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         if !contentPathlines.isEmpty {
             nodes.append(Node(path: Path(contentPathlines),
                               fillType: .color(.content)))
+        }
+        if !warningPathlines.isEmpty {
+            nodes.append(Node(path: Path(warningPathlines),
+                              fillType: .color(.warning)))
         }
         if !selectedPathlines.isEmpty {
             nodes.append(Node(name: "selected",
@@ -1681,38 +1699,38 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func containsTempo(_ p: Point, scale: Double) -> Bool {
-        if animationView.containsTempo(p, scale: scale) {
+        if animationView.model.enabled, animationView.containsTempo(p, scale: scale) {
             return true
         }
-        if scoreView.containsTempo(p, scale: scale) {
+        if scoreView.model.enabled, scoreView.containsTempo(p, scale: scale) {
             return true
         }
         for textView in textsView.elementViews {
-            if textView.containsTempo(p, scale: scale) {
+            if textView.model.timeOption != nil, textView.containsTempo(p, scale: scale) {
                 return true
             }
         }
         for contentView in contentsView.elementViews {
-            if contentView.containsTempo(p, scale: scale) {
+            if contentView.model.timeOption != nil, contentView.containsTempo(p, scale: scale) {
                 return true
             }
         }
         return false
     }
     func tempo(at p: Point, scale: Double) -> Rational? {
-        if animationView.containsTempo(p, scale: scale) {
+        if animationView.model.enabled, animationView.containsTempo(p, scale: scale) {
             return animationView.tempo
         }
-        if scoreView.containsTempo(p, scale: scale) {
+        if scoreView.model.enabled, scoreView.containsTempo(p, scale: scale) {
             return scoreView.tempo
         }
         for textView in textsView.elementViews {
-            if textView.containsTempo(p, scale: scale) {
+            if textView.model.timeOption != nil, textView.containsTempo(p, scale: scale) {
                 return textView.tempo
             }
         }
         for contentView in contentsView.elementViews {
-            if contentView.containsTempo(p, scale: scale) {
+            if contentView.model.timeOption != nil, contentView.containsTempo(p, scale: scale) {
                 return contentView.tempo
             }
         }
@@ -1956,7 +1974,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             playingCaptions = []
             
             updateCaption()
-            setupTimeNodes(isVolume: true)
+            setupTimeNodes()
             
             updateMainFrame()
             
@@ -2166,23 +2184,19 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
     }
-    func setupTimeNodes(isVolume: Bool) {
+    func setupTimeNodes() {
         endTimeNodes()
         if let parentNode = node.parent {
             let timeNode = Node()
             parentNode.append(child: timeNode)
             self.timeNode = timeNode
             
-            if isVolume {
-                let volumeNode = Node()
-                parentNode.append(child: volumeNode)
-                self.volumeNode = volumeNode
-            }
+            let volumeNode = Node()
+            parentNode.append(child: volumeNode)
+            self.volumeNode = volumeNode
             
+            volumeColor = .background
             updateTimeNodes()
-            if isVolume {
-                updateTimeNodes(from: nil, sampleRate: Audio.defaultSampleRate)
-            }
         }
     }
     func endTimeNodes() {
@@ -2204,7 +2218,8 @@ final class SheetView: BindableView, @unchecked Sendable {
         if let parentNode = sheetView.node.parent {
             var timeRects0 = [Rect](), timeRects1 = [Rect](), volumeRects1 = [Rect]()
             func update(from sheetView: SheetView) {
-                let knobW = isPlaying ? 2.0 : 1.0, volmW = 1.25
+                let d = volumeColor == .warning ? 2.0 : 1.0
+                let knobW = (isPlaying ? 3.0 : 1.0) * d, volmW = (isPlaying ? 2.0 : 0) * d
                 if !(!isPlaying && sheetView == self), sheetView.model.enabledAnimation && sheetView.animationView.model.allSecRange.contains(playingSec) {
                     
                     let btx = sheetView.animationView.x(atSec: playingSec)
@@ -2269,13 +2284,13 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     
-    static let tapSampleCount = 16384
+    static let tapSampleCount = 20480
     private var allSampless = [[Double]](repeating: .init(repeating: 0, count: tapSampleCount),
-                                         count: 2)
+                                         count: 2),
+                loudness = Loudness(sampleRate: Audio.defaultSampleRate)
     private func updateTimeNodes(from sampless: [[Double]]?, sampleRate: Double) {
         guard let sampless else {
             volumeColor = .background
-            volumeNode?.children.forEach { $0.fillType = .color(volumeColor) }
             return
         }
         
@@ -2293,21 +2308,21 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         
-        let lufs = PCMBuffer.lufs(sampless: allSampless,
-                                  sampleRate: sampleRate) ?? -.infinity
+        if loudness.sampleRate != sampleRate {
+            loudness = .init(sampleRate: sampleRate)
+        }
+        let lufs = (try? loudness.lufs(from: allSampless)) ?? -.infinity
         let peakAmp = PCMBuffer.peakAmp(sampless: sampless)
-        let isPeak = peakAmp > Audio.safetyAmp
+        let isPeak = peakAmp > Audio.headroomAmp
         
         volumeColor = if isPeak {
             .warning
-        } else if lufs > -14 {
+        } else if lufs > Audio.limitLufs {
             .linear(.content, .loudnessWarning,
-                    t: lufs.clipped(min: -14, max: -9, newMin: 0, newMax: 1))
+                    t: lufs.clipped(min: Audio.limitLufs, max: Audio.limitLufs + 6, newMin: 0.25, newMax: 1))
         } else {
-            Color(white: lufs.clipped(min: -19, max: -14, newMin: 1, newMax: 0))
+            Color(white: lufs.clipped(min: Audio.limitLufs - 6, max: Audio.limitLufs, newMin: 1, newMax: 0))
         }
-        
-        volumeNode?.children.forEach { $0.fillType = .color(volumeColor) }
     }
     private func allTimeSliderRect(atSec sec: Rational, at index: Int) -> Rect {
         if index == 0 {

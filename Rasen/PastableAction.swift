@@ -112,6 +112,7 @@ enum PastableObject: Sendable {
     case stereo(_ stereo: Stereo)
     case tone(_ tone: Tone)
     case rect(_ rect: Rect)
+    case tempo(_ tempo: Rational)
 }
 extension PastableObject {
     static func typeName(with obj: Any) -> String {
@@ -170,6 +171,8 @@ extension PastableObject {
              PastableObject.typeName(with: tone)
         case .rect(let rect):
              PastableObject.typeName(with: rect)
+        case .tempo(let tempo):
+             PastableObject.typeName(with: tempo)
         }
     }
     init(data: Data, typeName: String) throws {
@@ -219,6 +222,8 @@ extension PastableObject {
             self = .tone(try Tone(serializedData: data))
         case PastableObject.objectTypeName(with: Rect.self):
             self = .rect(try Rect(serializedData: data))
+        case PastableObject.objectTypeName(with: Rational.self):
+            self = .tempo(try Rational(serializedData: data))
         default:
             throw PastableObject.PastableError()
         }
@@ -265,6 +270,8 @@ extension PastableObject {
              try? tone.serializedData()
         case .rect(let rect):
              try? rect.serializedData()
+        case .tempo(let tempo):
+             try? tempo.serializedData()
         }
     }
 }
@@ -314,6 +321,8 @@ extension PastableObject: Protobuf {
             self = .tone(try Tone(tone))
         case .rect(let rect):
             self = .rect(try Rect(rect))
+        case .tempo(let tempo):
+            self = .tempo(try Rational(tempo))
         }
     }
     var pb: PBPastableObject {
@@ -359,6 +368,8 @@ extension PastableObject: Protobuf {
                 $0.value = .tone(tone.pb)
             case .rect(let rect):
                 $0.value = .rect(rect.pb)
+            case .tempo(let tempo):
+                $0.value = .tempo(tempo.pb)
             }
         }
     }
@@ -385,6 +396,7 @@ extension PastableObject: Codable {
         case stereo = "22"
         case tone = "14"
         case rect = "23"
+        case tempo = "24"
     }
     init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -430,6 +442,8 @@ extension PastableObject: Codable {
             self = .tone(try container.decode(Tone.self))
         case .rect:
             self = .rect(try container.decode(Rect.self))
+        case .tempo:
+            self = .tempo(try container.decode(Rational.self))
         }
     }
     func encode(to encoder: any Encoder) throws {
@@ -495,6 +509,9 @@ extension PastableObject: Codable {
         case .rect(let rect):
             try container.encode(CodingTypeKey.rect)
             try container.encode(rect)
+        case .tempo(let tempo):
+            try container.encode(CodingTypeKey.tempo)
+            try container.encode(tempo)
         }
     }
 }
@@ -742,9 +759,45 @@ final class PastableAction: Action {
             let lw = Line.defaultLineWidth * 2 / rootView.worldToScreenScale
             selectingLineNode.children =
             [Node(path: rootView.lookingUpBoundsNode?.path ?? Path(),
-                     lineWidth: lw,
-                     lineType: .color(.selected),
-                     fillType: .color(.subSelected))]
+                  lineWidth: lw,
+                  lineType: .color(.selected),
+                  fillType: .color(.subSelected))]
+            return true
+        } else if let sheetView = rootView.sheetView(at: p),
+                  let tempo = sheetView.tempo(at: sheetView.convertFromWorld(p),
+                                              scale: rootView.screenToWorldScale) {
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.tempo(tempo)]
+            }
+            
+            var frames = [Rect]()
+            if sheetView.animationView.tempo == tempo,
+               let frame = sheetView.animationView.tempoFrame() {
+                frames.append(frame)
+            }
+            if sheetView.scoreView.tempo == tempo,
+               let frame = sheetView.scoreView.tempoFrame() {
+                frames.append(frame)
+            }
+            for textView in sheetView.textsView.elementViews {
+                if textView.tempo == tempo,
+                   let frame = textView.tempoFrame() {
+                    frames.append(frame)
+                }
+            }
+            for contentView in sheetView.contentsView.elementViews {
+                if contentView.tempo == tempo,
+                   let frame = contentView.tempoFrame() {
+                    frames.append(frame)
+                }
+            }
+            
+            selectingLineNode.children =
+            [Node(path: Path(frames.map { .init(sheetView.convertToWorld($0)) }),
+                  fillType: .color(.selected))]
+            
+            rootView.cursor = .arrowWith(string: Sheet.tempoNameFromStandardFrameRate(withTempo: tempo))
+            
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, _, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
@@ -910,8 +963,7 @@ final class PastableAction: Action {
                     }
                 }
                 
-                let db = Volm.db(fromVolm: stereo.volm)
-                rootView.cursor = .arrowWith(string: "\(db.string(digitsCount: 2)) db")
+                rootView.cursor = .arrowWith(string: stereo.displayName)
                 show(ps)
             case .f0:
                 let note = score.notes[noteI]
@@ -2221,6 +2273,8 @@ final class PastableAction: Action {
             break
         case .rect:
             break
+        case .tempo:
+            break
         }
     }
     
@@ -3166,6 +3220,9 @@ final class PastableAction: Action {
                 sheetView.newUndoGroup()
                 sheetView.set(SheetOption(mainFrame: rect))
             }
+        case .tempo(let tempo):
+            let shps = rootView.sheetFramePositions(at: p, isUnselect: false).map { $0.shp }
+            rootView.replaceTempo(fromTempo: tempo, in: shps)
         }
     }
     
@@ -3191,6 +3248,7 @@ final class PastableAction: Action {
         case .stereo: false
         case .tone: false
         case .rect: false
+        case .tempo: false
         }
     }
     
@@ -3440,6 +3498,9 @@ final class PastableAction: Action {
                 }
                 rootView.updateNode()
             }
+        } else if case .tempo(let tempo) = pasteObject {
+            let shps = rootView.sheetFramePositions(at: p, isUnselect: false).map { $0.shp }
+            rootView.replaceTempo(fromTempo: tempo, in: shps)
         }
     }
     

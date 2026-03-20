@@ -229,16 +229,27 @@ extension TextView {
         let sy = centerY - timelineHalfHeight
         let ey = centerY + timelineHalfHeight
         
-        var contentPathlines = [Pathline]()
+        var contentPathlines = [Pathline](), warningPathlines = [Pathline]()
         var subBorderPathlines = [Pathline]()
         var secondEditBorderPathlines = [Pathline]()
         var fullEditBorderPathlines = [Pathline]()
         var borderPathlines = [Pathline]()
         
-        contentPathlines.append(.init(Rect(x: sx - 1, y: centerY - knobH / 2,
-                                           width: knobW, height: knobH)))
-        contentPathlines.append(.init(Rect(x: ex - 1, y: centerY - knobH / 2,
-                                           width: knobW, height: knobH)))
+        let fpb = Sheet.fpb(fromTempo: model.tempo)
+        let sbb = Rect(x: sx - 1, y: centerY - knobH / 2,
+                       width: knobW, height: knobH)
+        if let fpb, !(Rational(fpb) * sBeat).isInteger {
+            warningPathlines.append(.init(sbb))
+        } else {
+            contentPathlines.append(.init(sbb))
+        }
+        let ebb = Rect(x: ex - 1, y: centerY - knobH / 2,
+                       width: knobW, height: knobH)
+        if let fpb, !(Rational(fpb) * eBeat).isInteger {
+            warningPathlines.append(.init(ebb))
+        } else {
+            contentPathlines.append(.init(ebb))
+        }
         contentPathlines.append(.init(Rect(x: sx + 1, y: centerY - lw / 2,
                                            width: ex - sx - 2, height: lw)))
         
@@ -282,6 +293,10 @@ extension TextView {
         if !contentPathlines.isEmpty {
             nodes.append(Node(path: Path(contentPathlines),
                               fillType: .color(.content)))
+        }
+        if !warningPathlines.isEmpty {
+            nodes.append(Node(path: Path(warningPathlines),
+                              fillType: .color(.warning)))
         }
         
         return nodes

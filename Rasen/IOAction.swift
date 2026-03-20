@@ -1226,6 +1226,11 @@ final class IOAction: Action {
                     var sheetOrigin: Point
                     var sheetBounds: Rect
                     var renderBounds: Rect
+                    
+                    func frameRange(frameRate: Int) -> Range<Int> {
+                        Animation.frame(fromSec: secRange.start, frameRate: frameRate)
+                        ..< Animation.frame(fromSec: secRange.end, frameRate: frameRate)
+                    }
                 }
                 var tracks = [Track]()
                 for (i, rendering) in renderings.enumerated() {
@@ -1289,9 +1294,7 @@ final class IOAction: Action {
                 var oldImage: Image?, oldCaptionNodes = [CPUNode](), oldCaptions = [Caption]()
                 var oldTrackI: Int?, oldSheetNodes = [(oki: Int?, oldNode: CPUNode?)]()
                 for i in frameCount.range {
-                    let allSec = Rational(i, frameRate)
-                    
-                    let trackI = tracks.firstIndex { $0.secRange.contains(allSec) } ?? tracks.count - 1
+                    let trackI = tracks.firstIndex { $0.frameRange(frameRate: frameRate).contains(i) } ?? tracks.count - 1
                     if trackI != oldTrackI {
                         oldTrackI = trackI
                         
@@ -1301,7 +1304,6 @@ final class IOAction: Action {
                         oldSheetNodes = tracks[trackI].sheets.map { _ in (nil, nil) }
                     }
                     let track = tracks[trackI]
-                    let sec = allSec - track.secRange.start
                     
                     var isChanged = false
                     
@@ -1309,10 +1311,11 @@ final class IOAction: Action {
                     for si in track.sheets.count.range {
                         let (sheet, sheetBounds) = track.sheets[si]
                         let (oki, oldNode) = oldSheetNodes[si]
-                        let ki = sheet.animation.indexInBeatRange(atSec: sec)
+                        let ki = sheet.animation.indexInBeatRange(atFrame: i,
+                                                                  startSec: track.secRange.start,
+                                                                  frameRate: frameRate)
                         if oki != ki {
-                            let node = sheet.node(isBorder: false, atSec: sec,
-                                                  enabledCaption: false,
+                            let node = sheet.node(isBorder: false, atKeyframe: ki,
                                                   isBackground: false,
                                                   in: sheetBounds)
                             children.append(node)
@@ -1323,7 +1326,9 @@ final class IOAction: Action {
                         }
                     }
                     
-                    let captions = Caption.captions(atSec: sec, in: track.captions)
+                    let captions = Caption.captions(atFrame: i, frameRate: frameRate,
+                                                    startSec: track.secRange.start,
+                                                    in: track.captions)
                     let captionNodes: [CPUNode]
                     if captions != oldCaptions {
                         captionNodes = Caption.cpuNodes(in: track.renderBounds, from: captions)
@@ -1346,7 +1351,7 @@ final class IOAction: Action {
                     }
                     
                     guard let image else { throw Movie.exportError }
-                    let isAppend = movie.write(image) { (stop) in
+                    let isAppend = movie.write(image, duration: 1, timeScale: frameRate) { (stop) in
                         progressHandler(.init(i) / .init(frameCount) * 0.6 + 0.1, &isStop)
                         if isStop {
                             stop = true

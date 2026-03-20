@@ -3512,6 +3512,14 @@ struct PBPastableObject: Sendable {
     set {value = .rect(newValue)}
   }
 
+  var tempo: PBRational {
+    get {
+      if case .tempo(let v)? = value {return v}
+      return PBRational()
+    }
+    set {value = .tempo(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Value: Equatable, Sendable {
@@ -3535,6 +3543,7 @@ struct PBPastableObject: Sendable {
     case stereo(PBStereo)
     case tone(PBTone)
     case rect(PBRect)
+    case tempo(PBRational)
 
   }
 
@@ -9515,6 +9524,7 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     24: .same(proto: "stereo"),
     15: .same(proto: "tone"),
     25: .same(proto: "rect"),
+    26: .same(proto: "tempo"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -9773,6 +9783,19 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
           self.value = .rect(v)
         }
       }()
+      case 26: try {
+        var v: PBRational?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .tempo(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .tempo(v)
+        }
+      }()
       default: break
       }
     }
@@ -9863,6 +9886,10 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     case .rect?: try {
       guard case .rect(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 25)
+    }()
+    case .tempo?: try {
+      guard case .tempo(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 26)
     }()
     case nil: break
     }

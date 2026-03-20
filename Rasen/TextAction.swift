@@ -248,9 +248,11 @@ final class LookUpAction: InputKeyEventAction {
                 scoreView.scoreTrackItem?.updateNotewaveDic()
                 let lufs = scoreView.scoreTrackItem?.lufs
                 let peakDb = scoreView.scoreTrackItem?.peakDb
+                let truePeakDb = scoreView.scoreTrackItem?.truePeakDb
                 rootView.show("Score".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
-                              + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB",
+                              + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB"
+                              + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP",
                               at: p)
             } else {
                 let pitchInterval = rootView.currentPitchInterval
@@ -280,10 +282,12 @@ final class LookUpAction: InputKeyEventAction {
             let fileSize = content.url.fileSize ?? 0
             let lufs = contentView.pcmTrackItem?.lufs
             let peakDb = contentView.pcmTrackItem?.peakDb
+            let truePeakDb = contentView.pcmTrackItem?.truePeakDb
             let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
             rootView.show(content.type.displayName
                           + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                           + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB"
+                          + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP"
                           + "\n\t\("File Size".localized): \(string)",
                           at: p)
         } else if !rootView.isDefaultUUColor(at: p),
@@ -298,14 +302,17 @@ final class LookUpAction: InputKeyEventAction {
             var sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
             if !sampless.isEmpty {
                 let peakDb = PCMBuffer.peakDb(sampless: sampless)
+                let truePeakDb = PCMBuffer.truePeakDb(sampless: sampless)
                 PCMBuffer.clip(amp: Audio.headroomAmp, sampless: &sampless)
                 let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
+                let mainSize = sheetView.mainFrame.bounds.size != bounds.size ? sheetView.mainFrame.size : nil
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb.string(digitsCount: 2)) dB"
-                              
+                              + "\n\t\("True Peak".localized): \(truePeakDb.string(digitsCount: 2)) dBTP"
                               + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))"
-                              + (sheetView.mainFrame.bounds.size != bounds.size ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))" : ""),
+                              + (mainSize != nil ?
+                              "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""),
                               at: p)
             } else {
                 rootView.show("Background".localized + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))", at: p)

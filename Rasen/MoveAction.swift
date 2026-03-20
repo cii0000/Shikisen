@@ -2115,7 +2115,7 @@ final class MoveTempoAction: DragEventAction {
                         beganScoreOption = sheetView.model.score.option
                     }
                     
-                    tempos = Sheet.temposFromStandardFrameRate()
+                    tempos = Set(Sheet.temposFromStandardFrameRate() + (1 ..< 400).map { .init($0) }).sorted()
                     var ni: Int?
                     for (i, tempo) in tempos.enumerated().reversed() {
                         if beganTempo >= tempo {

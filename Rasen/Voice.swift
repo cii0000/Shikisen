@@ -176,6 +176,9 @@ extension Note {
                         break
                     }
                 }
+                if pits[0].beat > fBeat {
+                    minI = 0
+                }
                 for j in i + 1 ..< pits.count {
                     let isMax = (!pits[j].lyric.isEmpty && pits[j].lyric != "]")
                     || pits[j].lyric == "["

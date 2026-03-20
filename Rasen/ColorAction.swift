@@ -346,6 +346,8 @@ final class ColorAction: Action {
                 rootAction.stopPlaying(with: event)
             }
             
+            whiteLightnessHeight = 200
+            
             beganSP = sp
             preEventTime = event.time
             let p = rootView.convertScreenToWorld(sp)
@@ -546,7 +548,7 @@ final class ColorAction: Action {
             let p = lightnessNode.convertFromWorld(wp)
             let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let volm = (scoreResult?.isStereo ?? false) ?
-            Double.linear(Volm.minVolm, Volm.safeVolm, t: t) : Double.linear(0, 1, t: t)
+            Double.linear(Volm.minVolm, Volm.safeVolm, t: t).rounded(decimalPlaces: 4) : Double.linear(0, 1, t: t)
             
             let db = Volm.db(fromVolm: volm)
             let ddb = db - Volm.db(fromVolm: beganVolm)
@@ -1042,16 +1044,17 @@ final class ColorAction: Action {
                 let pan: Double
                 if oldPan < 0 && oPan > 0 {
                     isSnappedPan = oPan <= 0.05
-                    pan = (oPan > 0.05 ? oPan - 0.05 : 0).clipped(min: -1, max: 1)
+                    pan = (oPan > 0.05 ? oPan - 0.05 : 0).clipped(min: -1, max: 1).rounded(decimalPlaces: 4)
                 } else if oldPan > 0 && oPan < 0 {
                     isSnappedPan = oPan >= -0.05
-                    pan = (oPan < -0.05 ? oPan + 0.05 : 0).clipped(min: -1, max: 1)
+                    pan = (oPan < -0.05 ? oPan + 0.05 : 0).clipped(min: -1, max: 1).rounded(decimalPlaces: 4)
                 } else {
                     isSnappedPan = false
-                    pan = oPan.clipped(min: -1, max: 1)
+                    pan = oPan.clipped(min: -1, max: 1).rounded(decimalPlaces: 4)
                     oldPan = pan
                 }
                 let ndPan = pan - beganPan
+                rootView.cursor = .arrowWith(string: "\(pan.string(digitsCount: 2)) (\((ndPan > 0 ? "+" : "") + ndPan.string(digitsCount: 2)))")
                 
                 func newPan(from otherPan: Double) -> Double {
                     if beganPan == otherPan {

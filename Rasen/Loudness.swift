@@ -218,7 +218,7 @@ struct Loudness {
     
     init(sampleRate: Double,
          filterClass: FilterClass = .kWeighting,
-         blockSize: Double = 0.37) {
+         blockSize: Double = 0.4) {
         self.sampleRate = sampleRate
         self.filterClass = filterClass
         self.filters = filterClass.filters(fromSampleRate: sampleRate)

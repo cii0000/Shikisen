@@ -944,9 +944,9 @@ final class LineAction: Action {
                 
                 noteMaxPressure = event.pressure
                 let volm = if noteMaxPressure > 0.25 {
-                    0.5
+                    0.453125
                 } else {
-                    0.25
+                    0.453125 / 2
                 }
                 
                 firstTone = isMinNoise ?
