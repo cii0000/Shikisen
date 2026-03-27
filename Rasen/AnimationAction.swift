@@ -580,7 +580,11 @@ final class InsertControlPointAction: InputKeyEventAction {
                     var line = lineView.model
                     let (bi, t, _, _) = line.nearest(at: sheetP)
                     let np = line.bezier(at: bi).position(withT: t)
-                    line.controls.insert(line.controls[bi + 1].mid(line.controls[bi + 2]), at: bi + 2)
+                    if line.controls.count <= 2 {
+                        line.controls.insert(line.controls.first!.mid(line.controls.last!), at: 1)
+                    } else {
+                        line.controls.insert(line.controls[bi + 1].mid(line.controls[bi + 2]), at: bi + 2)
+                    }
                     
                     sheetView.newUndoGroup()
                     sheetView.removeLines(at: [li])
@@ -692,7 +696,7 @@ final class InsertControlPointAction: InputKeyEventAction {
                                 }
                             }
                         } ()
-                        if iBeat != 0 && animation.keyframes[i].isKey {
+                        if iBeat != 0 {
                             let nBeat = animation.keyframes[i].beat + iBeat
                             let keyframe = Keyframe(beat: nBeat)
                             animationView.selectedFrameIndexes = []

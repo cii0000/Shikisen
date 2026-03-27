@@ -1491,7 +1491,7 @@ final class ColorAction: Action {
             let p = lightnessNode.convertFromWorld(wp)
             if isEditableMaxLightness {
                 let r = abs(p.y - whiteLightnessHeight)
-                if r < snappableDistance {
+                if r < snappableDistance * rootView.screenToWorldScale {
                     if let lastTintSnapTime = lastTintSnapTime {
                         if event.time - lastTintSnapTime > 1 {
                             isSnappedLightness = false
@@ -1685,7 +1685,7 @@ final class ColorAction: Action {
             let r = fTintP.distance(p)
             let theta = fTintP.angle(p)
             var uuColor = beganMainUUColor
-            if r < snappableDistance {
+            if r < snappableDistance * rootView.screenToWorldScale {
                 if let lastTintSnapTime = lastTintSnapTime {
                     if event.time - lastTintSnapTime > 1 {
                         isSnappedTint = false

@@ -559,11 +559,11 @@ extension Line: Interpolatable {
             }
         }
         
-        if lines.allSatisfy({ lines[0].controls.count == $0.controls.count }) {
+//        if lines.allSatisfy({ lines[0].controls.count == $0.controls.count }) {
             lss = lines.map { FLine(lines: [$0]) }
-        } else {
-            split(lines: lines)
-        }
+//        } else {
+//            split(lines: lines)
+//        }
         
         let lines = (0 ..< lss[0].lines.count).map { i in handler(lss.map { $0.lines[i] }) }
         return Line(lines: lines)
@@ -1639,6 +1639,26 @@ extension Line {
         let v0 = 4 * xp - n0 * p0 - m1 * p2
         let v1 = m0 + n1 + 2
         return v0 / v1
+    }
+    func prefixLength(at i: Int) -> Double {
+        if i == 0 {
+            0
+        } else if i == controls.count - 1 {
+            length()
+        } else {
+            length(with: .init(startIndexValue: firstIndexValue,
+                               endIndexValue: .init(index: i - 1, t: 0.5)))
+        }
+    }
+    func suffixLength(at i: Int) -> Double {
+        if i == 0 {
+            length()
+        } else if i == controls.count - 1 {
+            0
+        } else {
+            length(with: .init(startIndexValue: .init(index: i - 1, t: 0.5),
+                               endIndexValue: lastIndexValue))
+        }
     }
     
     var firstAngle: Double {

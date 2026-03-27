@@ -864,28 +864,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         var nodes = [Node]()
         
-        let preP = model.currentKeyframe.previousPosition
-        let nextP = model.currentKeyframe.nextPosition
-        let prePP = Point(pnW * 5 + sx, pnY)
-        if preP != .init() {
-            let p = prePP.movedWith(distance: spnW, angle: preP.angle())
-            nodes.append(.init(path: .init(Edge(prePP, p)),
-                               lineWidth: lw, lineType: .color(.content)))
-            contentPathlines.append(.init(Edge(prePP, p)))
-            contentPathlines.append(.init(circleRadius: knobW, position: p))
-        } else {
-            contentPathlines.append(.init(circleRadius: knobW, position: prePP))
-        }
-        let nextPP = Point(pnW * 6 + sx, pnY)
-        if nextP != .init() {
-            let p = nextPP.movedWith(distance: spnW, angle: nextP.angle())
-            nodes.append(.init(path: .init(Edge(nextPP, p)),
-                               lineWidth: lw, lineType: .color(.content)))
-            contentPathlines.append(.init(circleRadius: knobW, position: p))
-        } else {
-            contentPathlines.append(.init(circleRadius: knobW, position: nextPP))
-        }
-        
         if !fullEditBorderPathlines.isEmpty {
             nodes.append(Node(name: "fullGrid",
                               isHidden: editGrid != .full,
@@ -1305,8 +1283,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     enum HitResult {
         case key(i: Int)
         case previousNext(PreviousNext)
-        case previousPosition
-        case nextPosition
         case startBeat
         case endBeat
         case loopDurBeat
@@ -1318,16 +1294,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         if pnD < minD && pnD < 3 + scale * 5 {
             minD = pnD
-            
-            let beatRange = model.beatRange
-            let sBeat = max(beatRange.start, -10000)
-            let sx = x(atBeat: sBeat)
-            let pnW = 14.0
-            if p.x >= sx + pnW * 4.5 {
-                minResult = p.x < sx + pnW * 5.5 ? .previousPosition : .nextPosition
-            } else {
-                minResult = .previousNext(previousNext(at: p))
-            }
+            minResult = .previousNext(previousNext(at: p))
         }
         
         if p.y > Sheet.timelineHalfHeight - 3 {
@@ -3371,18 +3338,17 @@ final class SheetView: BindableView, @unchecked Sendable {
             stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
-                let lw = Line.defaultLineWidth * 1.5
                 for kv in kvs {
                     animationView.elementViews[kv.index].linesView.insert(kv.value)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let line = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .picture.lines[$1.index]
-                        $0 += line.bounds
-                        
-                        nodes.append(Node(path: Path(line),
-                                          lineWidth: lw,
-                                          lineType: .color(.selected)))
+                        let node = animationView.elementViews[kv.index].linesView
+                            .elementViews[$1.index].node.clone
+                        node.lineType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3399,7 +3365,6 @@ final class SheetView: BindableView, @unchecked Sendable {
             stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
-                let lw = Line.defaultLineWidth * 1.5
                 for kv in kvs {
                     for liv in kv.value {
                         binder[keyPath: keyPath].animation.keyframes[kv.index]
@@ -3408,13 +3373,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let line = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .picture.lines[$1.index]
-                        $0 += line.bounds
-                        
-                        nodes.append(Node(path: Path(line),
-                                          lineWidth: lw,
-                                          lineType: .color(.selected)))
+                        let node = animationView.elementViews[kv.index].linesView
+                            .elementViews[$1.index].node.clone
+                        node.lineType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3435,16 +3400,15 @@ final class SheetView: BindableView, @unchecked Sendable {
             stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
-                let lw = Line.defaultLineWidth * 1.5
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let line = binder[keyPath: keyPath].animation.keyframes[iv.index]
-                            .picture.lines[$1]
-                        $0 += line.bounds
-                        
-                        nodes.append(Node(path: Path(line),
-                                          lineWidth: lw,
-                                          lineType: .color(.removing)))
+                        let node = animationView.elementViews[iv.index].linesView
+                            .elementViews[$1].node.clone
+                        node.lineType = .color(.removing)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                     
                     animationView.elementViews[iv.index].linesView.remove(at: iv.value)
@@ -3469,10 +3433,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                     animationView.elementViews[kv.index].planesView.insert(kv.value)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let plane = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .picture.planes[$1.index]
-                        $0 += plane.bounds
-                        nodes.append(plane.node(from: .selected))
+                        let node = animationView.elementViews[kv.index].planesView
+                            .elementViews[$1.index].node.clone
+                        node.fillType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3495,10 +3462,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let plane = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .picture.planes[$1.index]
-                        $0 += plane.bounds
-                        nodes.append(plane.node(from: .selected))
+                        let node = animationView.elementViews[kv.index].planesView
+                            .elementViews[$1.index].node.clone
+                        node.fillType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3521,10 +3491,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let plane = binder[keyPath: keyPath].animation.keyframes[iv.index]
-                            .picture.planes[$1]
-                        $0 += plane.bounds
-                        nodes.append(plane.node(from: .removing))
+                        let node = animationView.elementViews[iv.index].planesView
+                            .elementViews[$1].node.clone
+                        node.fillType = .color(.removing)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                     
                     animationView.elementViews[iv.index].planesView.remove(at: iv.value)
@@ -3543,20 +3516,18 @@ final class SheetView: BindableView, @unchecked Sendable {
             stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
-                let lw = Line.defaultLineWidth * 1.5
                 for kv in kvs {
                     animationView.elementViews[kv.index].draftLinesView.insert(kv.value)
                     updateDraftLines(from: kv.value.map { $0.index },
                                      atKeyframeIndex: kv.index)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let line = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .draftPicture.lines[$1.index]
-                        $0 += line.bounds
-                        
-                        nodes.append(Node(path: Path(line),
-                                          lineWidth: lw,
-                                          lineType: .color(.selected)))
+                        let node = animationView.elementViews[kv.index].draftLinesView
+                            .elementViews[$1.index].node.clone
+                        node.lineType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3575,16 +3546,15 @@ final class SheetView: BindableView, @unchecked Sendable {
             stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
-                let lw = Line.defaultLineWidth * 1.5
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let line = binder[keyPath: keyPath].animation.keyframes[iv.index]
-                            .draftPicture.lines[$1]
-                        $0 += line.bounds
-                        
-                        nodes.append(Node(path: Path(line),
-                                          lineWidth: lw,
-                                          lineType: .color(.removing)))
+                        let node = animationView.elementViews[iv.index].draftLinesView
+                            .elementViews[$1].node.clone
+                        node.lineType = .color(.removing)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                     
                     animationView.elementViews[iv.index].draftLinesView.remove(at: iv.value)
@@ -3611,10 +3581,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                                       atKeyframeIndex: kv.index)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let plane = binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .draftPicture.planes[$1.index]
-                        $0 += plane.bounds
-                        nodes.append(plane.node(from: .selected))
+                        let node = animationView.elementViews[kv.index].draftPlanesView
+                            .elementViews[$1.index].node.clone
+                        node.fillType = .color(.selected)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3635,10 +3608,13 @@ final class SheetView: BindableView, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let plane = binder[keyPath: keyPath].animation.keyframes[iv.index]
-                            .draftPicture.planes[$1]
-                        $0 += plane.bounds
-                        nodes.append(plane.node(from: .removing))
+                        let node = animationView.elementViews[iv.index].draftPlanesView
+                            .elementViews[$1].node.clone
+                        node.fillType = .color(.removing)
+                        if let b = node.bounds {
+                            $0 += b
+                        }
+                        nodes.append(node)
                     }
                     
                     animationView.elementViews[iv.index].draftPlanesView.remove(at: iv.value)
@@ -3666,26 +3642,23 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
                 
                 let idSet = Set(kvs.flatMap { $0.value.map { $0.value.id } })
-                let lw = Line.defaultLineWidth * 1.5
                 var nodes = [Node]()
-                for keyframe in model.animation.keyframes {
-                    for line in keyframe.picture.lines {
-                        if idSet.contains(line.id) {
-                            nodes.append(Node(path: Path(line),
-                                              lineWidth: lw,
-                                              lineType: .color(.selected)))
+                let rect = model.animation.keyframes.enumerated().reduce(into: Rect?.none) { (n, v) in
+                    n += v.element.picture.lines.enumerated().reduce(into: Rect?.none) {
+                        if idSet.contains($1.element.id) {
+                            let node = animationView.elementViews[v.offset].linesView
+                                .elementViews[$1.offset].node.clone
+                            node.lineType = .color(.selected)
+                            if let b = node.bounds {
+                                $0 += b
+                            }
+                            nodes.append(node)
                         }
                     }
                 }
                 
                 updateTimeline()
                 
-                let rect = kvs.reduce(into: Rect?.none) { (n, kv) in
-                    n += kv.value.reduce(into: Rect?.none) {
-                        $0 += binder[keyPath: keyPath].animation.keyframes[kv.index]
-                            .picture.lines[$1.index].bounds
-                    }
-                }
                 return (rect, nodes)
             } else {
                 for kv in kvs {

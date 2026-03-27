@@ -38,6 +38,10 @@ extension Array {
         return array
     }
     
+    static func insertableIs(from idxs: [Int]) -> [Int] {
+        idxs.enumerated().map { $0.element + $0.offset }
+    }
+    
     mutating func remove(at indexes: [Int]) {
         for i in indexes.reversed() {
             remove(at: i)
