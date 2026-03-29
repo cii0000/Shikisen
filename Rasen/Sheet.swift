@@ -2724,6 +2724,7 @@ extension Sheet {
         texts.compactMap {
             if let timeOption = $0.timeOption {
                 Caption(string: $0.string, origin: $0.origin, orientation: $0.orientation,
+                        isTitle: $0.typobute.font.isProportional,
                         secRange: timeOption.secRange)
             } else {
                 nil

@@ -310,27 +310,14 @@ extension Bezier {
         cp == p1 ? p0.angle(p1) : cp.angle(p1)
     }
     
-    func enumeratedEdges(quality: Double = 1, maxCount: Int = 20,
-                         _ handler: (_ t: Double, _ oldT: Double,
-                                     _ edge: Edge, _ stop: inout Bool) -> ()) {
-        var stop = false
-        guard !isLineaer else {
-            handler(1, 0, Edge(p0, p1), &stop)
-            return
-        }
-        let l = length(withFlatness: 4)
-        let count = Int(l * quality).clipped(min: 2, max: maxCount)
+    func edges(count: Int) -> [Edge] {
+        var oldP = p0
         let rCount = 1 / Double(count)
-        var oldP = p0, oldT = 0.0
-        for i in 1 ... count {
-            let t = Double(i) * rCount
-            let p = position(withT: t)
-            handler(t, oldT, Edge(oldP, p), &stop)
-            if stop {
-                return
-            }
+        return (1 ... count).map {
+            let p = position(withT: Double($0) * rCount)
+            let edge = Edge(oldP, p)
             oldP = p
-            oldT = t
+            return edge
         }
     }
     func reversedEnumeratedEdges(quality: Double = 1, maxCount: Int = 20,

@@ -26,6 +26,7 @@ struct Caption: Hashable, Codable {
     var string = ""
     var origin = Point()
     var orientation = Orientation.horizontal
+    var isTitle = false
     var secRange = 0 ..< Rational(0)
 }
 extension Caption {
@@ -57,27 +58,33 @@ extension Caption {
         case .horizontal: bounds.width < 444 ? bounds.width / 444 : 1
         case .vertical: bounds.height < 330 ? bounds.height / 330 : 1
         }
-        let fontSize = fontSize * ratio
+        let fontSize =  (isTitle ? fontSize * 1.25 : fontSize) * ratio
         let padding = padding * ratio
         
         guard let tb = Text(string: string, size: fontSize,
                             widthCount: bounds.width).bounds else { return nil }
         switch orientation {
         case .horizontal:
-            let tp = bounds.midXMinYPoint + Point(-tb.width / 2, padding + fontSize)
+            let tp = isTitle ?
+            bounds.centerPoint + Point(-tb.width / 2, 0) :
+            bounds.midXMinYPoint + Point(-tb.width / 2, padding + fontSize)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
+            typebute.font.isProportional = isTitle
             typebute.orientation = .horizontal
             typebute.maxTypelineWidth = .infinity
             typebute.alignment = .center
             let path = Typesetter(string: string, typobute: typebute).path()
             return (path, tp)
         case .vertical:
-            let tp = bounds.maxXMidYPoint + Point(-padding - fontSize * 2, tb.width / 2)
+            let tp = isTitle ?
+            bounds.centerPoint + Point(0, tb.width / 2) :
+            bounds.maxXMidYPoint + Point(-padding - fontSize * 2, tb.width / 2)
             
             let text = Text(string: string, size: fontSize, widthCount: bounds.width)
             var typebute = text.typobute
+            typebute.font.isProportional = isTitle
             typebute.orientation = .vertical
             typebute.alignment = .center
             typebute.maxTypelineWidth = .infinity

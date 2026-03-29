@@ -91,19 +91,6 @@ final class LineAction: Action {
     var tempLineWidth = Line.defaultLineWidth
     var lassoDistance = 3.0
     
-    struct Temp {
-        var control: Line.Control, distance: Double, speed: Double
-        var time: Double, position: Point, length: Double
-        var pressurePoint: Point {
-            return Point(distance, control.pressure)
-        }
-    }
-    var temps = [Temp](), times = [Double]()
-    var firstPoint = Point(), oldPoint = Point(), tempDistance = 0.0
-    var oldFirstChangedTime: Double?, oldTime = 0.0, lastSpeed = 0.0, oldTempTime = 0.0
-    var oldPressure = 1.0, firstTime = 0.0
-    var prs = [Double](), snapDC: Line.Control?, snapSize = 0.0, isStopFirstPressure = false
-    
     var isSnapStraight = false {
         didSet {
             guard isSnapStraight != oldValue else { return }
@@ -115,6 +102,7 @@ final class LineAction: Action {
     }
     var lastSnapStraightTime = 0.0
     
+    var firstPoint = Point()
     var centerOrigin = Point(), centerBounds = Rect(), clipBounds = Rect()
     var centerSHP = IntPoint(), nearestShps = [IntPoint]()
     var tempLine = Line()
@@ -164,559 +152,6 @@ final class LineAction: Action {
         didSet {
             outlineLassoNode?.lineWidth = lassoPathNodeLineWidth
         }
-    }
-    
-    nonisolated
-    private static func joinControlWith(_ line: Line,
-                                        lastControl lc: Line.Control,
-                                        lowAngle: Double = 0.8 * (.pi / 2),
-                                        angle: Double = 1.0 * (.pi / 2)) -> Line.Control? {
-        guard line.controls.count >= 4 else { return nil }
-        let c0 = line.controls[line.controls.count - 4]
-        let c1 = line.controls[line.controls.count - 3], c2 = lc
-        guard c0.point != c1.point && c1.point != c2.point else { return nil }
-        guard c1.point.distance(c2.point) > 3 else { return nil }
-        let dr = abs(Point.differenceAngle(c0.point, c1.point, c2.point))
-        if dr > angle {
-            var nc = c1
-            nc.pressure = lc.pressure
-            return nc
-        } else if dr > lowAngle {
-            let t = 1 - (dr - lowAngle) / (angle - lowAngle)
-            return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
-                                weight: 0.5,
-                                pressure: c2.pressure)
-        } else {
-            return nil
-        }
-    }
-    
-    nonisolated
-    private static func speed(from temps: [Temp], at i: Int, delta: Int = 2) -> Double {
-        var allSpeed = 0.0, count = 0
-        for temp in temps[max(0, i - delta) ..< i] {
-            allSpeed += temp.speed
-            count += 1
-        }
-        if i + 1 < temps.count {
-            for temp in temps[(i + 1) ... min(temps.count - 1, i + delta)] {
-                allSpeed += temp.speed
-                count += 1
-            }
-        }
-        guard count > 0 else { return temps[i].speed }
-        let averageSpeed = allSpeed / Double(count)
-        if temps[i].speed < averageSpeed * 2 {
-            return temps[i].speed
-        } else {
-            return averageSpeed
-        }
-    }
-    
-    nonisolated
-    private static func isAppendPointWith(distance: Double, deltaTime: Double,
-                                          _ temps: [Temp], lastBezier lb: Bezier,
-                                          wtsScale: Double,
-                                          minSpeed: Double = 300.0,
-                                          maxSpeed: Double = 1000.0,
-                                          exp: Double = 2.0,
-                                          minTime: Double = 0.125,
-                                          maxTime: Double = 0.125,
-                                          minDistance: Double = 1.5,
-                                          maxDistance: Double = 1.5,
-                                          maxPressureDistance maxPrD: Double = 0.0625) -> Bool {
-        guard deltaTime > 0 else {
-            return false
-        }
-        let speed = ((distance * wtsScale) / deltaTime)
-            .clipped(min: minSpeed, max: maxSpeed)
-        let t = ((speed - minSpeed) / (maxSpeed - minSpeed)) ** (1 / exp)
-        let time = minTime + (maxTime - minTime) * t
-        if temps.count <= 2 {
-            return false
-        } else if deltaTime > time {
-            return true
-        } else {
-            guard let lTemp = temps.last else {
-                return false
-            }
-            let linearLine = LinearLine(temps.first!.control.point,
-                                        temps.last!.control.point)
-            let ss = wtsScale * wtsScale
-            var angle = 0.0
-            for (i, tc) in temps.enumerated() {
-                if i > 1 {
-                    angle += Point.differenceAngle(temps[i].control.point,
-                                                  temps[i - 1].control.point,
-                                                  temps[i - 2].control.point)
-                    if abs(angle) > .pi / 4 {
-                        return true
-                    }
-                }
-                
-                let speed = (LineAction.speed(from: temps, at: i) * wtsScale).clipped(min: minSpeed, max: maxSpeed)
-                let t = ((speed - minSpeed) / (maxSpeed - minSpeed)) ** (1 / exp)
-                let maxD = minDistance + (maxDistance - minDistance) * t
-                
-                let nMaxD = maxD * (lTemp.time - tc.time)
-                    .clipped(min: 0, max: time, newMin: 1, newMax: 0)
-                guard let p = lb.position(withLength: tc.length) else {
-                    if linearLine.distanceSquared(from: tc.control.point) * ss > maxD * maxD {
-                        return true
-                    }
-                    continue
-                }
-                if tc.position.distanceSquared(p) * ss > nMaxD * nMaxD {
-                    return true
-                }
-            }
-            return false
-        }
-    }
-    
-    nonisolated
-    private static func revision(pressure: Double,
-                                 minPressure: Double = 0.3,
-                                 revisonMinPressure: Double = 0.1875) -> Double {
-        pressure.clipped(min: minPressure, max: 1, newMin: revisonMinPressure, newMax: 1)
-    }
-    
-    nonisolated
-    private static func snap(_ fol: FirstOrLast, _ line: Line,
-                             isSnapSelf: Bool = true,
-                             screenToWorldScale: Double,
-                             from lines: [Line]) -> Line.Control? {
-        snap(line.controls[fol],
-             isSnapSelf ? line.controls[fol.reversed] : nil,
-             size: line.size * line.controls[fol].pressure,
-             screenToWorldScale: screenToWorldScale, from: lines)
-    }
-    nonisolated
-    private static func snap(_ c: Line.Control, _ nc: Line.Control?,
-                             size: Double, paddingD: Double = 0.5,
-                             screenToWorldScale: Double,
-                             from lines: [Line]) -> Line.Control? {
-        let dd = size / 2
-        let wPaddingD = screenToWorldScale * paddingD
-        var minDSQ = Double.infinity, minP: Line.Control?
-        func update(_ oc: Line.Control, _ oSize: Double) {
-            let ond = dd + oSize / 2 + wPaddingD
-            let dSQ = c.distanceSquared(oc)
-            if dSQ < ond * ond && dSQ < minDSQ {
-                minDSQ = dSQ
-                minP = oc
-            }
-        }
-        for oLine in lines {
-            guard let fc = oLine.controls.first,
-                  let lc = oLine.controls.last else { continue }
-            update(fc, oLine.size * fc.pressure)
-            update(lc, oLine.size * lc.pressure)
-        }
-        if let nc {
-            update(nc, size)
-        }
-        return minP
-    }
-    
-    nonisolated
-    static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true,
-                     isSnap: Bool = true,
-                     firstSnapLines: [Line], lastSnapLines: [Line],
-                     clipBounds: Rect, isStraight: Bool) -> (line: Line, isSnapStraight: Bool) {
-        isStraight ?
-        straightLine(from: events, isClip: isClip, isSnap: isSnap,
-                     firstSnapLines: firstSnapLines,
-                     lastSnapLines: lastSnapLines,
-                     clipBounds: clipBounds) :
-        (line(from: events, isClip: isClip, isSnap: isSnap,
-             firstSnapLines: firstSnapLines,
-             lastSnapLines: lastSnapLines,
-             clipBounds: clipBounds), false)
-    }
-    nonisolated
-    static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true,
-                     isSnap: Bool = true,
-                     firstSnapLines: [Line], lastSnapLines: [Line],
-                     clipBounds: Rect) -> Line {
-        var nLine = Line()
-        
-        var temps = [Temp](), times = [Double]()
-        var oldPoint = Point(), tempDistance = 0.0
-        var oldFirstChangedTime: Double?, oldTime = 0.0, oldTempTime = 0.0
-        var snapDP: Point?, isStopFirstPressure = false
-        let lineWidth = Line.defaultLineWidth
-        
-        func drawLine(for p: Point, sp: Point, pressure: Double, isTablet: Bool,
-                      time: Double, isClip: Bool = true, isSnap: Bool = true,
-                      worldToScreenScale: Double,
-                      screenToWorldScale: Double,
-                      sheetLineWidth: Double,
-                      _ phase: Phase) {
-            let wtsScale = worldToScreenScale
-            var p = RootView.roundedPoint(from: p, scale: wtsScale)
-            let pressure = revision(pressure: pressure).rounded(decimalPlaces: 2)
-            
-            switch phase {
-            case .began:
-                if isClip {
-                    p = clipBounds.clipped(p)
-                }
-                var fc = Line.Control(point: p, weight: 0.5, pressure: pressure)
-                if isSnap, let snapC = snap(fc, nil, size: lineWidth,
-                                            screenToWorldScale: screenToWorldScale,
-                                            from: firstSnapLines) {
-                    snapDP = snapC.point - fc.point
-                    fc.point = snapC.point
-                }
-                nLine = Line(controls: [fc, fc, fc, fc],
-                                size: lineWidth)
-                times = [time, time, time, time]
-                oldPoint = p
-                oldTime = time
-                oldTempTime = time
-                tempDistance = 0
-                temps = [Temp(control: fc, distance: 0, speed: 0,
-                              time: time, position: fc.point, length: 0)]
-            case .changed:
-                //
-    //            rootView.node.append(child: Node(attitude: Attitude(position: centerOrigin + p),
-    //                                                 path: Path(circleRadius: 0.25),
-    //                                                 fillType: .color(.border)))
-                let tempLine = nLine
-                
-                if isClip {
-                    p = clipBounds.clipped(p)
-                }
-                
-                let firstChangedTime: Double
-                if let aTime = oldFirstChangedTime {
-                    firstChangedTime = aTime
-                } else {
-                    oldFirstChangedTime = time
-                    firstChangedTime = time
-                }
-                if let nSnapDP = snapDP, time - firstChangedTime < 0.08 {
-                    snapDP = nSnapDP * 0.75
-                    p = RootView.roundedPoint(from: p + nSnapDP * 0.75, scale: wtsScale)
-                }
-                
-                guard p != oldPoint && time > oldTime
-                        && tempLine.controls.count >= 4 else { return }
-                let d = p.distance(oldPoint)
-                tempDistance += d
-                
-                let speed = d / (time - oldTime)
-                let lc = Line.Control(point: p, weight: 0.5, pressure: pressure)
-                var lb = nLine.bezier(at: nLine.maxBezierIndex - 1)
-                lb.p1 = lb.cp.mid(lc.point)
-                temps.append(Temp(control: lc, distance: tempDistance, speed: speed,
-                                  time: time, position: lb.p1, length: lb.length()))
-                
-                if !isStopFirstPressure {
-                    if nLine.controls[.first].pressure < pressure {
-                        for i in 0 ..< nLine.controls.count {
-                            nLine.controls[i].pressure = pressure
-                        }
-                        temps = temps.map {
-                            var temp = $0
-                            temp.control.pressure = pressure
-                            return temp
-                        }
-                    }
-                }
-                if time - firstChangedTime > 0.1 {
-                     isStopFirstPressure = true
-                }
-                
-                if nLine.controls.count == 4, temps.count >= 2 {
-                    var maxL = 0.0
-                    for i in 0 ..< (temps.count - 1) {
-                        let edge = Edge(temps[i].control.point,
-                                        temps[i + 1].control.point)
-                        maxL += edge.length
-                    }
-                    let d = maxL / 4
-                    var l = 0.0, maxP = nLine.firstPoint
-                    for i in 0 ..< (temps.count - 1) {
-                        let edge = Edge(temps[i].control.point,
-                                        temps[i + 1].control.point)
-                        let el = edge.length
-                        if el > 0 && d >= l && d < l + el {
-                            maxP = edge.position(atT: (d - l) / el)
-                        }
-                        l += el
-                    }
-                    nLine.controls[nLine.controls.count - 3].point = maxP
-                }
-                
-                let mp = lc.point.mid(temps[temps.count - 1].control.point)
-                let mpr = lc.pressure.mid(temps[temps.count - 1].control.pressure)
-                let mlc = Line.Control(point: mp, weight: 0.5, pressure: mpr)
-                if var jc = joinControlWith(nLine, lastControl: mlc) {
-                    if time - firstChangedTime < 0.02 {
-                        jc.weight = 0.5
-                        nLine.controls = [jc, jc, jc, jc]
-                        times = [time, time, time, time]
-                    } else {
-                        //
-    //                    rootView.node.append(child: Node(attitude: Attitude(position: centerOrigin + jc.point),
-    //                                                         path: Path(circleRadius: 1),
-    //                                                         fillType: .color(.selected)))
-                        
-                        nLine.controls[nLine.controls.count - 3].weight = 0.5
-                        jc.weight = 1
-                        
-                        nLine.controls.insert(jc, at: nLine.controls.count - 2)
-                        times.insert(time, at: times.count - 2)
-                    }
-                    let lb = tempLine.bezier(at: tempLine.maxBezierIndex - 1)
-                    temps = [Temp(control: lc, distance: 0, speed: speed,
-                                  time: time, position: lb.p1, length: lb.length())]
-                    oldTempTime = time
-                    tempDistance = 0
-                } else if isAppendPointWith(distance: tempDistance,
-                                            deltaTime: time - oldTempTime,
-                                            temps, lastBezier: lb,
-                                            wtsScale: wtsScale) {
-                    nLine.controls[nLine.controls.count - 3].weight = 0.5
-                    let prp = nLine.controls[nLine.controls.count - 1]
-                    nLine.controls[nLine.controls.count - 2] = prp
-                    nLine.controls[nLine.controls.count - 2].weight = 1
-                    
-                    nLine.controls.insert(prp, at: nLine.controls.count - 1)
-                    times.insert(times[times.count - 1], at: times.count - 1)
-                    
-                    //
-    //                rootView.node.append(child: Node(attitude: Attitude(position: centerOrigin + prp.point),
-    //                                                     path: Path(circleRadius: 0.5),
-    //                                                     fillType: .color(.selected)))
-                    
-                    let lb = nLine.bezier(at: nLine.maxBezierIndex - 1)
-                    temps = [Temp(control: lc, distance: 0, speed: speed,
-                                  time: time, position: lb.p1, length: lb.length())]
-                    oldTempTime = time
-                    tempDistance = 0
-                }
-                
-                nLine.controls[nLine.controls.count - 3].weight = 1
-                nLine.controls[nLine.controls.count - 2]
-                    = nLine.controls[nLine.controls.count - 3].mid(lc)
-                nLine.controls[nLine.controls.count - 2].weight = 0.5
-                nLine.controls[.last] = lc
-                times[times.count - 2] = time
-                times[.last] = time
-                
-                oldTime = time
-                oldPoint = p
-            case .ended:
-                guard nLine.controls.count >= 4 else { return }
-                
-                nLine.controls[nLine.controls.count - 3].weight = 0.5
-                nLine.controls[nLine.controls.count - 2] = nLine.controls.last!
-                nLine.controls.removeLast()
-                times.removeLast()
-                
-                if nLine.controls.count == times.count && nLine.controls.count >= 3 {
-                    var fi = times.count
-                    for (i, oldTime) in times.enumerated().reversed() {
-                        fi = i
-                        if time - oldTime > 0.04 { break }
-                    }
-                    fi = min(max(1, nLine.controls.count - 3), fi)
-                    let fpre = nLine.controls[fi].pressure
-                    for i in (fi + 1) ..< nLine.controls.count {
-                        nLine.controls[i].pressure = fpre
-                    }
-                    
-                    if nLine.controls.count > 2 {
-                        var oldC = nLine.controls.first!
-                        let ll = nLine.controls.reduce(0.0) {
-                            let n = $0 + $1.point.distance(oldC.point)
-                            oldC = $1
-                            return n
-                        }
-                        oldC = nLine.controls.last!
-                        var l = 0.0
-                        for i in (2 ..< nLine.controls.count).reversed() {
-                            let p0 = nLine.controls[i].point,
-                                p1 = nLine.controls[i - 1].point,
-                                p2 = nLine.controls[i - 2].point
-                            l += p1.distance(oldC.point)
-                            oldC = nLine.controls[i]
-                            if time - times[i] > 0.1
-                                || l * wtsScale > 6
-                                || l / ll > 0.05 {
-                                break
-                            }
-                            let dr = abs(Point.differenceAngle(p0, p1, p2))
-                            if dr > .pi * 0.75 {
-                                let nCount = nLine.controls.count - i
-                                nLine.controls.removeLast(nCount)
-                                times.removeLast(nCount)
-                                break
-                            }
-                        }
-                    }
-                }
-                
-                if isSnap, let nc = snap(.last, nLine,
-                                         screenToWorldScale: screenToWorldScale,
-                                         from: lastSnapLines) {
-                    nLine.controls[.last].point = nc.point
-                }
-                
-                func toStraight() {
-                    let edge = Edge(nLine.firstPoint, nLine.lastPoint)
-                    let length = edge.length
-                    if length > 0 {
-                        let lScale = length.clipped(min: 20 * screenToWorldScale,
-                                                    max: 200 * screenToWorldScale,
-                                                    newMin: 0, newMax: 0.5)
-                        if nLine.straightDistance() * wtsScale < lScale {
-                            nLine.controls = [nLine.controls.first!, nLine.controls.last!]
-                            let pd = nLine.controls.first!.pressure
-                                .distance(nLine.controls.last!.pressure)
-                            if pd < 0.1 {
-                                let pres = max(nLine.controls.first!.pressure,
-                                               nLine.controls.last!.pressure)
-                                nLine.controls[.first].pressure = pres
-                                nLine.controls[.last].pressure = pres
-                            }
-                        }
-                    }
-                }
-                toStraight()
-            }
-        }
-        
-        for event in events {
-            drawLine(for: event.p, sp: event.sp, pressure: event.pressure, isTablet: event.isTablet,
-                     time: event.time, isClip: isClip, isSnap: isSnap,
-                     worldToScreenScale: event.worldToScreenScale,
-                     screenToWorldScale: event.screenToWorldScale, sheetLineWidth: lineWidth,
-                     event.phase)
-        }
-        
-        return nLine
-    }
-    
-    nonisolated
-    static func straightLine(from events: [DrawLineEvent],
-                             isClip: Bool = true, isSnap: Bool = true,
-                             firstSnapLines: [Line], lastSnapLines: [Line],
-                             clipBounds: Rect) -> (line: Line, snapStraight: Bool) {
-        var nLine = Line()
-        var oldPoint = Point()
-        var prs = [(time: Double, pressure: Double)]()
-        let lineWidth = Line.defaultLineWidth
-        let snappableDistance = 2.5
-        var isSnapStraight = false, lastSnapStraightTime: Double?, nsd = Point()
-        
-        func drawLine(for p: Point, sp: Point, pressure: Double, isTablet: Bool,
-                      time: Double, isClip: Bool = true,
-                      isSnap: Bool = true,
-                      worldToScreenScale: Double,
-                      screenToWorldScale: Double,
-                      _ phase: Phase) {
-            let wtsScale = worldToScreenScale
-            var p = RootView.roundedPoint(from: p, scale: wtsScale)
-            let pressure = Self.revision(pressure: pressure).rounded(decimalPlaces: 2)
-            
-            switch phase {
-            case .began:
-                if isClip {
-                    p = clipBounds.clipped(p)
-                }
-                if isSnap, let nc = Self.snap(.init(point: p, pressure: pressure),
-                                              nil, size: lineWidth,
-                                              screenToWorldScale: screenToWorldScale,
-                                              from: firstSnapLines) {
-                    p = nc.point
-                }
-                
-                let fc = Line.Control(point: p, weight: 0.5, pressure: pressure)
-                nLine = Line(controls: [fc, fc], size: lineWidth)
-                oldPoint = p
-                prs = [(time, pressure)]
-            case .changed:
-                if isClip {
-                    p = clipBounds.clipped(p)
-                }
-                guard p != oldPoint else { return }
-                
-                prs.append((time, pressure))
-                
-                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
-                nLine.controls[.first].pressure = nPressure
-                nLine.controls[.last].pressure = nPressure
-                
-                nLine.controls[.last].point = p
-                
-                let dp = nLine.lastPoint - nLine.firstPoint
-                
-                let sd: Point, isSnapS: Bool
-                if abs(dp.x) < abs(dp.y) {
-                    sd = .init(dp.x, 0)
-                    isSnapS = abs(dp.x * wtsScale) < abs(dp.y * wtsScale)
-                        .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
-                } else {
-                    sd = .init(0, dp.y)
-                    isSnapS = abs(dp.y * wtsScale) < abs(dp.x * wtsScale)
-                        .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
-                }
-                if isSnapS {
-                    if let lastSnapStraightTime = lastSnapStraightTime {
-                        if time - lastSnapStraightTime > 1 {
-                            isSnapStraight = false
-                            nsd = sd
-                        }
-                    } else {
-                        if !isSnapStraight {
-                            lastSnapStraightTime = time
-                            nsd = sd
-                        }
-                        isSnapStraight = true
-                    }
-                } else {
-                    lastSnapStraightTime = nil
-                    isSnapStraight = false
-                }
-                if isSnapStraight {
-                    if abs(nsd.x) > 0 {
-                        nLine.controls[.last].point.x = nLine.controls[.first].point.x
-                    } else {
-                        nLine.controls[.last].point.y = nLine.controls[.first].point.y
-                    }
-                } else {
-                    nLine.controls[.last].point -= nsd
-                }
-                
-                oldPoint = p
-            case .ended:
-                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
-                nLine.controls[.first].pressure = nPressure
-                nLine.controls[.last].pressure = nPressure
-                
-                if isSnap, let nc = Self.snap(.last, nLine, isSnapSelf: false,
-                                              screenToWorldScale: screenToWorldScale,
-                                              from: lastSnapLines) {
-                    nLine.controls[.last].point = nc.point
-                }
-            }
-        }
-        
-        for event in events {
-            drawLine(for: event.p, sp: event.sp, pressure: event.pressure, isTablet: event.isTablet,
-                     time: event.time, isClip: isClip, isSnap: isSnap,
-                     worldToScreenScale: event.worldToScreenScale,
-                     screenToWorldScale: event.screenToWorldScale,
-                     event.phase)
-        }
-        
-        return (nLine, isSnapStraight)
     }
     
     private var isDrawNote = false
@@ -1076,11 +511,430 @@ final class LineAction: Action {
         drawLine(with: event, isStraight: true)
     }
     
+    
+    nonisolated
+    private static func revision(pressure: Double,
+                                 minPressure: Double = 0.3,
+                                 revisonMinPressure: Double = 0.1875) -> Double {
+        pressure.clipped(min: minPressure, max: 1, newMin: revisonMinPressure, newMax: 1)
+    }
+    
+    nonisolated
+    private static func snap(_ fol: FirstOrLast, _ line: Line,
+                             isSnapSelf: Bool = true,
+                             screenToWorldScale: Double,
+                             from lines: [Line]) -> Line.Control? {
+        snap(line.controls[fol],
+             isSnapSelf ? line.controls[fol.reversed] : nil,
+             size: line.size * line.controls[fol].pressure,
+             screenToWorldScale: screenToWorldScale, from: lines)
+    }
+    nonisolated
+    private static func snap(_ c: Line.Control, _ nc: Line.Control?,
+                             size: Double, paddingD: Double = 0.5,
+                             screenToWorldScale: Double,
+                             from lines: [Line]) -> Line.Control? {
+        let dd = size / 2
+        let wPaddingD = screenToWorldScale * paddingD
+        var minDSQ = Double.infinity, minP: Line.Control?
+        func update(_ oc: Line.Control, _ oSize: Double) {
+            let ond = dd + oSize / 2 + wPaddingD
+            let dSQ = c.distanceSquared(oc)
+            if dSQ < ond * ond && dSQ < minDSQ {
+                minDSQ = dSQ
+                minP = oc
+            }
+        }
+        for oLine in lines {
+            guard let fc = oLine.controls.first,
+                  let lc = oLine.controls.last else { continue }
+            update(fc, oLine.size * fc.pressure)
+            update(lc, oLine.size * lc.pressure)
+        }
+        if let nc {
+            update(nc, size)
+        }
+        return minP
+    }
+    
+    nonisolated
+    static func line(from events: [DrawLineEvent],
+                     isClip: Bool = true,
+                     isSnap: Bool = true,
+                     firstSnapLines: [Line], lastSnapLines: [Line],
+                     clipBounds: Rect, isStraight: Bool) -> (line: Line, isSnapStraight: Bool) {
+        isStraight ?
+        straightLine(from: events, isClip: isClip, isSnap: isSnap,
+                     firstSnapLines: firstSnapLines,
+                     lastSnapLines: lastSnapLines,
+                     clipBounds: clipBounds) :
+        (line(from: events, isClip: isClip, isSnap: isSnap,
+             firstSnapLines: firstSnapLines,
+             lastSnapLines: lastSnapLines,
+             clipBounds: clipBounds), false)
+    }
+    nonisolated
+    static func line(from events: [DrawLineEvent],
+                     isClip: Bool = true, isSnap: Bool = true,
+                     lineWidth: Double = Line.defaultLineWidth,
+                     firstSnapLines: [Line], lastSnapLines: [Line],
+                     clipBounds: Rect) -> Line {
+        var nLine = Line(), nLineTimes = [Double]()
+        var tempPs = [Point]()
+        var oldC = Line.Control(point: .init()), oldTime = 0.0, oldFirstChangedTime: Double?
+        var snapDP: Point?, isStopRevisionFirstPressure = false
+        var tempPresures = [(time: Double, pressure: Double)]()
+        
+        for event in events {
+            switch event.phase {
+            case .began:
+                var p = RootView.roundedPoint(from: event.p, scale: event.worldToScreenScale)
+                let pressure = revision(pressure: event.pressure).rounded(decimalPlaces: 2)
+                
+                if isClip {
+                    p = clipBounds.clipped(p)
+                }
+                
+                if isSnap, let nc = snap(.init(point: p, weight: 0.5, pressure: pressure), nil,
+                                         size: lineWidth,
+                                         screenToWorldScale: event.screenToWorldScale,
+                                         from: firstSnapLines) {
+                    snapDP = nc.point - p
+                    p = nc.point
+                }
+                
+                let fc = Line.Control(point: p, weight: 0.5, pressure: pressure)
+                nLine = Line(controls: [fc, fc, fc, fc], size: lineWidth)
+                nLineTimes = [event.time, event.time, event.time, event.time]
+                oldC = fc
+                oldTime = event.time
+                tempPs = [fc.point]
+                tempPresures = [(event.time, pressure)]
+            case .changed:
+                var p = RootView.roundedPoint(from: event.p, scale: event.worldToScreenScale)
+                let pressure = revision(pressure: event.pressure).rounded(decimalPlaces: 2)
+                
+                if isClip {
+                    p = clipBounds.clipped(p)
+                }
+                
+                let firstChangedTime: Double
+                if let aTime = oldFirstChangedTime {
+                    firstChangedTime = aTime
+                } else {
+                    oldFirstChangedTime = event.time
+                    firstChangedTime = event.time
+                }
+                if let nSnapDP = snapDP, event.time - firstChangedTime < 0.08 {
+                    snapDP = nSnapDP * 0.75
+                    p = RootView.roundedPoint(from: p + nSnapDP * 0.75,
+                                              scale: event.worldToScreenScale)
+                }
+                
+                guard p != oldC.point && event.time > oldTime
+                        && nLine.controls.count >= 4 else { break }
+                tempPs.append(p)
+                
+                func revisionFirstPressure() {
+                    if !isStopRevisionFirstPressure {
+                        if nLine.controls[.first].pressure < pressure {
+                            for i in nLine.controls.count.range {
+                                nLine.controls[i].pressure = pressure
+                            }
+                            for i in tempPresures.count.range {
+                                tempPresures[i].pressure = pressure
+                            }
+                        }
+                        if event.time - firstChangedTime > 0.1 {
+                             isStopRevisionFirstPressure = true
+                        }
+                    }
+                }
+                revisionFirstPressure()
+                
+                tempPresures.append((event.time, pressure))
+                for ti in (1 ..< tempPresures.count).reversed() {
+                    if event.time - tempPresures[ti].time > 0.04 {
+                        tempPresures.removeFirst(ti - 1)
+                        break
+                    }
+                }
+                let lastC = Line.Control(point: p, weight: 0.5,
+                                         pressure: tempPresures.first?.pressure ?? pressure)
+                
+                func revisionFirstBezier() {
+                    if nLine.controls.count == 4, tempPs.count >= 2 {
+                        var maxL = 0.0
+                        for i in 0 ..< (tempPs.count - 1) {
+                            let edge = Edge(tempPs[i], tempPs[i + 1])
+                            maxL += edge.length
+                        }
+                        let d = maxL / 4
+                        var l = 0.0, maxP = nLine.firstPoint
+                        for i in 0 ..< (tempPs.count - 1) {
+                            let edge = Edge(tempPs[i], tempPs[i + 1])
+                            let el = edge.length
+                            if el > 0 && d >= l && d < l + el {
+                                maxP = edge.position(atT: (d - l) / el)
+                            }
+                            l += el
+                        }
+                        nLine.controls[nLine.controls.count - 3].point = maxP
+                    }
+                }
+                revisionFirstBezier()
+                
+                func jointControl(lowAngle: Double = 0.8 * (.pi / 2),
+                                  angle: Double = 1.0 * (.pi / 2)) -> Line.Control? {
+                    guard nLine.controls.count >= 4 else { return nil }
+                    let c0 = nLine.controls[nLine.controls.count - 4]
+                    let c1 = nLine.controls[nLine.controls.count - 3]
+                    let c2 = lastC.mid(oldC)
+                    guard c0.point != c1.point && c1.point != c2.point else { return nil }
+                    guard c1.point.distance(c2.point) > 3 * event.screenToWorldScale else { return nil }
+                    let dr = abs(Point.differenceAngle(c0.point, c1.point, c2.point))
+                    if dr > angle {
+                        var nc = c1
+                        nc.pressure = c2.pressure
+                        return nc
+                    } else if dr > lowAngle {
+                        let t = 1 - (dr - lowAngle) / (angle - lowAngle)
+                        return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
+                                            weight: 0.5,
+                                            pressure: c2.pressure)
+                    } else {
+                        return nil
+                    }
+                }
+                
+                func isAppend(maxDSq: Double = 0.75.squared) -> Bool {
+                    guard tempPs.count >= 3 else { return false }
+                    let nMaxDSq = maxDSq * event.screenToWorldScale.squared
+                    let ll = LinearLine(tempPs.first!,tempPs.last!)
+                    return tempPs.contains { ll.distanceSquared(from: $0) > nMaxDSq }
+                }
+                
+                if var jointC = jointControl() {
+                    if event.time - firstChangedTime < 0.02 {
+                        jointC.weight = 0.5
+                        
+                        nLine.controls = [jointC, jointC, jointC, jointC]
+                        nLineTimes = [event.time, event.time, event.time, event.time]
+                    } else {
+                        nLine.controls[nLine.controls.count - 3].weight = 0.5
+                        jointC.weight = 1
+                        
+                        nLine.controls.insert(jointC, at: nLine.controls.count - 2)
+                        nLineTimes.insert(event.time, at: nLineTimes.count - 2)
+                    }
+                    
+                    tempPs = [p]
+                } else if isAppend() {
+                    nLine.controls[nLine.controls.count - 3].weight = 0.5
+                    let prp = nLine.controls[nLine.controls.count - 1]
+                    nLine.controls[nLine.controls.count - 2] = prp
+                    nLine.controls[nLine.controls.count - 2].weight = 1
+                    
+                    nLine.controls.insert(prp, at: nLine.controls.count - 1)
+                    nLineTimes.insert(nLineTimes[nLineTimes.count - 1], at: nLineTimes.count - 1)
+                    
+                    tempPs = [p]
+                }
+                
+                nLine.controls[nLine.controls.count - 3].weight = 1
+                nLine.controls[nLine.controls.count - 2]
+                    = nLine.controls[nLine.controls.count - 3].mid(lastC)
+                nLine.controls[nLine.controls.count - 2].weight = 0.5
+                nLine.controls[.last] = lastC
+                nLineTimes[nLineTimes.count - 2] = event.time
+                nLineTimes[.last] = event.time
+                
+                oldC = lastC
+                oldTime = event.time
+            case .ended:
+                guard nLine.controls.count >= 4 else { break }
+                
+                nLine.controls[nLine.controls.count - 3].weight = 0.5
+                nLine.controls[nLine.controls.count - 2] = nLine.controls.last!
+                nLine.controls.removeLast()
+                nLineTimes.removeLast()
+                
+//                func revisionLastPressure() {
+//                    if nLine.controls.count == nLineTimes.count && nLine.controls.count >= 3 {
+//                        var fi = nLineTimes.count
+//                        for (i, oldTime) in nLineTimes.enumerated().reversed() {
+//                            fi = i
+//                            if event.time - oldTime > 0.04 { break }
+//                        }
+//                        fi = min(max(1, nLine.controls.count - 3), fi)
+//                        let fpre = nLine.controls[fi].pressure
+//                        for i in (fi + 1) ..< nLine.controls.count {
+//                            nLine.controls[i].pressure = fpre
+//                        }
+//                    }
+//                }
+//                revisionLastPressure()
+                
+                func lastCut() {
+                    if nLine.controls.count >= 3 {
+                        var oldC = nLine.controls.first!
+                        let allLength = nLine.controls.reduce(0.0) {
+                            let n = $0 + $1.point.distance(oldC.point)
+                            oldC = $1
+                            return n
+                        }
+                        oldC = nLine.controls.last!
+                        var length = 0.0
+                        for i in (2 ..< nLine.controls.count).reversed() {
+                            let p0 = nLine.controls[i].point,
+                                p1 = nLine.controls[i - 1].point,
+                                p2 = nLine.controls[i - 2].point
+                            length += p1.distance(oldC.point)
+                            oldC = nLine.controls[i]
+                            if event.time - nLineTimes[i] > 0.1
+                                || length * event.worldToScreenScale > 6
+                                || length / allLength > 0.05 {
+                                break
+                            }
+                            let dr = abs(Point.differenceAngle(p0, p1, p2))
+                            if dr > .pi * 0.75 {
+                                let nCount = nLine.controls.count - i
+                                nLine.controls.removeLast(nCount)
+                                nLineTimes.removeLast(nCount)
+                                break
+                            }
+                        }
+                    }
+                }
+                lastCut()
+                
+                if isSnap, let nc = snap(.last, nLine,
+                                         screenToWorldScale: event.screenToWorldScale,
+                                         from: lastSnapLines) {
+                    nLine.controls[.last].point = nc.point
+                }
+            }
+        }
+        
+        return nLine
+    }
+    
+    nonisolated
+    static func straightLine(from events: [DrawLineEvent],
+                             isClip: Bool = true, isSnap: Bool = true,
+                             lineWidth: Double = Line.defaultLineWidth,
+                             snappableDistance: Double = 2.5,
+                             firstSnapLines: [Line], lastSnapLines: [Line],
+                             clipBounds: Rect) -> (line: Line, snapStraight: Bool) {
+        var nLine = Line()
+        var oldPoint = Point()
+        var prs = [(time: Double, pressure: Double)]()
+        var isSnapStraight = false, lastSnapStraightTime: Double?, nsd = Point()
+        
+        func drawLine(for p: Point, sp: Point, pressure: Double, isTablet: Bool,
+                      time: Double,
+                      worldToScreenScale: Double,
+                      screenToWorldScale: Double,
+                      _ phase: Phase) {
+            var p = RootView.roundedPoint(from: p, scale: worldToScreenScale)
+            let pressure = Self.revision(pressure: pressure).rounded(decimalPlaces: 2)
+            
+            switch phase {
+            case .began:
+                if isClip {
+                    p = clipBounds.clipped(p)
+                }
+                if isSnap, let nc = Self.snap(.init(point: p, pressure: pressure),
+                                              nil, size: lineWidth,
+                                              screenToWorldScale: screenToWorldScale,
+                                              from: firstSnapLines) {
+                    p = nc.point
+                }
+                
+                let fc = Line.Control(point: p, weight: 0.5, pressure: pressure)
+                nLine = Line(controls: [fc, fc], size: lineWidth)
+                oldPoint = p
+                prs = [(time, pressure)]
+            case .changed:
+                if isClip {
+                    p = clipBounds.clipped(p)
+                }
+                guard p != oldPoint else { return }
+                
+                prs.append((time, pressure))
+                
+                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
+                nLine.controls[.first].pressure = nPressure
+                nLine.controls[.last].pressure = nPressure
+                
+                nLine.controls[.last].point = p
+                
+                let dp = nLine.lastPoint - nLine.firstPoint
+                
+                let sd: Point, isSnapS: Bool
+                if abs(dp.x) < abs(dp.y) {
+                    sd = .init(dp.x, 0)
+                    isSnapS = abs(dp.x * worldToScreenScale) < abs(dp.y * worldToScreenScale)
+                        .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
+                } else {
+                    sd = .init(0, dp.y)
+                    isSnapS = abs(dp.y * worldToScreenScale) < abs(dp.x * worldToScreenScale)
+                        .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
+                }
+                if isSnapS {
+                    if let lastSnapStraightTime = lastSnapStraightTime {
+                        if time - lastSnapStraightTime > 1 {
+                            isSnapStraight = false
+                            nsd = sd
+                        }
+                    } else {
+                        if !isSnapStraight {
+                            lastSnapStraightTime = time
+                            nsd = sd
+                        }
+                        isSnapStraight = true
+                    }
+                } else {
+                    lastSnapStraightTime = nil
+                    isSnapStraight = false
+                }
+                if isSnapStraight {
+                    if abs(nsd.x) > 0 {
+                        nLine.controls[.last].point.x = nLine.controls[.first].point.x
+                    } else {
+                        nLine.controls[.last].point.y = nLine.controls[.first].point.y
+                    }
+                } else {
+                    nLine.controls[.last].point -= nsd
+                }
+                
+                oldPoint = p
+            case .ended:
+                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
+                nLine.controls[.first].pressure = nPressure
+                nLine.controls[.last].pressure = nPressure
+                
+                if isSnap, let nc = Self.snap(.last, nLine, isSnapSelf: false,
+                                              screenToWorldScale: screenToWorldScale,
+                                              from: lastSnapLines) {
+                    nLine.controls[.last].point = nc.point
+                }
+            }
+        }
+        
+        for event in events {
+            drawLine(for: event.p, sp: event.sp, pressure: event.pressure, isTablet: event.isTablet,
+                     time: event.time,
+                     worldToScreenScale: event.worldToScreenScale,
+                     screenToWorldScale: event.screenToWorldScale,
+                     event.phase)
+        }
+        
+        return (nLine, isSnapStraight)
+    }
     struct DrawLineEvent {
-        var p: Point,
-            sp: Point, pressure: Double, isTablet: Bool,
-            time: Double, isClip: Bool = true,
-            isSnap: Bool = true,
+        var p: Point, sp: Point, pressure: Double, isTablet: Bool,
+            time: Double, isClip: Bool = true, isSnap: Bool = true,
             worldToScreenScale: Double, screenToWorldScale: Double,
             phase: Phase
     }
