@@ -669,7 +669,7 @@ final class LineAction: Action {
                             let edge = Edge(tempPs[i], tempPs[i + 1])
                             maxL += edge.length
                         }
-                        let d = maxL / 4
+                        let d = maxL / 3
                         var l = 0.0, maxP = nLine.firstPoint
                         for i in 0 ..< (tempPs.count - 1) {
                             let edge = Edge(tempPs[i], tempPs[i + 1])
@@ -679,19 +679,18 @@ final class LineAction: Action {
                             }
                             l += el
                         }
-                        nLine.controls[nLine.controls.count - 3].point = maxP
+                        nLine.controls[1].point = maxP
                     }
                 }
                 revisionFirstBezier()
                 
-                func jointControl(lowAngle: Double = 0.8 * (.pi / 2),
-                                  angle: Double = 1.0 * (.pi / 2)) -> Line.Control? {
+                func jointControl(lowAngle: Double = 0.3 * (.pi / 2),
+                                  angle: Double = 0.6 * (.pi / 2)) -> Line.Control? {
                     guard nLine.controls.count >= 4 else { return nil }
                     let c0 = nLine.controls[nLine.controls.count - 4]
                     let c1 = nLine.controls[nLine.controls.count - 3]
-                    let c2 = lastC.mid(oldC)
+                    let c2 = lastC
                     guard c0.point != c1.point && c1.point != c2.point else { return nil }
-                    guard c1.point.distance(c2.point) > 3 * event.screenToWorldScale else { return nil }
                     let dr = abs(Point.differenceAngle(c0.point, c1.point, c2.point))
                     if dr > angle {
                         var nc = c1
@@ -715,7 +714,7 @@ final class LineAction: Action {
                 }
                 
                 if var jointC = jointControl() {
-                    if event.time - firstChangedTime < 0.02 {
+                    if event.time - firstChangedTime < 0.04 {
                         jointC.weight = 0.5
                         
                         nLine.controls = [jointC, jointC, jointC, jointC]
@@ -729,7 +728,7 @@ final class LineAction: Action {
                     }
                     
                     tempPs = [p]
-                } else if isAppend() {
+                } else if isAppend(maxDSq: event.time - firstChangedTime < 0.04 ? 3.0.squared : 0.75.squared) {
                     nLine.controls[nLine.controls.count - 3].weight = 0.5
                     let prp = nLine.controls[nLine.controls.count - 1]
                     nLine.controls[nLine.controls.count - 2] = prp
@@ -758,22 +757,6 @@ final class LineAction: Action {
                 nLine.controls[nLine.controls.count - 2] = nLine.controls.last!
                 nLine.controls.removeLast()
                 nLineTimes.removeLast()
-                
-//                func revisionLastPressure() {
-//                    if nLine.controls.count == nLineTimes.count && nLine.controls.count >= 3 {
-//                        var fi = nLineTimes.count
-//                        for (i, oldTime) in nLineTimes.enumerated().reversed() {
-//                            fi = i
-//                            if event.time - oldTime > 0.04 { break }
-//                        }
-//                        fi = min(max(1, nLine.controls.count - 3), fi)
-//                        let fpre = nLine.controls[fi].pressure
-//                        for i in (fi + 1) ..< nLine.controls.count {
-//                            nLine.controls[i].pressure = fpre
-//                        }
-//                    }
-//                }
-//                revisionLastPressure()
                 
                 func lastCut() {
                     if nLine.controls.count >= 3 {

@@ -6964,7 +6964,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     nPath.contains(planeView.node.path) ?
                         IndexValue(value: planeView.model, index: pi) : nil
                 } else if selections.contains(where: { selection in
-                    planeView.model.path.intersects(convertFromWorld(selection.rect))
+                    Path(convertFromWorld(selection.rect)).contains(planeView.node.path)
                 }) {
                     IndexValue(value: planeView.model, index: pi)
                 } else {
