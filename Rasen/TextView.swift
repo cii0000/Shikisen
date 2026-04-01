@@ -30,6 +30,20 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
     var replacedRange: Range<String.Index>?
     var selectedRange: Range<String.Index>?
     var selectedLineLocation = 0.0
+    var selectedRanges = [Range<String.Index>]() {
+        didSet {
+            guard selectedRanges != oldValue else { return }
+            updateWithSelectedRanges()
+        }
+    }
+    func updateWithSelectedRanges() {
+        guard !selectedRanges.isEmpty else {
+            selectionNode.path = .init()
+            return
+        }
+        
+        selectionNode.path = Path(selectedRects.map { .init($0) })
+    }
     
     var editGrid = EditGrid.main {
         didSet {
@@ -86,6 +100,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
                           lineWidth: 0.5, lineType: .color(.border))
     let clippingNode = Node(isHidden: true,
                             lineWidth: 4, lineType: .color(.warning))
+    let selectionNode = Node(lineWidth: 1, lineType: .color(.selected), fillType: .color(.subSelected))
     var isHiddenSelectedRange = true {
         didSet {
             cursorNode.isHidden = isHiddenSelectedRange
@@ -102,7 +117,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
         typesetter = binder[keyPath: keyPath].typesetter
         
         node = Node(children: [markedRangeNode, replacedRangeNode,
-                               cursorNode, borderNode, timelineNode, clippingNode],
+                               cursorNode, borderNode, timelineNode, clippingNode, selectionNode],
                     attitude: Attitude(position: binder[keyPath: keyPath].origin),
                     fillType: .color(.content))
         updateLineWidth()
@@ -117,6 +132,7 @@ extension TextView {
         node.attitude.position = model.origin
         updateLineWidth()
         updateTypesetter()
+        updateWithSelectedRanges()
     }
     func updateLineWidth() {
         let ratio = model.size / Font.defaultSize
@@ -322,11 +338,6 @@ extension TextView {
         }
     }
     
-    func contains(_ p: Point, scale: Double) -> Bool {
-        containsTimeline(p, scale: scale)
-        || (bounds?.contains(p) ?? false)
-    }
-    
     private func updateMarkedRange() {
         if let markedRange {
             var mPathlines = [Pathline]()
@@ -425,6 +436,43 @@ extension TextView {
         }
     }
     
+    var transformedSelectedRects: [Rect] {
+        selectedRects.map { $0 * node.localTransform }
+    }
+    var selectedRects: [Rect] {
+        let orientation = model.orientation
+        var rects = [Rect]()
+        for range in selectedRanges {
+            var oldRect: Rect?
+            for rect in paddingRects(with: range) {
+                if let oldRect {
+                    switch orientation {
+                    case .horizontal:
+                        let w = oldRect.minX - rect.maxX
+                        if w > 0 {
+                            rects.append(.init(Edge(oldRect.minXMinYPoint,
+                                                    rect.maxXMaxYPoint)))
+                        }
+                    case .vertical:
+                        let h = rect.minY - oldRect.maxY
+                        if h > 0 {
+                            rects.append(.init(Edge(oldRect.minXMaxYPoint,
+                                                    rect.maxXMinYPoint)))
+                        }
+                    }
+                }
+                rects.append(rect)
+                oldRect = rect
+            }
+        }
+        return rects
+    }
+    func rects(with range: Range<String.Index>) -> [Rect] {
+        typesetter.rects(for: range)
+    }
+    func paddingRects(with range: Range<String.Index>) -> [Rect] {
+        typesetter.paddingRects(for: range)
+    }
     func transformedRects(with range: Range<String.Index>) -> [Rect] {
         typesetter.rects(for: range).map { $0 * node.localTransform }
     }
@@ -496,12 +544,6 @@ extension TextView {
         typesetter.intersectsHalf(rect)
     }
     
-    func ranges(at selection: Selection) -> [Range<String.Index>] {
-        guard let fi = characterIndexWithOutOfBounds(for: selection.firstOrigin),
-              let li = characterIndexWithOutOfBounds(for: selection.lastOrigin) else { return [] }
-        return [fi < li ? fi ..< li : li ..< fi]
-    }
-    
     var copyPadding: Double {
         1 * model.size / Font.defaultSize
     }
@@ -539,6 +581,7 @@ extension TextView {
             .replaceSubrange(oldRange, with: textValue.string)
         let nri = model.string.range(fromInt: textValue.newRange).upperBound
         selectedRange = nri ..< nri
+        selectedRanges = []
         
         if let origin = textValue.origin {
             binder[keyPath: keyPath].origin = origin
@@ -608,29 +651,31 @@ extension TextView {
         insert("\t")
     }
     
-    func range(from selection: Selection) -> Range<String.Index>? {
-        let nRect = convertFromWorld(selection.rect)
-        let tfp = convertFromWorld(selection.firstOrigin)
-        let tlp = convertFromWorld(selection.lastOrigin)
-        if intersects(nRect),
-           let fi = characterIndexWithOutOfBounds(for: tfp),
-           let li = characterIndexWithOutOfBounds(for: tlp) {
+    func selectedRange(at p: Point) -> Range<String.Index>? {
+        if let i = characterIndexWithOutOfBounds(for: p) {
+            selectedRanges.first { $0.contains(i) }
+        } else {
+            nil
+        }
+    }
+    func rangeFrom(firstP: Point, lastP: Point) -> Range<String.Index>? {
+        if let rect = Rect(points: [firstP, lastP]), intersects(rect),
+           let fi = characterIndexWithOutOfBounds(for: firstP),
+           let li = characterIndexWithOutOfBounds(for: lastP) {
             
             return fi < li ? fi ..< li : li ..< fi
         } else {
             return nil
         }
     }
-    @discardableResult func delete(from selections: [Selection]) -> Bool {
+    @discardableResult func deleteWithSelected() -> Bool {
         guard let deleteRange = selectedRange else { return false }
-        for selection in selections {
-            if let nRange = range(from: selection) {
-                if nRange.contains(deleteRange.lowerBound)
-                    || nRange.lowerBound == deleteRange.lowerBound
-                    || nRange.upperBound == deleteRange.lowerBound {
-                    removeCharacters(in: nRange)
-                    return true
-                }
+        for nRange in selectedRanges {
+            if nRange.contains(deleteRange.lowerBound)
+                || nRange.lowerBound == deleteRange.lowerBound
+                || nRange.upperBound == deleteRange.lowerBound {
+                removeCharacters(in: nRange)
+                return true
             }
         }
         return false
@@ -779,6 +824,7 @@ extension TextView {
             replacedRange = model.string.range(fromInt: iReplacedRange)
         }
         selectedRange = ni ..< ni
+        selectedRanges = []
         
         TextInputContext.update()
         updateTypesetter()
@@ -817,6 +863,7 @@ extension TextView {
             markedRange = nil
             replacedRange = nil
             selectedRange = ni ..< ni
+            selectedRanges = []
         } else {
             let i = model.string.intIndex(from: rRange.lowerBound)
             let iMarkingRange = str.intRange(from: markingRange)
@@ -828,6 +875,7 @@ extension TextView {
             markedRange = ni ..< di
             replacedRange = imsi ..< imei
             selectedRange = di ..< di
+            selectedRanges = []
         }
         updateTypesetter()
         updateSelectedLineLocation()
@@ -855,6 +903,7 @@ extension TextView {
         let ei = model.string.index(model.string.startIndex,
                                     offsetBy: irRange.lowerBound + str.count)
         selectedRange = ei ..< ei
+        selectedRanges = []
         
         updateTypesetter()
         updateSelectedLineLocation()

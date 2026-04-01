@@ -514,9 +514,10 @@ final class LineAction: Action {
     
     nonisolated
     private static func revision(pressure: Double,
-                                 minPressure: Double = 0.3,
+                                 minPressure: Double = 0.175,
+                                 maxPressure: Double = 0.1875,
                                  revisonMinPressure: Double = 0.1875) -> Double {
-        pressure.clipped(min: minPressure, max: 1, newMin: revisonMinPressure, newMax: 1)
+        pressure.clipped(min: minPressure, max: maxPressure, newMin: revisonMinPressure, newMax: 1)
     }
     
     nonisolated
@@ -525,7 +526,7 @@ final class LineAction: Action {
                              screenToWorldScale: Double,
                              from lines: [Line]) -> Line.Control? {
         snap(line.controls[fol],
-             isSnapSelf ? line.controls[fol.reversed] : nil,
+             isSnapSelf && line.length() > line.size * 2 ? line.controls[fol.reversed] : nil,
              size: line.size * line.controls[fol].pressure,
              screenToWorldScale: screenToWorldScale, from: lines)
     }
@@ -1104,7 +1105,7 @@ final class LineAction: Action {
                 isStraightNode = nil
             }
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
         }
     }
     
@@ -1275,7 +1276,7 @@ final class LineAction: Action {
             outlineLassoNode = nil
             rectNode?.removeFromParent()
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             rootView.updateFinding(at: p)
         }
     }
@@ -1337,9 +1338,7 @@ final class LineAction: Action {
                    isEnableLine: Bool = true,
                    isEnablePlane: Bool = true,
                    isEnableText: Bool = true,
-                   isSplitLine: Bool = true,
-                   distance: Double = 0,
-                   selections: [Selection] = [], at p: Point) {
+                   distance: Double = 0, at p: Point) {
         guard let lb = tempLine.bounds else { return }
         if centerBounds.contains(lb),
            let sheetView = rootView.sheetView(at: centerSHP) {
@@ -1347,23 +1346,19 @@ final class LineAction: Action {
             let nLine = tempLine * Transform(translation: -centerBounds.origin)
             let d = distance  * rootView.screenToWorldScale
             if let value = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                distance: d,
-                                                isSplitLine: isSplitLine,
-                                                  isRemove: isRemove,
-                                                  isEnableLine: isEnableLine,
-                                                  isEnablePlane: isEnablePlane,
-                                                  isEnableText: isEnableText,
-                                                  selections: selections) {
+                                                isRemove: isRemove,
+                                                isEnableLine: isEnableLine,
+                                                isEnablePlane: isEnablePlane,
+                                                isEnableText: isEnableText,
+                                                distance: d) {
                 let np = sheetView.convertFromWorld(p)
                 let t = Transform(translation: -np)
                 var nValue = value * t
                 nValue.origin = np
                 if let s = nValue.string {
-                    Pasteboard.shared.copiedObjects
-                        = [.sheetValue(nValue), .string(s)]
+                    Pasteboard.shared.copiedObjects = [.sheetValue(nValue), .string(s)]
                 } else {
-                    Pasteboard.shared.copiedObjects
-                        = [.sheetValue(nValue)]
+                    Pasteboard.shared.copiedObjects = [.sheetValue(nValue)]
                 }
             }
         } else {
@@ -1373,16 +1368,13 @@ final class LineAction: Action {
                 if lb.intersects(b),
                    let sheetView = rootView.sheetView(at: shp) {
                     
-                    let nLine = tempLine
-                        * Transform(translation: -b.origin)
+                    let nLine = tempLine * Transform(translation: -b.origin)
                     if let aValue
                         = sheetView.lassoErase(with: Lasso(line: nLine),
-                                               isSplitLine: isSplitLine,
                                                isRemove: isRemove,
                                                isEnableLine: isEnableLine,
                                                isEnablePlane: isEnablePlane,
-                                               isEnableText: isEnableText,
-                                               selections: selections) {
+                                               isEnableText: isEnableText) {
                         let t = Transform(translation: -sheetView.convertFromWorld(p))
                         value += aValue * t
                     }
@@ -1391,65 +1383,12 @@ final class LineAction: Action {
             
             if !value.isEmpty {
                 if let s = value.string {
-                    Pasteboard.shared.copiedObjects
-                        = [.sheetValue(value), .string(s)]
+                    Pasteboard.shared.copiedObjects = [.sheetValue(value), .string(s)]
                 } else {
-                    Pasteboard.shared.copiedObjects
-                        = [.sheetValue(value)]
+                    Pasteboard.shared.copiedObjects = [.sheetValue(value)]
                 }
             }
         }
-    }
-    func sheetValue(isRemove: Bool,
-                    isEnableLine: Bool = true,
-                    isEnablePlane: Bool = true,
-                    isEnableText: Bool = true,
-                    isSplitLine: Bool = true,
-                    distance: Double = 2,
-                    selections: [Selection] = [], at p: Point) -> SheetValue {
-        guard let lb = tempLine.bounds else { return SheetValue() }
-        if centerBounds.contains(lb),
-           let sheetView = rootView.sheetView(at: centerSHP) {
-            
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            let d = distance * rootView.screenToWorldScale
-            if let value = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                distance: d,
-                                                  isSplitLine: isSplitLine,
-                                                  isRemove: isRemove,
-                                                  isEnableLine: isEnableLine,
-                                                  isEnablePlane: isEnablePlane,
-                                                  isEnableText: isEnableText,
-                                                  selections: selections) {
-                let t = Transform(translation: -sheetView.convertFromWorld(p))
-                let nValue = value * t
-                return nValue
-            }
-        } else {
-            var value = SheetValue()
-            for shp in nearestShps {
-                let b = rootView.sheetFrame(with: shp) - centerOrigin
-                if lb.intersects(b),
-                   let sheetView = rootView.sheetView(at: shp) {
-                    
-                    let nLine = tempLine
-                        * Transform(translation: -b.origin)
-                    if let aValue
-                        = sheetView.lassoErase(with: Lasso(line: nLine),
-                                               isSplitLine: isSplitLine,
-                                               isRemove: isRemove,
-                                               isEnableLine: isEnableLine,
-                                               isEnablePlane: isEnablePlane,
-                                               isEnableText: isEnableText,
-                                               selections: selections) {
-                        let t = Transform(translation: -sheetView.convertFromWorld(p))
-                        value += aValue * t
-                    }
-                }
-            }
-            return value
-        }
-        return SheetValue()
     }
     
     var rectNode: Node?

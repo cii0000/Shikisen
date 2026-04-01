@@ -306,10 +306,6 @@ final class SubNSApplication: NSApplication {
                          action: #selector(SubMTKView.paste(_:)),
                          keyEquivalent: "v", modifierFlags: [.command])
         editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Find".localized,
-                         action: #selector(SubMTKView.find(_:)),
-                         keyEquivalent: "f", modifierFlags: [.command])
-        editMenu.addItem(NSMenuItem.separator())
         editMenu.addItem(withTitle: "Change to Draft".localized,
                          action: #selector(SubMTKView.changeToDraft(_:)),
                          keyEquivalent: "d", modifierFlags: [.command])
@@ -323,13 +319,6 @@ final class SubNSApplication: NSApplication {
         editMenu.addItem(withTitle: "Cut Faces".localized,
                          action: #selector(SubMTKView.cutFaces(_:)),
                          keyEquivalent: "b", modifierFlags: [.command, .shift])
-        editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Change to Vertical Text".localized,
-                         action: #selector(SubMTKView.changeToVerticalText(_:)),
-                         keyEquivalent: "l", modifierFlags: [.command])
-        editMenu.addItem(withTitle: "Change to Horizontal Text".localized,
-                         action: #selector(SubMTKView.changeToHorizontalText(_:)),
-                         keyEquivalent: "l", modifierFlags: [.command, .shift])
         self.editMenu = editMenu
         let editMenuItem = NSMenuItem(title: editString,
                                       action: nil, keyEquivalent: "")
@@ -717,28 +706,12 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     private var trackpadView: NSView?,
-                lookUpButton: NSButton?,
                 scrollButton: NSButton?,
                 zoomButton: NSButton?,
                 rotateButton: NSButton?
     func updateTrackpadAlternative() {
         if isShownTrackpadAlternative {
             let trackpadView = SubNSTrackpadView(frame: NSRect())
-            let lookUpButton = SubNSButton(frame: NSRect(),
-                                           .lookUp) { [weak self] (event, dp) in
-                guard let self else { return }
-                if event.phase == .began,
-                   let r = self.rootView.selections
-                    .first(where: { self.rootView.worldBounds.intersects($0.rect) })?.rect {
-                    
-                    let p = r.centerPoint
-                    let sp = self.rootView.convertWorldToScreen(p)
-                    self.rootAction.inputKey(with: self.inputKeyEventWith(at: sp, .threeFingersTap, .began))
-                    self.rootAction.inputKey(with: self.inputKeyEventWith(at: sp, .threeFingersTap, .ended))
-                }
-            }
-            trackpadView.addSubview(lookUpButton)
-            self.lookUpButton = lookUpButton
             
             let scrollButton = SubNSButton(frame: NSRect(),
                                            .scroll) { [weak self] (event, dp) in
@@ -784,7 +757,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             updateTrackpadAlternativePositions()
         } else {
             trackpadView?.removeFromSuperview()
-            lookUpButton?.removeFromSuperview()
             scrollButton?.removeFromSuperview()
             zoomButton?.removeFromSuperview()
             rotateButton?.removeFromSuperview()
@@ -793,17 +765,11 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     func updateTrackpadAlternativePositions() {
         let aw = max(actionNode?.transformedBounds?.cg.width ?? 0, 150)
         let w: CGFloat = 40.0, padding: CGFloat = 4.0
-        let lookUpSize = NSSize(width: w, height: 40)
         let scrollSize = NSSize(width: w, height: 40)
         let zoomSize = NSSize(width: w, height: 100)
         let rotateSize = NSSize(width: w, height: 40)
-        let h = lookUpSize.height + scrollSize.height + zoomSize.height + rotateSize.height + padding * 5
+        let h = scrollSize.height + zoomSize.height + rotateSize.height + padding * 5
         let b = bounds
-        
-        lookUpButton?.frame = NSRect(x: padding,
-                                     y: padding * 4 + rotateSize.height + zoomSize.height + scrollSize.height,
-                                   width: lookUpSize.width,
-                                   height: lookUpSize.height)
         scrollButton?.frame = NSRect(x: padding,
                                      y: padding * 3 + rotateSize.height + zoomSize.height,
                                    width: scrollSize.width,
@@ -835,45 +801,45 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         didSet {
             guard isEnableMenuCommand != oldValue else { return }
             rootView.isShownLastEditedSheet = isEnableMenuCommand
-            rootView.isNoneCursor = isEnableMenuCommand
+            rootView.isFromMenu = isEnableMenuCommand
         }
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(SubMTKView.importDocument(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
             
         case #selector(SubMTKView.exportAsImage(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsImage4K(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsPDF(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsGIF(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
             
         case #selector(SubMTKView.exportAsMovie(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsMovie4K(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsSound(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsLinearPCM(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
             
         case #selector(SubMTKView.exportAsDocument(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsDocumentWithHistory(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
             
         case #selector(SubMTKView.clearHistory(_:)):
-            return rootView.isSelectedNoneCursor
+            return rootView.editableFromMenu
             
         case #selector(SubMTKView.undo(_:)):
             if isEnableMenuCommand {
                 if rootView.isEditingSheet {
-                    if rootView.isSelectedNoneCursor {
-                        return rootView.selectedSheetViewNoneCursor?.history.isCanUndo ?? false
+                    if rootView.editableFromMenu {
+                        return rootView.lastEditedSheetViewFromMenu?.history.isCanUndo ?? false
                     }
                 } else {
                     return rootView.history.isCanUndo
@@ -883,8 +849,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         case #selector(SubMTKView.redo(_:)):
             if isEnableMenuCommand {
                 if rootView.isEditingSheet {
-                    if rootView.isSelectedNoneCursor {
-                        return rootView.selectedSheetViewNoneCursor?.history.isCanRedo ?? false
+                    if rootView.editableFromMenu {
+                        return rootView.lastEditedSheetViewFromMenu?.history.isCanRedo ?? false
                     }
                 } else {
                     return rootView.history.isCanRedo
@@ -893,13 +859,13 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             return false
         case #selector(SubMTKView.cut(_:)):
             return isEnableMenuCommand
-                && rootView.isSelectedNoneCursor && rootView.isSelectedOnlyNoneCursor
+                && rootView.editableFromMenu
         case #selector(SubMTKView.copy(_:)):
             return isEnableMenuCommand
-                && rootView.isSelectedNoneCursor && rootView.isSelectedOnlyNoneCursor
+                && rootView.editableFromMenu
         case #selector(SubMTKView.paste(_:)):
             return if isEnableMenuCommand
-                && rootView.isSelectedNoneCursor {
+                && rootView.editableFromMenu {
                 switch Pasteboard.shared.copiedObjects.first {
                 case .picture, .planesValue: rootView.isEditingSheet
                 case .copiedSheetsValue: !rootView.isEditingSheet
@@ -908,31 +874,22 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             } else {
                 false
             }
-        case #selector(SubMTKView.find(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor && rootView.isSelectedText
         case #selector(SubMTKView.changeToDraft(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor
-                && !(rootView.selectedSheetViewNoneCursor?.model.picture.isEmpty ?? true)
+                && rootView.editableFromMenu
+                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.isEmpty ?? true)
         case #selector(SubMTKView.cutDraft(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor
-                && !(rootView.selectedSheetViewNoneCursor?.model.draftPicture.isEmpty ?? true)
+                && rootView.editableFromMenu
+                && !(rootView.lastEditedSheetViewFromMenu?.model.draftPicture.isEmpty ?? true)
         case #selector(SubMTKView.makeFaces(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor
-                && !(rootView.selectedSheetViewNoneCursor?.model.picture.lines.isEmpty ?? true)
+                && rootView.editableFromMenu
+                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.lines.isEmpty ?? true)
         case #selector(SubMTKView.cutFaces(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor
-                && !(rootView.selectedSheetViewNoneCursor?.model.picture.planes.isEmpty ?? true)
-        case #selector(SubMTKView.changeToVerticalText(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor && rootView.isSelectedText
-        case #selector(SubMTKView.changeToHorizontalText(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.isSelectedNoneCursor && rootView.isSelectedText
+                && rootView.editableFromMenu
+                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.planes.isEmpty ?? true)
         
         case #selector(SubMTKView.shownActionList(_:)):
             menuItem.state = !isHiddenActionList ? .on : .off
@@ -1205,200 +1162,200 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     }
     
     @objc func importDocument(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ImportAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     
     @objc func exportAsImage(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsImageAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsImage4K(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAs4KImageAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsPDF(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsPDFAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsGIF(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsGIFAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsMovie(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsMovieAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsMovie4K(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAs4KMovieAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsSound(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsSoundAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsLinearPCM(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsLinearPCMAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     
     @objc func exportAsDocument(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsDocumentAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func exportAsDocumentWithHistory(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ExportAsDocumentWithHistoryAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     
     @objc func clearHistory(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ClearHistoryAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     
     @objc func undo(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = UndoAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func redo(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = RedoAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func cut(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = CutAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func copy(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = CopyAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func paste(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = PasteAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func find(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = FindAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func changeToDraft(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ChangeToDraftAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func cutDraft(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = CutDraftAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func makeFaces(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = MakeFacesAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func cutFaces(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = CutFacesAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func changeToVerticalText(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ChangeToVerticalTextAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     @objc func changeToHorizontalText(_ sender: Any) {
-        rootView.isNoneCursor = true
+        rootView.isFromMenu = true
         let action = ChangeToHorizontalTextAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
-        rootView.isNoneCursor = false
+        rootView.isFromMenu = false
     }
     
 //    @objc func startDictation(_ sender: Any) {
@@ -1680,6 +1637,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     
+    var enableFirstPressure: Float = 0.0625
+    
     private var beganDragEvent: DragEvent?,
                 oldPressureStage = 0, isDrag = false, isStrongDrag = false,
                 firstTime = 0.0, firstP = Point(), isMovedDrag = false, maxPressure: Float = 0.0
@@ -1701,8 +1660,11 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         isMovedDrag = true
         maxPressure = max(maxPressure, nsEvent.pressure)
         if !isDrag {
-            guard nsEvent.pressure > 0 else {
+            guard nsEvent.pressure > enableFirstPressure else {
                 beganDragEvent = dragEventWith(nsEvent, .began)
+                if beganDragEvent.time - firstTime < 0.02 {
+                    beganDragEvent.screenPoint = firstP
+                }
                 self.beganDragEvent = beganDragEvent
                 return
             }
@@ -1795,7 +1757,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         guard window?.isMainWindow ?? false else { return }
         
         let event = inputKeyEventWith(drag: nsEvent, .began)
-        rootAction.updateLastEditedIntPoint(from: event)
+        rootAction.updateLastEditedSheetPosition(from: event)
         let menu = NSMenu()
         if menuAction != nil {
             menuAction?.action.end()

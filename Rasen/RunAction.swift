@@ -79,12 +79,17 @@ final class RunAction: InputKeyEventAction {
             rootAction.stopPlaying(with: event)
             return
         }
-        if event.phase == .began && rootView.closePanel(at: p) { return }
         guard isEditingSheet else {
-            rootAction.keepOut(with: event)
-            
-            if event.phase == .began {
+            switch event.phase {
+            case .began:
+                rootView.cursor = .arrow
+                
+                rootView.unselect(at: p)
                 rootView.closeAllPanels(at: p)
+            case .changed:
+                break
+            case .ended:
+                rootView.cursor = rootView.defaultCursor
             }
             return
         }
@@ -94,6 +99,7 @@ final class RunAction: InputKeyEventAction {
             rootView.cursor = .arrow
             
             defer {
+                rootView.unselect(at: p)
                 rootView.closeAllPanels(at: p)
             }
             

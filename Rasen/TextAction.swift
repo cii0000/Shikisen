@@ -40,34 +40,18 @@ final class FindAction: InputKeyEventAction {
             guard let sheetView = rootView.sheetView(at: p) else { return }
             let inP = sheetView.convertFromWorld(p)
             if let (textView, _, i, _) = sheetView.textTuple(at: inP) {
-                if rootView.isSelect(at: p),
-                   let selection = rootView.multiSelection.firstSelection(at: p) {
+                if let range = textView.selectedRange(at: textView.convertFromWorld(p))
+                    ?? textView.wordRange(at: i) {
                     
-                    let nSelection = textView.convertFromWorld(selection)
-                    let ranges = textView.ranges(at: nSelection)
-                    if let range = ranges.first {
-                        let string = String(textView.model.string[range])
-                        rootView.selections.removeLast()
-                        rootView.finding = Finding(worldPosition: p,
-                                                   string: string)
-                        rootView.selections = []
-                    } else {
-                        rootView.finding = Finding()
-                    }
-                } else {
-                    if let range = textView.wordRange(at: i) {
-                        let string = String(textView.model.string[range])
-                        rootView.finding = Finding(worldPosition: p,
-                                                   string: string)
-                    }
+                    let string = String(textView.model.string[range])
+                    rootView.finding = Finding(worldPosition: p, string: string)
                 }
             } else {
                 let topOwner = sheetView.sheetColorOwner(at: inP, scale: rootView.screenToWorldScale).value
                 let uuColor = topOwner.uuColor
                 if uuColor != Sheet.defalutBackgroundUUColor {
                     let string = uuColor.id.uuidString
-                    rootView.finding = Finding(worldPosition: p,
-                                               string: string)
+                    rootView.finding = Finding(worldPosition: p, string: string)
                 } else {
                     rootView.finding = Finding()
                 }
@@ -138,14 +122,16 @@ final class LookUpAction: InputKeyEventAction {
     func show(for p: Point) {
         if !rootView.isEditingSheet {
             let shp = rootView.sheetPosition(at: p)
-            if rootView.isSelect(at: p), !rootView.selections.isEmpty {
-                let vs = rootView.sheetFramePositions(at: p, isUnselect: false)
-                rootView.show("Sheet".localized + "\n\t\("Count".localized): \(vs.count)", at: p)
+            if rootView.containsSelectedSheetPositions(p) {
+                let sheetCount = rootView.selectedSheetPositions.count
+                rootView.show("Sheet".localized
+                              + "\n\t\("Count".localized): \(sheetCount)",
+                              at: p)
             } else if let sid = rootView.sheetID(at: shp),
-               let recoder = rootView.model.sheetRecorders[sid],
-               let updateDate = recoder.directory.updateDate,
-               let createdDate = recoder.directory.createdDate {
-               
+                      let recoder = rootView.model.sheetRecorders[sid],
+                      let updateDate = recoder.directory.updateDate,
+                      let createdDate = recoder.directory.createdDate {
+                
                 let fileSize = recoder.fileSize
                 let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
                 rootView.show("Sheet".localized
@@ -156,64 +142,12 @@ final class LookUpAction: InputKeyEventAction {
             } else {
                 rootView.show("Root".localized, at: p)
             }
-        } else if rootView.isSelect(at: p), !rootView.selections.isEmpty {
-            if let selection = rootView.multiSelection.firstSelection(at: p) {
-                if let sheetView = rootView.sheetView(at: p),
-                   let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
-                    
-                    let nSelection = textView.convertFromWorld(selection)
-                    if let range = textView.ranges(at: nSelection).first {
-                        let string = String(textView.model.string[range])
-                        showDefinition(string: string, range: range,
-                                       in: textView, in: sheetView)
-                        
-                    }
-                } else if let sheetView = rootView.sheetView(at: p),
-                          let (node, contentView) = sheetView.spectrogramNode(at: sheetView.convertFromWorld(p)) {
-                    let nSelection = sheetView.convertFromWorld(selection)
-                    let rect = node.convertFromWorld(selection.rect)
-                    let minY = rect.minY, maxY = rect.maxY
-                    let minPitch = contentView.spectrogramPitch(atY: minY)!
-                    let minPitchRat = Rational(minPitch, intervalScale: .init(1, 12))
-                    let minFq = Pitch(value: minPitchRat).fq
-                    let maxPitch = contentView.spectrogramPitch(atY: maxY)!
-                    let maxPitchRat = Rational(maxPitch, intervalScale: .init(1, 12))
-                    let maxFq = Pitch(value: maxPitchRat).fq
-                    let minSec: Double = sheetView.animationView.sec(atX: nSelection.rect.minX)
-                    let maxSec: Double = sheetView.animationView.sec(atX: nSelection.rect.maxX)
-                    rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitchRat - minPitchRat).displayString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
-                } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    let nis = sheetView.noteIndexes(from: rootView.selections)
-                    if !nis.isEmpty {
-                        let notes = nis.map { score.notes[$0] }
-                        var fpr = notes[0].pitchRange
-                        for i in 1 ..< notes.count {
-                            fpr = fpr.formUnion(notes[i].pitchRange)
-                        }
-                        let startPitch = Pitch(value: fpr.start)
-                        let endPitch = Pitch(value: fpr.end)
-                        
-                        let str = "\(startPitch.displayString()) ... \(endPitch.displayString())  (\(startPitch.fq.string(digitsCount: 1)) ... \(endPitch.fq.string(digitsCount: 1)) Hz)".localized
-                        rootView.show(str, at: p)
-                    } else {
-                        let nSelection = sheetView.convertFromWorld(selection)
-                        let rect = scoreView.convertFromWorld(selection.rect)
-                        let minY = rect.minY, maxY = rect.maxY
-                        let pitchInterval = rootView.currentPitchInterval
-                        let minPitch = scoreView.pitch(atY: minY, interval: pitchInterval)
-                        let minFq = Pitch(value: minPitch).fq
-                        let maxPitch = scoreView.pitch(atY: maxY, interval: pitchInterval)
-                        let maxFq = Pitch(value: maxPitch).fq
-                        let minSec: Double = sheetView.animationView.sec(atX: nSelection.rect.minX)
-                        let maxSec: Double = sheetView.animationView.sec(atX: nSelection.rect.maxX)
-                        rootView.show("Δ\((maxSec - minSec).string(digitsCount: 4)) sec, Δ\(Pitch(value: maxPitch - minPitch).displayString()), (Δ\((maxFq - minFq).string(digitsCount: 1)) Hz)", at: p)
-                    }
-                } else {
-                    rootView.show("No selection".localized, at: p)
-                }
-            }
+        } else if let sheetView = rootView.sheetView(at: p),
+                  let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+                  let range = textView.selectedRange(at: textView.convertFromWorld(p)) {
+            let string = String(textView.model.string[range])
+            showDefinition(string: string, range: range,
+                           in: textView, in: sheetView)
         } else if let (_, _) = rootView.worldBorder(at: p) {
             rootView.show("Border".localized, at: p)
         } else if let (_, _, _, _) = rootView.border(at: p) {
@@ -305,17 +239,19 @@ final class LookUpAction: InputKeyEventAction {
                 let truePeakDb = PCMBuffer.truePeakDb(sampless: sampless)
                 PCMBuffer.clip(amp: Audio.headroomAmp, sampless: &sampless)
                 let lufs = PCMBuffer.lufs(sampless: sampless, sampleRate: Audio.defaultSampleRate)
-                let mainSize = sheetView.mainFrame.bounds.size != bounds.size ? sheetView.mainFrame.size : nil
+                let mainSize = sheetView.mainFrame.bounds.size != Sheet.defaultBounds.size ? sheetView.mainFrame.size : nil
                 rootView.show("Background".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb.string(digitsCount: 2)) dB"
                               + "\n\t\("True Peak".localized): \(truePeakDb.string(digitsCount: 2)) dBTP"
-                              + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))"
-                              + (mainSize != nil ?
-                              "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""),
+                              + (mainSize != bounds.size ? "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" : "")
+                              + (mainSize != nil ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""),
                               at: p)
             } else {
-                rootView.show("Background".localized + "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" + "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: .init(width: sheetView.mainFrame.width, height: sheetView.mainFrame.height)))", at: p)
+                let mainSize = sheetView.mainFrame.bounds.size != Sheet.defaultBounds.size ? sheetView.mainFrame.size : nil
+                rootView.show("Background".localized
+                              + (mainSize != bounds.size ? "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" : "")
+                              + (mainSize != nil ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""), at: p)
             }
         } else {
             rootView.show("Background".localized, at: p)
@@ -360,6 +296,8 @@ final class LookUpAction: InputKeyEventAction {
             "\(widthStr) x \(heightStr) \(wScale) 16:11"
         } else if Rational(iWidth, iHeight) == Rational(4, 3) {
             "\(widthStr) x \(heightStr) \(wScale) 4:3"
+        } else if width == height {
+            "\(widthStr) x \(heightStr)"
         } else {
             "\(widthStr) x \(heightStr) \(wScale)"
         }
@@ -423,33 +361,23 @@ final class TextOrientationAction: Action {
             rootView.cursor = .arrow
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
+            guard let sheetView = rootView.sheetView(at: p) else { return }
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.multiSelection.isEmpty {
-                for (shp, _) in rootView.sheetViewValues {
-                    let ssFrame = rootView.sheetFrame(with: shp)
-                    if rootView.multiSelection.intersects(ssFrame),
-                       let sheetView = rootView.sheetView(at: shp) {
-                        
-                        let ms = sheetView.convertFromWorld(rootView.multiSelection)
-                        var tivs = [IndexValue<Text>]()
-                        for (i, textView) in sheetView.textsView.elementViews.enumerated() {
-                            if let tb = textView.transformedBounds, ms.intersects(tb) {
-                                var text = textView.model
-                                text.orientation = orientation
-                                tivs.append(IndexValue(value: text, index: i))
-                            }
-                            
-                        }
-                        if !tivs.isEmpty {
-                            sheetView.newUndoGroup()
-                            sheetView.replace(tivs)
-                        }
-                    }
+            if sheetView.containsSelectedText(sheetView.convertFromWorld(p),
+                                              scale: rootView.screenToWorldScale) {
+                var tivs = [IndexValue<Text>]()
+                for ti in sheetView.selectedTextIs {
+                    var text = sheetView.model.texts[ti]
+                    text.orientation = orientation
+                    tivs.append(IndexValue(value: text, index: ti))
                 }
-            } else if !rootView.isNoneCursor {
+                if !tivs.isEmpty {
+                    sheetView.newUndoGroup()
+                    sheetView.replace(tivs)
+                }
+            } else {
                 rootAction.textAction.begin(atScreen: event.screenPoint)
                 
-                guard let sheetView = rootView.sheetView(at: p) else { return }
                 if let aTextView = rootAction.textAction.editingTextView,
                    !aTextView.isHiddenSelectedRange,
                    let i = sheetView.textsView.elementViews.firstIndex(of: aTextView) {
@@ -487,7 +415,7 @@ final class TextOrientationAction: Action {
                 }
             }
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             rootView.updateFinding(at: p)
         case .changed:
             break
@@ -569,42 +497,34 @@ final class TextScriptAction: Action {
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
             
-            if rootView.isSelect(at: p),
-               let selection = rootView.multiSelection.firstSelection(at: p) {
+            if let sheetView = rootView.sheetView(at: p),
+               let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+               textView.selectedRange(at: textView.convertFromWorld(p)) != nil {
                 
-                for (shp, _) in rootView.sheetViewValues {
-                    let ssFrame = rootView.sheetFrame(with: shp)
-                    if ssFrame.intersects(selection.rect),
-                       let sheetView = rootView.sheetView(at: shp) {
-                        
-                        var isNewUndoGroup = true
-                        for (j, textView) in sheetView.textsView.elementViews.enumerated() {
-                            let nSelection = textView.convertFromWorld(selection)
-                            let ranges = textView.ranges(at: nSelection)
-                            let string = textView.model.string
-                            for range in ranges {
-                                let str = string[range]
-                                var nstr = "", isChange = false
-                                for c in str {
-                                    if let nc = moveCharacter(isSuper: isSuper, from: c) {
-                                        nstr.append(nc)
-                                        isChange = true
-                                    } else {
-                                        nstr.append(c)
-                                    }
-                                }
-                                if isChange {
-                                    let tv = TextValue(string: nstr,
-                                                       replacedRange: string.intRange(from: range),
-                                                       origin: nil, size: nil,
-                                                       widthCount: nil)
-                                    if isNewUndoGroup {
-                                        sheetView.newUndoGroup()
-                                        isNewUndoGroup = false
-                                    }
-                                    sheetView.replace(IndexValue(value: tv, index: j))
-                                }
+                var isNewUndoGroup = true
+                for (j, textView) in sheetView.textsView.elementViews.enumerated() {
+                    let string = textView.model.string
+                    for range in textView.selectedRanges {
+                        let str = string[range]
+                        var nstr = "", isChange = false
+                        for c in str {
+                            if let nc = moveCharacter(isSuper: isSuper, from: c) {
+                                nstr.append(nc)
+                                isChange = true
+                            } else {
+                                nstr.append(c)
                             }
+                        }
+                        if isChange {
+                            let tv = TextValue(string: nstr,
+                                               replacedRange: string.intRange(from: range),
+                                               origin: nil, size: nil,
+                                               widthCount: nil)
+                            if isNewUndoGroup {
+                                sheetView.newUndoGroup()
+                                isNewUndoGroup = false
+                            }
+                            sheetView.replace(IndexValue(value: tv, index: j))
                         }
                     }
                 }
@@ -641,7 +561,7 @@ final class TextScriptAction: Action {
                 }
             }
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             rootView.updateFinding(at: p)
         case .changed:
             break
@@ -941,7 +861,7 @@ final class TextAction: InputTextEventAction {
                 Cursor.isHidden = false
             }
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             if let oldEditingSheetView = oldEditingSheetView {
                 rootView.updateFinding(from: oldEditingSheetView)
             }
@@ -959,7 +879,7 @@ final class TextAction: InputTextEventAction {
                 removeText(in: editingTextView, in: sheetView)
             }
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             if let editingSheetView = editingSheetView {
                 rootView.updateFinding(from: editingSheetView)
             }
@@ -1149,17 +1069,17 @@ final class TextAction: InputTextEventAction {
                 editingSheetView = nil
                 editingTextView = nil
             }
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             rootView.updateFinding(from: sheetView)
         }
     }
     
-    func cut(from selection: Selection, at p: Point) {
+    func cut(at p: Point) {
         guard let sheetView = rootView.madeSheetView(at: p) else { return }
         let inP = sheetView.convertFromWorld(p)
         guard let (textView, ti, _, _) = sheetView.textTuple(at: inP) else { return }
         
-        guard let range = textView.range(from: selection) else { return }
+        guard let range = textView.selectedRange(at: textView.convertFromWorld(p)) else { return }
         
         let minP = textView.typesetter
             .characterPosition(at: range.lowerBound)
@@ -1209,11 +1129,9 @@ final class TextAction: InputTextEventAction {
         let t = Transform(translation: -sheetView.convertFromWorld(p))
         let nValue = ssValue * t
         if let s = nValue.string {
-            Pasteboard.shared.copiedObjects
-                = [.sheetValue(nValue), .string(s)]
+            Pasteboard.shared.copiedObjects = [.sheetValue(nValue), .string(s)]
         } else {
-            Pasteboard.shared.copiedObjects
-                = [.sheetValue(nValue)]
+            Pasteboard.shared.copiedObjects = [.sheetValue(nValue)]
         }
     }
     
@@ -1247,7 +1165,7 @@ final class TextAction: InputTextEventAction {
             rootView.isUpdateWithCursorPosition = true
         }
         
-        rootView.updateSelects()
+        rootView.updateSelectedNodes()
         rootView.updateFinding(from: sheetView)
     }
     
@@ -1407,11 +1325,8 @@ final class TextAction: InputTextEventAction {
         }
         guard let deleteRange = textView.selectedRange else { return }
         
-        if !rootView.selectedFrames.isEmpty {
-            if textView.delete(from: rootView.selections) {
-                rootView.selections = []
-                return
-            }
+        if textView.deleteWithSelected() {
+            return
         }
         
         if deleteRange.isEmpty {
@@ -1432,11 +1347,8 @@ final class TextAction: InputTextEventAction {
         }
         guard let deleteRange = textView.selectedRange else { return }
         
-        if !rootView.selectedFrames.isEmpty {
-            if textView.delete(from: rootView.selections) {
-                rootView.selections = []
-                return
-            }
+        if textView.deleteWithSelected() {
+            return
         }
         
         if deleteRange.isEmpty {

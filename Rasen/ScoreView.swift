@@ -240,6 +240,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     let pitsNode = Node(fillType: .color(.background))
     var tonesNode = Node(), reverbsNode = Node(), otherNotesNode = Node()
     var noteLines = [Pointline]()
+    var selectedsNode = Node()
     let clippingNode = Node(isHidden: true, lineWidth: 4, lineType: .color(.warning))
     var chordResults = [Note.ChordResult?](), draftChordResults = [Note.ChordResult?]()
     
@@ -247,6 +248,52 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     var spectrogramFqType: Spectrogram.FqType?
     
     var scoreTrackItem: ScoreTrackItem?
+    
+    var selectedNotePitSprolIs = [Int: [Int: Set<Int>]]() {
+        didSet {
+            updateWithSelected(old: oldValue)
+        }
+    }
+    var selectedNotePitIs: [Int: [Int]] {
+        selectedNotePitSprolIs.reduce(into: .init()) { $0[$1.key] = $1.value.keys.sorted() }
+    }
+    var selectedNoteIs: [Int] {
+        selectedNotePitSprolIs.keys.sorted()
+    }
+    func updateWithSelected(old: [Int: [Int: Set<Int>]]) {
+        guard !selectedNotePitSprolIs.isEmpty else {
+            
+            return
+        }
+        
+        let score = model
+        for (noteI, pitSprols) in selectedNotePitSprolIs {
+            let note = score.notes[noteI]
+            
+            if !pitSprols.isEmpty {
+                let selectedNoteNode = Node(path: Path(noteLines[noteI].controls.map { $0.point }),
+                                            lineWidth: 1.5,
+                                            lineType: .color(.selected))
+            }
+            
+            var ps = [Point]()
+            for (pitIs, toneFrame) in toneFrames(from: note) {
+                for pitI in pitIs {
+                    if let sprolIs = pitSprols[pitI] {
+                        let pitP = pitPosition(atPit: pitI, from: note)
+                        ps.append(pitP)
+                        for sprolI in sprolIs {
+                            let sprolP = sprolPosition(atSprol: sprolI, atPit: pitI,
+                                                       from: note, atY: toneFrame.minY)
+                            ps.append(sprolP)
+                        }
+                    }
+                }
+            }
+            0.25 * 8
+            0.125 * 2
+        }
+    }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -332,6 +379,8 @@ extension ScoreView {
     }
     func updateNotes() {
         if model.enabled {
+            selectedNotePitSprolIs = [:]
+            
             let vs = model.notes.map { noteNode(from: $0) }
             let nodes = vs.map { $0.node }
             notesNode.children = nodes
@@ -340,6 +389,8 @@ extension ScoreView {
             reverbsNode.children = vs.map { $0.reverbNode }
             noteLines = vs.map { $0.noteLine }
         } else {
+            selectedNotePitSprolIs = [:]
+            
             notesNode.children = []
             chordResults = []
             tonesNode.children = []
@@ -498,6 +549,8 @@ extension ScoreView {
         scoreTrackItem?.insert(nivs, with: model)
     }
     func replace(_ nivs: [IndexValue<Note>]) {
+        nivs.forEach { selectedNotePitSprolIs[$0.index] = nil }
+        
         unupdateModel.notes.replace(nivs)
         let vs = nivs.map { IndexValue(value: noteNode(from: $0.value), index: $0.index) }
         let noivs = vs.map { IndexValue(value: $0.value.node, index: $0.index) }
@@ -514,6 +567,8 @@ extension ScoreView {
         scoreTrackItem?.replace(nivs, with: model)
     }
     func remove(at noteI: Int) {
+        selectedNotePitSprolIs[noteI] = nil
+        
         unupdateModel.notes.remove(at: noteI)
         notesNode.remove(atChild: noteI)
         chordResults.remove(at: noteI)
@@ -524,6 +579,8 @@ extension ScoreView {
         scoreTrackItem?.remove(at: [noteI])
     }
     func remove(at noteIs: [Int]) {
+        noteIs.forEach { selectedNotePitSprolIs[$0] = nil }
+        
         unupdateModel.notes.remove(at: noteIs)
         noteIs.reversed().forEach { notesNode.remove(atChild: $0) }
         noteIs.reversed().forEach { chordResults.remove(at: $0) }
@@ -538,6 +595,8 @@ extension ScoreView {
             unupdateModel.notes[noteI]
         }
         set {
+            selectedNotePitSprolIs[noteI] = nil
+            
             unupdateModel.notes[noteI] = newValue
             let (noteNode, toneNode, reverbNode, noteLine) = noteNode(from: newValue)
             notesNode.children[noteI] = noteNode
@@ -1657,11 +1716,11 @@ extension ScoreView {
                                                  width: 3, height: 0.5)))
             knobPRCs.append((.init(x, ny - 10), knobR, true, .background))
         }
+        nodes.append(.init(path: stereoLinePath,
+                           fillType: color != nil ? .color(color!) : (stereoLineColors.count == 1 ? .color(stereoLineColors[0]) : .gradient(stereoLineColors))))
         if let lyricLinePath {
             nodes.append(.init(path: lyricLinePath, fillType: .color(.interpolated)))
         }
-        nodes.append(.init(path: stereoLinePath,
-                           fillType: color != nil ? .color(color!) : (stereoLineColors.count == 1 ? .color(stereoLineColors[0]) : .gradient(stereoLineColors))))
         nodes.append(.init(path: mainLinePath, fillType: color != nil ? .color(color!) : (mainLineColors.count == 1 ? .color(mainLineColors[0]) : .gradient(mainLineColors))))
         nodes.append(.init(path: Path(Rect(x: nsx, y: ny - halfNH * 0.75,
                                            width: overtoneHalfH / 4, height: nh * 0.75)),
@@ -1889,6 +1948,36 @@ extension ScoreView {
         return minI
     }
     
+    func isStraightWithSelection(atPit pitI: Int, atNote noteI: Int) -> Bool {
+        if selectedNotePitSprolIs[noteI]?[pitI] == nil {
+            let note = model.notes[noteI]
+            let pit = note.pits[pitI]
+            if pitI - 1 >= 0 {
+                if pit.beat == note.pits[pitI - 1].beat {
+                    return true
+                }
+                if pitI == note.pits.count - 1 && pitI - 2 >= 0
+                    && note.pits[pitI - 1].beat == note.pits[pitI - 2].beat {
+                    return true
+                }
+            }
+            if pitI + 1 < note.pits.count {
+                if pit.beat == note.pits[pitI + 1].beat {
+                    return true
+                }
+                if pitI == 0 && pitI + 2 < note.pits.count
+                    && note.pits[pitI + 1].beat == note.pits[pitI + 2].beat {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    func noteIs(at p: Point, scale: Double, enabledTone: Bool = false) -> [Int] {
+        guard let i = noteIndex(at: p, scale: scale, enabledTone: enabledTone) else { return [] }
+        return selectedNotePitSprolIs[i] != nil ? selectedNotePitSprolIs.map { $0.key }.sorted() : [i]
+    }
     func containsNote(_ p: Point, scale: Double, enabledTone: Bool = false) -> Bool {
         noteIndex(at: p, scale: scale, enabledTone: enabledTone) != nil
     }

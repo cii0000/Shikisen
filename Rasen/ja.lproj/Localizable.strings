@@ -35,6 +35,7 @@
 "Play" = "再生";
 
 "Select by Range" = "範囲選択";
+"Unselect by Range" = "範囲選択解除";
 "Run" = "実行";
 "Run / Close" = "実行 / 閉じる";
 "Look Up" = "調べる";

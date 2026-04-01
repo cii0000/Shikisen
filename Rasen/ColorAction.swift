@@ -235,10 +235,10 @@ final class ColorAction: Action {
         if let (uuColor, owners) = rootView.madeColorOwnersWithSelection(at: p) {
             self.beganMainUUColor = uuColor
             self.colorOwners = owners
+            colorOwners.forEach { $0.hideSelected() }
         } else {
             self.colorOwners = []
         }
-        rootView.selections = []
     }
     func updateTintPointNodes(with event: DragEvent) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
@@ -355,16 +355,10 @@ final class ColorAction: Action {
                 self.sheetView = sheetView
                 
                 func updateContentsWithSelections() {
-                    let fs = rootView.selections
-                        .map { $0.rect }
-                        .map { sheetView.convertFromWorld($0) }
-                    if !fs.isEmpty {
-                        beganContents = sheetView.contentsView.elementViews.enumerated().reduce(into: [Int: Content]()) { (dic, v) in
-                            if fs.contains(where: { v.element.transformedTimelineFrame?.intersects($0) ?? false }),
-                                v.element.model.type.isAudio {
-                                
-                                dic[v.offset] = v.element.model
-                            }
+                    beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
+                        let contentView = sheetView.contentsView.elementViews[$1]
+                        if contentView.model.type.isAudio {
+                            $0[$1] = sheetView.contentsView.elementViews[$1].model
                         }
                     }
                 }
@@ -384,8 +378,9 @@ final class ColorAction: Action {
                                              sprolI: Int?, _ type: PitIDType) {
                     var noteAndPitIs: [Int: [Int: Set<Int>]]
                     if let sprolI {
-                        if rootView.isSelect(at: p) {
-                            noteAndPitIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections)
+                        if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                          scale: rootView.screenToWorldScale) {
+                            noteAndPitIs = sheetView.scoreView.selectedNotePitSprolIs
                         } else {
                             if let pitI {
                                 let id = score.notes[noteI].pits[pitI][type]
@@ -402,8 +397,9 @@ final class ColorAction: Action {
                                 }]
                             }
                         }
-                    } else if rootView.isSelect(at: p) {
-                        let aNoteAndPitIs = sheetView.noteAndPitIndexes(from: rootView.selections)
+                    } else if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                             scale: rootView.screenToWorldScale) {
+                        let aNoteAndPitIs = sheetView.scoreView.selectedNotePitIs
                         noteAndPitIs = [:]
                         for (noteI, v) in aNoteAndPitIs {
                             noteAndPitIs[noteI] = v.reduce(into: [Int: Set<Int>]()) {
@@ -473,8 +469,9 @@ final class ColorAction: Action {
                 if let (noteI, result) = scoreView
                     .hitTestColor(scoreP, scale: rootView.screenToWorldScale) {
                     
-                    let selectedNoteIs = if rootView.isSelect(at: p) {
-                        sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
+                    let selectedNoteIs = if sheetView.containsSelectedNote(sheetP,
+                                                                           scale: rootView.screenToWorldScale) {
+                        scoreView.selectedNoteIs
                     } else {
                         [noteI]
                     }
@@ -777,16 +774,10 @@ final class ColorAction: Action {
                 self.sheetView = sheetView
                 
                 func updateContentsWithSelections() {
-                    let fs = rootView.selections
-                        .map { $0.rect }
-                        .map { sheetView.convertFromWorld($0) }
-                    if !fs.isEmpty {
-                        beganContents = sheetView.contentsView.elementViews.enumerated().reduce(into: [Int: Content]()) { (dic, v) in
-                            if fs.contains(where: { v.element.transformedTimelineFrame?.intersects($0) ?? false }),
-                                v.element.model.type.isAudio {
-                                
-                                dic[v.offset] = v.element.model
-                            }
+                    beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
+                        let contentView = sheetView.contentsView.elementViews[$1]
+                        if contentView.model.type.isAudio {
+                            $0[$1] = sheetView.contentsView.elementViews[$1].model
                         }
                     }
                 }
@@ -806,8 +797,9 @@ final class ColorAction: Action {
                                              sprolI: Int?, _ type: PitIDType) {
                     var noteAndPitIs: [Int: [Int: Set<Int>]]
                     if let sprolI {
-                        if rootView.isSelect(at: p) {
-                            noteAndPitIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections)
+                        if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                          scale: rootView.screenToWorldScale) {
+                            noteAndPitIs = sheetView.scoreView.selectedNotePitSprolIs
                         } else {
                             if let pitI {
                                 let id = score.notes[noteI].pits[pitI][type]
@@ -824,8 +816,9 @@ final class ColorAction: Action {
                                 }]
                             }
                         }
-                    } else if rootView.isSelect(at: p) {
-                        let aNoteAndPitIs = sheetView.noteAndPitIndexes(from: rootView.selections)
+                    } else if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                             scale: rootView.screenToWorldScale) {
+                        let aNoteAndPitIs = sheetView.scoreView.selectedNotePitIs
                         noteAndPitIs = [:]
                         for (noteI, v) in aNoteAndPitIs {
                             noteAndPitIs[noteI] = v.reduce(into: [Int: Set<Int>]()) {
@@ -896,8 +889,9 @@ final class ColorAction: Action {
                 if let (noteI, result) = scoreView
                     .hitTestColor(scoreP, scale: rootView.screenToWorldScale) {
                     
-                    let selectedNoteIs = if rootView.isSelect(at: p) {
-                        sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
+                    let selectedNoteIs = if sheetView.containsSelectedNote(sheetP,
+                                                                           scale: rootView.screenToWorldScale) {
+                        scoreView.selectedNoteIs
                     } else {
                         [noteI]
                     }
@@ -1174,16 +1168,10 @@ final class ColorAction: Action {
                 self.sheetView = sheetView
                 
                 func updateContentsWithSelections() {
-                    let fs = rootView.selections
-                        .map { $0.rect }
-                        .map { sheetView.convertFromWorld($0) }
-                    if !fs.isEmpty {
-                        beganContents = sheetView.contentsView.elementViews.enumerated().reduce(into: [Int: Content]()) { (dic, v) in
-                            if fs.contains(where: { v.element.transformedTimelineFrame?.intersects($0) ?? false }),
-                                v.element.model.type.isAudio {
-                                
-                                dic[v.offset] = v.element.model
-                            }
+                    beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
+                        let contentView = sheetView.contentsView.elementViews[$1]
+                        if contentView.model.type.isAudio {
+                            $0[$1] = sheetView.contentsView.elementViews[$1].model
                         }
                     }
                 }
@@ -1203,8 +1191,9 @@ final class ColorAction: Action {
                                              sprolI: Int?, _ type: PitIDType) {
                     var noteAndPitIs: [Int: [Int: Set<Int>]]
                     if let sprolI {
-                        if rootView.isSelect(at: p) {
-                            noteAndPitIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections)
+                        if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                          scale: rootView.screenToWorldScale) {
+                            noteAndPitIs = sheetView.scoreView.selectedNotePitSprolIs
                         } else {
                             let id = pitI != nil ? score.notes[noteI].pits[pitI!][type] : nil
                             noteAndPitIs = score.notes.enumerated().reduce(into: [Int: [Int: Set<Int>]]()) {
@@ -1215,8 +1204,9 @@ final class ColorAction: Action {
                                 }
                             }
                         }
-                    } else if rootView.isSelect(at: p) {
-                        let aNoteAndPitIs = sheetView.noteAndPitIndexes(from: rootView.selections)
+                    } else if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                             scale: rootView.screenToWorldScale) {
+                        let aNoteAndPitIs = sheetView.scoreView.selectedNotePitIs
                         noteAndPitIs = [:]
                         for (noteI, v) in aNoteAndPitIs {
                             noteAndPitIs[noteI] = v.reduce(into: [Int: Set<Int>]()) {
@@ -1537,6 +1527,7 @@ final class ColorAction: Action {
             editingLightness = lightness
         case .ended:
             capture()
+            colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingLightness = false
             lightnessNode.removeFromParent()
@@ -1727,6 +1718,7 @@ final class ColorAction: Action {
                                              uuColor.value.hue).rectangular
         case .ended:
             capture()
+            colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingTint = false
             lightnessNode.removeFromParent()
@@ -1808,6 +1800,7 @@ final class ColorAction: Action {
             editingLightness = opacity
         case .ended:
             capture()
+            colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingLightness = false
             lightnessNode.removeFromParent()

@@ -46,8 +46,7 @@ final class GoPreviousAction: InputKeyEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -102,7 +101,7 @@ final class GoPreviousAction: InputKeyEventAction {
     func goPrevious(from sheetView: SheetView?, at sp: Point) {
         sheetView?.goPrevious()
         rootAction.updateActionNode()
-        rootView.updateSelects()
+        rootView.updateSelectedNodes()
     }
 }
 
@@ -132,8 +131,7 @@ final class GoNextAction: InputKeyEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-        ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
@@ -190,7 +188,7 @@ final class GoNextAction: InputKeyEventAction {
     func goNext(from sheetView: SheetView?, at sp: Point) {
         sheetView?.goNext()
         rootAction.updateActionNode()
-        rootView.updateSelects()
+        rootView.updateSelectedNodes()
     }
 }
 
@@ -250,8 +248,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -400,7 +397,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                             }
                             
                             rootAction.updateActionNode()
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                             
                             if oldKI != animationView.model.index {
                                 animationView.shownInterTypeKeyframeIndex = animationView.model.index
@@ -470,8 +467,7 @@ final class PlayAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -562,8 +558,7 @@ final class InsertControlPointAction: InputKeyEventAction {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -658,7 +653,7 @@ final class InsertControlPointAction: InputKeyEventAction {
                     
                     sheetView.rootBeat = animationView.model.localDurBeat * count + beat
                     rootAction.updateActionNode()
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 } else if sheetView.animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale) {
                     sheetView.selectedFrameIndexes = []
                     
@@ -842,7 +837,7 @@ final class InsertControlPointAction: InputKeyEventAction {
                 }
                 
                 rootAction.updateActionNode()
-                rootView.updateSelects()
+                rootView.updateSelectedNodes()
             }
         case .changed:
             break
@@ -874,20 +869,20 @@ final class InterpolateAction: InputKeyEventAction {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+                let sheetP = sheetView.scoreView.convertFromWorld(p)
                 let nis: [Int]
-                if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                    nis = sheetView.noteIndexes(from: rootView.selections)
+                if sheetView.containsSelectedNote(sheetP,
+                                                  scale: rootView.screenToWorldScale) {
+                    nis = sheetView.scoreView.selectedNoteIs
                 } else {
-                    let onis = sheetView.scoreView
-                        .nearestNoteIndexes(at: sheetView.scoreView.convertFromWorld(p))
+                    let onis = sheetView.scoreView.nearestNoteIndexes(at: sheetP)
                     if onis.count >= 2 {
                         nis = [onis[0], onis[1]]
                     } else {
@@ -1006,9 +1001,12 @@ final class InterpolateAction: InputKeyEventAction {
                 } else if case .sheetValue(let v) = co, !v.planes.isEmpty {
                     if let sheetView = rootView.sheetView(at: p),
                        sheetView.id == v.id {
-                        if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                            let nlis = sheetView.lineIndexes(from: rootView.selections)
-                            let npis = sheetView.planeIndexes(from: rootView.selections)
+                        let sheetP = sheetView.convertFromWorld(p)
+                        if sheetView.containsSelectedLine(sheetP,
+                                                          scale: rootView.screenToWorldScale)
+                            || sheetView.containsSelectedPlane(sheetP) {
+                            let nlis = sheetView.keyframeView.selectedLineIs
+                            let npis = sheetView.keyframeView.selectedPlaneIs
                             let animationView = sheetView.animationView
                             let animation = animationView.model
                             let ok = animation.keyframe(atRoot: v.rootKeyframeIndex)
@@ -1135,12 +1133,13 @@ final class InterpolateAction: InputKeyEventAction {
 //                    }
 //                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
 //                    rootAction.updateActionNode()
-//                    rootView.updateSelects()
+//                    rootView.updateSelectedNodes()
 //                }
                 
                 let lis: [Int], nKI, nRootKI: Int
-                if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                    lis = sheetView.lineIndexes(from: rootView.selections)
+                if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
+                                                  scale: rootView.screenToWorldScale) {
+                    lis = sheetView.keyframeView.selectedLineIs
                     nKI = sheetView.model.animation.index
                     nRootKI = sheetView.model.animation.rootIndex
                 } else {
@@ -1691,8 +1690,7 @@ final class DisconnectAction: InputKeyEventAction {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1747,8 +1745,8 @@ final class DisconnectAction: InputKeyEventAction {
             if let sheetView = sheetView {
                 let inP = sheetView.convertFromWorld(p)
                 let lis: [Int], isSelected: Bool
-                if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                    lis = sheetView.lineIndexes(from: rootView.selections)
+                if sheetView.containsSelectedLine(inP, scale: rootView.screenToWorldScale) {
+                    lis = sheetView.keyframeView.selectedLineIs
                     isSelected = true
                 } else {
                     if let li = sheetView.lineTuple(at: inP, scale: 1 / rootView.worldToScreenScale)?.lineIndex {
@@ -1959,7 +1957,7 @@ final class DisconnectAction: InputKeyEventAction {
                     rootView.node.append(child: linesNode)
                     
                     rootAction.updateActionNode()
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 } else if ids.count >= 1 {
                     let keyframes = sheetView.model.animation.keyframes
                     var nodes = [Node]()
@@ -2023,7 +2021,7 @@ final class DisconnectAction: InputKeyEventAction {
                     rootView.node.append(child: linesNode)
                     
                     rootAction.updateActionNode()
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 }
             }
         case .changed:

@@ -67,7 +67,7 @@ final class RootAction: Action {
     }
     
     func containsAllTimelines(with event: any Event) -> Bool {
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         guard let sheetView = rootView.sheetView(at: p) else { return false }
         let sheetP = sheetView.convertFromWorld(p)
@@ -140,7 +140,7 @@ final class RootAction: Action {
         switch event.phase {
         case .began:
             stopInputTextEvent()
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             swipeAction = SelectFrameAction(self)
             swipeAction?.flow(with: event)
             oldSwipeEvent = event
@@ -173,13 +173,21 @@ final class RootAction: Action {
     
     func strongDrag(with event: DragEvent) {}
     
+    private func subDragAction(with quasimode: Quasimode) -> (any DragEventAction)? {
+        switch quasimode {
+        case .selectByRange: SelectByRangeAction(self)
+        case .unselectByRange: UnselectByRangeAction(self)
+        default: nil
+        }
+    }
     private(set) var oldSubDragEvent: DragEvent?, subDragEventAction: (any DragEventAction)?
     func subDrag(with event: DragEvent) {
         switch event.phase {
         case .began:
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
-            subDragEventAction = SelectByRangeAction(self)
+            let quasimode = Quasimode(modifier: modifierKeys, .subDrag)
+            subDragEventAction = self.subDragAction(with: quasimode)
             subDragEventAction?.flow(with: event)
             oldSubDragEvent = event
             rootView.textCursorNode.isHidden = true
@@ -199,7 +207,7 @@ final class RootAction: Action {
     func middleDrag(with event: DragEvent) {
         switch event.phase {
         case .began:
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
             middleDragEventAction = LassoCutAction(self)
             middleDragEventAction?.flow(with: event)
@@ -223,6 +231,7 @@ final class RootAction: Action {
         case .drawStraightLine: DrawStraightLineAction(self)
         case .lassoCut: LassoCutAction(self)
         case .selectByRange: SelectByRangeAction(self)
+        case .unselectByRange: UnselectByRangeAction(self)
         case .changeLightness: ChangeLightnessAction(self)
         case .changeTint: ChangeTintAction(self)
         case .changeOpacity: ChangeOpacityAction(self)
@@ -237,7 +246,7 @@ final class RootAction: Action {
     func drag(with event: DragEvent) {
         switch event.phase {
         case .began:
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
             let quasimode = Quasimode(modifier: modifierKeys, .drag)
             if quasimode != .selectFrame {
@@ -271,7 +280,7 @@ final class RootAction: Action {
     func inputText(with event: InputTextEvent) {
         switch event.phase {
         case .began:
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             oldInputTextKeys.insert(event.inputKeyType)
             textAction.flow(with: event)
         case .changed:
@@ -327,7 +336,7 @@ final class RootAction: Action {
     func inputKey(with event: InputKeyEvent) {
         switch event.phase {
         case .began:
-            updateLastEditedIntPoint(from: event)
+            updateLastEditedSheetPosition(from: event)
             guard inputKeyAction == nil else { return }
             let quasimode = Quasimode(modifier: modifierKeys,
                                       event.inputKeyType)
@@ -336,6 +345,7 @@ final class RootAction: Action {
                 && quasimode != .changeToSubscript
                 && quasimode != .changeToHorizontalText
                 && quasimode != .changeToVerticalText
+                && quasimode != .cut
                 && quasimode != .paste
                 && quasimode != .changeABC && quasimode != .changeAIU {
                 
@@ -358,8 +368,8 @@ final class RootAction: Action {
         }
     }
     
-    func updateLastEditedIntPoint(from event: any Event) {
-        rootView.updateLastEditedIntPoint(fromScreen: event.screenPoint)
+    func updateLastEditedSheetPosition(from event: any Event) {
+        rootView.updateLastEditedSheetPosition(fromScreen: event.screenPoint)
     }
     
     func keepOut(with event: any Event) {
@@ -483,12 +493,8 @@ final class ZoomAction: PinchEventAction {
             rootView.updateTextCursor()
         }
         
-        if rootView.selectedNode != nil {
-            rootView.updateSelectedNode()
-        }
-        if !rootView.finding.isEmpty {
-            rootView.updateFindingNodes()
-        }
+        rootView.updateSelectedNodes()
+        rootView.updateFindingNodes()
     }
 }
 
@@ -637,17 +643,57 @@ final class ScrollAction: ScrollEventAction {
 }
 
 final class SelectByRangeAction: DragEventAction {
+    let action: SelectAction
+    
+    init(_ rootAction: RootAction) {
+        action = SelectAction(rootAction)
+    }
+    
+    func flow(with event: DragEvent) {
+        action.select(with: event, isUnselect: false)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
+final class UnselectByRangeAction: DragEventAction {
+    let action: SelectAction
+    
+    init(_ rootAction: RootAction) {
+        action = SelectAction(rootAction)
+    }
+    
+    func flow(with event: DragEvent) {
+        action.select(with: event, isUnselect: true)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
+final class SelectAction: Action {
     let rootAction: RootAction, rootView: RootView
+    let isEditingSheet: Bool
     
     init(_ rootAction: RootAction) {
         self.rootAction = rootAction
         rootView = rootAction.rootView
+        isEditingSheet = rootView.isEditingSheet
     }
     
-    private var firstP = Point(), multiSelectFrameAction: MultiSelectFrameAction?
+    struct Capture {
+        var selectedLineIs: [Int]
+        var selectedPlaneIs: [Int]
+        var selectedContentIs: [Int]
+        var selectedNotePitSprolIs: [Int : [Int : Set<Int>]]
+        var selectedTextRanegs: [Int: [Range<String.Index>]]
+    }
+    
+    private var firstP = Point(), multiSelectFrameAction: MultiSelectFrameAction?,
+                captures = [SheetView: Capture](), firstSelectedSheetPositions = [IntPoint]()
+    private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
     
-    func flow(with event: DragEvent) {
+    func select(with event: DragEvent, isUnselect: Bool) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
@@ -656,55 +702,179 @@ final class SelectByRangeAction: DragEventAction {
                                                         scale: rootView.screenToWorldScale) {
                 
                 multiSelectFrameAction = .init(rootAction)
-                multiSelectFrameAction?.flow(with: event)
+                multiSelectFrameAction?.select(with: event, isUnselect: isUnselect)
                 return
             }
             
             rootView.cursor = .arrow
-            rootView.selections.append(Selection(rect: Rect(Edge(p, p)),
-                                             rectCorner: .maxXMinY))
             firstP = p
+            node.lineWidth = rootView.worldLineWidth
+            node.path = .init(.init(p, distance: 0))
+            rootView.node.append(child: node)
+            
+            if !isEditingSheet {
+                firstSelectedSheetPositions = rootView.selectedSheetPositions
+            }
         case .changed:
             if let multiSelectFrameAction {
-                multiSelectFrameAction.flow(with: event)
+                multiSelectFrameAction.select(with: event, isUnselect: isUnselect)
                 return
             }
-//            guard firstP.distance(p) >= snappedDistance * rootView.screenToWorldScale else {
-//                rootView.selections = []
-//                return
-//            }
-            let orientation: RectCorner
-            if firstP.x < p.x {
-                if firstP.y < p.y {
-                    orientation = .maxXMaxY
-                } else {
-                    orientation = .maxXMinY
+            
+            let rect = AABB(firstP, p).rect
+            node.path = .init(rect)
+            
+            if rootView.isEditingSheet {
+                var isSelectedTextOnly = false
+                for v in rootView.sheetViewValues {
+                    guard rootView.sheetFrame(with: v.key).intersects(rect),
+                          let sheetView = v.value.sheetView else { continue }
+                    
+                    let capture: Capture
+                    if let aCapture = captures[sheetView] {
+                        capture = aCapture
+                    } else {
+                        let aCapture = Capture(selectedLineIs: sheetView.keyframeView.selectedLineIs,
+                              selectedPlaneIs: sheetView.keyframeView.selectedPlaneIs,
+                              selectedContentIs: sheetView.selectedContentIs,
+                              selectedNotePitSprolIs: sheetView.scoreView.selectedNotePitSprolIs,
+                              selectedTextRanegs: sheetView.textsView.elementViews.enumerated().reduce(into: .init()) { $0[$1.offset] = $1.element.selectedRanges })
+                        captures[sheetView] = aCapture
+                        capture = aCapture
+                    }
+                    
+                    let sheetRect = sheetView.convertFromWorld(rect)
+                    
+                    let scoreView = sheetView.scoreView
+                    if scoreView.model.enabled {
+                        let score = sheetView.scoreView.model
+                        let scoreP = scoreView.convertFromWorld(firstP)
+                        let scoreRect = sheetView.convertFromWorld(rect)
+                        
+                        let nNotePitSprolIs: [Int : [Int : Set<Int>]]
+                        if scoreView.containsTone(at: scoreP) {
+                            nNotePitSprolIs = scoreView.model.notes.enumerated().reduce(into: .init()) { (n, v) in
+                                let noteI = v.offset, note = v.element
+                                
+                                let toneFrames = scoreView.toneFrames(from: note)
+                                n[noteI] = toneFrames.reduce(into: .init()) { (v, tf) in
+                                    tf.pitIs.forEach { pitI in
+                                        let pit = note.pits[pitI]
+                                        for sprolI in pit.tone.spectlope.sprols.count.range {
+                                            if scoreRect.contains(scoreView.sprolPosition(atSprol: sprolI, atPit: pitI, at: noteI, atY: tf.frame.minY)) {
+                                                if v[pitI] != nil {
+                                                    v[pitI]?.insert(sprolI)
+                                                } else {
+                                                    v[pitI] = [sprolI]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            let noteIs = (0 ..< scoreView.model.notes.count).filter {
+                                scoreView.intersectsNote(scoreRect, at: $0)
+                            }
+                            nNotePitSprolIs = noteIs.reduce(into: .init()) {
+                                let note = score.notes[$1]
+                                $0[$1] = note.pits.count == 1 ?
+                                [0: []] :
+                                note.pits.count.range.filter {
+                                    scoreRect.contains(scoreView.pitPosition(atPit: $0, from: note))
+                                }.reduce(into: .init()) { $0[$1] = [] }
+                            }
+                        }
+                        if isUnselect {
+                            let oNotePitSprolIs = capture.selectedNotePitSprolIs
+                            sheetView.scoreView.selectedNotePitSprolIs
+                            = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
+                                v0.merging(v1) { w0, w1 in w0.subtracting(w1) }
+                            }
+                        } else {
+                            let oNotePitSprolIs = capture.selectedNotePitSprolIs
+                            sheetView.scoreView.selectedNotePitSprolIs
+                            = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
+                                v0.merging(v1) { w0, w1 in w0.union(w1) }
+                            }
+                        }
+                    }
+                    
+                    let oSelectedLineIs = Set(capture.selectedLineIs)
+                    let nSelectedLineIs = sheetView.linesView.elementViews.enumerated().compactMap {
+                        $0.element.intersects(sheetRect) ? $0.offset : nil
+                    }
+                    sheetView.keyframeView.selectedLineIs
+                    = (isUnselect ? oSelectedLineIs.subtracting(nSelectedLineIs) :
+                        oSelectedLineIs.union(nSelectedLineIs)).sorted()
+                    
+                    let sheetRectPath = Path(sheetRect)
+                    let oSelectedPlaneIs = Set(capture.selectedPlaneIs)
+                    let nSelectedPlaneIs = sheetView.planesView.elementViews.enumerated().compactMap {
+                        sheetRectPath.contains($0.element.node.path) ? $0.offset : nil
+                    }
+                    sheetView.keyframeView.selectedPlaneIs
+                    = (isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
+                        oSelectedPlaneIs.union(nSelectedPlaneIs)).sorted()
+                    
+                    let oSelectedContentIs = Set(capture.selectedContentIs)
+                    let nSelectedContentIs = sheetView.contentsView.elementViews.enumerated().compactMap { (ci, contentView) in
+                        if let b = contentView.transformedBounds,
+                           sheetRectPath.intersects(b) { ci } else { nil }
+                    }
+                    sheetView.selectedContentIs
+                    = (isUnselect ? oSelectedContentIs.subtracting(nSelectedContentIs) :
+                        oSelectedContentIs.union(nSelectedContentIs)).sorted()
+                    
+                    for (ti, textView) in sheetView.textsView.elementViews.enumerated() {
+                         guard let oRanges = capture.selectedTextRanegs[ti] else { continue }
+                        let nRect = textView.convertFromWorld(rect)
+                        guard textView.intersectsHalf(nRect) else { continue }
+                        let tfp = textView.convertFromWorld(firstP)
+                        let tlp = textView.convertFromWorld(p)
+                        
+                        guard let fi = textView.characterIndexWithOutOfBounds(for: tfp),
+                              let li = textView.characterIndexWithOutOfBounds(for: tlp) else { continue }
+                        let range = fi < li ? fi ..< li : li ..< fi
+                        
+                        var nRanges = oRanges
+                        if isUnselect {
+                            Range.subtracting(range, in: &nRanges)
+                        } else {
+                            Range.union(range, in: &nRanges)
+                        }
+                        textView.selectedRanges = nRanges
+                        
+                        isSelectedTextOnly = textView.characterIndex(for: tfp) != nil
+                        && textView.characterIndex(for: tlp) != nil
+                    }
+                    
+                    rootView.updateSelectedNodes()
                 }
+                node.isHidden = isSelectedTextOnly
             } else {
-                if firstP.y < p.y {
-                    orientation = .minXMaxY
-                } else {
-                    orientation = .minXMinY
+                let oShps = Set(firstSelectedSheetPositions)
+                let nShps = rootView.world.sheetIDs.keys.filter {
+                    rect.intersects(rootView.sheetFrame(with: $0))
                 }
-            }
-            if rootView.selections.isEmpty {
-                rootView.selections = [Selection(rect: Rect(Edge(p, p)),
-                                                 rectCorner: .maxXMinY)]
-            } else {
-                rootView.selections[.last] = Selection(rect: Rect(Edge(firstP, p)),
-                                                        rectCorner: orientation)
+                rootView.selectedSheetPositions
+                = (isUnselect ? oShps.subtracting(nShps) : oShps.union(nShps))
+                .sorted { $0.x == $1.x ? $0.y < $1.y : $0.x < $1.x }
             }
             
         case .ended:
             if let multiSelectFrameAction {
-                multiSelectFrameAction.flow(with: event)
+                multiSelectFrameAction.select(with: event, isUnselect: isUnselect)
                 return
             }
+            
+            node.removeFromParent()
+            
             rootView.cursor = rootView.defaultCursor
         }
     }
 }
-final class MultiSelectFrameAction: DragEventAction {
+final class MultiSelectFrameAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -728,21 +898,21 @@ final class MultiSelectFrameAction: DragEventAction {
     } ()
     
     private func updateSelected(fromRootBeeat nRootBeat: Rational,
-                                in animationView: AnimationView) {
+                                in animationView: AnimationView, isUnselect: Bool) {
         var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
         let beganRootIndex = animationView.model.nearestRootIndex(atRootBeat: beganSelectedRootBeat)
         let ni = animationView.model.rootIndex(atRootBeat: nRootBeat)
         let range = beganRootIndex <= ni ? beganRootIndex ... ni : ni ... beganRootIndex
         for i in range {
             let ki = animationView.model.index(atRoot: i)
-            isSelects[ki] = true
+            isSelects[ki] = !isUnselect
         }
         
         let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
         animationView.selectedFrameIndexes = fis
     }
     
-    func flow(with event: DragEvent) {
+    func select(with event: DragEvent, isUnselect: Bool) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return
@@ -769,7 +939,7 @@ final class MultiSelectFrameAction: DragEventAction {
                 if animationView.rootBeat != nRootBeat {
                     sheetView.rootBeat = nRootBeat
                     rootAction.updateActionNode()
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 }
                 animationView.shownInterTypeKeyframeIndex = animationView.model.index
                 
@@ -808,7 +978,7 @@ final class MultiSelectFrameAction: DragEventAction {
                 if sheetView.rootBeat != nRootBeat {
                     sheetView.rootBeat = nRootBeat
                     rootAction.updateActionNode()
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                     
                     if oldKI != animationView.model.index {
                         lastRootBeats.append((event.time, nRootBeat))
@@ -823,7 +993,8 @@ final class MultiSelectFrameAction: DragEventAction {
                         
                         animationView.shownInterTypeKeyframeIndex = animationView.model.index
                         
-                        updateSelected(fromRootBeeat: nRootBeat, in: animationView)
+                        updateSelected(fromRootBeeat: nRootBeat, in: animationView,
+                                       isUnselect: isUnselect)
                         
                         self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
                                                           progress: sheetView.currentTimeProgress(),
@@ -841,7 +1012,8 @@ final class MultiSelectFrameAction: DragEventAction {
                 for (sec, rootBeat) in lastRootBeats.reversed() {
                     if event.time - sec > minLastSec {
                         let animationView = sheetView.animationView
-                        updateSelected(fromRootBeeat: rootBeat, in: animationView)
+                        updateSelected(fromRootBeeat: rootBeat, in: animationView,
+                                       isUnselect: isUnselect)
                         break
                     }
                 }
@@ -851,7 +1023,7 @@ final class MultiSelectFrameAction: DragEventAction {
         }
     }
 }
-final class UnselectAction: InputKeyEventAction {
+final class UnselectAllAction: InputKeyEventAction {
     let rootAction: RootAction, rootView: RootView
     
     init(_ rootAction: RootAction) {
@@ -865,7 +1037,7 @@ final class UnselectAction: InputKeyEventAction {
             rootView.cursor = .arrow
             
             rootView.closeLookingUp()
-            rootView.selections = []
+            rootView.unselect(at: rootView.convertScreenToWorld(event.screenPoint))
         case .changed:
             break
         case .ended:
@@ -920,37 +1092,28 @@ final class DraftAction: Action {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                for (shp, _) in rootView.sheetViewValues {
-                    let ssFrame = rootView.sheetFrame(with: shp)
-                    if rootView.selections.contains(where: { ssFrame.intersects($0.rect) }),
-                       let sheetView = rootView.sheetView(at: shp) {
-                        
-                        if sheetView.model.score.enabled {
-                            let nis = sheetView.noteIndexes(from: rootView.selections)
-                            if !nis.isEmpty {
-                                sheetView.newUndoGroup()
-                                sheetView.changeToDraft(withNoteInexes: nis)
-                                rootView.updateSelects()
-                            }
-                        } else {
-                            let lis = sheetView.lineIndexes(from: rootView.selections)
-                            let pis = sheetView.planeIndexes(from: rootView.selections)
-                            if !lis.isEmpty {
-                                sheetView.newUndoGroup()
-                                sheetView.changeToDraft(withLineInexes: lis,
-                                                        planeInexes: pis)
-                                rootView.updateSelects()
-                            }
-                        }
-                    }
+            if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
+                let nis = sheetView.scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
+                if !nis.isEmpty {
+                    sheetView.newUndoGroup()
+                    sheetView.changeToDraft(withNoteInexes: nis)
+                    rootView.updateSelectedNodes()
+                }
+            } else if let sheetView = rootView.sheetViewWithSelectedLine(at: p)
+                        ?? rootView.sheetViewWithSelectedPlane(at: p) {
+                let lis = sheetView.keyframeView.selectedLineIs
+                let pis = sheetView.keyframeView.selectedPlaneIs
+                if !lis.isEmpty {
+                    sheetView.newUndoGroup()
+                    sheetView.changeToDraft(withLineInexes: lis,
+                                            planeInexes: pis)
+                    rootView.updateSelectedNodes()
                 }
             } else {
                 if let sheetView = rootView.sheetView(at: p) {
@@ -963,7 +1126,6 @@ final class DraftAction: Action {
                         if !nis.isEmpty {
                             sheetView.newUndoGroup()
                             sheetView.changeToDraft(withNoteInexes: nis)
-                            rootView.updateSelects()
                         }
                     } else {
                         sheetView.changeToDraft(with: nil)
@@ -976,6 +1138,7 @@ final class DraftAction: Action {
             rootView.cursor = rootView.defaultCursor
         }
     }
+    
     func cutDraft(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
@@ -984,83 +1147,57 @@ final class DraftAction: Action {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText,
-               !rootView.selections.isEmpty {
-                
-                var value = SheetValue()
-                for selection in rootView.selections {
-                    for (shp, _) in rootView.sheetViewValues {
-                        let ssFrame = rootView.sheetFrame(with: shp)
-                        if ssFrame.intersects(selection.rect),
-                           let sheetView = rootView.sheetView(at: shp) {
-                           
-                            if sheetView.model.score.enabled {
-                                let nis = sheetView.draftNoteIndexes(from: rootView.selections)
-                                if !nis.isEmpty {
-                                    let scoreView = sheetView.scoreView
-                                    let scoreP = scoreView.convertFromWorld(p)
-                                    let pitchInterval = rootView.currentPitchInterval
-                                    let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
-                                    let beatInterval = rootView.currentBeatInterval
-                                    let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
-                                    let notes: [Note] = nis.map {
-                                        var note = scoreView.model.draftNotes[$0]
-                                        note.pitch -= pitch
-                                        note.beatRange.start -= beat
-                                        return note
-                                    }
-                                    
-                                    sheetView.newUndoGroup()
-                                    sheetView.removeDraftNotes(at: nis)
-                                    
-                                    Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
-                                }
-                            } else {
-                                let line = Line(selection.rect.inset(by: -0.5))
-                                let nLine = sheetView.convertFromWorld(line)
-                                if let v = sheetView.removeDraft(with: nLine, at: p) {
-                                    value += v
-                                }
-                            }
+            if let sheetView = rootView.sheetView(at: p) {
+                if sheetView.model.score.enabled {
+                    let nis = (0 ..< sheetView.model.score.draftNotes.count).map { $0 }
+                    if !nis.isEmpty {
+                        let scoreView = sheetView.scoreView
+                        let scoreP = scoreView.convertFromWorld(p)
+                        let pitchInterval = rootView.currentPitchInterval
+                        let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
+                        let beatInterval = rootView.currentBeatInterval
+                        let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
+                        let notes: [Note] = sheetView.model.score.draftNotes.map {
+                            var note = $0
+                            note.pitch -= pitch
+                            note.beatRange.start -= beat
+                            return note
                         }
+                        
+                        sheetView.newUndoGroup()
+                        sheetView.removeDraftNotes(at: nis)
+                        
+                        Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
                     }
-                }
-                if !value.isEmpty {
-                    Pasteboard.shared.copiedObjects = [.sheetValue(value)]
-                }
-                rootView.selections = []
-            } else {
-                if let sheetView = rootView.sheetView(at: p) {
-                    if sheetView.model.score.enabled {
-                        let nis = (0 ..< sheetView.model.score.draftNotes.count).map { $0 }
-                        if !nis.isEmpty {
-                            let scoreView = sheetView.scoreView
-                            let scoreP = scoreView.convertFromWorld(p)
-                            let pitchInterval = rootView.currentPitchInterval
-                            let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
-                            let beatInterval = rootView.currentBeatInterval
-                            let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
-                            let notes: [Note] = sheetView.model.score.draftNotes.map {
-                                var note = $0
-                                note.pitch -= pitch
-                                note.beatRange.start -= beat
-                                return note
-                            }
-                            
-                            sheetView.newUndoGroup()
-                            sheetView.removeDraftNotes(at: nis)
-                            
-                            Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
-                        }
+                } else {
+                    if !sheetView.selectedFrameIndexes.isEmpty {
+                        sheetView.newUndoGroup()
+                        let sfis = sheetView.selectedFrameIndexes.sorted()
+                        sheetView.removeDraftKeyLines(sfis.compactMap {
+                            let lines = sheetView.model.animation.keyframes[$0].draftPicture.lines
+                            return lines.isEmpty ?
+                            nil :
+                            IndexValue(value: Array(0 ..< lines.count), index: $0)
+                        })
+                        sheetView.removeDraftKeyPlanes(sfis.compactMap {
+                            let planes = sheetView.model.animation.keyframes[$0].draftPicture.planes
+                            return planes.isEmpty ?
+                                nil :
+                            IndexValue(value: Array(0 ..< planes.count), index: $0)
+                        })
                     } else {
-                        sheetView.cutDraft(with: nil, at: p)
+                        let object = PastableObject.picture(sheetView.model.draftPicture)
+                        if !sheetView.model.draftPicture.isEmpty {
+                            sheetView.newUndoGroup()
+                            sheetView.removeDraft()
+                            Pasteboard.shared.copiedObjects = [object]
+                        }
                     }
                 }
             }
@@ -1118,8 +1255,7 @@ final class FaceAction: Action {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1127,13 +1263,9 @@ final class FaceAction: Action {
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let score = sheetView.scoreView.model
-                let nis = if rootView.isSelectNoneCursor(at: p) && !rootView.isSelectedText {
-                    sheetView.noteIndexes(from: rootView.selections)
-                } else if let i = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
-                    [i]
-                } else {
-                    Array(score.notes.count.range)
-                }
+                let scoreP = sheetView.scoreView.convertFromWorld(p)
+                let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
+                let nis = ois.isEmpty ? Array(score.notes.count.range) : ois
                 let nnis = nis.filter { score.notes[$0].isDefaultTone }.sorted()
                 if !nnis.isEmpty {
                     var tones = [UUID: Tone]()
@@ -1162,17 +1294,12 @@ final class FaceAction: Action {
                 return
             }
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                for (shp, _) in rootView.sheetViewValues {
-                    let ssFrame = rootView.sheetFrame(with: shp)
-                    if rootView.multiSelection.intersects(ssFrame),
-                       let sheetView = rootView.sheetView(at: shp) {
-                        
-                        let rects = rootView.selections
-                            .map { sheetView.convertFromWorld($0.rect) }
-                        let path = Path(rects.map { Pathline($0) })
-                        sheetView.makeFaces(with: path, isSelection: true)
-                    }
+            if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
+                let planes = sheetView.keyframeView.selectedPlaneIs
+                    .map { sheetView.model.picture.planes[$0] }
+                if let rect = planes.reduce(into: Rect?.none, { $0 += $1.bounds }) {
+                    let path = Path(rect)
+                    sheetView.makeFaces(with: path, isSelection: true)
                 }
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
@@ -1199,8 +1326,7 @@ final class FaceAction: Action {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1208,13 +1334,9 @@ final class FaceAction: Action {
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let score = sheetView.scoreView.model
-                let nis = if rootView.isSelectNoneCursor(at: p) && !rootView.isSelectedText {
-                    sheetView.noteIndexes(from: rootView.selections)
-                } else if let i = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
-                    [i]
-                } else {
-                    Array(score.notes.count.range)
-                }
+                let scoreP = sheetView.scoreView.convertFromWorld(p)
+                let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
+                let nis = ois.isEmpty ? Array(score.notes.count.range) : ois
                 let nnis = nis
                     .filter { !score.notes[$0].isOneOvertone && !score.notes[$0].isFullNoise }
                     .sorted()
@@ -1240,24 +1362,14 @@ final class FaceAction: Action {
                 return
             }
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                var value = SheetValue()
-                for (shp, _) in rootView.sheetViewValues {
-                    let ssFrame = rootView.sheetFrame(with: shp)
-                    if rootView.multiSelection.intersects(ssFrame),
-                       let sheetView = rootView.sheetView(at: shp) {
-                        
-                        let rects = rootView.selections
-                            .map { sheetView.convertFromWorld($0.rect).inset(by: 1) }
-                        let path = Path(rects.map { Pathline($0) })
-                        if let v = sheetView.removeFilledFaces(with: path, at: p) {
-                            value += v
-                        }
-                    }
-                }
+            if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
+                sheetView.newUndoGroup()
+                let planes = sheetView.keyframeView.selectedPlaneIs
+                    .map { sheetView.model.picture.planes[$0] }
+                let t = Transform(translation: -sheetView.convertFromWorld(p))
+                sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
+                let value = SheetValue(lines: [], planes: planes, texts: []) * t
                 Pasteboard.shared.copiedObjects = [.sheetValue(value)]
-                
-                rootView.selections = []
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView = sheetView {
@@ -1295,8 +1407,7 @@ final class AddScoreAction: InputKeyEventAction {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1311,7 +1422,6 @@ final class AddScoreAction: InputKeyEventAction {
                 sheetView.set(option)
                 
                 rootAction.updateActionNode()
-                rootView.updateSelects()
             }
         case .changed:
             break
@@ -1339,8 +1449,7 @@ final class JustFitAction: InputKeyEventAction {
         if rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1359,12 +1468,12 @@ final class JustFitAction: InputKeyEventAction {
                     var nivs = [IndexValue<Note>]()
                     
                     let nis: [Int]
-                    if rootView.selections.isEmpty {
+                    if scoreView.selectedNotePitSprolIs.isEmpty {
                         let beat: Rational = scoreView.beat(atX: scoreP.x)
                         nis = scoreView.model.notes.enumerated()
                             .filter { $0.element.beatRange.contains(beat) }.map { $0.offset }
                     } else {
-                        nis = sheetView.noteIndexes(from: rootView.selections)
+                        nis = scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
                     }
                     
                     for ni in nis {

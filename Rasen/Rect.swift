@@ -573,6 +573,10 @@ extension Rect {
     var maxXMaxYPoint: Point {
         Point(maxX, maxY)
     }
+    var allPoints: [Point] {
+        [minXMinYPoint, minXMaxYPoint, maxXMinYPoint, maxXMaxYPoint,
+         minXMidYPoint, midXMinYPoint, maxXMidYPoint, midXMaxYPoint]
+    }
     var leftEdge: Edge {
         Edge(minXMaxYPoint, minXMinYPoint)
     }

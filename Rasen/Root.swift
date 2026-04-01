@@ -19,84 +19,6 @@ import struct Foundation.UUID
 import struct Foundation.Data
 import struct Foundation.URL
 
-struct CornerRectValue {
-    var rect: Rect
-    var rectCorner: RectCorner
-}
-extension CornerRectValue {
-    var firstOrigin: Point {
-        switch rectCorner {
-        case .minXMinY: rect.maxXMaxYPoint
-        case .minXMaxY: rect.maxXMinYPoint
-        case .maxXMinY: rect.minXMaxYPoint
-        case .maxXMaxY: rect.minXMinYPoint
-        }
-    }
-    var lastOrigin: Point {
-        switch rectCorner {
-        case .minXMinY: rect.minXMinYPoint
-        case .minXMaxY: rect.minXMaxYPoint
-        case .maxXMinY: rect.maxXMinYPoint
-        case .maxXMaxY: rect.maxXMaxYPoint
-        }
-    }
-}
-extension CornerRectValue: Protobuf {
-    init(_ pb: PBCornerRectValue) throws {
-        rect = try .init(pb.rect)
-        rectCorner = try .init(pb.rectCorner)
-    }
-    var pb: PBCornerRectValue {
-        .with {
-            $0.rect = rect.pb
-            $0.rectCorner = rectCorner.pb
-        }
-    }
-}
-extension CornerRectValue: Codable {}
-
-typealias Selection = CornerRectValue
-extension Array: Serializable where Element == Selection {}
-extension Array: Protobuf where Element == Selection {
-    init(_ pb: PBCornerRectValueArray) throws {
-        self = try pb.value.map { try .init($0) }
-    }
-    var pb: PBCornerRectValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Selection: AppliableTransform {
-    static func * (lhs: Self, rhs: Transform) -> Self {
-        .init(rect: lhs.rect * rhs, rectCorner: lhs.rectCorner)
-    }
-}
-
-struct MultiSelection {
-    var selections = [Selection]()
-}
-extension MultiSelection {
-    var isEmpty: Bool {
-        selections.isEmpty
-    }
-    func intersects(_ rect: Rect) -> Bool {
-        selections.contains { $0.rect.intersects(rect) }
-    }
-    func intersects(_ line: Line) -> Bool {
-        selections.contains { line.intersects($0.rect) }
-    }
-    func contains(_ p : Point) -> Bool {
-        selections.contains { $0.rect.contains(p) }
-    }
-    func firstSelection(at p: Point) -> Selection? {
-        selections.reversed().first { $0.rect.contains(p) }
-    }
-}
-extension MultiSelection: AppliableTransform {
-    static func * (lhs: Self, rhs: Transform) -> Self {
-        .init(selections: lhs.selections.map { $0 * rhs })
-    }
-}
-
 struct Finding {
     var worldPosition = Point()
     var string = ""
@@ -483,9 +405,6 @@ final class Root: @unchecked Sendable {
     static let worldHistoryRecordKey = "world_h.pb"
     let worldHistoryRecord: Record<WorldHistory>
     
-    static let selectionsRecordKey = "selections.pb"
-    var selectionsRecord: Record<[Selection]>
-    
     static let findingRecordKey = "finding.pb"
     var findingRecord: Record<Finding>
     
@@ -504,7 +423,6 @@ final class Root: @unchecked Sendable {
         
         worldRecord = rootDirectory.makeRecord(forKey: Self.worldRecordKey, isLoadOnly: isLoadOnly)
         worldHistoryRecord = rootDirectory.makeRecord(forKey: Self.worldHistoryRecordKey, isLoadOnly: isLoadOnly)
-        selectionsRecord = rootDirectory.makeRecord(forKey: Self.selectionsRecordKey, isLoadOnly: isLoadOnly)
         findingRecord = rootDirectory.makeRecord(forKey: Self.findingRecordKey, isLoadOnly: isLoadOnly)
         povRecord = rootDirectory.makeRecord(forKey: Self.povRecordKey, isLoadOnly: isLoadOnly)
         sheetsDirectory = rootDirectory.makeDirectory(forKey: Self.sheetsDirectoryKey, isLoadOnly: isLoadOnly)
@@ -540,9 +458,6 @@ final class Root: @unchecked Sendable {
     }
     func history() -> WorldHistory {
         worldHistoryRecord.decodedValue ?? .init()
-    }
-    func selections() -> [Selection] {
-        selectionsRecord.decodedValue ?? []
     }
     func finding() -> Finding {
         findingRecord.decodedValue ?? .init()

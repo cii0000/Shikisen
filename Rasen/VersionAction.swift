@@ -238,8 +238,7 @@ final class VersionAction: Action {
         undo(with: event, isRedo: true)
     }
     func undo(with event: InputKeyEvent, isRedo: Bool) {
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneSelectedNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -257,7 +256,7 @@ final class VersionAction: Action {
             selectingRootNode.removeFromParent()
             rootNode.removeFromParent()
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             if let sheetView = sheetView {
                 rootView.updateFinding(from: sheetView)
             }
@@ -539,7 +538,7 @@ final class VersionAction: Action {
             selectingRootNode.removeFromParent()
             rootNode.removeFromParent()
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             if let sheetView = sheetView {
                 rootView.updateFinding(from: sheetView)
             }
@@ -586,17 +585,14 @@ final class ClearHistoryAction: InputKeyEventAction {
     }
     
     func flow(with event: InputKeyEvent) {
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                let vs: [Rect] = rootView.world.sheetIDs.keys.compactMap { shp in
-                    let frame = rootView.sheetFrame(with: shp)
-                    return rootView.multiSelection.intersects(frame) ? frame : nil
-                }
+            if rootView.containsSelectedSheetPositions(p) {
+                let vs = rootView.selectedSheetPositions.map { rootView.sheetFrame(with: $0) }
                 selectingLineNode.children = vs.map {
                     Node(path: Path($0),
                          lineWidth: rootView.worldLineWidth,
@@ -620,8 +616,8 @@ final class ClearHistoryAction: InputKeyEventAction {
         case .changed:
             break
         case .ended:
-            if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-                let shps = rootView.sheetPositionsWithSelection()
+            if rootView.containsSelectedSheetPositions(p) {
+                let shps = rootView.selectedSheetPositions
                 
                 let mes = shps.count == 1 ?
                     "Do you want to clear history of this sheet?".localized :

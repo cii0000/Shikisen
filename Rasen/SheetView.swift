@@ -40,8 +40,20 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         updatePath()
         node.lineWidth = model.size
     }
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            updateColor()
+        }
+    }
+    var isHiddenSeleted = false {
+        didSet {
+            guard isHiddenSeleted != oldValue else { return }
+            updateColor()
+        }
+    }
     func updateColor() {
-        node.lineType = .color(model.uuColor.value)
+        node.lineType = .color(isSelected && !isHiddenSeleted ? .selected : model.uuColor.value)
     }
     func updatePath() {
         node.path = Path(model)
@@ -106,8 +118,20 @@ final class PlaneView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         updateColor()
         updatePath()
     }
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            updateColor()
+        }
+    }
+    var isHiddenSeleted = false {
+        didSet {
+            guard isHiddenSeleted != oldValue else { return }
+            updateColor()
+        }
+    }
     func updateColor() {
-        node.fillType = .color(model.uuColor.value)
+        node.fillType = .color(isSelected && !isHiddenSeleted ? .selected + model.uuColor.value :  model.uuColor.value)
     }
     func updatePath() {
         node.path = model.path
@@ -181,6 +205,29 @@ final class KeyframeView: BindableView, @unchecked Sendable {
     let planesView: ArrayView<SheetPlaneView>
     let draftLinesView: ArrayView<SheetLineView>
     let draftPlanesView: ArrayView<SheetPlaneView>
+    
+    var selectedLineIs: [Int] {
+        get {
+            linesView.elementViews.count.range.filter { linesView.elementViews[$0].isSelected }
+        }
+        set {
+            let value = Set(newValue)
+            linesView.elementViews.enumerated().forEach {
+                $0.element.isSelected = value.contains($0.offset)
+            }
+        }
+    }
+    var selectedPlaneIs: [Int] {
+        get {
+            planesView.elementViews.count.range.filter { planesView.elementViews[$0].isSelected }
+        }
+        set {
+            let value = Set(newValue)
+            planesView.elementViews.enumerated().forEach {
+                $0.element.isSelected = value.contains($0.offset)
+            }
+        }
+    }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -1382,6 +1429,13 @@ final class SheetView: BindableView, @unchecked Sendable {
     
     var notePlayer: NotePlayer?
     let tempoNode = Node()
+    let selectedFrameNode = Node()
+    
+    var selectedTextIs: [Int] {
+        textsView.elementViews.enumerated()
+            .compactMap { !$0.element.selectedRanges.isEmpty ? $0.offset : nil }
+    }
+    var selectedContentIs = [Int]()
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
@@ -1407,7 +1461,8 @@ final class SheetView: BindableView, @unchecked Sendable {
                                textsView.node,
                                bordersView.node,
                                animationView.timelineNode,
-                               animationView.captionNode])
+                               animationView.captionNode,
+                               selectedFrameNode])
         
         updateBackground()
         updateWithKeyframeIndex()
@@ -1589,6 +1644,158 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     
+    var selectedFrame: Rect? {
+        var rect: Rect?
+        keyframeView.selectedLineIs.forEach {
+            rect += keyframeView.linesView.elementViews[$0].node.bounds
+        }
+        keyframeView.selectedPlaneIs.forEach {
+            rect += keyframeView.planesView.elementViews[$0].node.bounds
+        }
+        selectedTextIs.forEach {
+            rect += textsView.elementViews[$0].transformedBounds
+        }
+        selectedContentIs.forEach {
+            rect += contentsView.elementViews[$0].transformedBounds
+        }
+        return rect
+    }
+    func updateSelectedNodes(scale: Double, isHidden: Bool) {
+        selectedFrameNode.isHidden = isHidden
+        guard !isHidden else { return }
+        
+//        animationView.selectedFrameIndexes
+        
+        if let rect = selectedFrame?.outset(by: 5 * scale) {
+            let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+                             rect.midXMinYPoint, rect.midXMaxYPoint,
+                             rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
+                Node(attitude: .init(position: $0, scale: .init(square: scale)),
+                         path: Path(circleRadius: 3),
+                         fillType: .color(.selected))
+            }
+            
+            selectedFrameNode.children = knobNodes + [Node(path: .init(rect),
+                                                           lineWidth: scale,
+                                                           lineType: .color(.selected))]
+        } else {
+            selectedFrameNode.children = []
+        }
+    }
+    func updateSelectedColor(isMain: Bool) {
+        let selectedColor = isMain ? Color.selected : Color.diselected
+        animationView.selectedColor = selectedColor
+        selectedFrameNode.children.forEach {
+            if $0.fillType != nil {
+                $0.fillType = .color(selectedColor)
+            }
+            if $0.lineType != nil {
+                $0.lineType = .color(selectedColor)
+            }
+        }
+    }
+    func containsSelected(_ p: Point, scale: Double) -> Bool {
+        containsSelectedNote(p, scale: scale) || containsSelectedSheetValue(p, scale: scale)
+    }
+    
+    func selectedSheetValue() -> SheetValue? {
+        let sheet = model
+        
+        let texts: [Text] = textsView.elementViews.enumerated().compactMap { (ti, textView) in
+            let ranges = textView.selectedRanges
+            guard !ranges.isEmpty else { return nil }
+            
+            var minP = textView.typesetter
+                .characterPosition(at: textView.model.string.startIndex)
+            var minI = textView.model.string.endIndex
+            for range in ranges {
+                let i = range.lowerBound
+                if i < minI {
+                    minI = i
+                    minP = textView.typesetter
+                        .characterPosition(at: i)
+                }
+            }
+            var text = textView.model
+            var removedText = text
+            removedText.string = ""
+            for range in ranges {
+                removedText.string += text.string[range]
+            }
+            for range in ranges.reversed() {
+                text.string.removeSubrange(range)
+            }
+            removedText.origin += minP
+            return removedText
+        }
+        
+        let ssValue = SheetValue(lines: keyframeView.selectedLineIs.map { sheet.picture.lines[$0] },
+                                 planes: keyframeView.selectedPlaneIs.map { sheet.picture.planes[$0] },
+                                 texts: texts,
+                                 id: id, rootKeyframeIndex: model.animation.rootIndex,
+                                 keyframes: [], keyframeBeganIndex: 0)
+        return ssValue.isEmpty ? nil : ssValue
+    }
+    func containsSelectedSheetValue(_ p: Point, scale: Double) -> Bool {
+        containsSelectedLine(p, scale: scale)
+        || containsSelectedPlane(p)
+        || containsSelectedText(p, scale: scale)
+        || containsSelectedContent(p, scale: scale)
+        || containsSelectedFrame(p, scale: scale)
+    }
+    func containsSelectedFrame(_ p: Point, scale: Double) -> Bool {
+        guard let frame = selectedFrame?.outset(by: 5 * scale) else { return false }
+        let dSq = (Sheet.moveKnobEditDistance * scale).squared
+        let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
+        return frame.allPoints.contains { $0.distanceSquared(p) < dSq }
+        || frame.edges.contains { $0.distanceSquared(from: p) < edSq }
+    }
+    func containsSelectedLineOrPlane(_ p: Point, scale: Double) -> Bool {
+        containsSelectedLine(p, scale: scale) || containsSelectedPlane(p)
+    }
+    func containsSelectedLine(_ p: Point, scale: Double) -> Bool {
+        lineTuple(at: p, isSelectedOnly: true, scale: scale) != nil
+    }
+    func containsSelectedPlane(_ p: Point) -> Bool {
+        let planes = model.picture.planes
+        return keyframeView.selectedPlaneIs.contains { planes[$0].topolygon.contains(p) }
+    }
+    func containsSelectedText(_ p: Point, scale: Double) -> Bool {
+        selectedTextIs.contains {
+            let textView = textsView.elementViews[$0]
+            let p = textView.convert(p, from: node)
+            return if let ci = textView.characterIndex(for: p) {
+                textView.selectedRanges.contains { $0.contains(ci) }
+            } else {
+                false
+            }
+        }
+    }
+    func containsSelectedContent(_ p: Point, scale: Double) -> Bool {
+        selectedContentIs.contains { contentsView.elementViews[$0].contains(convert(p, from: node),
+                                                                            scale: scale) }
+    }
+    
+    func containsSelectedNote(_ p: Point, scale: Double) -> Bool {
+        guard model.score.enabled, let v = scoreView.hitTestPoint(p, scale: scale) else { return false }
+        return switch v.result {
+        case .note, .startBeat, .endBeat, .f0, .spectlopeHeight: scoreView.selectedNoteIs.contains(v.noteI)
+        case .pit(let pitI): scoreView.selectedNotePitIs[v.noteI]?.contains(pitI) ?? false
+        case .lyric(let pitI): scoreView.selectedNotePitIs[v.noteI]?.contains(pitI) ?? false
+        case .even(let pitI): scoreView.selectedNotePitIs[v.noteI]?.contains(pitI) ?? false
+        case .sprol(let pitI, let sprolI, _): scoreView.selectedNotePitSprolIs[v.noteI]?[pitI]?.contains(sprolI) ?? false
+        case .allSprol: scoreView.selectedNoteIs.contains(v.noteI)
+        }
+    }
+    
+    var selectedTextFrames: [Rect] {
+        textsView.elementViews.flatMap { $0.transformedSelectedRects }
+    }
+    
+    private(set) var selectedLinesNode: Node?, selectedLineNodes = [Line: Node]()
+    private(set) var selectedNotesNode: Node?, selectedPointsNode: Node?,
+                     selectedNoteNodes = [Pointline: Node]()
+    
     func sec(at p: Point, scale: Double, interval: Rational) -> Rational {
         if let (_, view) = contentIndexAndView(at: p, scale: scale) {
             view.sec(atX: p.x, interval: interval)
@@ -1742,7 +1949,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             return i
         }
         for (i, view) in textsView.elementViews.enumerated().reversed() {
-            if view.contains(view.convert(p, from: node), scale: scale) {
+            if view.containsTimeline(view.convert(p, from: node), scale: scale) {
                 return i
             }
         }
@@ -2819,17 +3026,14 @@ final class SheetView: BindableView, @unchecked Sendable {
             return SheetColorOwner(sheetView: self, colorValue: cv)
         }
     }
-    func sheetColorOwner(at r: Rect,
-                         isLine: Bool = false) -> [SheetColorOwner] {
+    func sheetColorOwnerWithSelection(isLine: Bool = false) -> [SheetColorOwner] {
         if isLine {
-            let liDic = linesView.elementViews.enumerated().reduce(into: [UUColor: [Int]]()) {
-                if $1.element.intersects(r) {
-                    let uuColor = $1.element.model.uuColor
-                    if $0[uuColor] != nil {
-                        $0[uuColor]?.append($1.offset)
-                    } else {
-                        $0[uuColor] = [$1.offset]
-                    }
+            let liDic = keyframeView.selectedLineIs.reduce(into: [UUColor: [Int]]()) {
+                let uuColor = model.picture.lines[$1].uuColor
+                if $0[uuColor] != nil {
+                    $0[uuColor]?.append($1)
+                } else {
+                    $0[uuColor] = [$1]
                 }
             }
             return liDic.map {
@@ -2854,14 +3058,12 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             }
         } else {
-            let piDic = planesView.elementViews.enumerated().reduce(into: [UUColor: [Int]]()) {
-                if $1.element.node.path.intersects(r) {
-                    let uuColor = $1.element.model.uuColor
-                    if $0[uuColor] != nil {
-                        $0[uuColor]?.append($1.offset)
-                    } else {
-                        $0[uuColor] = [$1.offset]
-                    }
+            let piDic = keyframeView.selectedPlaneIs.reduce(into: [UUColor: [Int]]()) {
+                let uuColor = model.picture.planes[$1].uuColor
+                if $0[uuColor] != nil {
+                    $0[uuColor]?.append($1)
+                } else {
+                    $0[uuColor] = [$1]
                 }
             }
             return piDic.map {
@@ -3181,6 +3383,9 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             }
         case .replaceString(let ituv):
+            //
+            textsView.elementViews[ituv.index].selectedRanges = []
+            
             if isMakeRect {
                 let textView = textsView.elementViews[ituv.index]
                 let firstRect: Rect?
@@ -6491,15 +6696,18 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func lineTuple(at p: Point, enabledPlane: Bool = false,
+                   isSelectedOnly: Bool = false,
                    removingUUColor: UUColor? = nil,
                    scale: Double) -> (lineView: SheetLineView,
                                       lineIndex: Int)? {
         guard let v = lineTuple(at: p, enabledPlane: enabledPlane, removingUUColor: removingUUColor,
+                                isSelectedOnly: isSelectedOnly,
                                 enabledPreviousNext: false, scale: scale) else { return nil }
         return (v.lineView, v.lineI)
     }
     func lineTuple(at p: Point, enabledPlane: Bool = false,
                    removingUUColor: UUColor? = nil,
+                   isSelectedOnly: Bool = false,
                    enabledPreviousNext: Bool,
                    minEnabledDistance med: Double = 10,
                    scale: Double) -> (lineView: SheetLineView, lineI: Int, rootKeyframeI: Int)? {
@@ -6543,7 +6751,8 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
         let rki = model.animation.rootIndex
         for (i, line) in model.picture.lines.enumerated().reversed() {
-            if let n = update(at: i, rki: rki, from: line) {
+            if isSelectedOnly ? keyframeView.selectedLineIs.contains(i) : true,
+               let n = update(at: i, rki: rki, from: line) {
                 return n
             }
         }
@@ -6585,138 +6794,6 @@ final class SheetView: BindableView, @unchecked Sendable {
             return (linesView.elementViews[i], i, rki)
         } else {
             return nil
-        }
-    }
-    
-    func lineIndexes(from selections: [Selection]) -> [Int] {
-        linesView.elementViews.enumerated().compactMap { (li, lineView) in
-            if selections.contains(where: {
-                lineView.intersects(convertFromWorld($0.rect))
-            }) { li } else { nil }
-        }
-    }
-    func planeIndexes(from selections: [Selection]) -> [Int] {
-        planesView.elementViews.enumerated().compactMap { (pi, planeView) in
-            if selections.contains(where: {
-                Path(convertFromWorld($0.rect))
-                    .contains(planeView.node.path)
-            }) { pi } else { nil }
-        }
-    }
-    func textIndexes(from selections: [Selection]) -> [Int] {
-        textsView.elementViews.enumerated().compactMap { (ti, textView) in
-            if textView.transformedBounds != nil, selections.contains(where: {
-                let nRect = textView.convertFromWorld($0.rect)
-                guard textView.intersectsHalf(nRect) else { return false }
-                let tfp = textView.convertFromWorld($0.firstOrigin)
-                let tlp = textView.convertFromWorld($0.lastOrigin)
-                guard textView.characterIndexWithOutOfBounds(for: tfp) != nil,
-                      textView.characterIndexWithOutOfBounds(for: tlp) != nil else { return false }
-                return true
-            }) { ti } else { nil }
-        }
-    }
-    func contentIndexes(from selections: [Selection]) -> [Int] {
-        contentsView.elementViews.enumerated().compactMap { (ci, contentView) in
-            if let b = contentView.transformedBounds, selections.contains(where: {
-                Path(convertFromWorld($0.rect))
-                    .intersects(b)
-            }) { ci } else { nil }
-        }
-    }
-    func noteIndexes(from selections: [Selection]) -> [Int] {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        return (0 ..< scoreView.model.notes.count).compactMap { i in
-            fs.contains(where: { scoreView.intersectsNote($0, at: i) }) ? i : nil
-        }
-    }
-    func containedNotes(from selections: [Selection]) -> [Int] {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        return (0 ..< scoreView.model.notes.count).compactMap { i in
-            fs.contains(where: { scoreView.containsNote($0, at: i) }) ? i : nil
-        }
-    }
-    func noteAndPitIndexes(from selections: [Selection], enabledAllPits: Bool = true) -> [Int: [Int]] {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        return scoreView.model.notes.enumerated().reduce(into: [Int: [Int]]()) { (n, v) in
-            let noteI = v.offset, note = v.element
-            let pitIs = note.pits.enumerated().compactMap { (pitI, pit) in
-                fs.contains(where: { $0.contains(scoreView.pitPosition(atPit: pitI, from: note)) }) ?
-                pitI : nil
-            }
-            
-            if pitIs.isEmpty {
-                if enabledAllPits && fs.contains(where: { scoreView.intersectsNote($0, at: noteI) }) {
-                    n[noteI] = note.pits.count.array
-                }
-            } else {
-                n[noteI] = pitIs
-            }
-        }
-    }
-    func noteAndPitAndSprolIs(from selections: [Selection], enabledAll: Bool = true) -> [Int: [Int: Set<Int>]] {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        return scoreView.model.notes.enumerated().reduce(into: [Int: [Int: Set<Int>]]()) { (n, v) in
-            let noteI = v.offset, note = v.element
-            
-            let toneFrames = scoreView.toneFrames(from: note)
-            n[noteI] = toneFrames.reduce(into: .init()) { (v, tf) in
-                tf.pitIs.forEach { pitI in
-                    let pit = note.pits[pitI]
-                    for sprolI in pit.tone.spectlope.sprols.count.range {
-                        if fs.contains(where: { $0.contains(scoreView.sprolPosition(atSprol: sprolI, atPit: pitI, at: noteI, atY: tf.frame.minY)) }) {
-                            if v[pitI] != nil {
-                                v[pitI]?.insert(sprolI)
-                            } else {
-                                v[pitI] = [sprolI]
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    func isStraight(from selections: [Selection], atPit pitI: Int, at note: Note) -> Bool {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        if !fs.contains(where: { $0.contains(scoreView.pitPosition(atPit: pitI, from: note)) }) {
-            let pit = note.pits[pitI]
-            if pitI - 1 >= 0 {
-                if pit.beat == note.pits[pitI - 1].beat {
-                    return true
-                }
-                if pitI == note.pits.count - 1 && pitI - 2 >= 0
-                    && note.pits[pitI - 1].beat == note.pits[pitI - 2].beat {
-                    return true
-                }
-            }
-            if pitI + 1 < note.pits.count {
-                if pit.beat == note.pits[pitI + 1].beat {
-                    return true
-                }
-                if pitI == 0 && pitI + 2 < note.pits.count
-                    && note.pits[pitI + 1].beat == note.pits[pitI + 2].beat {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-    func draftNoteIndexes(from selections: [Selection]) -> [Int] {
-        let fs = selections
-            .map { $0.rect }
-            .map { scoreView.convertFromWorld($0) }
-        return (0 ..< scoreView.model.draftNotes.count).compactMap { i in
-            fs.contains(where: { scoreView.intersectsDraftNote($0, at: i) }) ? i : nil
         }
     }
     
@@ -6802,15 +6879,13 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func lassoErase(with lasso: Lasso,
-                    distance d: Double = 0,
-                    isSplitLine: Bool = true,
                     isRemove: Bool,
                     isEnableLine: Bool = true,
                     isEnablePlane: Bool = true,
                     isEnableText: Bool = true,
-                    selections: [Selection] = [],
                     isDraft: Bool = false,
-                    isUpdateUndoGroup: Bool = false) -> SheetValue? {
+                    isUpdateUndoGroup: Bool = false,
+                    distance d: Double = 0) -> SheetValue? {
         guard let nlb = lasso.bounds else { return nil }
         guard node.bounds?.intersects(nlb) ?? false else { return nil }
         
@@ -6822,154 +6897,100 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         
-        var ssValue = SheetValue(id: id,
-                                 rootKeyframeIndex: model.animation.rootIndex)
-        
-        if !selectedFrameIndexes.isEmpty {
-            let sfis = selectedFrameIndexes.sorted()
-            
-            var nis = [Int]()
-            let sfisSet = Set(sfis)
-            for (i, keyframeView) in animationView.elementViews.enumerated() {
-                
-                guard sfisSet.contains(i) else { continue }
-                
-                ssValue.keyframes.append(keyframeView.model)
-                
-                nis.append(i)
-            }
-            
-            guard !nis.isEmpty else { return nil }
-            
-            let bi = nis.firstIndex(of: model.animation.index) ?? 0
-            ssValue.keyframeBeganIndex = bi
-            
-            return ssValue.isEmpty ? nil : ssValue
-        }
+        var ssValue = SheetValue(id: id, rootKeyframeIndex: model.animation.rootIndex)
         
         let nPath = lasso.line.path(isClosed: true, isPolygon: false)
         
         if isEnableLine {
             let linesView = isDraft ? self.draftLinesView : self.linesView
-            if !isSplitLine {
-                let indexValues: [IndexValue<Line>] = linesView.elementViews.enumerated().compactMap { (li, lineView) in
-                    if selections.contains(where: {
-                        lineView.intersects(convertFromWorld($0.rect))
-                    }) {
-                        return IndexValue(value: lineView.model, index: li)
-                    } else {
-                        return nil
-                    }
+            var removeLines = [Line](), splitedLines = [Line]()
+            var removeLineIndexes = [Int]()
+            let nSplitLines: [Line], nd: Double
+            if d > 0 {
+                let snlb = nlb.outset(by: d + 0.0001)
+                let splitLines = linesView.model.filter {
+                    $0.bounds?.outset(by: $0.size / 2).intersects(snlb) ?? false
                 }
-                if !indexValues.isEmpty {
-                    if isRemove {
-                        updateUndoGroup()
-                        if isDraft {
-                            self.removeDraftLines(at: indexValues.map { $0.index })
-                        } else {
-                            self.removeLines(at: indexValues.map { $0.index })
-                        }
+                if splitLines.count < 50 {
+                    let count = splitLines.reduce(0) {
+                        lasso.intersects($1) ? $0 + 1 : $0
                     }
-                    ssValue.lines += indexValues.map { $0.value }
-                }
-            } else {
-                var removeLines = [Line](), splitedLines = [Line]()
-                var removeLineIndexes = [Int]()
-                let nSplitLines: [Line], nd: Double
-                if d > 0 {
-                    let snlb = nlb.outset(by: d + 0.0001)
-                    let splitLines = linesView.model.filter {
-                        $0.bounds?.outset(by: $0.size / 2).intersects(snlb) ?? false
-                    }
-                    if splitLines.count < 50 {
-                        let count = splitLines.reduce(0) {
-                            lasso.intersects($1) ? $0 + 1 : $0
-                        }
-                        nd = count <= 3 ? d * 2 : d
-                        nSplitLines = splitLines
-                    } else {
-                        nd = d
-                        nSplitLines = []
-                    }
+                    nd = count <= 3 ? d * 2 : d
+                    nSplitLines = splitLines
                 } else {
                     nd = d
                     nSplitLines = []
                 }
-                for (i, aLine) in linesView.model.enumerated() {
-                    if let splitedLine = lasso
-                        .splitedLine(with: aLine,
-                                     splitLines: nSplitLines,
-                                     distance: nd) {
-                        switch splitedLine {
-                        case .around(let line):
-                            removeLineIndexes.append(i)
-                            removeLines.append(line)
-                        case .split((let aRemoveLines, var aSplitLines)):
-                            removeLineIndexes.append(i)
-                            removeLines += aRemoveLines
-                            if !aSplitLines.isEmpty {
-                                let idI: Int
-                                if aSplitLines.count == 1 {
-                                    idI = 0
-                                } else {
-                                    var maxD = 0.0, j = 0
-                                    for (k, l) in aSplitLines.enumerated() {
-                                        let d = l.length()
-                                        if d > maxD {
-                                            j = k
-                                            maxD = d
-                                        }
-                                    }
-                                    idI = j
-                                }
-                                for i in aSplitLines.count.range {
-                                    if i == idI {
-                                        aSplitLines[idI].id = aLine.id
-                                        aSplitLines[idI].interType = aLine.interType
-                                    } else {
-                                        aSplitLines[i].id = .init()
-                                    }
-                                }
-                                
-                                splitedLines += aSplitLines
-                            }
-                        }
-                    }
-                }
-                if isRemove && (!removeLineIndexes.isEmpty || !splitedLines.isEmpty) {
-                    updateUndoGroup()
-                    if !removeLineIndexes.isEmpty {
-                        if isDraft {
-                            self.removeDraftLines(at: removeLineIndexes)
-                        } else {
-                            self.removeLines(at: removeLineIndexes)
-                        }
-                    }
-                    if isDraft {
-                        insertDraft(splitedLines.enumerated().map {
-                            IndexValue(value: $0.element, index: $0.offset)
-                        })
-                    } else {
-                        append(splitedLines)
-                    }
-                }
-                ssValue.lines = removeLines
+            } else {
+                nd = d
+                nSplitLines = []
             }
+            for (i, aLine) in linesView.model.enumerated() {
+                if let splitedLine = lasso
+                    .splitedLine(with: aLine,
+                                 splitLines: nSplitLines,
+                                 distance: nd) {
+                    switch splitedLine {
+                    case .around(let line):
+                        removeLineIndexes.append(i)
+                        removeLines.append(line)
+                    case .split((let aRemoveLines, var aSplitLines)):
+                        removeLineIndexes.append(i)
+                        removeLines += aRemoveLines
+                        if !aSplitLines.isEmpty {
+                            let idI: Int
+                            if aSplitLines.count == 1 {
+                                idI = 0
+                            } else {
+                                var maxD = 0.0, j = 0
+                                for (k, l) in aSplitLines.enumerated() {
+                                    let d = l.length()
+                                    if d > maxD {
+                                        j = k
+                                        maxD = d
+                                    }
+                                }
+                                idI = j
+                            }
+                            for i in aSplitLines.count.range {
+                                if i == idI {
+                                    aSplitLines[idI].id = aLine.id
+                                    aSplitLines[idI].interType = aLine.interType
+                                } else {
+                                    aSplitLines[i].id = .init()
+                                }
+                            }
+                            
+                            splitedLines += aSplitLines
+                        }
+                    }
+                }
+            }
+            if isRemove && (!removeLineIndexes.isEmpty || !splitedLines.isEmpty) {
+                updateUndoGroup()
+                if !removeLineIndexes.isEmpty {
+                    if isDraft {
+                        self.removeDraftLines(at: removeLineIndexes)
+                    } else {
+                        self.removeLines(at: removeLineIndexes)
+                    }
+                }
+                if isDraft {
+                    insertDraft(splitedLines.enumerated().map {
+                        IndexValue(value: $0.element, index: $0.offset)
+                    })
+                } else {
+                    append(splitedLines)
+                }
+            }
+            ssValue.lines = removeLines
         }
         
         if isEnablePlane {
             let planesView = isDraft ? self.draftPlanesView : self.planesView
             let indexValues = planesView.elementViews.enumerated().compactMap { (pi, planeView) in
-                if selections.isEmpty {
-                    nPath.contains(planeView.node.path) ?
-                        IndexValue(value: planeView.model, index: pi) : nil
-                } else if selections.contains(where: { selection in
-                    Path(convertFromWorld(selection.rect)).contains(planeView.node.path)
-                }) {
-                    IndexValue(value: planeView.model, index: pi)
-                } else {
-                    nil
-                }
+                nPath.contains(planeView.node.path) ?
+                IndexValue(value: planeView.model, index: pi) : nil
             }
             if !indexValues.isEmpty {
                 if isRemove {
@@ -7015,78 +7036,41 @@ final class SheetView: BindableView, @unchecked Sendable {
                 
                 guard textView.transformedBounds.intersects(nlb) else { continue }
                 var ranges = [Range<String.Index>]()
-                if !selections.isEmpty {
-                    let string = textView.model.string
-                    var isFilleds = [Bool](repeating: false, count: string.count)
-                    for selection in selections {
-                        let nRect = textView.convertFromWorld(selection.rect)
-                        let tfp = textView.convertFromWorld(selection.firstOrigin)
-                        let tlp = textView.convertFromWorld(selection.lastOrigin)
-                        if textView.intersectsHalf(nRect),
-                           let fi = textView.characterIndexWithOutOfBounds(for: tfp),
-                           let li = textView.characterIndexWithOutOfBounds(for: tlp) {
-                            
-                            let ifi = string.intIndex(from: fi)
-                            let ili = string.intIndex(from: li)
-                            for i in (ifi < ili ? ifi ..< ili : ili ..< ifi) {
-                                isFilleds[i] = true
+                for typeline in textView.typesetter.typelines {
+                    let tlRange = typeline.range
+                    var oldI: String.Index?
+                    var isRemoveAll = true
+                    
+                    let range: Range<String.Index>
+                    if !typeline.isReturnEnd {
+                        range = tlRange
+                    } else if tlRange.lowerBound < tlRange.upperBound {
+                        range = tlRange.lowerBound ..< tlRange.upperBound
+                    } else { continue }
+                    
+                    for i in textView.model.string[range].indices {
+                        let tb = textView.typesetter
+                            .characterBounds(at: i)!
+                            .outset(by: textView.lassoPadding)
+                            + textView.model.origin
+                        if nPath.intersects(tb) {
+                            if oldI == nil {
+                                oldI = i
                             }
-                        }
-                    }
-                    var fi: Int?
-                    for (i, isFilled) in isFilleds.enumerated() {
-                        if isFilled {
-                            if fi == nil {
-                                fi = i
+                        } else {
+                            isRemoveAll = false
+                            if let oldI = oldI {
+                                ranges.append(oldI ..< i)
                             }
-                        } else if let nfi = fi {
-                            let sfi = string.index(fromInt: nfi)
-                            let sli = string.index(fromInt: i)
-                            ranges.append(sfi ..< sli)
-                            fi = nil
+                            oldI = nil
                         }
                     }
-                    if let nfi = fi {
-                        let sfi = string.index(fromInt: nfi)
-                        ranges.append(sfi ..< string.endIndex)
+                    if isRemoveAll {
+                        ranges.append(tlRange)
+                    } else if let oldI = oldI, oldI < range.upperBound {
+                        ranges.append(oldI ..< range.upperBound)
                     }
-                } else {
-                    for typeline in textView.typesetter.typelines {
-                        let tlRange = typeline.range
-                        var oldI: String.Index?
-                        var isRemoveAll = true
-                        
-                        let range: Range<String.Index>
-                        if !typeline.isReturnEnd {
-                            range = tlRange
-                        } else if tlRange.lowerBound < tlRange.upperBound {
-                            range = tlRange.lowerBound ..< tlRange.upperBound
-                        } else { continue }
-                        
-                        for i in textView.model.string[range].indices {
-                            let tb = textView.typesetter
-                                .characterBounds(at: i)!
-                                .outset(by: textView.lassoPadding)
-                                + textView.model.origin
-                            if nPath.intersects(tb) {
-                                if oldI == nil {
-                                    oldI = i
-                                }
-                            } else {
-                                isRemoveAll = false
-                                if let oldI = oldI {
-                                    ranges.append(oldI ..< i)
-                                }
-                                oldI = nil
-                            }
-                        }
-                        if isRemoveAll {
-                            ranges.append(tlRange)
-                        } else if let oldI = oldI, oldI < range.upperBound {
-                            ranges.append(oldI ..< range.upperBound)
-                        }
-                        oldI = nil
-                    }
+                    oldI = nil
                 }
                 
                 guard !ranges.isEmpty else { continue }
@@ -7282,64 +7266,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                     set(Picture())
                 }
-            }
-        }
-    }
-    func removeDraft(with line: Line, at p: Point) -> SheetValue? {
-        if let value = lassoErase(with: Lasso(line: line),
-                                  isRemove: true,
-                                  isEnableText: false,
-                                  isDraft: true) {
-            let t = Transform(translation: -convertFromWorld(p))
-            return value * t
-        }
-        return nil
-    }
-    func cutDraft(with line: Line?, at p: Point) {
-        if let line = line {
-            if let value = lassoErase(with: Lasso(line: line),
-                                      isRemove: true,
-                                      isEnableText: false,
-                                      isDraft: true) {
-                let t = Transform(translation: -convertFromWorld(p))
-                Pasteboard.shared.copiedObjects = [.sheetValue(value * t)]
-            }
-        } else {
-            if !selectedFrameIndexes.isEmpty {
-                newUndoGroup()
-                let sfis = selectedFrameIndexes.sorted()
-                removeDraftKeyLines(sfis.compactMap {
-                    let lines = model.animation.keyframes[$0].draftPicture.lines
-                    return lines.isEmpty ?
-                        nil :
-                    IndexValue(value: Array(0 ..< lines.count), index: $0)
-                })
-                removeDraftKeyPlanes(sfis.compactMap {
-                    let planes = model.animation.keyframes[$0].draftPicture.planes
-                    return planes.isEmpty ?
-                        nil :
-                    IndexValue(value: Array(0 ..< planes.count), index: $0)
-                })
-                return
-            }
-            
-            if !selectedFrameIndexes.isEmpty {
-                newUndoGroup()
-                for i in selectedFrameIndexes.sorted() {
-                    if !animationView.elementViews[i].model.draftPicture.isEmpty {
-                        setRootKeyframeIndex(rootKeyframeIndex: i)
-                        removeDraft()
-                        setRootKeyframeIndex(rootKeyframeIndex: i)
-                    }
-                }
-                return
-            }
-            
-            let object = PastableObject.picture(model.draftPicture)
-            if !model.draftPicture.isEmpty {
-                newUndoGroup()
-                removeDraft()
-                Pasteboard.shared.copiedObjects = [object]
             }
         }
     }
@@ -7542,6 +7468,15 @@ final class SheetColorOwner {
     }
     var oldUUColor: UUColor {
         oldColorValue.uuColor
+    }
+    
+    func showSelected() {
+        sheetView.keyframeView.linesView.elementViews.forEach { $0.isHiddenSeleted = false }
+        sheetView.keyframeView.planesView.elementViews.forEach { $0.isHiddenSeleted = false }
+    }
+    func hideSelected() {
+        sheetView.keyframeView.linesView.elementViews.forEach { $0.isHiddenSeleted = true }
+        sheetView.keyframeView.planesView.elementViews.forEach { $0.isHiddenSeleted = true }
     }
     
     init(sheetView: SheetView, colorValue: ColorValue) {

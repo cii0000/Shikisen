@@ -58,14 +58,14 @@ final class MoveAction: DragEventAction {
     
     func flow(with event: DragEvent) {
         if event.phase == .began {
-            let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor ?? event.screenPoint
+            let sp = rootView.screenPointFromMenu ?? event.screenPoint
             let p = rootView.convertScreenToWorld(sp)
             
             if !rootView.isEditingSheet {
                 type = .sheets(MoveSheetsAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if rootView.isSelect(at: p)
+                if sheetView.containsSelectedSheetValue(sheetP, scale: rootView.screenToWorldScale)
                     && !sheetView.scoreView.containsNote(sheetView.scoreView.convertFromWorld(p),
                                                          scale: rootView.screenToWorldScale,
                                                          enabledTone: true) {
@@ -150,8 +150,7 @@ final class MoveSheetsAction: DragEventAction {
     var editingSP = Point(), editingP = Point()
     var csv = CopiedSheetsValue(), isNewUndoGroup = false
     func flow(with event: DragEvent) {
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -161,7 +160,7 @@ final class MoveSheetsAction: DragEventAction {
             }
             
             let p = rootView.convertScreenToWorld(sp)
-            let vs = rootView.sheetFramePositions(at: p, isUnselect: true)
+            let vs = rootView.sheetFramePositions(at: p)
             var csv = CopiedSheetsValue()
             for value in vs {
                 if let sid = rootView.sheetID(at: value.shp) {
@@ -199,7 +198,7 @@ final class MoveSheetsAction: DragEventAction {
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
             
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
             rootView.updateWithFinding()
             
             rootView.cursor = rootView.defaultCursor
@@ -306,8 +305,7 @@ final class MoveAnimationAction: DragEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         
         switch event.phase {
@@ -625,8 +623,7 @@ final class MoveScoreAction: DragEventAction {
             return
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -659,12 +656,13 @@ final class MoveScoreAction: DragEventAction {
                 
                 let scoreP = scoreView.convert(sheetP, from: sheetView.node)
                 let v = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale)
-                let selectedNoteIs = !(v?.result.isStartEndBeat ?? false)
-                && rootView.isSelect(at: p) ? sheetView.noteIndexes(from: rootView.selections) : []
-                if !selectedNoteIs.isEmpty && !(v?.result.isPit ?? false) {
-                    rootView.selections = []
+                let containsSelectedNote = sheetView.containsSelectedNote(sheetP,
+                                                                          scale: rootView.screenToWorldScale)
+                if !(v?.result.isStartEndBeat ?? false)
+                    && containsSelectedNote
+                    && !(v?.result.isPit ?? false) {
                     
-                    let noteIs = selectedNoteIs
+                    let noteIs = scoreView.selectedNoteIs
                     beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
                     let interval = rootView.currentBeatInterval
                     let nBeat: Rational = scoreView.beat(atX: sheetP.x)
@@ -699,9 +697,7 @@ final class MoveScoreAction: DragEventAction {
                     beganNotes[noteI] = score.notes[noteI]
                     
                     let playerBeat: Rational = nsBeat.clipped(min: minBeat, max: maxBeat)
-                    let selectedNoteIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
-                    let nNoteIs = Set(beganNotes.keys).intersection(selectedNoteIs).sorted()
-                    let vs = score.noteIAndNormarizedPits(atBeat: playerBeat, selectedNoteI: noteI, in: nNoteIs)
+                    let vs = score.noteIAndNormarizedPits(atBeat: playerBeat, selectedNoteI: noteI, in: noteIs)
                     playerBeatNoteIndexes = vs.map { $0.noteI }
                     
                     updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
@@ -725,16 +721,15 @@ final class MoveScoreAction: DragEventAction {
                     beganStartBeat = nsBeat
                     beganNote = note
                     
-                    let selectedNoteIs = if rootView.isSelect(at: p) {
-                        sheetView.noteAndPitAndSprolIs(from: rootView.selections).map { $0.key }
+                    let selectedNoteIs = if containsSelectedNote {
+                        scoreView.selectedNoteIs
                     } else {
                         [noteI]
                     }
                     
                     switch result {
                     case .pit(let pitI), .lyric(let pitI):
-                        type = sheetView.isStraight(from: rootView.selections,
-                                                        atPit: pitI, at: note) ? .strightPit : .pit
+                        type = scoreView.isStraightWithSelection(atPit: pitI, atNote: noteI) ? .strightPit : .pit
                         
                         let pit = note.pits[pitI]
                         self.pitI = pitI
@@ -767,9 +762,8 @@ final class MoveScoreAction: DragEventAction {
                                 nextStrightPitI = pitI + 1
                             }
                             noteAndPitIs = [noteI: pitIs]
-                        } else if rootView.isSelect(at: p) {
-                            noteAndPitIs = sheetView.noteAndPitIndexes(from: rootView.selections,
-                                                                       enabledAllPits: false)
+                        } else if containsSelectedNote {
+                            noteAndPitIs = scoreView.selectedNotePitIs
                             if noteAndPitIs[noteI] != nil {
                                 if !noteAndPitIs[noteI]!.contains(pitI) {
                                     noteAndPitIs[noteI]?.append(pitI)
@@ -777,7 +771,6 @@ final class MoveScoreAction: DragEventAction {
                             } else {
                                 noteAndPitIs[noteI] = [pitI]
                             }
-                            rootView.selections = []
                         } else {
                             noteAndPitIs = [noteI: [pitI]]
                         }
@@ -816,9 +809,9 @@ final class MoveScoreAction: DragEventAction {
                         beganBeatX = scoreView.x(atBeat: note.beatRange.start + pit.beat)
                         
                         var noteAndPitIs: [Int: [Int]]
-                        if rootView.isSelect(at: p) {
-                            noteAndPitIs = sheetView.noteAndPitIndexes(from: rootView.selections,
-                                                                       enabledAllPits: false)
+                        if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                          scale: rootView.screenToWorldScale) {
+                            noteAndPitIs = sheetView.scoreView.selectedNotePitIs
                             if noteAndPitIs[noteI] != nil {
                                 if !noteAndPitIs[noteI]!.contains(pitI) {
                                     noteAndPitIs[noteI]?.append(pitI)
@@ -826,7 +819,6 @@ final class MoveScoreAction: DragEventAction {
                             } else {
                                 noteAndPitIs[noteI] = [pitI]
                             }
-                            rootView.selections = []
                         } else {
                             noteAndPitIs = [noteI: [pitI]]
                         }
@@ -851,13 +843,12 @@ final class MoveScoreAction: DragEventAction {
                         self.pitI = pitI
                         
                         func updatePitsWithSelection() {
-                            var noteAndPitIs: [Int: [Int: Set<Int>]]
-                            if rootView.isSelect(at: p) {
-                                noteAndPitIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections)
-                                rootView.selections = []
+                            var notePitSprolIs: [Int: [Int: Set<Int>]]
+                            if containsSelectedNote {
+                                notePitSprolIs = scoreView.selectedNotePitSprolIs
                             } else {
                                 let id = score.notes[noteI].pits[pitI][.tone]
-                                noteAndPitIs = score.notes.enumerated().reduce(into: [Int: [Int: Set<Int>]]()) {
+                                notePitSprolIs = score.notes.enumerated().reduce(into: [Int: [Int: Set<Int>]]()) {
                                     $0[$1.offset] = $1.element.pits.enumerated().reduce(into: [Int: Set<Int>]()) { (v, ip) in
                                         if ip.element[.tone] == id {
                                             v[ip.offset] = sprolI < ip.element.tone.spectlope.count ? [sprolI] : []
@@ -866,7 +857,7 @@ final class MoveScoreAction: DragEventAction {
                                 }
                             }
                             
-                            beganNoteSprols = noteAndPitIs.reduce(into: .init()) {
+                            beganNoteSprols = notePitSprolIs.reduce(into: .init()) {
                                 for (pitI, sprolIs) in $1.value {
                                     let pit = score.notes[$1.key].pits[pitI]
                                     let id = pit[.tone]
@@ -906,9 +897,8 @@ final class MoveScoreAction: DragEventAction {
                         
                         func updatePitsWithSelection() {
                             var noteAndPitIs: [Int: [Int: Set<Int>]]
-                            if rootView.isSelect(at: p) {
-                                noteAndPitIs = sheetView.noteAndPitAndSprolIs(from: rootView.selections)
-                                rootView.selections = []
+                            if containsSelectedNote {
+                                noteAndPitIs = scoreView.selectedNotePitSprolIs
                             } else {
                                 if let pitI {
                                     let id = score.notes[noteI].pits[pitI].tone.id
@@ -957,10 +947,9 @@ final class MoveScoreAction: DragEventAction {
                         
                         self.noteI = noteI
                         
-                        if rootView.isSelect(at: p) {
-                            let noteIs = sheetView.noteIndexes(from: rootView.selections)
+                        if containsSelectedNote {
+                            let noteIs = scoreView.selectedNoteIs
                             beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
-                            rootView.selections = []
                         }
                         beganNotes[noteI] = score.notes[noteI]
                         
@@ -1005,10 +994,9 @@ final class MoveScoreAction: DragEventAction {
                         }
                         beganPitchY = scoreView.y(fromPitch: note.pitch)
                         
-                        if rootView.isSelect(at: p) {
-                            let noteIs = sheetView.noteIndexes(from: rootView.selections)
+                        if containsSelectedNote {
+                            let noteIs = scoreView.selectedNoteIs
                             beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
-                            rootView.selections = []
                         }
                         beganNotes[noteI] = score.notes[noteI]
                         
@@ -1144,7 +1132,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .endNoteBeat:
@@ -1195,7 +1183,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .note:
@@ -1248,7 +1236,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
                                 }
                             }
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                     
@@ -1268,7 +1256,7 @@ final class MoveScoreAction: DragEventAction {
                             option.keyBeats[keyBeatI] = nkBeat
                             option.keyBeats.sort()
                             scoreView.option = option
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .scale:
@@ -1281,7 +1269,7 @@ final class MoveScoreAction: DragEventAction {
                             var option = beganScoreOption
                             option.scales = option.scales.map { ($0 + dPitch).mod(12) }
                             scoreView.option = option
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                             
                             octaveNode?.children = scoreView.scaleNode(mainPitch: pitch).children
                             
@@ -1321,7 +1309,7 @@ final class MoveScoreAction: DragEventAction {
                         option.beatRange.start = beat
                         option.timelineY = py
                         scoreView.option = option
-                        rootView.updateSelects()
+                        rootView.updateSelectedNodes()
                     }
                 case .loopDurBeat:
                     if let beganScoreOption {
@@ -1351,7 +1339,7 @@ final class MoveScoreAction: DragEventAction {
                             
                             oldBeat = nkBeat
                             scoreView.option.beatRange.end = nkBeat
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .isShownSpectrogram:
@@ -1465,7 +1453,7 @@ final class MoveScoreAction: DragEventAction {
                                 
                                 rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch))
                             }
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .even:
@@ -1507,7 +1495,7 @@ final class MoveScoreAction: DragEventAction {
                             
                             oldBeat = nsBeat
                             
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .sprol:
@@ -1554,7 +1542,7 @@ final class MoveScoreAction: DragEventAction {
                     }
                     scoreView.replace(nivs)
                     
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 }
             }
         case .ended:
@@ -1692,8 +1680,7 @@ final class MoveContentAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1763,7 +1750,7 @@ final class MoveContentAction: DragEventAction {
                         timeOption?.beatRange.start = beat
                         
                         contentView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat), timelineY))
-                        rootView.updateSelects()
+                        rootView.updateSelectedNodes()
                     }
                     
                 case .startBeat:
@@ -1782,7 +1769,7 @@ final class MoveContentAction: DragEventAction {
                             timeOption.beatRange.length += dBeat
                             contentView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start), content.origin.y))
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .endBeat:
@@ -1796,7 +1783,7 @@ final class MoveContentAction: DragEventAction {
                             timeOption.beatRange.end = beat
                             contentView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start), content.origin.y))
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .isShownSpectrogram:
@@ -1813,7 +1800,7 @@ final class MoveContentAction: DragEventAction {
                         nnp += nFrame.origin - contentFrame.origin
                     }
                     contentView.origin = nnp
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 }
             }
         case .ended:
@@ -1858,8 +1845,7 @@ final class MoveTextAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -1915,7 +1901,7 @@ final class MoveTextAction: DragEventAction {
                     var timeOption = text.timeOption
                     timeOption?.beatRange.start = beat
                     textView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat) + tw, np.y))
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 case .startBeat:
                     if var timeOption = text.timeOption {
                         let np = beganText.origin + sheetP - beganInP
@@ -1930,7 +1916,7 @@ final class MoveTextAction: DragEventAction {
                             timeOption.beatRange.length += dBeat
                             textView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start) + tw, text.origin.y))
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .endBeat:
@@ -1944,7 +1930,7 @@ final class MoveTextAction: DragEventAction {
                             var beatRange = beganTimeOption.beatRange
                             beatRange.end = beat
                             textView.timeOption?.beatRange = beatRange
-                            rootView.updateSelects()
+                            rootView.updateSelectedNodes()
                         }
                     }
                 case .position:
@@ -1958,7 +1944,7 @@ final class MoveTextAction: DragEventAction {
                     }
                     textView.origin = text.origin
                     
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                 }
             }
         case .ended:
@@ -2008,8 +1994,7 @@ final class MoveTempoAction: DragEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         
         switch event.phase {
@@ -2073,7 +2058,7 @@ final class MoveTempoAction: DragEventAction {
                         sheetView.scoreView.tempo = tempo
                     }
                     
-                    rootView.updateSelects()
+                    rootView.updateSelectedNodes()
                     
                     rootView.cursor = .arrowWith(string: Sheet.tempoNameFromStandardFrameRate(withTempo: tempo))
                     
@@ -2138,12 +2123,13 @@ final class MoveSheetAction: DragEventAction {
     }
 
     enum MoveType {
-        case move, scale, rotate
+        case move, scale, scaleLeft, scaleRight, scaleTop, scaleBottom, rotate
     }
     
     private var sheetView: SheetView?, type = MoveType.move, oldP = Point(), typeRect = Rect()
     private var lineIs = [Int](), planeIs = [Int](), textIs = [Int](), contentIs = [Int]()
-    private var oldLines = [Line](), oldPlanes = [Plane](), oldTexts = [Text](), oldContents = [Content](), oldStr: String?
+    private var oldLines = [Line](), oldPlanes = [Plane](),
+                oldTexts = [Text](), oldContents = [Content](), oldStr: String?
     private var sheetOrigin = Point()
 
     func flow(with event: DragEvent) {
@@ -2155,8 +2141,7 @@ final class MoveSheetAction: DragEventAction {
             rootAction.stopPlaying(with: event)
         }
         
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-        ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         
         switch event.phase {
@@ -2165,15 +2150,13 @@ final class MoveSheetAction: DragEventAction {
             
             let shp = rootView.sheetPosition(at: p)
             if let sheetView = rootView.sheetView(at: shp) {
-                if rootView.isSelect(at: p) {
-                    let lis = sheetView.lineIndexes(from: rootView.selections)
-                    let pis = sheetView.planeIndexes(from: rootView.selections)
-                    let tis = sheetView.textIndexes(from: rootView.selections)
-                    let cis = sheetView.contentIndexes(from: rootView.selections)
-                    lineIs = lis
-                    planeIs = pis
-                    textIs = tis
-                    contentIs = cis
+                let sheetP = sheetView.convertFromWorld(p)
+                if sheetView.containsSelectedSheetValue(sheetP,
+                                                        scale: rootView.screenToWorldScale) {
+                    lineIs = sheetView.keyframeView.selectedLineIs
+                    planeIs = sheetView.keyframeView.selectedPlaneIs
+                    textIs = sheetView.selectedTextIs
+                    contentIs = sheetView.selectedContentIs
                     oldLines = sheetView.model.picture.lines[lineIs]
                     oldPlanes = sheetView.model.picture.planes[planeIs]
                     oldTexts = sheetView.model.texts[textIs]
@@ -2182,31 +2165,36 @@ final class MoveSheetAction: DragEventAction {
                     sheetOrigin = rootView.sheetFrame(with: shp).origin
                     self.sheetView = sheetView
                     
-                    var minDSq = Double.infinity, maxD = 4 * rootView.screenToWorldScale
-                    for selection in rootView.selections {
-                        guard selection.rect.width != 0 && selection.rect.height != 0 else { continue }
-                        let rect = selection.rect
-                        if (rect.edges.minValue({ $0.distanceSquared(from: p) }) ?? .infinity) < maxD {
-                            func update(_ rp: Point, isRotate: Bool) {
-                                let dSq = rp.distanceSquared(p)
-                                if dSq < minDSq {
-                                    type = isRotate ? .rotate : .scale
-                                    typeRect = rect
-                                    minDSq = dSq
-                                }
+                    if let rect = sheetView.selectedFrame {
+                        typeRect = sheetView.convertToWorld(rect)
+                        let rect = rootView.convertWorldToScreen(typeRect).outset(by: 5)
+                        var minDSq = Double.infinity
+                        let maxDSq = Sheet.moveKnobEditDistance.squared
+                        let eMaxDSq = (Sheet.moveKnobEditDistance / 2).squared
+                        func update(_ rp: Point, _ type: MoveType) {
+                            let dSq = rp.distanceSquared(sp)
+                            if dSq < maxDSq && dSq < minDSq {
+                                self.type = type
+                                minDSq = dSq
                             }
-                            update(rect.minXMinYPoint, isRotate: false)
-                            update(rect.minXMaxYPoint, isRotate: false)
-                            update(rect.maxXMinYPoint, isRotate: false)
-                            update(rect.maxXMaxYPoint, isRotate: false)
-                            update(rect.minXMidYPoint, isRotate: true)
-                            update(rect.midXMinYPoint, isRotate: true)
-                            update(rect.maxXMidYPoint, isRotate: true)
-                            update(rect.midXMaxYPoint, isRotate: true)
+                        }
+                        update(rect.minXMinYPoint, .scale)
+                        update(rect.minXMaxYPoint, .scale)
+                        update(rect.maxXMinYPoint, .scale)
+                        update(rect.maxXMaxYPoint, .scale)
+                        update(rect.minXMidYPoint, .scaleLeft)
+                        update(rect.midXMinYPoint, .scaleBottom)
+                        update(rect.maxXMidYPoint, .scaleRight)
+                        update(rect.midXMaxYPoint, .scaleTop)
+                        
+                        let dSq = rect.edges.minValue({ $0.distanceSquared(from: sp) })!
+                        if type == .move, dSq < eMaxDSq && dSq < minDSq {
+                            type = .rotate
+                            minDSq = dSq
                         }
                     }
-                    rootView.selections = []
                 }
+                print(type)
             }
         case .changed:
             if let sheetView {
@@ -2215,9 +2203,30 @@ final class MoveSheetAction: DragEventAction {
                 case .move:
                     .init(translation: dp)
                 case .scale:
+                    typeRect.centerPoint.distance(oldP) == 0 ? .init() :
                     .init(translation: -typeRect.centerPoint + sheetOrigin)
                     .scaled(by: typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP))
                     .translated(by: typeRect.centerPoint - sheetOrigin)
+                case .scaleLeft:
+                    oldP.x - typeRect.maxX == 0 ? .init() :
+                    .init(translation: -typeRect.maxXMidYPoint + sheetOrigin)
+                    .scaledBy(x: (p.x - typeRect.maxX) / (oldP.x - typeRect.maxX), y: 1)
+                    .translated(by: typeRect.maxXMidYPoint - sheetOrigin)
+                case .scaleRight:
+                    oldP.x - typeRect.minX == 0 ? .init() :
+                    .init(translation: -typeRect.minXMidYPoint + sheetOrigin)
+                    .scaledBy(x: (p.x - typeRect.minX) / (oldP.x - typeRect.minX), y: 1)
+                    .translated(by: typeRect.minXMidYPoint - sheetOrigin)
+                case .scaleBottom:
+                    oldP.y - typeRect.minY == 0 ? .init() :
+                    .init(translation: -typeRect.midXMaxYPoint + sheetOrigin)
+                    .scaledBy(x: 1, y: (p.y - typeRect.maxY) / (oldP.y - typeRect.maxY))
+                    .translated(by: typeRect.midXMaxYPoint - sheetOrigin)
+                case .scaleTop:
+                    oldP.y - typeRect.maxY == 0 ? .init() :
+                    .init(translation: -typeRect.midXMinYPoint + sheetOrigin)
+                    .scaledBy(x: 1, y: (p.y - typeRect.minY) / (oldP.y - typeRect.minY))
+                    .translated(by: typeRect.midXMinYPoint - sheetOrigin)
                 case .rotate:
                     .init(translation: -typeRect.centerPoint + sheetOrigin)
                     .rotated(by: Point.differenceAngle(oldP, typeRect.centerPoint, p) - .pi)
@@ -2251,6 +2260,7 @@ final class MoveSheetAction: DragEventAction {
                         oldStr = str
                     }
                 }
+                rootView.updateSelectedNodes()
             }
         case .ended:
             if let sheetView {
@@ -2335,8 +2345,7 @@ final class MoveLineAction: DragEventAction {
             rootAction.stopPlaying(with: event)
         }
 
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         
         switch event.phase {
@@ -2358,7 +2367,7 @@ final class MoveLineAction: DragEventAction {
                         beganSheetP = sheetP
                         
                         let d = beganLine.minDistanceSquared(at: sheetP).squareRoot()
-                        type = if d < beganLine.size + 1 * rootView.screenToWorldScale {
+                        type = if d < beganLine.size + 0.5 * rootView.screenToWorldScale {
                             .point
                         } else if d < beganLine.size + 20 * rootView.screenToWorldScale {
                             .warp
@@ -2496,8 +2505,7 @@ final class MoveLineZAction: DragEventAction {
             rootAction.stopPlaying(with: event)
         }
 
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
 
         switch event.phase {
@@ -2691,8 +2699,7 @@ final class MoveBorderAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
@@ -2835,8 +2842,7 @@ final class MoveMainFrameAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-            ?? event.screenPoint
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:

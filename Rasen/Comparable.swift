@@ -83,9 +83,13 @@ extension Range where Bound: SignedNumeric {
     static func -= (lhs: inout Self, rhs: Bound) {
         lhs = lhs - rhs
     }
-    
+}
+extension Range {
     static func union(_ bRange: Self, in aRanges: inout [Self]) {
         aRanges = Array(RangeSet(aRanges).union(.init(bRange)).ranges)
+    }
+    static func subtracting(_ bRange: Self, in aRanges: inout [Self]) {
+        aRanges = Array(RangeSet(aRanges).subtracting(.init(bRange)).ranges)
     }
 }
 extension ClosedRange where Bound: SignedNumeric {

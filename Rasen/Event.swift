@@ -379,6 +379,7 @@ extension Quasimode {
     static let lookUp = Self(.threeFingersTap)
     static let keyLookUp = Self(modifier: [.control, .command], .d)
     static let selectByRange = Self(.subDrag)
+    static let unselectByRange = Self(modifier: [.shift], .subDrag)
     static let openMenu = Self(.subClick)
     
     static let runOrClose = Self(.click)
@@ -525,9 +526,11 @@ extension ActionList {
          .init(name: "Scroll".localized, .scroll),
          .init(name: "Rotate".localized, .rotate)],
         
-        [.init(name: "Look Up".localized, .lookUp),
-         .init(name: "Select by Range".localized, .selectByRange),
-         .init(name: "Open Menu".localized, .openMenu),
+        [.init(name: "Select by Range".localized, .selectByRange),
+         .init(name: "Unselect by Range".localized, .unselectByRange)],
+        
+        [.init(name: "Open Menu".localized, .openMenu),
+         .init(name: "Look Up".localized, .lookUp),
          .init(name: "Input Character".localized, .inputCharacter)],
         
         [.init(name: "Undo".localized, .undo),

@@ -224,7 +224,7 @@ final class IOAction: Action {
         selectingLineNode.removeFromParent()
         
         if isUpdateSelect {
-            rootView.updateSelects()
+            rootView.updateSelectedNodes()
         }
         if isUpdateCursor {
             rootView.cursor = rootView.defaultCursor
@@ -244,8 +244,20 @@ final class IOAction: Action {
         }
     }
     
-    func sorted(_ vs: [SelectingValue],
-                with rectCorner: RectCorner) -> [SelectingValue] {
+    func rectCorner(_ vs: [SelectingValue], at ip: IntPoint) -> RectCorner {
+        let minX = vs.minValue { $0.shp.x } ?? ip.x
+        let maxX = vs.maxValue { $0.shp.x } ?? ip.x
+        let minY = vs.minValue { $0.shp.y } ?? ip.y
+        let maxY = vs.maxValue { $0.shp.y } ?? ip.y
+        let isLeft = minX.mid(maxX) > ip.x
+        let isBottom = minY.mid(maxY) > ip.y
+        return if isLeft {
+            isBottom ? .minXMinY : .minXMaxY
+        } else {
+            isBottom ? .maxXMinY : .maxXMaxY
+        }
+    }
+    func sorted(_ vs: [SelectingValue], with rectCorner: RectCorner) -> [SelectingValue] {
         switch rectCorner {
         case .minXMinY:
             vs.sorted {
@@ -537,7 +549,7 @@ final class IOAction: Action {
         case .began:
             rootView.cursor = .arrow
             
-            let sp = rootView.lastEditedSheetScreenCenterPositionNoneSelectedNoneCursor ?? event.screenPoint
+            let sp = rootView.screenPointFromMenu ?? event.screenPoint
             beginImportFile(at: sp)
         case .changed:
             break
@@ -574,69 +586,46 @@ final class IOAction: Action {
         case .began:
             rootView.cursor = .arrow
             
-            let sp = rootView.lastEditedSheetScreenCenterPositionNoneCursor
-                ?? event.screenPoint
+            let sp = rootView.screenPointFromMenu ?? event.screenPoint
             fp = rootView.convertScreenToWorld(sp)
-            if rootView.isSelectNoneCursor(at: fp),
-               !rootView.isSelectedText, !rootView.selections.isEmpty {
-                
-                var nvs = [SelectingValue]()
-                for selection in rootView.selections {
-                    let vs: [SelectingValue] = rootView.world.sheetIDs.keys.compactMap { shp in
-                        let frame = rootView.sheetFrame(with: shp)
-                        if let rf = selection.rect.intersection(frame) {
-                            if rootView.isEditingSheet {
-                                let nf = rf - frame.origin
-                                return SelectingValue(shp: shp, bounds: nf)
-                            } else {
-                                return SelectingValue(shp: shp, bounds: frame.bounds)
-                            }
-                        } else {
-                            return nil
-                        }
-                    }
-                    nvs += sorted(vs, with: selection.rectCorner)
+            if rootView.containsSelectedSheetPositions(fp) {
+                let fshp = rootView.sheetPosition(at: fp)
+                let vs = rootView.selectedSheetPositions.map {
+                    SelectingValue(shp: $0, bounds: rootView.sheetFrame(with: $0).bounds)
                 }
+                let nvs = sorted(vs, with: rectCorner(vs, at: fshp))
                 
-                if let unionFrame = rootView.isEditingSheet
-                    && nvs.count > 1 && !type.isDocument ?
-                        rootView.multiSelection.firstSelection(at: fp)?.rect : nil {
+                let mainFrame = rootView.sheetView(at: fp)?.model.mainFrame
+                
+                var oldP: Point?
+                selectingLineNode.children = nvs.map {
+                    let frame = !type.isDocument ?
+                    ((mainFrame ?? $0.bounds) + rootView.sheetFrame(with: $0.shp).origin) :
+                    rootView.sheetFrame(with: $0.shp)
                     
-                    selectingLineNode.lineWidth = rootView.worldLineWidth
-                    selectingLineNode.fillType = .color(.subSelected)
-                    selectingLineNode.lineType = .color(.selected)
-                    selectingLineNode.path = Path(unionFrame)
-                } else {
-                    var oldP: Point?
-                    selectingLineNode.children = nvs.map {
-                        let frame = !type.isDocument ?
-                        ($0.bounds + rootView.sheetFrame(with: $0.shp).origin) :
-                        rootView.sheetFrame(with: $0.shp)
-                        
-                        if !type.isDocument, let op = oldP {
-                            let cp = frame.centerPoint
-                            let a = op.angle(cp) - .pi
-                            let d = min(frame.width, frame.height) / 4
-                            let p0 = cp.movedWith(distance: d, angle: a + .pi / 6)
-                            let p1 = cp.movedWith(distance: d, angle: a - .pi / 6)
-                            let path = Path([Pathline([op, cp]),
-                                             Pathline([p0, cp, p1])])
-                            let arrowNode = Node(path: path,
-                                                 lineWidth: rootView.worldLineWidth,
-                                                 lineType: .color(.selected))
-                            oldP = frame.centerPoint
-                            return Node(children: [arrowNode],
-                                        path: Path(frame),
-                                        lineWidth: rootView.worldLineWidth,
-                                        lineType: .color(.selected),
-                                        fillType: .color(.subSelected))
-                        } else {
-                            oldP = frame.centerPoint
-                            return Node(path: Path(frame),
-                                        lineWidth: rootView.worldLineWidth,
-                                        lineType: .color(.selected),
-                                        fillType: .color(.subSelected))
-                        }
+                    if !type.isDocument, let op = oldP {
+                        let cp = frame.centerPoint
+                        let a = op.angle(cp) - .pi
+                        let d = min(frame.width, frame.height) / 4
+                        let p0 = cp.movedWith(distance: d, angle: a + .pi / 6)
+                        let p1 = cp.movedWith(distance: d, angle: a - .pi / 6)
+                        let path = Path([Pathline([op, cp]),
+                                         Pathline([p0, cp, p1])])
+                        let arrowNode = Node(path: path,
+                                             lineWidth: rootView.worldLineWidth,
+                                             lineType: .color(.selected))
+                        oldP = frame.centerPoint
+                        return Node(children: [arrowNode],
+                                    path: Path(frame),
+                                    lineWidth: rootView.worldLineWidth,
+                                    lineType: .color(.selected),
+                                    fillType: .color(.subSelected))
+                    } else {
+                        oldP = frame.centerPoint
+                        return Node(path: Path(frame),
+                                    lineWidth: rootView.worldLineWidth,
+                                    lineType: .color(.selected),
+                                    fillType: .color(.subSelected))
                     }
                 }
             } else {
@@ -666,7 +655,7 @@ final class IOAction: Action {
     
     struct Rendering {
         struct Item {
-            var sheet: Sheet?, data: Data?, url: URL?, frame = Rect()
+            var id: UUID, sheet: Sheet?, data: Data?, url: URL?, frame = Rect()
             
             func decodedSheet() -> Sheet? {
                 if let sheet {
@@ -693,49 +682,33 @@ final class IOAction: Action {
     }
     
     func beginExportFile(_ type: ExportType, at p: Point) {
-        let nvs: [SelectingValue], unionFrame: Rect?
-        if rootView.isSelectNoneCursor(at: p), !rootView.isSelectedText {
-            nvs = rootView.selections.flatMap { selection in
-                let vs: [SelectingValue] = rootView.world.sheetIDs.keys.compactMap { shp in
-                    let frame = rootView.sheetFrame(with: shp)
-                    if let rf = selection.rect.intersection(frame) {
-                        if rootView.isEditingSheet {
-                            let nf = rf - frame.origin
-                            return SelectingValue(shp: shp,
-                                                  bounds: nf)
-                        } else {
-                            return SelectingValue(shp: shp,
-                                                  bounds: frame.bounds)
-                        }
-                    } else {
-                        return nil
-                    }
-                }
-                return sorted(vs, with: selection.rectCorner)
+        let nvs: [SelectingValue]
+        let isSelect = rootView.containsSelectedSheetPositions(p)
+        if isSelect {
+            let fshp = rootView.sheetPosition(at: p)
+            let vs = rootView.selectedSheetPositions.map {
+                SelectingValue(shp: $0, bounds: rootView.sheetFrame(with: $0).bounds)
             }
-            
-            unionFrame = rootView.isEditingSheet && nvs.count > 1 && !type.isDocument ?
-            rootView.multiSelection.firstSelection(at: p)?.rect : nil
+            nvs = sorted(vs, with: rectCorner(vs, at: fshp))
         } else {
             let (shp, sheetView, frame, _) = rootView.sheetViewAndFrame(at: p)
             if let sheetView {
-                let bounds = sheetView.model.boundsTuple(at: sheetView.convertFromWorld(p),
-                                                         in: rootView.sheetFrame(with: shp).bounds).bounds.integral
+                let bounds = sheetView.model
+                    .boundsTuple(at: sheetView.convertFromWorld(p),
+                                 in: rootView.sheetFrame(with: shp).bounds).bounds.integral
                 nvs = [SelectingValue(shp: shp, bounds: bounds)]
             } else {
                 let bounds = Rect(size: frame.size)
                 nvs = [SelectingValue(shp: shp, bounds: bounds)]
             }
-            
-            unionFrame = nil
         }
         
         guard let fv = nvs.first else {
             end()
             return
         }
-        let size = unionFrame?.size ??
-        (nvs.count >= 2 ? rootView.sheetView(at: fv.shp)?.model.mainFrame.size : nil) ?? fv.bounds.size
+        let mainFrame = isSelect ? rootView.sheetView(at: p)?.model.mainFrame : nil
+        let size = mainFrame?.size ?? fv.bounds.size
         guard size.width > 0 && size.height > 0 else {
             end()
             return
@@ -750,13 +723,15 @@ final class IOAction: Action {
                 if let sid = rootView.sheetID(at: $0.shp),
                    let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord {
                     
-                    .init(mainItem: .init(sheet: sheetRecord.value, data: sheetRecord.data, url: sheetRecord.url,
+                    .init(mainItem: .init(id: sid, sheet: sheetRecord.value,
+                                          data: sheetRecord.data, url: sheetRecord.url,
                                           frame: rootView.sheetFrame(with: $0.shp)),
-                          bounds: $0.bounds)
+                          bounds: mainFrame ?? $0.bounds)
                 } else {
-                    .init(mainItem: .init(sheet: nil, data: nil, url: nil,
+                    .init(mainItem: .init(id: .init(), sheet: nil,
+                                          data: nil, url: nil,
                                           frame: rootView.sheetFrame(with: $0.shp)),
-                          bounds: $0.bounds)
+                          bounds: mainFrame ?? $0.bounds)
                 }
             }
             documentRecorders = []
@@ -773,8 +748,8 @@ final class IOAction: Action {
                     if !filledShps.contains(shp) {
                         filledShps.insert(shp)
                         
-                        bottomItems.append(.init(sheet: sheetRecord.value, data: sheetRecord.data,
-                                                 url: sheetRecord.url,
+                        bottomItems.append(.init(id: sid, sheet: sheetRecord.value,
+                                                 data: sheetRecord.data, url: sheetRecord.url,
                                                  frame: rootView.sheetFrame(with: shp)))
                     }
                     shp.y -= 1
@@ -789,8 +764,8 @@ final class IOAction: Action {
                     if !filledShps.contains(shp) {
                         filledShps.insert(shp)
                         
-                        topItems.append(.init(sheet: sheetRecord.value, data: sheetRecord.data,
-                                              url: sheetRecord.url,
+                        topItems.append(.init(id: sid, sheet: sheetRecord.value,
+                                              data: sheetRecord.data, url: sheetRecord.url,
                                               frame: rootView.sheetFrame(with: shp)))
                     }
                     
@@ -799,15 +774,17 @@ final class IOAction: Action {
                 
                 return if let sid = rootView.sheetID(at: $0.shp),
                           let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord {
-                    .init(mainItem: .init(sheet: sheetRecord.value, data: sheetRecord.data, url: sheetRecord.url,
+                    .init(mainItem: .init(id: sid, sheet: sheetRecord.value,
+                                          data: sheetRecord.data, url: sheetRecord.url,
                                           frame: rootView.sheetFrame(with: $0.shp)),
                           bottomItems: bottomItems, topItems: topItems,
-                          bounds: $0.bounds)
+                          bounds: mainFrame ?? $0.bounds)
                 } else {
-                    .init(mainItem: .init(sheet: nil, data: nil, url: nil,
+                    .init(mainItem: .init(id: .init(), sheet: nil,
+                                          data: nil, url: nil,
                                           frame: rootView.sheetFrame(with: $0.shp)),
                           bottomItems: bottomItems, topItems: topItems,
-                          bounds: $0.bounds)
+                          bounds: mainFrame ?? $0.bounds)
                 }
             }
             documentRecorders = []
@@ -823,8 +800,8 @@ final class IOAction: Action {
         let isAlphaChannel = (rootView.sheetView(at: p)?.model.backgroundUUColor.value.opacity ?? 1) != 1
         
         let fType: any FileTypeProtocol = switch type {
-        case .image: nvs.count > 1 && unionFrame == nil ? Image.FileType.pngs : Image.FileType.png
-        case .image4K: nvs.count > 1 && unionFrame == nil ? Image.FileType.pngs : Image.FileType.png
+        case .image: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
+        case .image4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
         case .movie, .movie4K: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
@@ -903,19 +880,19 @@ final class IOAction: Action {
                 switch type {
                 case .image:
                     let nSize = size * 4
-                    exportImage(from: renderings, unionFrame: unionFrame, is4K: false, colorSpace,
+                    exportImage(from: renderings, is4K: false, colorSpace,
                                 size: nSize, at: ioResult)
                 case .image4K:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 2160).rounded(.down) :
                     size.snapped(max: Size(width: 2160, height: 3840)).rounded(.down)
-                    exportImage(from: renderings, unionFrame: unionFrame, is4K: true, colorSpace,
+                    exportImage(from: renderings, is4K: true, colorSpace,
                                 size: nSize, at: ioResult)
                 case .pdf:
-                    exportPDF(from: renderings, unionFrame: unionFrame, size: size, at: ioResult)
+                    exportPDF(from: renderings, size: size, at: ioResult)
                 case .gif:
                     let nSize = size.snapped(max: Size(width: 800, height: 1200)).rounded(.down)
-                    exportGIF(from: renderings, unionFrame: unionFrame, colorSpace, size: nSize, at: ioResult)
+                    exportGIF(from: renderings, colorSpace, size: nSize, at: ioResult)
                 case .movie:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 1080).rounded(.down) :
@@ -946,34 +923,17 @@ final class IOAction: Action {
         }
     }
     
-    func exportImage(from renderings: [Rendering], unionFrame: Rect?, is4K: Bool,
-                     _ colorSpace: ColorSpace,
-                     size: Size, at ioResult: IOResult) {
+    func exportImage(from renderings: [Rendering], is4K: Bool,
+                     _ colorSpace: ColorSpace, size: Size, at ioResult: IOResult) {
         if renderings.isEmpty {
             return
-        } else if renderings.count == 1 || unionFrame != nil {
+        } else if renderings.count == 1 {
             do {
                 try ioResult.remove()
                 
-                if let unionFrame {
-                    let scaleX = size.width / unionFrame.width
-                    let scaleY = size.height / unionFrame.height
-                    var nImage = Image(size: size, color: .background.with(colorSpace))
-                    for rendering in renderings {
-                        let origin = rendering.mainItem.frame.origin - unionFrame.origin
-                        if let node = rendering.renderableMainSheetNode(),
-                           let image = node.renderedAntialiasFillImage(in: rendering.bounds, to: size, colorSpace) {
-                            nImage = nImage?.drawn(image,
-                                                   in: (rendering.bounds + origin)
-                                                   * Transform(scaleX: scaleX, y: scaleY))
-                        }
-                    }
-                    try nImage?.write(.png, to: ioResult.url)
-                } else {
-                    if let node = renderings[0].renderableMainSheetNode() {
-                        let image = node.renderedAntialiasFillImage(in: renderings[0].bounds, to: size, colorSpace)
-                        try image?.write(.png, to: ioResult.url)
-                    }
+                if let node = renderings[0].renderableMainSheetNode() {
+                    let image = node.renderedAntialiasFillImage(in: renderings[0].bounds, to: size, colorSpace)
+                    try image?.write(.png, to: ioResult.url)
                 }
                 
                 try ioResult.setAttributes()
@@ -1034,32 +994,20 @@ final class IOAction: Action {
         }
     }
     
-    func exportPDF(from renderings: [Rendering], unionFrame: Rect?,
-                   size: Size, at ioResult: IOResult) {
+    func exportPDF(from renderings: [Rendering], size: Size, at ioResult: IOResult) {
         @Sendable func export(progressHandler: (Double, inout Bool) -> ()) throws {
             var isStop = false
             let pdf = try PDF(url: ioResult.url, mediaBox: Rect(size: size))
             
-            if let unionFrame {
-                pdf.newPage { pdf in
-                    for rendering in renderings {
-                        if let node = rendering.renderableMainSheetNode() {
-                            let origin = rendering.mainItem.frame.origin - unionFrame.origin
-                            node.render(in: rendering.bounds, to: rendering.bounds + origin, in: pdf)
-                        }
+            for (i, rendering) in renderings.enumerated() {
+                if let node = rendering.renderableMainSheetNode() {
+                    pdf.newPage { pdf in
+                        node.render(in: rendering.bounds, to: size, in: pdf)
                     }
                 }
-            } else {
-                for (i, rendering) in renderings.enumerated() {
-                    if let node = rendering.renderableMainSheetNode() {
-                        pdf.newPage { pdf in
-                            node.render(in: rendering.bounds, to: size, in: pdf)
-                        }
-                    }
-                    
-                    progressHandler(Double(i + 1) / Double(renderings.count), &isStop)
-                    if isStop { break }
-                }
+                
+                progressHandler(Double(i + 1) / Double(renderings.count), &isStop)
+                if isStop { break }
             }
             
             pdf.finish()
@@ -1113,63 +1061,48 @@ final class IOAction: Action {
         }
     }
     
-    func exportGIF(from renderings: [Rendering], unionFrame: Rect?, _ colorSpace: ColorSpace,
+    func exportGIF(from renderings: [Rendering], _ colorSpace: ColorSpace,
                    size: Size, at ioResult: IOResult) {
         @Sendable func export(progressHandler: (Double, inout Bool) -> ()) throws {
             var images = [(image: Image, time: Rational)]()
             var isStop = false, t = 0.0
             let allC = renderings.count + 1
             
-            if let unionFrame {
-                let scaleX = size.width / unionFrame.width
-                let scaleY = size.height / unionFrame.height
-                var nImage = Image(size: size, color: .background.with(colorSpace))
-                for rendering in renderings {
-                    let origin = rendering.mainItem.frame.origin - unionFrame.origin
-                    if let node = rendering.renderableMainSheetNode(),
-                       let image = node.renderedAntialiasFillImage(in: rendering.bounds, to: size, colorSpace) {
-                        nImage = nImage?.drawn(image,
-                                               in: (rendering.bounds + origin)
-                                               * Transform(scaleX: scaleX, y: scaleY))
-                    }
-                }
-                try nImage?.write(.gif, to: ioResult.url)
-            } else {
-                for rendering in renderings {
-                    if let sheet = rendering.mainItem.decodedSheet() {
-                        let ot = t
-                        var sec = Rational(0)
-                        for (i, _) in sheet.animation.keyframes.enumerated() {
-                            let node = sheet.node(isBorder: false, atSec: sec,
-                                                  enabledCaption: false,
-                                                  attitude: .init(position: rendering.mainItem.frame.origin),
-                                                  in: rendering.bounds)
-                            let durBeat = sheet.animation.rendableKeyframeDurBeat(at: i)
-                            let durSec = sheet.animation.sec(fromBeat: durBeat)
-                            if let image = node.renderedAntialiasFillImage(in: rendering.bounds, to: size, colorSpace) {
-                                images.append((image, durSec))
-                            }
-                            sec += durSec
-                            let d = Double(i) / Double(sheet.animation.keyframes.count - 1)
-                            t = ot + d / Double(allC)
-                            progressHandler(t, &isStop)
+            for rendering in renderings {
+                if let sheet = rendering.mainItem.decodedSheet() {
+                    let ot = t
+                    var sec = Rational(0)
+                    for (i, _) in sheet.animation.keyframes.enumerated() {
+                        let node = sheet.node(isBorder: false, atSec: sec,
+                                              enabledCaption: false,
+                                              attitude: .init(position: rendering.mainItem.frame.origin),
+                                              in: rendering.bounds)
+                        let durBeat = sheet.animation.rendableKeyframeDurBeat(at: i)
+                        let durSec = sheet.animation.sec(fromBeat: durBeat)
+                        if let image = node.renderedAntialiasFillImage(in: rendering.bounds, to: size, colorSpace) {
+                            images.append((image, durSec))
                         }
-                    } else {
-                        let ot = t
-                        if let node = renderings[0].renderableMainSheetNode(),
-                           let image = node.renderedAntialiasFillImage(in: renderings[0].bounds, to: size,
-                                                                       colorSpace) {
-                            images.append((image, Keyframe.defaultDurBeat))
-                            t = ot + 1 / Double(allC)
-                            progressHandler(t, &isStop)
-                        }
+                        sec += durSec
+                        let d = Double(i) / Double(sheet.animation.keyframes.count - 1)
+                        t = ot + d / Double(allC)
+                        progressHandler(t, &isStop)
                     }
-                    
-                    if isStop { break }
+                } else {
+                    let ot = t
+                    if let node = renderings[0].renderableMainSheetNode(),
+                       let image = node.renderedAntialiasFillImage(in: renderings[0].bounds, to: size,
+                                                                   colorSpace) {
+                        images.append((image, Keyframe.defaultDurBeat))
+                        t = ot + 1 / Double(allC)
+                        progressHandler(t, &isStop)
+                    }
                 }
                 
-                try Image.writeGIF(images, to: ioResult.url)
+                if isStop { break }
             }
+            
+            try Image.writeGIF(images, to: ioResult.url)
+            
             progressHandler(1, &isStop)
             try ioResult.setAttributes()
         }
@@ -1213,12 +1146,11 @@ final class IOAction: Action {
     func exportMovie(from renderings: [Rendering], is4K: Bool, isAlphaChannel: Bool,
                      _ colorSpace: ColorSpace,
                      size: Size, at ioResult: IOResult) {
-        let isMainFrame = !rootView.isEditingSheet
         @Sendable func export(progressHandler: (Double, inout Bool) -> (),
                               completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
             do {
                 var isStop = false
-                var durSecs = [Rational](), allDurSec: Rational = 0
+                var durSecs = [Int: Rational](), allDurSec: Rational = 0
                 struct Track {
                     var captions: [Caption]
                     var sheets: [(sheet: Sheet, sheetBounds: Rect)]
@@ -1232,14 +1164,19 @@ final class IOAction: Action {
                         ..< Animation.frame(fromSec: secRange.end, frameRate: frameRate)
                     }
                 }
+                var filledIDs = Set<UUID>()
                 var tracks = [Track]()
                 for (i, rendering) in renderings.enumerated() {
+                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                    filledIDs.insert(rendering.mainItem.id)
+                    
                     var maxEndSec: Rational = 0
                     if let sheet = rendering.mainItem.decodedSheet() {
                         var captions = sheet.captions
                         
                         var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
                         for item in rendering.bottomItems {
+                            filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                             captions += sheet.captions
                             if sheet.enabledAnimation {
@@ -1254,6 +1191,7 @@ final class IOAction: Action {
                         maxEndSec = max(sheet.allEndSec, maxEndSec)
                         
                         for item in rendering.topItems {
+                            filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                             captions += sheet.captions
                             if sheet.enabledAnimation {
@@ -1263,7 +1201,7 @@ final class IOAction: Action {
                         }
                         
                         let origin = rendering.mainItem.frame.origin
-                        let b = isMainFrame ? sheet.mainFrame : rendering.bounds
+                        let b = rendering.bounds
                         tracks.append(.init(captions: captions, sheets: sheets,
                                             secRange: allDurSec ..< (allDurSec + maxEndSec),
                                             sheetOrigin: origin, sheetBounds: sheetBounds,
@@ -1279,7 +1217,7 @@ final class IOAction: Action {
                                             sheetBounds: rendering.bounds,
                                             renderBounds: rendering.bounds))
                     }
-                    durSecs.append(maxEndSec)
+                    durSecs[i] = maxEndSec
                     allDurSec += maxEndSec
                     
                     progressHandler(.init(i) / .init(renderings.count) * 0.1, &isStop)
@@ -1363,18 +1301,23 @@ final class IOAction: Action {
                 var audiotracks = [Audiotrack]()
                 
                 if !isStop {
+                    var filledIDs = Set<UUID>()
                     for (i, rendering) in renderings.enumerated() {
-                        let durSec = durSecs[i]
+                        guard !filledIDs.contains(rendering.mainItem.id),
+                              let durSec = durSecs[i] else { continue }
+                        filledIDs.insert(rendering.mainItem.id)
                         
                         var audiotrack: Audiotrack?
                         if let sheet = rendering.mainItem.decodedSheet() {
                             audiotrack += sheet.audiotrack
                         }
                         for item in rendering.bottomItems {
+                            filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                             audiotrack += sheet.audiotrack
                         }
                         for item in rendering.topItems {
+                            filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                             audiotrack += sheet.audiotrack
                         }
@@ -1457,17 +1400,23 @@ final class IOAction: Action {
             do {
                 var audiotracks = [Audiotrack]()
                 
+                var filledIDs = Set<UUID>()
                 var isStop = false
                 for (i, rendering) in renderings.enumerated() {
+                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                    filledIDs.insert(rendering.mainItem.id)
+                    
                     var audiotrack: Audiotrack?
                     if let sheet = rendering.mainItem.decodedSheet() {
                         audiotrack += sheet.audiotrack
                     }
                     for item in rendering.bottomItems {
+                        filledIDs.insert(item.id)
                         guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                         audiotrack += sheet.audiotrack
                     }
                     for item in rendering.topItems {
+                        filledIDs.insert(item.id)
                         guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                         audiotrack += sheet.audiotrack
                     }

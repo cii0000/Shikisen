@@ -36,7 +36,6 @@ final class RootView: View, @unchecked Sendable {
         
         world = model.world()
         history = model.history()
-        selections = model.selections()
         finding = model.finding()
         pov = Self.clippedPOV(from: model.pov())
         baseThumbnailBlocks = model.baseThumbnailBlocks()
@@ -51,10 +50,6 @@ final class RootView: View, @unchecked Sendable {
         model.povRecord.willwriteClosure = { [weak self] (record) in
             guard let self else { return }
             record.value = self.pov
-        }
-        model.selectionsRecord.willwriteClosure = { [weak self] (record) in
-            guard let self else { return }
-            record.value = self.selections
         }
         model.findingRecord.willwriteClosure = { [weak self] (record) in
             guard let self else { return }
@@ -73,7 +68,6 @@ final class RootView: View, @unchecked Sendable {
         }
         updateTransformsWithPOV()
         updateWithWorld()
-        updateWithSelections(oldValue: [])
         updateWithFinding()
         backgroundColor = isEditingSheet ? .background : .disabled
         
@@ -267,6 +261,15 @@ final class RootView: View, @unchecked Sendable {
                 updateMap()
                 updateGrid(with: screenToWorldTransform, in: screenBounds)
                 updateWithCursorPosition()
+                
+                //
+                if !selectedSheetPositions.isEmpty {
+                    let nSHPs = selectedSheetPositions.filter { world.sheetIDs[$0] != nil }
+                    if nSHPs != selectedSheetPositions {
+                        selectedSheetPositions = nSHPs
+                    }
+                }
+                
                 return rect
             }
         } else {
@@ -298,6 +301,15 @@ final class RootView: View, @unchecked Sendable {
                     }
                     world.sheetIDs[shp] = nil
                 }
+                
+                //
+                if !selectedSheetPositions.isEmpty {
+                    let nSHPs = selectedSheetPositions.filter { world.sheetIDs[$0] != nil }
+                    if nSHPs != selectedSheetPositions {
+                        selectedSheetPositions = nSHPs
+                    }
+                }
+                
                 return rect
             }
         }
@@ -736,391 +748,68 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    var selections = [Selection]() {
+    private(set) var selectedNode: Node?
+    var selectedSheetPositions = [IntPoint]() {
         didSet {
-            model.selectionsRecord.isWillwrite = true
-            updateWithSelections(oldValue: oldValue)
-        }
-    }
-    var multiSelection: MultiSelection {
-        MultiSelection(selections: selections)
-    }
-    func sheetPositionsWithSelection() -> [IntPoint] {
-        world.sheetIDs.keys.compactMap {
-            multiSelection
-                .intersects(sheetFrame(with: $0)) ? $0 : nil
-        }
-    }
-    private(set) var selectedNode: Node?, selectedOrientationNode: Node?
-    private(set) var selectedFrames = [Rect](), selectedFramesNode: Node?
-    private(set) var selectedClippedFrame: Rect?, selectedClippedNode: Node?
-    private(set) var selectedLinesNode: Node?,
-                     selectedLineNodes = [Line: Node]()
-    private(set) var selectedNotesNode: Node?, selectedPointsNode: Node?,
-                     selectedNoteNodes = [Pointline: Node]()
-    private(set) var isOldSelectedSheet = false, isSelectedText = false, isSelectedLine = false
-    func updateWithSelections(oldValue: [Selection]) {
-        if !selections.isEmpty {
-            if oldValue.isEmpty {
-                let oNode = Node()
-                selectedOrientationNode = oNode
-                node.append(child: oNode)
-                
-                let selectedNode = Node(lineWidth: Line.defaultLineWidth,
-                                lineType: .color(.selected),
-                                fillType: .color(.subSelected))
-                self.selectedNode = selectedNode
-                node.append(child: selectedNode)
-                
-                let soNode = Node()
-                selectedFramesNode = soNode
-                node.append(child: soNode)
-                
-                let slNode = Node()
-                selectedLinesNode = slNode
-                node.append(child: slNode)
-                
-                let snNode = Node()
-                selectedNotesNode = snNode
-                node.append(child: snNode)
-                
-                let pNode = Node()
-                selectedPointsNode = pNode
-                node.append(child: pNode)
-                
-                let ssNode = Node(lineWidth: Line.defaultLineWidth,
-                                  lineType: .color(.selected),
-                                  fillType: .color(.subSelected))
-                selectedClippedNode = ssNode
-                node.append(child: ssNode)
-                
-                isOldSelectedSheet = isEditingSheet
-            }
-            updateSelects()
-            updateSelectedNode()
-        } else {
-            selectedFrames = []
-            if !oldValue.isEmpty {
+            if selectedSheetPositions.isEmpty {
                 selectedNode?.removeFromParent()
-                selectedOrientationNode?.removeFromParent()
-                selectedFramesNode?.removeFromParent()
-                selectedLinesNode?.removeFromParent()
-                selectedNotesNode?.removeFromParent()
-                selectedPointsNode?.removeFromParent()
-                selectedClippedNode?.removeFromParent()
                 selectedNode = nil
-                selectedOrientationNode = nil
-                selectedFramesNode = nil
-                selectedLinesNode = nil
-                selectedNotesNode = nil
-                selectedPointsNode = nil
-                selectedClippedNode = nil
+            } else {
+                if self.selectedNode == nil {
+                    let selectedNode = Node()
+                    node.append(child: selectedNode)
+                    self.selectedNode = selectedNode
+                }
+                updateSelectedNodes()
             }
         }
     }
-    func updateSelects() {
-        guard !selections.isEmpty else {
-            for key in selectedLineNodes.keys {
-                selectedLineNodes[key]?.removeFromParent()
-                selectedLineNodes[key] = nil
-            }
+    var selectedBounds: Rect? {
+        selectedSheetPositions.reduce(into: Rect?.none) { $0 += sheetFrame(with: $1) }
+    }
+    func updateSelectedNodes() {
+        sheetViewValues.forEach {
+            $0.value.sheetView?.updateSelectedNodes(scale: screenToWorldScale,
+                                                    isHidden: !isEditingSheet)
+        }
+        guard !isEditingSheet else {
+            selectedNode?.children = []
             return
         }
-        let centerSHPs = Set(self.centerSHPs)
-        var rectsSet = Set<Rect>()
-        var rects = [Rect](), isSelectedText = false, isSelectedLine = false, selectedCount = 0
-        var firstOrientation = Orientation.horizontal, lineNodes = [Node]()
-        var sLines = [Line](), sPointlines = [Pointline]()
-        var addedLineIndexes = Set<IntPoint>()
-        var cr: Rect?, oldRect: Rect?
-        var ps = [Point]()
-        for selection in selections {
-            let rect = selection.rect
-            if isEditingSheet {
-                sheetViewValues.enumerated().forEach { (si, svv) in
-                    guard let shp = sheetPosition(at: svv.value.sheetID),
-                          centerSHPs.contains(shp) else { return }
-                    let frame = sheetFrame(with: shp)
-                    guard let inFrame = rect.intersection(frame) else { return }
-                    guard let sheetView = svv.value.sheetView else { return }
-                    let rectInSheet = sheetView.convertFromWorld(selection.rect)
-                    cr = cr == nil ? inFrame : cr!.union(inFrame)
-                    for textView in sheetView.textsView.elementViews {
-                        let nRect = textView.convertFromWorld(rect)
-                        guard textView.intersectsHalf(nRect) else { continue }
-                        let tfp = textView.convertFromWorld(selection.firstOrigin)
-                        let tlp = textView.convertFromWorld(selection.lastOrigin)
-                        if textView.characterIndex(for: tfp) != nil {
-                            isSelectedText = true
-                        }
-                        
-                        guard let fi = textView.characterIndexWithOutOfBounds(for: tfp),
-                              let li = textView.characterIndexWithOutOfBounds(for: tlp) else { continue }
-                        let range = fi < li ? fi ..< li : li ..< fi
-                        for nf in textView.transformedPaddingRects(with: range) {
-                            let frame = sheetView.convertToWorld(nf)
-                            if !rectsSet.contains(frame) {
-                                rects.append(frame)
-                                rectsSet.insert(frame)
-                            }
-                        }
-                        if selectedCount == 0 {
-                            firstOrientation = textView.model.orientation
-                        }
-                        selectedCount += 1
-                    }
-                    
-                    //
-                    for (li, lineView) in sheetView.linesView.elementViews.enumerated() {
-                        let sli = IntPoint(si, li)
-                        if !addedLineIndexes.contains(sli),
-                           lineView.intersects(rectInSheet) {
-                            if case .line(let line) =  lineView.node.path.pathlines.first?.elements.first,
-                               case .color(let color) = lineView.node.lineType {//
-                                
-                                var nLine = sheetView.convertToWorld(line)
-                                nLine.uuColor.value = color//
-                                sLines.append(nLine)
-                                addedLineIndexes.insert(sli)
-                                isSelectedLine = true
-                            }
-                        }
-                    }
-                    
-//                    for (li, lineView) in sheetView.linesView.elementViews.enumerated() {
-//                        let sli = IntPoint(si, li)
-//                        if !addedLineIndexes.contains(sli),
-//                            lineView.intersects(rectInSheet) {
-//                            if case .line(let line) =  lineView.node.path.pathlines.first?.elements.first,
-//                               case .color(let color) = lineView.node.lineType {//
-//
-//                                var nLine = sheetView.convertToWorld(line)
-//                                nLine.uuColor.value = color//
-//                                sLines.append(nLine)
-//                                addedLineIndexes.insert(sli)
-//                            }
-//                        }
-//                    }
-                    
-                    let scoreView = sheetView.scoreView
-                    if scoreView.model.enabled {
-                        let score = sheetView.scoreView.model
-                        let nis = sheetView.noteIndexes(from: selections)
-                        if !nis.isEmpty {
-                            for ni in nis {
-                                var nLine = scoreView.pointline(at: ni)
-                                nLine = scoreView.convertToWorld(nLine)
-                                sPointlines.append(nLine)
-                            }
-                        }
-                        
-                        if nis.count == 1 {
-                            let note = score.notes[nis[0]]
-                            if note.pits.count > 1 {
-                                ps += note.pits.count.range.compactMap {
-                                    let p = scoreView.convertToWorld(scoreView.pitPosition(atPit: $0, from: note))
-                                    return selections.contains(where: { $0.rect.contains(p) }) ? p : nil
-                                }
-                            }
-                        }
-                    }
-                }
-                if selectedCount == 1 && rects.count >= 2 {
-                    let r0 = rects[0], r1 = rects[1]
-                    switch firstOrientation {
-                    case .horizontal:
-                        let w = r0.minX - r1.maxX
-                        if w > 0 {
-                            lineNodes.append(Node(path: Path(Edge(r0.minXMinYPoint,
-                                                                  r1.maxXMaxYPoint)),
-                                                  lineWidth: worldLineWidth,
-                                                  lineType: .color(.selected)))
-                        }
-                    case .vertical:
-                        let h = r1.minY - r0.maxY
-                        if h > 0 {
-                            lineNodes.append(Node(path: Path(Edge(r0.minXMaxYPoint,
-                                                                  r1.maxXMinYPoint)),
-                                                  lineWidth: worldLineWidth,
-                                                  lineType: .color(.selected)))
-                        }
-                    }
-                }
-                if selections.count == 1 {
-                    if let cr = cr, cr != rect, isEditingSheet {
-                        selectedClippedNode?.lineWidth = worldLineWidth
-                        selectedClippedNode?.path = Path(cr)
-                    } else {
-                        selectedClippedNode?.path = Path()
-                    }
-                    selectedClippedFrame = cr
-                }
-            } else {
-                world.sheetIDs.keys.forEach {
-                    let frame = sheetFrame(with: $0)
-                    guard rect.intersects(frame) else { return }
-                    if !rectsSet.contains(frame) {
-                        rects.append(frame)
-                        rectsSet.insert(frame)
-                    }
-                }
-            }
-            if let oldRect = oldRect, let pathline = selection.rect.minLine(oldRect) {
-                lineNodes.append(Node(path: Path([pathline]),
-                                      lineWidth: worldLineWidth,
-                                      lineType: .color(.selected)))
-            }
-            oldRect = selection.rect
+        
+        let roads = roads(fromMap: Set(selectedSheetPositions))
+        let pathlines = roads.compactMap {
+            $0.pathlineWith(width: Sheet.width, height: Sheet.height)
         }
         
-        selectedFramesNode?.children = rects.map {
-            Node(path: Path($0),
-                 lineWidth: worldLineWidth,
-                 lineType: .color(.selected),
-                 fillType: .color(.subSelected))
-        } + lineNodes
-        
-        let sLinesSet = Set(sLines)
-        for key in selectedLineNodes.keys {
-            if !sLinesSet.contains(key) {
-                selectedLineNodes[key]?.removeFromParent()
-                selectedLineNodes[key] = nil
-            }
-        }
-        for sLine in sLines {
-            if selectedLineNodes[sLine] == nil {
-                let selectedLineNode = Node(path: Path(sLine),
-                                            lineWidth: sLine.size * 1.5,
-                                            lineType: .color(.linear(.selected, sLine.uuColor.value,
-                                                                     t: sLine.uuColor.value.lightness / 100 * 0.5)))
-                selectedLineNodes[sLine] = selectedLineNode
-                selectedLinesNode?.append(child: selectedLineNode)
-            }
-        }
-        
-        let sPointlinesSet = Set(sPointlines)
-        for key in selectedNoteNodes.keys {
-            if !sPointlinesSet.contains(key) {
-                selectedNoteNodes[key]?.removeFromParent()
-                selectedNoteNodes[key] = nil
-            }
-        }
-        for sPointline in sPointlines {
-            if selectedNoteNodes[sPointline] == nil {
-                let selectedNoteNode = Node(path: Path(sPointline.controls.map { $0.point }),
-                                            lineWidth: worldLineWidth * 1.5,
-                                            lineType: .color(.selected))
-                selectedNoteNodes[sPointline] = selectedNoteNode
-                selectedNotesNode?.append(child: selectedNoteNode)
-            }
-        }
-        
-        selectedPointsNode?.children = ps.map {
-            Node(path: .init(circleRadius: 0.5, position: $0), fillType: .color(.selected))
-        }
-        
-        selectedFrames = rects
-        self.isSelectedText = isSelectedText && selectedCount == 1
-        self.isSelectedLine = isSelectedLine
-    }
-    func updateSelectedNode() {
-        guard !selections.isEmpty else { return }
         let l = worldLineWidth
-        
-        if let cr = selectedClippedFrame, cr != selections.first?.rect, isEditingSheet {
-            selectedClippedNode?.lineWidth = l
-            selectedClippedNode?.path = Path(cr)
-        } else {
-            selectedClippedNode?.path = Path()
-        }
-        selectedNode?.isHidden = isSelectedText && !isSelectedLine
-//        selectedNode?.lineWidth = l
-//        selectedNode?.path = Path(rect)
-        selectedNode?.children = selections.map {
-            Node(path: Path($0.rect),
+        selectedNode?.children = selectedSheetPositions.map {
+            Node(path: Path(sheetFrame(with: $0)),
                  lineWidth: l,
                  lineType: .color(.selected),
                  fillType: .color(.subSelected))
-        }
-        
-        let attitude = Attitude(screenToWorldTransform)
-        selectedOrientationNode?.isHidden = isSelectedText && !isSelectedLine
-        selectedOrientationNode?.children = selections.map {
-            var nAttitude = attitude
-            switch $0.rectCorner {
-            case .minXMinY: nAttitude.position = $0.rect.minXMinYPoint
-            case .minXMaxY: nAttitude.position = $0.rect.minXMaxYPoint
-            case .maxXMinY: nAttitude.position = $0.rect.maxXMinYPoint
-            case .maxXMaxY: nAttitude.position = $0.rect.maxXMaxYPoint
-            }
-            return Node(attitude: nAttitude,
-                        path: Path(circleRadius: 3),
-                        fillType: .color(.selected))
-        }
-        
-        selectedFramesNode?.children.forEach { $0.lineWidth = l }
-        
-        let isS = isEditingSheet
-        if isS != isOldSelectedSheet {
-            isOldSelectedSheet = isS
-            updateSelects()
-        }
+        } + (!roads.isEmpty ? [.init(path: Path(pathlines, isCap: false),
+                                     lineWidth: l * 0.5,
+                                     lineType: .color(.selected))] : [])
     }
-    func isSelect(at p: Point) -> Bool {
-        let d = 2.0 * screenToWorldScale
-        if isSelectedText && !selectedFrames.isEmpty {
-            return selectedFrames.contains(where: { $0.outset(by: d).contains(p) })
-        } else {
-            for s in selections {
-                let r = s.rect
-                if r.outset(by: d).contains(p) {
-                    return true
-                }
-            }
-            return selectedFrames.contains(where: { $0.outset(by: d).contains(p) })
-        }
-    }
-    func isSelect(at rect: Rect) -> Bool {
-        let d = 1.0 * screenToWorldScale
-        if isSelectedText && !selectedFrames.isEmpty {
-            return selectedFrames.contains(where: { $0.outset(by: d).intersects(rect) })
-        } else {
-            for s in selections {
-                let r = s.rect
-                if r.outset(by: d).intersects(rect) {
-                    return true
-                }
-            }
-            return selectedFrames.contains(where: { $0.outset(by: d).intersects(rect) })
-        }
+    func updateSelectedNodesWithScale() {
+        
+        
     }
     func updateSelectedColor(isMain: Bool) {
         let selectedColor = isMain ? Color.selected : Color.diselected
-        if !selections.isEmpty {
-            let subSelectedColor = isMain ? Color.subSelected : Color.subDiselected
-            selectedNode?.children.forEach {
+        let subSelectedColor = isMain ? Color.subSelected : Color.subDiselected
+        selectedNode?.children.forEach {
+            if $0.fillType != nil {
                 $0.fillType = .color(subSelectedColor)
-                $0.lineType = .color(selectedColor)
             }
-            selectedClippedNode?.fillType = .color(subSelectedColor)
-            selectedClippedNode?.lineType = .color(selectedColor)
-            selectedFramesNode?.children.forEach {
-                $0.fillType = .color(subSelectedColor)
+            if $0.lineType != nil {
                 $0.lineType = .color(selectedColor)
-            }
-            selectedLinesNode?.children.forEach {
-                $0.lineType = .color(selectedColor)
-            }
-            selectedNotesNode?.children.forEach {
-                $0.lineType = .color(selectedColor)
-            }
-            selectedOrientationNode?.children.forEach {
-                $0.fillType = .color(selectedColor)
             }
         }
         
-        sheetViewValues.values.forEach {
-            $0.sheetView?.animationView.selectedColor = selectedColor
+        sheetViewValues.forEach {
+            $0.value.sheetView?.updateSelectedColor(isMain: isMain)
         }
     }
     
@@ -1167,12 +856,11 @@ final class RootView: View, @unchecked Sendable {
             return
         }
         
-        let isSelected = isSelect(at: finding.worldPosition)
         var findingChildNodes = [Node]()
         var findingChildrenNodeDic = [IntPoint: Node]()
         for sr in model.sheetRecorders {
-            guard let shp = sheetPosition(at: sr.key) else { continue }
-            if isSelected && !isSelect(at: sheetFrame(with: shp)) { continue }
+            guard let shp = sheetPosition(at: sr.key),
+                    selectedSheetPositions.contains(shp) else { continue }
             let string = sheetViewValues[shp]?.sheetView?.model.allTextsString
                 ?? sr.value.stringRecord.decodedValue
             if string?.contains(finding.string) ?? false {
@@ -1225,8 +913,6 @@ final class RootView: View, @unchecked Sendable {
                                lineType: .color(.selected)))
         }
         if let nSheetView = sheetView(at: shp) {
-            let isSelected = isSelect(at: finding.worldPosition)
-            
             for textView in nSheetView.textsView.elementViews {
                 let text = textView.model
                 
@@ -1244,11 +930,8 @@ final class RootView: View, @unchecked Sendable {
                 }
                 
                 for range in ranges {
-                    var rects = textView.transformedPaddingRects(with: range).map {
+                    let rects = textView.transformedPaddingRects(with: range).map {
                         nSheetView.convertToWorld($0)
-                    }
-                    if isSelected {
-                        rects = rects.filter { isSelect(at: $0) }
                     }
                     rects.forEach {
                         nodes.append(Node(path: Path($0),
@@ -1311,7 +994,7 @@ final class RootView: View, @unchecked Sendable {
         findingChildNode.children = nodes
     }
     func updateFindingNodes() {
-        if !findingChildNodeDic.isEmpty {
+        if !finding.isEmpty, !findingChildNodeDic.isEmpty {
             let l = findingLineWidth
             findingChildNodeDic.values.forEach {
                 $0.children.forEach { $0.lineWidth = l }
@@ -1734,12 +1417,21 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    func closePanel(at p: Point) -> Bool {
-        if let i = selections.enumerated().reversed().first(where: { $0.element.rect.contains(p) })?.offset {
-            selections.remove(at: i)
-            return true
+    func unselect(at p: Point) {
+        if isEditingSheet {
+            if let sheetView = sheetView(at: p) {
+                sheetView.unselectKeyframes()
+                sheetView.keyframeView.selectedLineIs = []
+                sheetView.keyframeView.selectedPlaneIs = []
+                sheetView.textsView.elementViews.forEach {
+                    $0.selectedRanges = []
+                }
+                sheetView.selectedContentIs = []
+                sheetView.scoreView.selectedNotePitSprolIs = [:]
+                updateSelectedNodes()
+            }
         } else {
-            return false
+            selectedSheetPositions = []
         }
     }
     func closeAllPanels(at p: Point) {
@@ -1748,16 +1440,6 @@ final class RootView: View, @unchecked Sendable {
            !b.contains(p) {
             
             closeLookingUp()
-        }
-        
-        if let i = selections.firstIndex(where: { $0.rect.contains(p) }) {
-            selections.remove(at: i)
-        } else {
-            selections = []
-        }
-        
-        if let sheetView = sheetView(at: p) {
-            sheetView.unselectKeyframes()
         }
         
         finding = Finding()
@@ -2183,25 +1865,26 @@ final class RootView: View, @unchecked Sendable {
     func groupAndAroundSheetPositions(at cp: IntPoint) -> [IntPoint] {
         var shps = [cp] + aroundSheetPositions(atCenter: cp)
         shps = groupSheetPositions(at: cp)
-        if let leshp = lastEditedIntPoint {
+        if let leshp = lastEditedSheetPosition {
             shps.append(leshp)
             shps += groupSheetPositions(at: leshp)
         }
         return shps
     }
     
+    func containsSelectedSheetPositions(_ p: Point) -> Bool {
+        selectedSheetPositions.contains { sheetFrame(with: $0).contains(p) }
+    }
+    
     struct SheetFramePosition {
         var shp: IntPoint, frame: Rect
     }
-    func sheetFramePositions(at p: Point, isUnselect: Bool) -> [SheetFramePosition] {
-        if isSelectSelectedNoneCursor(at: p), !isSelectedText {
+    func sheetFramePositions(at p: Point) -> [SheetFramePosition] {
+        if containsSelectedSheetPositions(p) {
             let vs: [SheetFramePosition] = world.sheetIDs.keys.compactMap { shp in
                 let frame = sheetFrame(with: shp)
-                return multiSelection.intersects(frame) ?
+                return selectedSheetPositions.contains(shp) ?
                     SheetFramePosition(shp: shp, frame: frame) : nil
-            }
-            if isUnselect {
-                selections = []
             }
             return vs
         } else {
@@ -2227,7 +1910,7 @@ final class RootView: View, @unchecked Sendable {
         var shps = [shp] + aroundSheetPositions(atCenter: shp)
         centerSHPs = shps
         var groupSheetPs = groupSheetPositions(at: shp)
-        if let leshp = lastEditedIntPoint {
+        if let leshp = lastEditedSheetPosition {
             shps.append(leshp)
             groupSheetPs += groupSheetPositions(at: leshp)
         }
@@ -2412,7 +2095,6 @@ final class RootView: View, @unchecked Sendable {
                 
                 self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
             }
-            updateSelects()
         case .sheet:
             if sheetViewValues.contains(where: { $0.value.sheetID == sid }) { return }
             guard let sheetRecorder = self.model.sheetRecorders[sid] else { return }
@@ -2505,7 +2187,6 @@ final class RootView: View, @unchecked Sendable {
                         
                         self.thumbnailNodeValues[shp]?.node?.removeFromParent()
                         
-                        self.updateSelects()
                         self.updateFindingNodes(at: shp)
                         if shp == self.sheetPosition(at: self.convertScreenToWorld(self.cursorPoint)) {
                             self.updateTextCursor()
@@ -2912,33 +2593,19 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    func updateLastEditedIntPoint(fromScreen screenPoint: Point) {
-        lastEditedIntPoint = sheetPosition(at: convertScreenToWorld(screenPoint))
+    func updateLastEditedSheetPosition(fromScreen sp: Point) {
+        lastEditedSheetPosition = sheetPosition(at: convertScreenToWorld(sp))
     }
     
-    private(set) var lastEditedIntPoint: IntPoint?
+    private(set) var lastEditedSheetPosition: IntPoint?
     private var lastEditedSheetNode: Node?
     var isShownLastEditedSheet = false {
         didSet {
-            updateSelectedColor(isMain: true)
             lastEditedSheetNode?.removeFromParent()
             lastEditedSheetNode = nil
             if isShownLastEditedSheet {
-                if let shp = lastEditedIntPoint {
+                if let shp = lastEditedSheetPosition {
                     let f = sheetFrame(with: shp)
-                    var isSelection = false
-                    for selection in selections {
-                        let r = selection.rect
-                        if worldBounds.intersects(r) && !r.intersects(f)
-                            && worldBounds.intersects(f) {
-                            
-                            isSelection = true
-                            break
-                        }
-                    }
-                    if isSelection {
-                        updateSelectedColor(isMain: false)
-                    }
                     let selectedSheetNode = Node(path: Path(f),
                                                  lineWidth: worldLineWidth,
                                                  lineType: .color(.selected),
@@ -2949,119 +2616,29 @@ final class RootView: View, @unchecked Sendable {
             }
         }
     }
-    var isNoneCursor = false
-    private var lastEditedIntPointInView: IntPoint? {
-        if let shp = lastEditedIntPoint {
-            let f = sheetFrame(with: shp)
-            if worldBounds.intersects(f) {
-                if !selections.isEmpty {
-                    for selection in selections {
-                        let r = selection.rect
-                        if !f.contains(r)
-                            && (!worldBounds.intersects(r) || !r.intersects(f)) {
-                            return shp
-                        }
-                    }
-                } else {
-                    return shp
-                }
-            }
-        }
-        return nil
+    private var lastEditedSheetPositionInWorld: IntPoint? {
+        if let shp = lastEditedSheetPosition,
+           worldBounds.intersects(sheetFrame(with: shp)) { shp } else { nil }
     }
-    var lastEditedIntPointNoneCursor: IntPoint? {
-        guard isNoneCursor else { return nil }
-        return lastEditedIntPointInView
-    }
-    func isSelectNoneCursor(at p: Point) -> Bool {
-        (isNoneCursor && lastEditedIntPointNoneCursor == nil)
-        || isSelect(at: p)
-    }
-    var lastEditedSheetWorldCenterPositionNoneCursor: Point? {
-        if let shp = lastEditedIntPointNoneCursor {
-            sheetFrame(with: shp).centerPoint
-        } else {
-            nil
-        }
-    }
-    var lastEditedSheetScreenCenterPositionNoneCursor: Point? {
-        if let p = lastEditedSheetWorldCenterPositionNoneCursor {
-            convertWorldToScreen(p)
-        } else {
-            nil
-        }
-    }
-    var selectedScreenPositionNoneCursor: Point? {
-        guard isNoneCursor else { return nil }
-        if !selections.isEmpty {
-            if let shp = lastEditedIntPoint {
-                let f = sheetFrame(with: shp)
-                for selection in selections {
-                    if worldBounds.intersects(f), selection.rect.intersects(f) {
-                        return convertWorldToScreen(selection.rect.centerPoint)
-                    }
-                }
-            }
-        }
-        return lastEditedSheetScreenCenterPositionNoneCursor
-    }
-    func isSelectSelectedNoneCursor(at p: Point) -> Bool {
-        (isNoneCursor && selectedScreenPositionNoneCursor == nil)
-        || isSelect(at: p)
-    }
-    var selectedSheetViewNoneCursor: SheetView? {
-        guard isNoneCursor else { return nil }
-        return if let shp = lastEditedIntPoint {
+    var isFromMenu = false
+    var lastEditedSheetViewFromMenu: SheetView? {
+        guard isFromMenu else { return nil }
+        return if let shp = lastEditedSheetPosition {
             readSheetView(at: shp)
         } else {
             nil
         }
     }
-    var lastEditedSheetWorldCenterPositionNoneSelectedNoneCursor: Point? {
-        guard isNoneCursor else { return nil }
-        if let shp = lastEditedIntPoint {
-            let f = sheetFrame(with: shp)
-            if worldBounds.intersects(f) {
-                return f.centerPoint
-            }
-        }
-        return nil
-    }
-    var lastEditedSheetScreenCenterPositionNoneSelectedNoneCursor: Point? {
-        if let p = lastEditedSheetWorldCenterPositionNoneSelectedNoneCursor {
-            convertWorldToScreen(p)
+    var screenPointFromMenu: Point? {
+        if isFromMenu, let shp = lastEditedSheetPositionInWorld {
+            convertWorldToScreen(sheetFrame(with: shp).centerPoint)
         } else {
             nil
         }
     }
-    var isSelectedNoneCursor: Bool {
-        guard isNoneCursor else { return false }
-        if lastEditedIntPointInView != nil {
-            return true
-        } else if !selections.isEmpty {
-            var isIntersects = false
-            for shp in world.sheetIDs.keys {
-                let frame = sheetFrame(with: shp)
-                if multiSelection.intersects(frame) && worldBounds.intersects(frame) {
-                    isIntersects = true
-                }
-            }
-            return isIntersects
-        } else {
-            return false
-        }
-    }
-    var isSelectedOnlyNoneCursor: Bool {
-        guard isNoneCursor else { return false }
-        if !selections.isEmpty {
-            if let shp = lastEditedIntPoint {
-                let f = sheetFrame(with: shp)
-                if worldBounds.intersects(f), multiSelection.intersects(f) {
-                    return true
-                }
-            }
-        }
-        return false
+    var editableFromMenu: Bool {
+        guard isFromMenu else { return false }
+        return lastEditedSheetPositionInWorld != nil
     }
     
     func sheetViewAndFrame(at p: Point) -> (shp: IntPoint,
@@ -3166,6 +2743,83 @@ final class RootView: View, @unchecked Sendable {
         return nil
     }
     
+    func sheetViewWithSelected(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelected(sheetView.convertFromWorld(p),
+                                          scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedSheetValue(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
+                                                    scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedLine(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
+                                              scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedPlane(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedText(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedText(sheetView.convertFromWorld(p),
+                                              scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedContent(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedContent(sheetView.convertFromWorld(p),
+                                                 scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedNote(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                              scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    
     func colorPathValue(at p: Point, toColor: Color?,
                         color: Color, subColor: Color) -> ColorPathValue {
         if let sheetView = sheetView(at: p) {
@@ -3216,29 +2870,15 @@ final class RootView: View, @unchecked Sendable {
                                                            scale: screenToWorldScale)
         let uuColor = topOwner.uuColor
         
-        if isSelect(at: p), !isSelectedText {
+        if topOwner.sheetView.containsSelectedLineOrPlane(inP, scale: screenToWorldScale) {
             var colorOwners = [SheetColorOwner]()
-            for selection in selections {
-                let f = selection.rect
-                for (shp, _) in sheetViewValues {
-                    let ssFrame = sheetFrame(with: shp)
-                    if ssFrame.intersects(f),
-                       let sheetView = self.sheetView(at: shp) {
-                        
-                        let b = sheetView.convertFromWorld(f)
-                        for co in sheetView.sheetColorOwner(at: b,
-                                                            isLine: isLine) {
-                            colorOwners.append(co)
-                        }
-                    }
-                }
-            }
-            return (uuColor, colorOwners)
-        } else {
-            var colorOwners = [SheetColorOwner]()
-            if let co = sheetView.sheetColorOwner(with: uuColor) {
+            for co in sheetView.sheetColorOwnerWithSelection(isLine: isLine) {
                 colorOwners.append(co)
             }
+            return (uuColor, sheetView.sheetColorOwnerWithSelection(isLine: isLine))
+        } else {
+            let colorOwners: [SheetColorOwner] = if let co = sheetView
+                .sheetColorOwner(with: uuColor) { [co] } else { [] }
             return (uuColor, colorOwners)
         }
     }
@@ -3382,9 +3022,9 @@ final class RootView: View, @unchecked Sendable {
     static let mapScale = 16
     let mapWidth = Sheet.width * Double(mapScale), mapHeight = Sheet.height * Double(mapScale)
     private var mapIntPositions = Set<IntPoint>()
-    func mapIntPosition(at p: IntPoint) -> IntPoint {
-        let x = (Rational(p.x) / Rational(Self.mapScale)).rounded(.down).integralPart
-        let y = (Rational(p.y) / Rational(Self.mapScale)).rounded(.down).integralPart
+    func mapIntPosition(at p: IntPoint, mapScale: Int = mapScale) -> IntPoint {
+        let x = (Rational(p.x) / Rational(mapScale)).rounded(.down).integralPart
+        let y = (Rational(p.y) / Rational(mapScale)).rounded(.down).integralPart
         return .init(x, y)
     }
     func mapPosition(at ip: IntPoint) -> Point {
@@ -3397,12 +3037,7 @@ final class RootView: View, @unchecked Sendable {
              width: mapWidth, height: mapHeight)
     }
     private var roads = [Road]()
-    func updateMap() {
-        mapIntPositions = Set(model.sheetRecorders.keys.reduce(into: [IntPoint]()) {
-            if let shp = sheetPosition(at: $1) {
-                $0.append(mapIntPosition(at: shp))
-            }
-        })
+    func roads(fromMap mapIntPositions: Set<IntPoint>) -> [Road] {
         var roads = [Road]()
         
         var xSHPs = [Int: [IntPoint]]()
@@ -3429,9 +3064,16 @@ final class RootView: View, @unchecked Sendable {
             }
             previousSHPs = sortedXSHPs
         }
-        
+        return roads
+    }
+    func updateMap() {
+        mapIntPositions = Set(model.sheetRecorders.keys.reduce(into: [IntPoint]()) {
+            if let shp = sheetPosition(at: $1) {
+                $0.append(mapIntPosition(at: shp))
+            }
+        })
+        let roads = roads(fromMap: mapIntPositions)
         self.roads = roads
-        
         let pathlines = roads.compactMap {
             $0.pathlineWith(width: mapWidth, height: mapHeight)
         }
