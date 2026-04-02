@@ -1143,18 +1143,9 @@ final class InterpolateAction: InputKeyEventAction {
                     nKI = sheetView.model.animation.index
                     nRootKI = sheetView.model.animation.rootIndex
                 } else {
-                    if let (_, li, nrki) = sheetView
-                        .lineTuple(at: sheetView.convertFromWorld(p),
-                                   enabledPreviousNext: true,
-                                   scale: 1 / rootView.worldToScreenScale) {
-                        lis = [li]
-                        nKI = sheetView.model.animation.index(atRoot: nrki)
-                        nRootKI = nrki
-                    } else {
-                        lis = []
-                        nKI = 0
-                        nRootKI = 0
-                    }
+                    lis = []
+                    nKI = 0
+                    nRootKI = 0
                 }
                 
                 let maxCount = min(ios.count, lis.count)

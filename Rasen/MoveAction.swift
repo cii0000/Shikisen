@@ -56,6 +56,7 @@ final class MoveAction: DragEventAction {
         }
     }
     
+    var oldTime = 0.0
     func flow(with event: DragEvent) {
         if event.phase == .began {
             let sp = rootView.screenPointFromMenu ?? event.screenPoint
@@ -63,6 +64,8 @@ final class MoveAction: DragEventAction {
             
             if !rootView.isEditingSheet {
                 type = .sheets(MoveSheetsAction(rootAction))
+            } else if rootView.containsSelectedFrame(p) {
+                type = .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
                 if sheetView.containsSelectedSheetValue(sheetP, scale: rootView.screenToWorldScale)
@@ -70,7 +73,7 @@ final class MoveAction: DragEventAction {
                                                          scale: rootView.screenToWorldScale,
                                                          enabledTone: true) {
                     type = .sheet(MoveSheetAction(rootAction))
-                } else if sheetView.lineTuple(at: sheetP, enabledPreviousNext: true,
+                } else if sheetView.lineTuple(at: sheetP,
                                               scale: rootView.screenToWorldScale) != nil {
                     type = .line(MoveLineAction(rootAction))
                 } else if sheetView.containsTempo(sheetP, scale: rootView.screenToWorldScale) {
@@ -89,6 +92,14 @@ final class MoveAction: DragEventAction {
                 } else if rootView.border(at: p) != nil {
                     type = .border(MoveBorderAction(rootAction))
                 }
+            }
+            
+            oldTime = event.time
+        } else if event.phase == .changed {
+            if event.time - oldTime <= 1 / 70 {
+                return
+            } else {
+                oldTime = oldTime + ((event.time - oldTime) / (1 / 70)).rounded(.down) * 1 / 70
             }
         }
         
@@ -660,7 +671,7 @@ final class MoveScoreAction: DragEventAction {
                                                                           scale: rootView.screenToWorldScale)
                 if !(v?.result.isStartEndBeat ?? false)
                     && containsSelectedNote
-                    && !(v?.result.isPit ?? false) {
+                    && (v?.result.isNote ?? true) {
                     
                     let noteIs = scoreView.selectedNoteIs
                     beganNotes = noteIs.reduce(into: [Int: Note]()) { $0[$1] = score.notes[$1] }
@@ -2121,6 +2132,10 @@ final class MoveSheetAction: DragEventAction {
         rootView = rootAction.rootView
         isEditingSheet = rootView.isEditingSheet
     }
+    
+    func updateNode() {
+        node.lineWidth = rootView.worldLineWidth
+    }
 
     enum MoveType {
         case move, scale, scaleLeft, scaleRight, scaleTop, scaleBottom, rotate
@@ -2131,6 +2146,7 @@ final class MoveSheetAction: DragEventAction {
     private var oldLines = [Line](), oldPlanes = [Plane](),
                 oldTexts = [Text](), oldContents = [Content](), oldStr: String?
     private var sheetOrigin = Point()
+    private let node = Node()
 
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -2148,11 +2164,14 @@ final class MoveSheetAction: DragEventAction {
         case .began:
             rootView.cursor = .arrow
             
-            let shp = rootView.sheetPosition(at: p)
+            let shp = rootView.sheetPositionFromSelectedFrame(at: p)
+            ?? rootView.sheetPosition(at: p)
             if let sheetView = rootView.sheetView(at: shp) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.containsSelectedSheetValue(sheetP,
-                                                        scale: rootView.screenToWorldScale) {
+                if sheetView.containsSelectedFrame(sheetP,
+                                                   scale: rootView.screenToWorldScale)
+                    || sheetView.containsSelectedSheetValue(sheetP,
+                                                            scale: rootView.screenToWorldScale) {
                     lineIs = sheetView.keyframeView.selectedLineIs
                     planeIs = sheetView.keyframeView.selectedPlaneIs
                     textIs = sheetView.selectedTextIs
@@ -2167,7 +2186,7 @@ final class MoveSheetAction: DragEventAction {
                     
                     if let rect = sheetView.selectedFrame {
                         typeRect = sheetView.convertToWorld(rect)
-                        let rect = rootView.convertWorldToScreen(typeRect).outset(by: 5)
+                        let rect = rootView.convertWorldToScreen(typeRect)
                         var minDSq = Double.infinity
                         let maxDSq = Sheet.moveKnobEditDistance.squared
                         let eMaxDSq = (Sheet.moveKnobEditDistance / 2).squared
@@ -2190,46 +2209,59 @@ final class MoveSheetAction: DragEventAction {
                         let dSq = rect.edges.minValue({ $0.distanceSquared(from: sp) })!
                         if type == .move, dSq < eMaxDSq && dSq < minDSq {
                             type = .rotate
+                            node.lineType = .color(.selected)
+                            node.lineWidth = rootView.worldLineWidth
+                            node.path = .init(circleRadius: p.distance(typeRect.centerPoint),
+                                              position: typeRect.centerPoint)
+                            rootView.node.append(child: node)
                             minDSq = dSq
                         }
                     }
                 }
-                print(type)
             }
         case .changed:
             if let sheetView {
                 let dp = p - oldP
-                let transform: Transform = switch type {
+                let transform: Transform, v: Double
+                switch type {
                 case .move:
-                    .init(translation: dp)
+                    v = 0
+                    transform = .init(translation: dp)
                 case .scale:
-                    typeRect.centerPoint.distance(oldP) == 0 ? .init() :
-                    .init(translation: -typeRect.centerPoint + sheetOrigin)
-                    .scaled(by: typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP))
+                    v = typeRect.centerPoint.distance(oldP) == 0 ? 0 :
+                    typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP)
+                    transform = .init(translation: -typeRect.centerPoint + sheetOrigin)
+                    .scaled(by: v)
                     .translated(by: typeRect.centerPoint - sheetOrigin)
                 case .scaleLeft:
-                    oldP.x - typeRect.maxX == 0 ? .init() :
-                    .init(translation: -typeRect.maxXMidYPoint + sheetOrigin)
-                    .scaledBy(x: (p.x - typeRect.maxX) / (oldP.x - typeRect.maxX), y: 1)
+                    v = oldP.x - typeRect.maxX == 0 ? 0 :
+                    (p.x - typeRect.maxX) / (oldP.x - typeRect.maxX)
+                    transform = .init(translation: -typeRect.maxXMidYPoint + sheetOrigin)
+                    .scaledBy(x: v, y: 1)
                     .translated(by: typeRect.maxXMidYPoint - sheetOrigin)
                 case .scaleRight:
-                    oldP.x - typeRect.minX == 0 ? .init() :
-                    .init(translation: -typeRect.minXMidYPoint + sheetOrigin)
-                    .scaledBy(x: (p.x - typeRect.minX) / (oldP.x - typeRect.minX), y: 1)
+                    v = oldP.x - typeRect.minX == 0 ? 0 :
+                    (p.x - typeRect.minX) / (oldP.x - typeRect.minX)
+                    transform = .init(translation: -typeRect.minXMidYPoint + sheetOrigin)
+                    .scaledBy(x: v, y: 1)
                     .translated(by: typeRect.minXMidYPoint - sheetOrigin)
                 case .scaleBottom:
-                    oldP.y - typeRect.minY == 0 ? .init() :
+                    v = oldP.y - typeRect.minY == 0 ? 0 :
+                    (p.y - typeRect.maxY) / (oldP.y - typeRect.maxY)
+                    transform = oldP.y - typeRect.minY == 0 ? .init() :
                     .init(translation: -typeRect.midXMaxYPoint + sheetOrigin)
-                    .scaledBy(x: 1, y: (p.y - typeRect.maxY) / (oldP.y - typeRect.maxY))
+                    .scaledBy(x: 1, y: v)
                     .translated(by: typeRect.midXMaxYPoint - sheetOrigin)
                 case .scaleTop:
-                    oldP.y - typeRect.maxY == 0 ? .init() :
-                    .init(translation: -typeRect.midXMinYPoint + sheetOrigin)
-                    .scaledBy(x: 1, y: (p.y - typeRect.minY) / (oldP.y - typeRect.minY))
+                    v = oldP.y - typeRect.maxY == 0 ? 0 :
+                    (p.y - typeRect.minY) / (oldP.y - typeRect.minY)
+                    transform = .init(translation: -typeRect.midXMinYPoint + sheetOrigin)
+                    .scaledBy(x: 1, y: v)
                     .translated(by: typeRect.midXMinYPoint - sheetOrigin)
                 case .rotate:
-                    .init(translation: -typeRect.centerPoint + sheetOrigin)
-                    .rotated(by: Point.differenceAngle(oldP, typeRect.centerPoint, p) - .pi)
+                    v = Point.differenceAngle(oldP, typeRect.centerPoint, p) - .pi
+                    transform = .init(translation: -typeRect.centerPoint + sheetOrigin)
+                    .rotated(by: v)
                     .translated(by: typeRect.centerPoint - sheetOrigin)
                 }
                 for (li, oldLine) in zip(lineIs, oldLines) {
@@ -2245,15 +2277,17 @@ final class MoveSheetAction: DragEventAction {
                     sheetView.contentsView.elementViews[ci].model = oldContent * transform
                 }
                 
-                if type == .scale {
-                    let str = (typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP)).string(digitsCount: 2)
+                if type == .scale || type == .scaleTop
+                    || type == .scaleLeft || type == .scaleBottom || type == .scaleRight {
+                    
+                    let str = (v).string(digitsCount: 2)
                     if str != oldStr {
                         rootView.cursor = rootView.cursor(from: "x" + str,
                                                           isArrow: true)
                         oldStr = str
                     }
                 } else if type == .rotate {
-                    let str = ((Point.differenceAngle(oldP, typeRect.centerPoint, p) + .pi).loopedRotation * 180 / .pi).string(digitsCount: 2)
+                    let str = ((v + .pi2).loopedRotation * 180 / .pi).string(digitsCount: 2)
                     if str != oldStr {
                         rootView.cursor = rootView.cursor(from: str + "°",
                                                           isArrow: true)
@@ -2263,6 +2297,8 @@ final class MoveSheetAction: DragEventAction {
                 rootView.updateSelectedNodes()
             }
         case .ended:
+            node.removeFromParent()
+            
             if let sheetView {
                 let lines = sheetView.model.picture.lines[lineIs]
                 let planes = sheetView.model.picture.planes[planeIs]
@@ -2355,9 +2391,8 @@ final class MoveLineAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
                 
-                if let (lineView, li, _) = sheetView.lineTuple(at: sheetP,
-                                                               enabledPreviousNext: false,
-                                                                 scale: rootView.screenToWorldScale) {
+                if let (lineView, li) = sheetView.lineTuple(at: sheetP,
+                                                            scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
                     if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
                         beganLine = lineView.model

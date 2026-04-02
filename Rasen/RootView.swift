@@ -29,6 +29,7 @@ final class RootView: View, @unchecked Sendable {
     let gridNode = Node(lineType: .color(.border))
     let mapNode = Node(lineType: .color(.border))
     let currentMapNode = Node(lineType: .color(.border))
+    let selectedNode = Node(), selectedFrameNode = Node()
     let accessoryNodeIndex = 1
     
     init(url: URL) {
@@ -40,7 +41,8 @@ final class RootView: View, @unchecked Sendable {
         pov = Self.clippedPOV(from: model.pov())
         baseThumbnailBlocks = model.baseThumbnailBlocks()
         
-        node.children = [sheetsNode, gridNode, mapNode, currentMapNode]
+        node.children = [sheetsNode, gridNode, mapNode, currentMapNode,
+                         selectedNode, selectedFrameNode]
         
         model.rootDirectory.changedIsWillwriteByChildrenClosure = { [weak self] (_, isWillwrite) in
             if isWillwrite {
@@ -748,60 +750,137 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    private(set) var selectedNode: Node?
+    func containsSelectedFrame(_ p: Point) -> Bool {
+        sheetViewValues.contains {
+            if let sheetView = $0.value.sheetView {
+                sheetView.containsSelectedFrame(sheetView.convertFromWorld(p),
+                                                scale: screenToWorldScale)
+            } else {
+                false
+            }
+        }
+    }
+    func sheetPositionFromSelectedFrame(at p: Point) -> IntPoint? {
+        var minSHP: IntPoint?, minDSq = Double.infinity
+        sheetViewValues.forEach {
+            if let sheetVeiw = $0.value.sheetView,
+               let dSq = sheetVeiw.selectedFrameDistanceSquared(sheetVeiw.convertFromWorld(p),
+                                                                scale: screenToWorldScale) {
+                if dSq < minDSq {
+                    minSHP = $0.key
+                    minDSq = dSq
+                }
+            }
+        }
+        return minSHP
+    }
+    
     var selectedSheetPositions = [IntPoint]() {
         didSet {
-            if selectedSheetPositions.isEmpty {
-                selectedNode?.removeFromParent()
-                selectedNode = nil
-            } else {
-                if self.selectedNode == nil {
-                    let selectedNode = Node()
-                    node.append(child: selectedNode)
-                    self.selectedNode = selectedNode
-                }
-                updateSelectedNodes()
-            }
+            updateSelectedNodes()
         }
     }
     var selectedBounds: Rect? {
         selectedSheetPositions.reduce(into: Rect?.none) { $0 += sheetFrame(with: $1) }
     }
     func updateSelectedNodes() {
-        sheetViewValues.forEach {
-            $0.value.sheetView?.updateSelectedNodes(scale: screenToWorldScale,
-                                                    isHidden: !isEditingSheet)
+        if isEditingSheet {
+            let nodes: [Node] = sheetViewValues.flatMap {
+                guard let sheetVeiw = $0.value.sheetView,
+                        let selectedFrame = sheetVeiw.selectedFrame else {
+                    return [Node]()
+                }
+                let scale = screenToWorldScale
+                let rect = sheetVeiw.convertToWorld(selectedFrame)
+                let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+                                 rect.midXMinYPoint, rect.midXMaxYPoint,
+                                 rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
+                    Node(name: "knob",
+                         attitude: .init(position: $0, scale: .init(square: scale)),
+                         path: Path(circleRadius: 3),
+                         fillType: .color(.selected))
+                }
+                return knobNodes + [Node(path: .init(rect),
+                                         lineWidth: scale,
+                                         lineType: .color(.selected))]
+            }
+            
+            if nodes.isEmpty {
+                if !selectedFrameNode.children.isEmpty {
+                    selectedFrameNode.children = []
+                }
+            } else {
+                selectedFrameNode.children = nodes
+            }
+            
+            selectedFrameNode.isHidden = false
+            selectedNode.isHidden = true
+        } else {
+            if selectedSheetPositions.isEmpty {
+                if !selectedNode.children.isEmpty {
+                    selectedNode.children = []
+                }
+            } else {
+                let roads = roads(fromMap: Set(selectedSheetPositions))
+                let roadPath = Path(roads.compactMap {
+                    $0.pathlineWith(width: Sheet.width, height: Sheet.height)
+                }, isCap: false)
+                let framePath = Path(selectedSheetPositions.map { .init(sheetFrame(with: $0)) })
+                
+                let l = worldLineWidth
+                selectedNode.children = [Node(path: framePath,
+                                              lineWidth: l,
+                                              lineType: .color(.selected),
+                                              fillType: .color(.subSelected))] +
+                (!roads.isEmpty ? [.init(path: roadPath,
+                                             lineWidth: l * 0.5,
+                                             lineType: .color(.selected))] : [])
+            }
+            
+            selectedFrameNode.isHidden = true
+            selectedNode.isHidden = false
         }
-        guard !isEditingSheet else {
-            selectedNode?.children = []
-            return
-        }
-        
-        let roads = roads(fromMap: Set(selectedSheetPositions))
-        let pathlines = roads.compactMap {
-            $0.pathlineWith(width: Sheet.width, height: Sheet.height)
-        }
-        
-        let l = worldLineWidth
-        selectedNode?.children = selectedSheetPositions.map {
-            Node(path: Path(sheetFrame(with: $0)),
-                 lineWidth: l,
-                 lineType: .color(.selected),
-                 fillType: .color(.subSelected))
-        } + (!roads.isEmpty ? [.init(path: Path(pathlines, isCap: false),
-                                     lineWidth: l * 0.5,
-                                     lineType: .color(.selected))] : [])
     }
     func updateSelectedNodesWithScale() {
-        
-        
+        if isEditingSheet {
+            let scale = screenToWorldScale
+            selectedFrameNode.children.forEach {
+                if $0.name == "knob" {
+                    $0.attitude.scale = .init(square: scale)
+                } else {
+                    $0.lineWidth = scale
+                }
+            }
+            
+            selectedFrameNode.isHidden = false
+            selectedNode.isHidden = true
+        } else {
+            let l = worldLineWidth
+            if selectedNode.children.count == 1 {
+                selectedNode.children[0].lineWidth = l
+            } else if selectedNode.children.count == 2 {
+                selectedNode.children[0].lineWidth = l
+                selectedNode.children[1].lineWidth = l * 0.5
+            }
+            
+            selectedFrameNode.isHidden = true
+            selectedNode.isHidden = false
+        }
     }
     func updateSelectedColor(isMain: Bool) {
         let selectedColor = isMain ? Color.selected : Color.diselected
         let subSelectedColor = isMain ? Color.subSelected : Color.subDiselected
-        selectedNode?.children.forEach {
+        selectedNode.children.forEach {
             if $0.fillType != nil {
                 $0.fillType = .color(subSelectedColor)
+            }
+            if $0.lineType != nil {
+                $0.lineType = .color(selectedColor)
+            }
+        }
+        selectedFrameNode.children.forEach {
+            if $0.fillType != nil {
+                $0.fillType = .color(selectedColor)
             }
             if $0.lineType != nil {
                 $0.lineType = .color(selectedColor)
@@ -859,8 +938,7 @@ final class RootView: View, @unchecked Sendable {
         var findingChildNodes = [Node]()
         var findingChildrenNodeDic = [IntPoint: Node]()
         for sr in model.sheetRecorders {
-            guard let shp = sheetPosition(at: sr.key),
-                    selectedSheetPositions.contains(shp) else { continue }
+            guard let shp = sheetPosition(at: sr.key) else { continue }
             let string = sheetViewValues[shp]?.sheetView?.model.allTextsString
                 ?? sr.value.stringRecord.decodedValue
             if string?.contains(finding.string) ?? false {
@@ -2091,6 +2169,8 @@ final class RootView: View, @unchecked Sendable {
                 sheetViewValues[shp] = nil
                 sheetViewValue.sheetView?.node.removeFromParent()
                 sheetViewValue.loadingNode?.removeFromParent()
+                
+                updateSelectedNodes()
                 updateFindingNodes(at: shp)
                 
                 self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
@@ -2187,6 +2267,7 @@ final class RootView: View, @unchecked Sendable {
                         
                         self.thumbnailNodeValues[shp]?.node?.removeFromParent()
                         
+                        self.updateSelectedNodes()
                         self.updateFindingNodes(at: shp)
                         if shp == self.sheetPosition(at: self.convertScreenToWorld(self.cursorPoint)) {
                             self.updateTextCursor()

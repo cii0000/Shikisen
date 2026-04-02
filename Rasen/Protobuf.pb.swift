@@ -2347,6 +2347,8 @@ struct PBSheetValue: Sendable {
 
   var texts: [PBText] = []
 
+  var contents: [PBContent] = []
+
   var origin: PBPoint {
     get {return _origin ?? PBPoint()}
     set {_origin = newValue}
@@ -7352,6 +7354,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     1: .same(proto: "lines"),
     2: .same(proto: "planes"),
     3: .same(proto: "texts"),
+    9: .same(proto: "contents"),
     4: .same(proto: "origin"),
     5: .same(proto: "id"),
     6: .same(proto: "rootKeyframeIndex"),
@@ -7373,6 +7376,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.rootKeyframeIndex) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.keyframes) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.keyframeBeganIndex) }()
+      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.contents) }()
       default: break
       }
     }
@@ -7407,6 +7411,9 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     if self.keyframeBeganIndex != 0 {
       try visitor.visitSingularInt64Field(value: self.keyframeBeganIndex, fieldNumber: 8)
     }
+    if !self.contents.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.contents, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7414,6 +7421,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     if lhs.lines != rhs.lines {return false}
     if lhs.planes != rhs.planes {return false}
     if lhs.texts != rhs.texts {return false}
+    if lhs.contents != rhs.contents {return false}
     if lhs._origin != rhs._origin {return false}
     if lhs._id != rhs._id {return false}
     if lhs.rootKeyframeIndex != rhs.rootKeyframeIndex {return false}

@@ -493,7 +493,7 @@ final class ZoomAction: PinchEventAction {
             rootView.updateTextCursor()
         }
         
-        rootView.updateSelectedNodes()
+        rootView.updateSelectedNodesWithScale()
         rootView.updateFindingNodes()
     }
 }
@@ -749,29 +749,27 @@ final class SelectAction: Action {
                     if scoreView.model.enabled {
                         let score = sheetView.scoreView.model
                         let scoreP = scoreView.convertFromWorld(firstP)
-                        let scoreRect = sheetView.convertFromWorld(rect)
+                        let scoreRect = scoreView.convertFromWorld(rect)
                         
                         let nNotePitSprolIs: [Int : [Int : Set<Int>]]
-                        if scoreView.containsTone(at: scoreP) {
-                            nNotePitSprolIs = scoreView.model.notes.enumerated().reduce(into: .init()) { (n, v) in
-                                let noteI = v.offset, note = v.element
-                                
-                                let toneFrames = scoreView.toneFrames(from: note)
-                                n[noteI] = toneFrames.reduce(into: .init()) { (v, tf) in
-                                    tf.pitIs.forEach { pitI in
-                                        let pit = note.pits[pitI]
-                                        for sprolI in pit.tone.spectlope.sprols.count.range {
-                                            if scoreRect.contains(scoreView.sprolPosition(atSprol: sprolI, atPit: pitI, at: noteI, atY: tf.frame.minY)) {
-                                                if v[pitI] != nil {
-                                                    v[pitI]?.insert(sprolI)
-                                                } else {
-                                                    v[pitI] = [sprolI]
-                                                }
+                        if let noteI = scoreView.noteIInTone(at: scoreP),
+                           scoreView.isEditTone(from: score.notes[noteI]) {
+                            let note = score.notes[noteI]
+                            let toneFrames = scoreView.toneFrames(from: note)
+                            nNotePitSprolIs = [noteI: toneFrames.reduce(into: .init()) { (v, tf) in
+                                tf.pitIs.forEach { pitI in
+                                    let pit = note.pits[pitI]
+                                    for sprolI in pit.tone.spectlope.sprols.count.range {
+                                        if scoreRect.contains(scoreView.sprolPosition(atSprol: sprolI, atPit: pitI, at: noteI, atY: tf.frame.minY)) {
+                                            if v[pitI] != nil {
+                                                v[pitI]?.insert(sprolI)
+                                            } else {
+                                                v[pitI] = [sprolI]
                                             }
                                         }
                                     }
                                 }
-                            }
+                            }]
                         } else {
                             let noteIs = (0 ..< scoreView.model.notes.count).filter {
                                 scoreView.intersectsNote(scoreRect, at: $0)
@@ -785,6 +783,7 @@ final class SelectAction: Action {
                                 }.reduce(into: .init()) { $0[$1] = [] }
                             }
                         }
+                        
                         if isUnselect {
                             let oNotePitSprolIs = capture.selectedNotePitSprolIs
                             sheetView.scoreView.selectedNotePitSprolIs

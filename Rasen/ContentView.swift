@@ -43,6 +43,8 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
     
     let clippingNode = Node(isHidden: true,
                             lineWidth: 4, lineType: .color(.warning))
+    let selectedNode = Node(lineWidth: 1, lineType: .color(.selected),
+                            fillType: .color(.subSelected))
     
     let timelineNode = Node()
     var spectrogramNode: Node?, spectrogramDeltaX = 0.0
@@ -51,25 +53,36 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
     var pcmTrackItem: PCMTrackItem?
     var volms = [Double]()
     
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            updateWithIsSelected()
+        }
+    }
+    func updateWithIsSelected() {
+        selectedNode.path = if isSelected,
+                               let f = model.imageFrame?.bounds { .init(f) } else { .init() }
+    }
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
         
         if let image = binder[keyPath: keyPath].image,
            let texture = try? Texture(image: image, isOpaque: false, .sRGB) {
-            node = Node(children: [timelineNode, clippingNode],
+            node = Node(children: [timelineNode, clippingNode, selectedNode],
                         attitude: Attitude(position: binder[keyPath: keyPath].origin),
                         path: Path(Rect(origin:binder[keyPath: keyPath].timeOption == nil ?
                             .init() : .init(0, Sheet.timelineHalfHeight + Sheet.timelineMargin),
                             size: binder[keyPath: keyPath].size)),
                         fillType: .texture(texture))
         } else if binder[keyPath: keyPath].type == .movie {
-            node = Node(children: [timelineNode, clippingNode],
+            node = Node(children: [timelineNode, clippingNode, selectedNode],
                         attitude: Attitude(position: binder[keyPath: keyPath].origin),
                         path: Path(Rect(origin: .init(0, Sheet.timelineHalfHeight + Sheet.timelineMargin),
                                         size: binder[keyPath: keyPath].size)))
         } else {
-            node = Node(children: [timelineNode, clippingNode],
+            node = Node(children: [timelineNode, clippingNode, selectedNode],
                         attitude: Attitude(position: binder[keyPath: keyPath].origin))
         }
         
@@ -88,6 +101,7 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
 }
 extension ContentView {
     func updateWithModel() {
+        node.attitude.position = model.origin
         if let image = model.image,
            let texture = try? Texture(image: image, isOpaque: false, .sRGB) {
             node.fillType = .texture(texture)
@@ -99,6 +113,7 @@ extension ContentView {
             pcmTrackItem?.change(from: timeOption)
             updateSpectrogram()
         }
+        updateWithIsSelected()
     }
     func updateClippingNode() {
         var parent: Node?

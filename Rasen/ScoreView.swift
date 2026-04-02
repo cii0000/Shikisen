@@ -251,6 +251,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     
     var selectedNotePitSprolIs = [Int: [Int: Set<Int>]]() {
         didSet {
+            guard selectedNotePitSprolIs != oldValue else { return }
             updateWithSelected(old: oldValue)
         }
     }
@@ -262,37 +263,44 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     }
     func updateWithSelected(old: [Int: [Int: Set<Int>]]) {
         guard !selectedNotePitSprolIs.isEmpty else {
-            
+            selectedsNode.children = []
             return
         }
         
         let score = model
+        var children = [Node]()
         for (noteI, pitSprols) in selectedNotePitSprolIs {
             let note = score.notes[noteI]
             
-            if !pitSprols.isEmpty {
-                let selectedNoteNode = Node(path: Path(noteLines[noteI].controls.map { $0.point }),
-                                            lineWidth: 1.5,
-                                            lineType: .color(.selected))
-            }
+            children.append(Node(path: Path(noteLines[noteI].controls.map { $0.point }),
+                                 lineWidth: 1.5,
+                                 lineType: .color(.selected.with(opacity: 0.75))))
             
-            var ps = [Point]()
-            for (pitIs, toneFrame) in toneFrames(from: note) {
-                for pitI in pitIs {
-                    if let sprolIs = pitSprols[pitI] {
-                        let pitP = pitPosition(atPit: pitI, from: note)
-                        ps.append(pitP)
-                        for sprolI in sprolIs {
-                            let sprolP = sprolPosition(atSprol: sprolI, atPit: pitI,
-                                                       from: note, atY: toneFrame.minY)
-                            ps.append(sprolP)
+            var pathlines = [Pathline]()
+            if note.isDefaultTone {
+                pitSprols.keys.forEach {
+                    let pitP = pitPosition(atPit: $0, from: note)
+                    pathlines.append(.init(circleRadius: 0.25 * 8, position: pitP))
+                }
+            } else {
+                for (pitIs, toneFrame) in toneFrames(from: note) {
+                    for pitI in pitIs {
+                        if let sprolIs = pitSprols[pitI] {
+                            let pitP = pitPosition(atPit: pitI, from: note)
+                            pathlines.append(.init(circleRadius: 0.25 * 8, position: pitP))
+                            for sprolI in sprolIs {
+                                let sprolP = sprolPosition(atSprol: sprolI, atPit: pitI,
+                                                           from: note, atY: toneFrame.minY)
+                                pathlines.append(.init(circleRadius: 0.125 * 2, position: sprolP))
+                            }
                         }
                     }
                 }
             }
-            0.25 * 8
-            0.125 * 2
+            children.append(Node(path: Path(pathlines),
+                                 fillType: .color(.selected)))
         }
+        selectedsNode.children = children
     }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
@@ -305,14 +313,15 @@ final class ScoreView: TimelineView, @unchecked Sendable {
                                chordNode,
                                timelineContentNode,
                                draftNotesNode, otherNotesNode, notesNode, pitsNode, tonesNode,
-                               clippingNode])
+                               clippingNode, selectedsNode])
         updateClippingNode()
         updateTimeline()
         updateDraftNotes()
         updateScore()
         
         if model.enabled {
-            scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate, isUpdateNotewaveDic: false)
+            scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate,
+                                   isUpdateNotewaveDic: false)
         }
         node.attitude.position.y = binder[keyPath: keyPath].timelineY
     }
@@ -549,7 +558,22 @@ extension ScoreView {
         scoreTrackItem?.insert(nivs, with: model)
     }
     func replace(_ nivs: [IndexValue<Note>]) {
-        nivs.forEach { selectedNotePitSprolIs[$0.index] = nil }
+        var isUpdate = false
+        nivs.forEach {
+            let noteI = $0.index
+            let newValue = $0.value, oldValue = unupdateModel.notes[noteI]
+            if newValue.pits.count != oldValue.pits.count {
+                selectedNotePitSprolIs[noteI] = nil
+            } else {
+                if zip(newValue.pits, oldValue.pits).contains(where: { (newPit, oldPit) in
+                    newPit.tone.spectlope.sprols.count != oldPit.tone.spectlope.sprols.count
+                }) {
+                    selectedNotePitSprolIs[noteI] = newValue.pits.count.range.reduce(into: .init()) { $0[$1] = [] }
+                } else {
+                    isUpdate = true
+                }
+            }
+        }
         
         unupdateModel.notes.replace(nivs)
         let vs = nivs.map { IndexValue(value: noteNode(from: $0.value), index: $0.index) }
@@ -565,6 +589,10 @@ extension ScoreView {
         noteLines.replace(seivs)
         updateChord()
         scoreTrackItem?.replace(nivs, with: model)
+        
+        if isUpdate {
+            updateWithSelected(old: selectedNotePitSprolIs)
+        }
     }
     func remove(at noteI: Int) {
         selectedNotePitSprolIs[noteI] = nil
@@ -595,7 +623,19 @@ extension ScoreView {
             unupdateModel.notes[noteI]
         }
         set {
-            selectedNotePitSprolIs[noteI] = nil
+            let oldValue = unupdateModel.notes[noteI]
+            var isUpdate = false
+            if newValue.pits.count != oldValue.pits.count {
+                selectedNotePitSprolIs[noteI] = nil
+            } else {
+                if zip(newValue.pits, oldValue.pits).contains(where: { (newPit, oldPit) in
+                    newPit.tone.spectlope.sprols.count != oldPit.tone.spectlope.sprols.count
+                }) {
+                    selectedNotePitSprolIs[noteI] = newValue.pits.count.range.reduce(into: .init()) { $0[$1] = [] }
+                } else {
+                    isUpdate = true
+                }
+            }
             
             unupdateModel.notes[noteI] = newValue
             let (noteNode, toneNode, reverbNode, noteLine) = noteNode(from: newValue)
@@ -606,6 +646,10 @@ extension ScoreView {
             noteLines[noteI] = noteLine
             updateChord()
             scoreTrackItem?.replace([.init(value: newValue, index: noteI)], with: model)
+            
+            if isUpdate {
+                updateWithSelected(old: selectedNotePitSprolIs)
+            }
         }
     }
     
@@ -1908,6 +1952,11 @@ extension ScoreView {
         }
     }
     
+    func isEditTone(from note: Note) -> Bool {
+        let isMinSpectlopeHeight = note.spectlopeHeight == Sheet.spectlopeHeight
+        return isMinSpectlopeHeight ? isFullEdit : isEditTone
+    }
+    
     func contains(_ p : Point, scale: Double) -> Bool {
         model.enabled
         && (containsTimeline(p, scale: scale)
@@ -2047,6 +2096,12 @@ extension ScoreView {
         var isPit: Bool {
             switch self {
             case .pit, .lyric: true
+            default: false
+            }
+        }
+        var isNote: Bool {
+            switch self {
+            case .note: true
             default: false
             }
         }
@@ -2664,6 +2719,14 @@ extension ScoreView {
             }
         }
         return minPitI
+    }
+    func noteIInTone(at p: Point) -> Int? {
+        for (i, note) in model.notes.enumerated() {
+            if toneFrames(from: note).contains(where: { $0.frame.contains(p) }) {
+                return i
+            }
+        }
+        return nil
     }
     func containsTone(at p: Point) -> Bool {
         for note in model.notes {

@@ -156,7 +156,7 @@ extension TextValue: Protobuf {
 
 struct SheetValue {
     var lines = [Line](), planes = [Plane](),
-        texts = [Text](), origin = Point()
+        texts = [Text](), contents = [Content](), origin = Point()
     var id = UUID(), rootKeyframeIndex = 0
     var keyframes = [Keyframe]()
     var keyframeBeganIndex = 0
@@ -187,6 +187,7 @@ extension SheetValue: Protobuf {
         lines = try pb.lines.map { try Line($0) }
         planes = try pb.planes.map { try Plane($0) }
         texts = try pb.texts.map { try Text($0) }
+        contents = try pb.contents.map { try Content($0) }
         origin = try Point(pb.origin)
         id = try UUID(pb.id)
         rootKeyframeIndex = Int(pb.rootKeyframeIndex)
@@ -199,6 +200,7 @@ extension SheetValue: Protobuf {
             $0.lines = lines.map { $0.pb }
             $0.planes = planes.map { $0.pb }
             $0.texts = texts.map { $0.pb }
+            $0.contents = contents.map { $0.pb }
             $0.origin = origin.pb
             $0.id = id.pb
             $0.rootKeyframeIndex = Int64(rootKeyframeIndex)
@@ -213,6 +215,7 @@ extension SheetValue: AppliableTransform {
         SheetValue(lines: lhs.lines.map { $0 * rhs },
                    planes: lhs.planes.map { $0 * rhs },
                    texts: lhs.texts.map { $0 * rhs },
+                   contents: lhs.contents.map { $0 * rhs },
                    origin: lhs.origin,
                    id: lhs.id,
                    rootKeyframeIndex: lhs.rootKeyframeIndex,
@@ -228,6 +231,7 @@ extension SheetValue {
         SheetValue(lines: lhs.lines + rhs.lines,
                    planes: lhs.planes + rhs.planes,
                    texts: lhs.texts + rhs.texts,
+                   contents: lhs.contents + rhs.contents,
                    origin: lhs.origin,
                    id: lhs.id == rhs.id ? lhs.id : UUID(),
                    rootKeyframeIndex: lhs.rootKeyframeIndex,
@@ -238,6 +242,7 @@ extension SheetValue {
         lhs.lines += rhs.lines
         lhs.planes += rhs.planes
         lhs.texts += rhs.texts
+        lhs.contents += rhs.contents
         lhs.keyframeBeganIndex += rhs.keyframeBeganIndex
         if lhs.id != rhs.id {
             lhs.id = UUID()
@@ -2353,7 +2358,7 @@ extension Sheet {
     static let knobWidth = 2.0, knobHeight = 12.0, rulerHeight = 4.0
     static let knobEditDistance = 20.0
     static let noteEditDistance = 50.0
-    static let moveKnobEditDistance = 5.0
+    static let moveKnobEditDistance = 8.0
     static let timelineY = 18.0
     static let pitchHeight = 5.375
     static let noteHeight = 1.75

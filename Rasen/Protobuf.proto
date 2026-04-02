@@ -469,6 +469,7 @@ message PBSheetValue {
     repeated PBLine lines = 1;
     repeated PBPlane planes = 2;
     repeated PBText texts = 3;
+    repeated PBContent contents = 9;
     PBPoint origin = 4;
     PBUUID id = 5;
     int64 rootKeyframeIndex = 6;

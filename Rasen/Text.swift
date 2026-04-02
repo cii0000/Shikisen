@@ -151,6 +151,10 @@ extension String {
         return s
     }
     
+    var allRange: Range<Index> {
+        startIndex ..< endIndex
+    }
+    
     var toSuperscript: String {
         String(compactMap { $0.toSuperscript })
     }
