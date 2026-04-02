@@ -1142,6 +1142,11 @@ final class InterpolateAction: InputKeyEventAction {
                     lis = sheetView.keyframeView.selectedLineIs
                     nKI = sheetView.model.animation.index
                     nRootKI = sheetView.model.animation.rootIndex
+                } else if let (_, li) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
+                                                            scale: rootView.screenToWorldScale) {
+                    lis = [li]
+                    nKI = sheetView.model.animation.index
+                    nRootKI = sheetView.model.animation.rootIndex
                 } else {
                     lis = []
                     nKI = 0

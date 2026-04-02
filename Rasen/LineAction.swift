@@ -89,7 +89,7 @@ final class LineAction: Action {
     
     private(set) var tempLineNode: Node?
     var tempLineWidth = Line.defaultLineWidth
-    var lassoDistance = 3.0
+    var lassoDistance = 5.0
     
     var isSnapStraight = false {
         didSet {
@@ -521,20 +521,20 @@ final class LineAction: Action {
     }
     
     nonisolated
-    private static func snap(_ fol: FirstOrLast, _ line: Line,
-                             isSnapSelf: Bool = true,
-                             screenToWorldScale: Double,
-                             from lines: [Line]) -> Line.Control? {
+    static func snap(_ fol: FirstOrLast, _ line: Line,
+                     isSnapSelf: Bool = true,
+                     screenToWorldScale: Double,
+                     from lines: [Line]) -> Line.Control? {
         snap(line.controls[fol],
              isSnapSelf && line.length() > line.size * 2 ? line.controls[fol.reversed] : nil,
              size: line.size * line.controls[fol].pressure,
              screenToWorldScale: screenToWorldScale, from: lines)
     }
     nonisolated
-    private static func snap(_ c: Line.Control, _ nc: Line.Control?,
-                             size: Double, paddingD: Double = 0.5,
-                             screenToWorldScale: Double,
-                             from lines: [Line]) -> Line.Control? {
+    static func snap(_ c: Line.Control, _ nc: Line.Control?,
+                     size: Double, paddingD: Double = 0.5,
+                     screenToWorldScale: Double,
+                     from lines: [Line]) -> Line.Control? {
         let dd = size / 2
         let wPaddingD = screenToWorldScale * paddingD
         var minDSQ = Double.infinity, minP: Line.Control?

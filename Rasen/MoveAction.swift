@@ -2367,10 +2367,20 @@ final class MoveLineAction: DragEventAction {
     }
     
     private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0
-    private var beganLine = Line(), beganMainP = Point(), beganSheetP = Point(), isPressure = false
-    private var pressures = [(time: Double, pressure: Double)]()
+    private var beganLine = Line(), beganMainP = Point(), beganSheetP = Point(),
+                lastSnapTime: Double?, snapP = Point(), snapDP = Point()
+    let snappableDistance = 2.0
     private var node = Node()
     private var type = MoveType.point
+    
+    var isSnapped = true {
+        didSet {
+            guard isSnapped != oldValue else { return }
+            if isSnapped {
+                Feedback.performAlignment()
+            }
+        }
+    }
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -2410,9 +2420,22 @@ final class MoveLineAction: DragEventAction {
                             .all
                         }
                         
-                        let pressure = event.pressure
-                            .clipped(min: 0.4, max: 1, newMin: 0, newMax: 1)
-                        pressures.append((event.time, pressure))
+                        if type != .all {
+                            var lines = sheetView.keyframeView.linesView.model
+                            lines.remove(at: lineIndex)
+                            
+                            let nnp = pointIndex == 0 || pointIndex == beganLine.mainPointCount - 1 ?
+                            LineAction.snap(pointIndex == 0 ? .first : .last, beganLine,
+                                            isSnapSelf: true,
+                                            screenToWorldScale: rootView.screenToWorldScale,
+                                            from: lines)?.point :
+                            nil
+                            if nnp != nil {
+                                lastSnapTime = event.time
+                                snapP = nnp!
+                                isSnapped = false
+                            }
+                        }
                         
                         if type == .point {
                             node.children = beganLine.mainPointSequence.flatMap {
@@ -2453,37 +2476,100 @@ final class MoveLineAction: DragEventAction {
                             let op = sheetP - beganSheetP + beganMainP
                             let np = line.mainPoint(withMainCenterPoint: op,
                                                     at: pointIndex)
-                            let pressure = event.pressure
-                                .clipped(min: 0.4, max: 1, newMin: 0, newMax: 1)
-                            pressures.append((event.time, pressure))
                             
-                            line.controls[pointIndex].point = np
-                            line.controls[pointIndex].weight = 0.5
+                            var lines = sheetView.keyframeView.linesView.model
+                            lines.remove(at: lineIndex)
                             
-                            if isPressure || (!isPressure && (event.time - (pressures.first?.time ?? 0) > 1 && (pressures.allSatisfy { $0.pressure <= 0.5 }))) {
-                                isPressure = true
-                                
-                                let nPressures = pressures
-                                    .filter { (0.04 ..< 0.4).contains(event.time - $0.time) }
-                                let nPressure = nPressures.mean { $0.pressure } ?? pressures.first!.pressure
-                                line.controls[pointIndex].pressure = nPressure
+                            var nLine = line
+                            nLine.controls[pointIndex].point = np - snapDP
+                            nLine.controls[pointIndex].weight = 0.5
+                            
+                            let nnp = pointIndex == 0 || pointIndex == nLine.mainPointCount - 1 ?
+                            LineAction.snap(pointIndex == 0 ? .first : .last, nLine,
+                                            isSnapSelf: true,
+                                            screenToWorldScale: rootView.screenToWorldScale,
+                                            from: lines)?.point :
+                            nil
+                            
+                            if nnp != nil {
+                                if let lastSnapTime = lastSnapTime {
+                                    if event.time - lastSnapTime > 1 {
+                                        if isSnapped {
+                                            snapDP = np - nnp!
+                                        }
+                                        isSnapped = false
+                                    }
+                                } else {
+                                    if !isSnapped {
+                                        lastSnapTime = event.time
+                                        snapP = nnp!
+                                    }
+                                    isSnapped = true
+                                }
+                            } else {
+                                lastSnapTime = nil
+                                isSnapped = false
                             }
                             
+                            line.controls[pointIndex].point = isSnapped ? snapP : np - snapDP
+                            line.controls[pointIndex].weight = 0.5
                             lineView.model = line
                             
-                            node.children = line.mainPointSequence.flatMap {
-                                let p = sheetView.convertToWorld($0)
+                            node.children = line.mainPointSequence.enumerated().flatMap {
+                                let p = sheetView.convertToWorld($0.element)
                                 return [Node(path: .init(circleRadius: 0.35 * 1.5 * line.size, position: p),
                                              fillType: .color(.content)),
                                         Node(path: .init(circleRadius: 0.35 * line.size, position: p),
-                                             fillType: .color(.background))]
+                                             fillType: .color(isSnapped && $0.offset == pointIndex ? .selected : .background))]
                             }
                         }
                     case .warp:
                         var line = beganLine
                         let sheetP = sheetView.convertFromWorld(p)
-                        let dp = sheetP - beganSheetP
+                        var dp = sheetP - beganSheetP
+                        let np = pointIndex == 0 ? line.firstPoint + dp : (pointIndex == line.mainPointCount - 1 ? line.lastPoint + dp : nil)
+                        var lines = sheetView.keyframeView.linesView.model
+                        lines.remove(at: lineIndex)
+                        
+                        if let np {
+                            let nLine = line.warpedWith(deltaPoint: dp - snapDP, at: pointIndex)
+                            let nnp = pointIndex == 0 || pointIndex == line.mainPointCount - 1 ?
+                            LineAction.snap(pointIndex == 0 ? .first : .last, nLine,
+                                            isSnapSelf: true,
+                                            screenToWorldScale: rootView.screenToWorldScale,
+                                            from: lines)?.point :
+                            nil
+                            
+                            if nnp != nil {
+                                if let lastSnapTime = lastSnapTime {
+                                    if event.time - lastSnapTime > 1 {
+                                        if isSnapped {
+                                            snapDP = np - nnp!
+                                        }
+                                        isSnapped = false
+                                    }
+                                } else {
+                                    if !isSnapped {
+                                        lastSnapTime = event.time
+                                        snapP = nnp!
+                                    }
+                                    isSnapped = true
+                                }
+                            } else {
+                                lastSnapTime = nil
+                                isSnapped = false
+                            }
+                            
+                            let nnnp = isSnapped ? snapP : np - snapDP
+                            if pointIndex == 0 {
+                                dp = nnnp - line.firstPoint
+                            } else {
+                                dp = nnnp - line.lastPoint
+                            }
+                        }
+                        
                         line = line.warpedWith(deltaPoint: dp, at: pointIndex)
+                        
                         lineView.model = line
                     case .all:
                         var line = beganLine

@@ -1765,7 +1765,7 @@ final class PastableAction: Action {
                 textNode: Node?, imageNode: Node?, textFrame: Rect?, textScale = 1.0,
                 filledSheetViews = [UUID: SheetView](), beganTime = 0.0
     let enableUUColorTime = 0.3
-    var snapDistance = 2.0
+    var snapDistance = 4.0
     private var notePlayer: NotePlayer?, playerBeatNoteIndexes = [Int](),
                 oldPitch: Rational?, oldBeat: Rational?
     
@@ -1866,7 +1866,7 @@ final class PastableAction: Action {
                 
                 if nSnapP != oldSnapP {
                     if let nSnapP {
-                        selectingLineNode.children[3].path = Path(circleRadius: isSnapped ? 5 : 3)
+                        selectingLineNode.children[3].path = Path(circleRadius: isSnapped ? 6 : 4)
                         selectingLineNode.children[3].attitude = Attitude(position: nSnapP, scale: Size(square: rootView.screenToWorldScale))
                     } else {
                         selectingLineNode.children[3].path = Path()
