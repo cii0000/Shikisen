@@ -3801,11 +3801,13 @@ final class CutLinePointAction: InputKeyEventAction {
                     sheetView.removeLines(at: [li])
                     sheetView.insert([.init(value: line, index: li)])
                     
-                    node.children = line.mainPointSequence.flatMap {
-                        let p = sheetView.convertToWorld($0)
-                        return [Node(path: .init(circleRadius: 0.35 * 1.5 * line.size, position: p),
+                    node.children = line.mainControlSequence.flatMap {
+                        let p = sheetView.convertToWorld($0.point)
+                        return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
                                      fillType: .color(.content)),
-                                Node(path: .init(circleRadius: 0.35 * line.size, position: p),
+                                Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
                                      fillType: .color(.background))]
                     }
                 }

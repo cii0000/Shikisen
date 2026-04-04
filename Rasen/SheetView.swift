@@ -229,6 +229,15 @@ final class KeyframeView: BindableView, @unchecked Sendable {
         }
     }
     
+    func showSelected() {
+        linesView.elementViews.forEach { $0.isHiddenSeleted = false }
+        planesView.elementViews.forEach { $0.isHiddenSeleted = false }
+    }
+    func hideSelected() {
+        linesView.elementViews.forEach { $0.isHiddenSeleted = true }
+        planesView.elementViews.forEach { $0.isHiddenSeleted = true }
+    }
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
@@ -2298,8 +2307,10 @@ final class SheetView: BindableView, @unchecked Sendable {
                     if let i {
                         if bottomSheetView.playingOldKeyframeIndex != i {
                             if si < bottomNodes.count {
+                                bottomSheetView.animationView.elementViews[i].hideSelected()
                                 bottomNodes[si]
                                 = bottomSheetView.animationView.elementViews[i].node.clone
+                                bottomSheetView.animationView.elementViews[i].showSelected()
                             }
                             bottomSheetView.playingOldKeyframeIndex = i
                         }
@@ -2317,7 +2328,9 @@ final class SheetView: BindableView, @unchecked Sendable {
             if let i {
                 if playingOldKeyframeIndex != i {
                     let node = sheetView.animationView.elementViews[i].node
-                    centerNode = playingSheetIndex == 0 ? node : node.clone
+                    sheetView.animationView.elementViews[i].hideSelected()
+                    centerNode = node.clone
+                    sheetView.animationView.elementViews[i].showSelected()
                     playingOldKeyframeIndex = i
                 }
             } else {
@@ -2336,8 +2349,10 @@ final class SheetView: BindableView, @unchecked Sendable {
                     if let i {
                         if topSheetView.playingOldKeyframeIndex != i {
                             if si < topNodes.count {
+                                topSheetView.animationView.elementViews[i].hideSelected()
                                 topNodes[si]
                                 = topSheetView.animationView.elementViews[i].node.clone
+                                topSheetView.animationView.elementViews[i].showSelected()
                             }
                             topSheetView.playingOldKeyframeIndex = i
                         }
@@ -7435,12 +7450,10 @@ final class SheetColorOwner {
     }
     
     func showSelected() {
-        sheetView.keyframeView.linesView.elementViews.forEach { $0.isHiddenSeleted = false }
-        sheetView.keyframeView.planesView.elementViews.forEach { $0.isHiddenSeleted = false }
+        sheetView.keyframeView.showSelected()
     }
     func hideSelected() {
-        sheetView.keyframeView.linesView.elementViews.forEach { $0.isHiddenSeleted = true }
-        sheetView.keyframeView.planesView.elementViews.forEach { $0.isHiddenSeleted = true }
+        sheetView.keyframeView.hideSelected()
     }
     
     init(sheetView: SheetView, colorValue: ColorValue) {

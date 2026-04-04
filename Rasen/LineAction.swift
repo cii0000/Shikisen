@@ -91,6 +91,8 @@ final class LineAction: Action {
     var tempLineWidth = Line.defaultLineWidth
     var lassoDistance = 5.0
     
+    var enabledPressure = true
+    
     var isSnapStraight = false {
         didSet {
             guard isSnapStraight != oldValue else { return }
@@ -511,13 +513,13 @@ final class LineAction: Action {
         drawLine(with: event, isStraight: true)
     }
     
-    
     nonisolated
-    private static func revision(pressure: Double,
-                                 minPressure: Double = 0.175,
-                                 maxPressure: Double = 0.1875,
+    private static func revision(pressure: Double, tiltAngle: Double,
+                                 mainPressure: Double = 0.325,
                                  revisonMinPressure: Double = 0.1875) -> Double {
-        pressure.clipped(min: minPressure, max: maxPressure, newMin: revisonMinPressure, newMax: 1)
+        ((pressure / mainPressure) * tiltAngle.clipped(min: .pi * 0.25, max: .pi * 0.35,
+                                                       newMin: 1, newMax: 0))
+        .clipped(min: revisonMinPressure, max: 1)
     }
     
     nonisolated
@@ -560,23 +562,25 @@ final class LineAction: Action {
     
     nonisolated
     static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true,
+                     isClip: Bool = true, enabledPressure: Bool,
                      isSnap: Bool = true,
                      firstSnapLines: [Line], lastSnapLines: [Line],
                      clipBounds: Rect, isStraight: Bool) -> (line: Line, isSnapStraight: Bool) {
         isStraight ?
         straightLine(from: events, isClip: isClip, isSnap: isSnap,
+                     enabledPressure: enabledPressure,
                      firstSnapLines: firstSnapLines,
                      lastSnapLines: lastSnapLines,
                      clipBounds: clipBounds) :
         (line(from: events, isClip: isClip, isSnap: isSnap,
+              enabledPressure: enabledPressure,
              firstSnapLines: firstSnapLines,
              lastSnapLines: lastSnapLines,
              clipBounds: clipBounds), false)
     }
     nonisolated
     static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true, isSnap: Bool = true,
+                     isClip: Bool = true, isSnap: Bool = true, enabledPressure: Bool,
                      lineWidth: Double = Line.defaultLineWidth,
                      firstSnapLines: [Line], lastSnapLines: [Line],
                      clipBounds: Rect) -> Line {
@@ -590,12 +594,12 @@ final class LineAction: Action {
             switch event.phase {
             case .began:
                 var p = RootView.roundedPoint(from: event.p, scale: event.worldToScreenScale)
-                let pressure = revision(pressure: event.pressure).rounded(decimalPlaces: 2)
-                
                 if isClip {
                     p = clipBounds.clipped(p)
                 }
                 
+                let pressure = enabledPressure && event.isTablet ?
+                revision(pressure: event.pressure, tiltAngle: event.tiltAngle) : 1
                 if isSnap, let nc = snap(.init(point: p, weight: 0.5, pressure: pressure), nil,
                                          size: lineWidth,
                                          screenToWorldScale: event.screenToWorldScale,
@@ -610,10 +614,10 @@ final class LineAction: Action {
                 oldC = fc
                 oldTime = event.time
                 tempPs = [fc.point]
-                tempPresures = [(event.time, pressure)]
             case .changed:
                 var p = RootView.roundedPoint(from: event.p, scale: event.worldToScreenScale)
-                let pressure = revision(pressure: event.pressure).rounded(decimalPlaces: 2)
+                let pressure = enabledPressure && event.isTablet ?
+                revision(pressure: event.pressure, tiltAngle: event.tiltAngle) : 1
                 
                 if isClip {
                     p = clipBounds.clipped(p)
@@ -636,32 +640,35 @@ final class LineAction: Action {
                         && nLine.controls.count >= 4 else { break }
                 tempPs.append(p)
                 
-                func revisionFirstPressure() {
-                    if !isStopRevisionFirstPressure {
-                        if nLine.controls[.first].pressure < pressure {
-                            for i in nLine.controls.count.range {
-                                nLine.controls[i].pressure = pressure
+                if enabledPressure {
+                    func revisionFirstPressure() {
+                        if !isStopRevisionFirstPressure {
+                            if nLine.controls[.first].pressure < pressure {
+                                for i in nLine.controls.count.range {
+                                    nLine.controls[i].pressure = pressure
+                                }
+                                for i in tempPresures.count.range {
+                                    tempPresures[i].pressure = pressure
+                                }
                             }
-                            for i in tempPresures.count.range {
-                                tempPresures[i].pressure = pressure
+                            if event.time - firstChangedTime > 0.1 {
+                                 isStopRevisionFirstPressure = true
                             }
                         }
-                        if event.time - firstChangedTime > 0.1 {
-                             isStopRevisionFirstPressure = true
+                    }
+                    revisionFirstPressure()
+                    
+                    tempPresures.append((event.time, pressure))
+                    for ti in (1 ..< tempPresures.count).reversed() {
+                        if event.time - tempPresures[ti].time > 0.04 {
+                            tempPresures.removeFirst(ti - 1)
+                            break
                         }
                     }
                 }
-                revisionFirstPressure()
                 
-                tempPresures.append((event.time, pressure))
-                for ti in (1 ..< tempPresures.count).reversed() {
-                    if event.time - tempPresures[ti].time > 0.04 {
-                        tempPresures.removeFirst(ti - 1)
-                        break
-                    }
-                }
                 let lastC = Line.Control(point: p, weight: 0.5,
-                                         pressure: tempPresures.first?.pressure ?? pressure)
+                                         pressure: enabledPressure ? (tempPresures.first?.pressure ?? pressure) : 1)
                 
                 func revisionFirstBezier() {
                     if nLine.controls.count == 4, tempPs.count >= 2 {
@@ -807,6 +814,7 @@ final class LineAction: Action {
     static func straightLine(from events: [DrawLineEvent],
                              isClip: Bool = true, isSnap: Bool = true,
                              lineWidth: Double = Line.defaultLineWidth,
+                             enabledPressure: Bool,
                              snappableDistance: Double = 2.5,
                              firstSnapLines: [Line], lastSnapLines: [Line],
                              clipBounds: Rect) -> (line: Line, snapStraight: Bool) {
@@ -815,13 +823,15 @@ final class LineAction: Action {
         var prs = [(time: Double, pressure: Double)]()
         var isSnapStraight = false, lastSnapStraightTime: Double?, nsd = Point()
         
-        func drawLine(for p: Point, sp: Point, pressure: Double, isTablet: Bool,
+        func drawLine(for p: Point, sp: Point, pressure: Double, tiltAngle: Double,
+                      isTablet: Bool,
                       time: Double,
                       worldToScreenScale: Double,
                       screenToWorldScale: Double,
                       _ phase: Phase) {
             var p = RootView.roundedPoint(from: p, scale: worldToScreenScale)
-            let pressure = Self.revision(pressure: pressure).rounded(decimalPlaces: 2)
+            let pressure = enabledPressure && isTablet ? revision(pressure: pressure,
+                                                                  tiltAngle: tiltAngle) : 1
             
             switch phase {
             case .began:
@@ -845,11 +855,13 @@ final class LineAction: Action {
                 }
                 guard p != oldPoint else { return }
                 
-                prs.append((time, pressure))
-                
-                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
-                nLine.controls[.first].pressure = nPressure
-                nLine.controls[.last].pressure = nPressure
+                if enabledPressure {
+                    prs.append((time, pressure))
+                    
+                    let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
+                    nLine.controls[.first].pressure = nPressure
+                    nLine.controls[.last].pressure = nPressure
+                }
                 
                 nLine.controls[.last].point = p
                 
@@ -894,9 +906,11 @@ final class LineAction: Action {
                 
                 oldPoint = p
             case .ended:
-                let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
-                nLine.controls[.first].pressure = nPressure
-                nLine.controls[.last].pressure = nPressure
+                if enabledPressure {
+                    let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
+                    nLine.controls[.first].pressure = nPressure
+                    nLine.controls[.last].pressure = nPressure
+                }
                 
                 if isSnap, let nc = Self.snap(.last, nLine, isSnapSelf: false,
                                               screenToWorldScale: screenToWorldScale,
@@ -907,7 +921,9 @@ final class LineAction: Action {
         }
         
         for event in events {
-            drawLine(for: event.p, sp: event.sp, pressure: event.pressure, isTablet: event.isTablet,
+            drawLine(for: event.p, sp: event.sp,
+                     pressure: event.pressure, tiltAngle: event.tiltAngle,
+                     isTablet: event.isTablet,
                      time: event.time,
                      worldToScreenScale: event.worldToScreenScale,
                      screenToWorldScale: event.screenToWorldScale,
@@ -917,7 +933,7 @@ final class LineAction: Action {
         return (nLine, isSnapStraight)
     }
     struct DrawLineEvent {
-        var p: Point, sp: Point, pressure: Double, isTablet: Bool,
+        var p: Point, sp: Point, pressure: Double, tiltAngle: Double, isTablet: Bool,
             time: Double, isClip: Bool = true, isSnap: Bool = true,
             worldToScreenScale: Double, screenToWorldScale: Double,
             phase: Phase
@@ -955,7 +971,9 @@ final class LineAction: Action {
             }
             
             drawLineEvents.append(.init(p: p - centerOrigin,
-                                        sp: event.screenPoint, pressure: event.pressure,
+                                        sp: event.screenPoint,
+                                        pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         worldToScreenScale: rootView.worldToScreenScale,
@@ -968,6 +986,7 @@ final class LineAction: Action {
                 rootView.node.insert(child: isStraightNode,
                                          at: rootView.accessoryNodeIndex + 1)
                 let (tempLine, _) = Self.line(from: drawLineEvents,
+                                              enabledPressure: enabledPressure,
                                               firstSnapLines: snapLines,
                                               lastSnapLines: snapLines,
                                               clipBounds: clipBounds,
@@ -982,10 +1001,12 @@ final class LineAction: Action {
                     guard self.drawLineEvents.count != self.oldDrawLineEventsCount else { return }
                     let events = self.drawLineEvents
                     self.oldDrawLineEventsCount = events.count
-                    let snapLines = self.snapLines, clipBounds = self.clipBounds
+                    let snapLines = self.snapLines, clipBounds = self.clipBounds,
+                        enabledPressure = self.enabledPressure
                     
                     DispatchQueue.global().async { [weak self] in
                         let (tempLine, isSnapStraight) = Self.line(from: events,
+                                                                   enabledPressure: enabledPressure,
                                                                    firstSnapLines: snapLines,
                                                                    lastSnapLines: snapLines,
                                                                    clipBounds: clipBounds,
@@ -1008,7 +1029,9 @@ final class LineAction: Action {
             break
         case .changed:
             drawLineEvents.append(.init(p: p - centerOrigin,
-                                        sp: event.screenPoint, pressure: event.pressure,
+                                        sp: event.screenPoint,
+                                        pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         worldToScreenScale: rootView.worldToScreenScale,
@@ -1020,13 +1043,16 @@ final class LineAction: Action {
             drawLineTimer?.cancel()
             
             drawLineEvents.append(.init(p: p - centerOrigin,
-                                        sp: event.screenPoint, pressure: event.pressure,
+                                        sp: event.screenPoint,
+                                        pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         worldToScreenScale: rootView.worldToScreenScale,
                                         screenToWorldScale: rootView.screenToWorldScale,
                                         phase: .ended))
             let tempLine = Self.line(from: drawLineEvents,
+                                     enabledPressure: enabledPressure,
                                      firstSnapLines: snapLines,
                                      lastSnapLines: snapLines,
                                      clipBounds: clipBounds,
@@ -1161,6 +1187,7 @@ final class LineAction: Action {
             drawLineEvents.append(.init(p: p - centerOrigin,
                                         sp: event.screenPoint,
                                         pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         isClip: isEditingSheet,
@@ -1178,10 +1205,13 @@ final class LineAction: Action {
                     guard self.drawLineEvents.count != self.oldDrawLineEventsCount else { return }
                     let events = self.drawLineEvents
                     self.oldDrawLineEventsCount = events.count
-                    let snapLines = self.snapLines, clipBounds = self.clipBounds
+                    let snapLines = self.snapLines, clipBounds = self.clipBounds,
+                        enabledPressure = self.enabledPressure
                     DispatchQueue.global().async { [weak self] in
                         let (tempLine, _) = Self.line(from: events,
                                                       isClip: false,
+                                                      enabledPressure: enabledPressure,
+                                                      isSnap: false,
                                                       firstSnapLines: snapLines,
                                                       lastSnapLines: snapLines,
                                                       clipBounds: clipBounds,
@@ -1209,6 +1239,7 @@ final class LineAction: Action {
             drawLineEvents.append(.init(p: p - centerOrigin,
                                         sp: event.screenPoint,
                                         pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         isClip: isEditingSheet,
@@ -1224,6 +1255,7 @@ final class LineAction: Action {
             drawLineEvents.append(.init(p: p - centerOrigin,
                                         sp: event.screenPoint,
                                         pressure: event.pressure,
+                                        tiltAngle: event.tiltAngle,
                                         isTablet: event.isTablet,
                                         time: event.time,
                                         isClip: isEditingSheet,
@@ -1234,6 +1266,8 @@ final class LineAction: Action {
             
             tempLine = Self.line(from: drawLineEvents,
                                  isClip: false,
+                                 enabledPressure: enabledPressure,
+                                 isSnap: false,
                                  firstSnapLines: snapLines,
                                  lastSnapLines: snapLines,
                                  clipBounds: clipBounds,

@@ -235,6 +235,7 @@ final class ColorAction: Action {
         if let (uuColor, owners) = rootView.madeColorOwnersWithSelection(at: p) {
             self.beganMainUUColor = uuColor
             self.colorOwners = owners
+            rootView.hideSelected()
             colorOwners.forEach { $0.hideSelected() }
         } else {
             self.colorOwners = []
@@ -1527,6 +1528,7 @@ final class ColorAction: Action {
             editingLightness = lightness
         case .ended:
             capture()
+            rootView.showSelected()
             colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingLightness = false
@@ -1718,6 +1720,7 @@ final class ColorAction: Action {
                                              uuColor.value.hue).rectangular
         case .ended:
             capture()
+            rootView.showSelected()
             colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingTint = false
@@ -1800,6 +1803,7 @@ final class ColorAction: Action {
             editingLightness = opacity
         case .ended:
             capture()
+            rootView.showSelected()
             colorOwners.forEach { $0.showSelected() }
             colorOwners = []
             isEditingLightness = false

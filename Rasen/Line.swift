@@ -1264,6 +1264,9 @@ extension Line {
     func size(at liv: LineIndexValue) -> Double {
         size * pressureInterpolation(at: liv.index).position(withT: liv.t)
     }
+    func size(atMain i: Int) -> Double {
+        size * mainPressure(at: i)
+    }
     
     struct BezierSequence: Sequence, IteratorProtocol {
         private let controls: [Line.Control]
@@ -1614,6 +1617,40 @@ extension Line {
         MainPointSequence(controls)
     }
     
+    struct MainControlSequence: Sequence, IteratorProtocol {
+        private let line: Line
+        private var bezierSequence: BezierSequence
+        let underestimatedCount: Int
+        
+        private var i = 0
+        mutating func next() -> Line.Control? {
+            if i == 0 {
+                i += 1
+                return line.controls.first
+            } else if i < line.controls.count - 1 {
+                let pi = line.pressureInterpolation(at: i - 1)
+                i += 1
+                return .init(point: bezierSequence.next()?.position(withT: 0.5) ?? .init(),
+                             weight: 0.5,
+                             pressure: pi.position(withT: 0.5))
+            } else if i == line.controls.count - 1 {
+                i += 1
+                return line.controls.last
+            } else {
+                return nil
+            }
+        }
+        
+        init(_ line: Line) {
+            self.line = line
+            bezierSequence = BezierSequence(line.controls)
+            underestimatedCount = line.controls.count
+        }
+    }
+    var mainControlSequence: MainControlSequence {
+        MainControlSequence(self)
+    }
+    
     var maxPressure: Double {
         controls.max(by: { $0.pressure < $1.pressure })?.pressure ?? 0
     }
@@ -1628,6 +1665,15 @@ extension Line {
             return controls[controls.count - 1].point
         } else {
             return bezier(at: i - 1).position(withT: 0.5)
+        }
+    }
+    func mainPressure(at i: Int) -> Double {
+        if i == 0 {
+            return controls[0].pressure
+        } else if i == controls.count - 1 {
+            return controls[controls.count - 1].pressure
+        } else {
+            return pressureInterpolation(at: i - 1).position(withT: 0.5)
         }
     }
     func mainPoint(withMainCenterPoint xp: Point, at i: Int) -> Point {

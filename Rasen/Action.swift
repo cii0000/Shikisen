@@ -390,6 +390,7 @@ final class RootAction: Action {
             for (_, v) in rootView.sheetViewValues {
                 v.sheetView?.stop()
             }
+            rootView.showSelected()
         case .changed:
             break
         case .ended:

@@ -1491,12 +1491,13 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     func dragEventWith(indicate nsEvent: NSEvent) -> DragEvent {
         DragEvent(screenPoint: screenPoint(with: nsEvent).my,
                   time: nsEvent.timestamp,
-                  pressure: 1, isTablet: nsEvent.subtype == .tabletPoint, phase: .changed)
+                  pressure: 1, tilt: nsEvent.tilt.my,
+                  isTablet: nsEvent.subtype == .tabletPoint, phase: .changed)
     }
     func dragEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> DragEvent {
         DragEvent(screenPoint: screenPoint(with: nsEvent).my,
                   time: nsEvent.timestamp,
-                  pressure: Double(nsEvent.pressure),
+                  pressure: Double(nsEvent.pressure), tilt: nsEvent.tilt.my,
                   isTablet: nsEvent.subtype == .tabletPoint, phase: phase)
     }
     func pinchEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> PinchEvent {
@@ -1637,7 +1638,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     
-    var enableFirstPressure: Float = 0.0625
+    var enableFirstPressure: Float = 0.0
     
     private var beganDragEvent: DragEvent?,
                 oldPressureStage = 0, isDrag = false, isStrongDrag = false,
@@ -1660,7 +1661,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         isMovedDrag = true
         maxPressure = max(maxPressure, nsEvent.pressure)
         if !isDrag {
-            guard nsEvent.pressure > enableFirstPressure else {
+            guard nsEvent.pressure >= enableFirstPressure else {
                 beganDragEvent = dragEventWith(nsEvent, .began)
                 if beganDragEvent.time - firstTime < 0.02 {
                     beganDragEvent.screenPoint = firstP
@@ -3581,7 +3582,7 @@ final class SubNSButton: NSButton {
     func dragEventWith(_ nsEvent: NSEvent, _ phase: Phase) -> DragEvent {
         DragEvent(screenPoint: screenPoint(with: nsEvent).my,
                   time: nsEvent.timestamp,
-                  pressure: Double(nsEvent.pressure),
+                  pressure: Double(nsEvent.pressure), tilt: nsEvent.tilt.my,
                   isTablet: nsEvent.subtype == .tabletPoint, phase: phase)
     }
     var isDrag: Bool {

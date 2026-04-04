@@ -2373,7 +2373,7 @@ final class MoveLineAction: DragEventAction {
     private var node = Node()
     private var type = MoveType.point
     
-    var isSnapped = true {
+    var isSnapped = false {
         didSet {
             guard isSnapped != oldValue else { return }
             if isSnapped {
@@ -2405,19 +2405,46 @@ final class MoveLineAction: DragEventAction {
                                                             scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
                     if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
-                        beganLine = lineView.model
+                        let line = lineView.model
+                        beganLine = line
                         lineIndex = li
                         pointIndex = pi
-                        beganMainP = beganLine.mainPoint(at: pi)
+                        beganMainP = line.mainPoint(at: pi)
                         beganSheetP = sheetP
                         
-                        let d = beganLine.minDistanceSquared(at: sheetP).squareRoot()
-                        type = if d < beganLine.size + 0.5 * rootView.screenToWorldScale {
+                        let d = line.minDistanceSquared(at: sheetP).squareRoot()
+                        type = if d < line.size + 0.5 * rootView.screenToWorldScale {
                             .point
-                        } else if d < beganLine.size + 20 * rootView.screenToWorldScale {
+                        } else if d < line.size + 20 * rootView.screenToWorldScale {
                             .warp
                         } else {
                             .all
+                        }
+                        
+                        if type == .point {
+                            node.children = line.mainControlSequence.flatMap {
+                                let p = sheetView.convertToWorld($0.point)
+                                return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
+                                                         position: p),
+                                             fillType: .color(.content)),
+                                        Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
+                                                         position: p),
+                                             fillType: .color(.background))]
+                            }
+                            rootView.node.append(child: node)
+                        } else if type == .warp {
+                            let niv = line.nearestIndexValue(at: sheetP)
+                            
+                            let length = line.length()
+                            if length > 0 {
+                                if line.length(with: .init(startIndexValue: line.firstIndexValue,
+                                                                endIndexValue: niv)) / length < 0.25 {
+                                    pointIndex = 0
+                                } else if line.length(with: .init(startIndexValue: niv,
+                                                                       endIndexValue: line.lastIndexValue)) / length < 0.25 {
+                                    pointIndex = line.mainPointCount - 1
+                                }
+                            }
                         }
                         
                         if type != .all {
@@ -2433,31 +2460,6 @@ final class MoveLineAction: DragEventAction {
                             if nnp != nil {
                                 lastSnapTime = event.time
                                 snapP = nnp!
-                                isSnapped = false
-                            }
-                        }
-                        
-                        if type == .point {
-                            node.children = beganLine.mainPointSequence.flatMap {
-                                let p = sheetView.convertToWorld($0)
-                                return [Node(path: .init(circleRadius: 0.35 * 1.5 * beganLine.size, position: p),
-                                             fillType: .color(.content)),
-                                        Node(path: .init(circleRadius: 0.35 * beganLine.size, position: p),
-                                             fillType: .color(.background))]
-                            }
-                            rootView.node.append(child: node)
-                        } else if type == .warp {
-                            let niv = beganLine.nearestIndexValue(at: sheetP)
-                            
-                            let length = beganLine.length()
-                            if length > 0 {
-                                if beganLine.length(with: .init(startIndexValue: beganLine.firstIndexValue,
-                                                                endIndexValue: niv)) / length < 0.25 {
-                                    pointIndex = 0
-                                } else if beganLine.length(with: .init(startIndexValue: niv,
-                                                                       endIndexValue: beganLine.lastIndexValue)) / length < 0.25 {
-                                    pointIndex = beganLine.mainPointCount - 1
-                                }
                             }
                         }
                     }
@@ -2515,12 +2517,14 @@ final class MoveLineAction: DragEventAction {
                             line.controls[pointIndex].weight = 0.5
                             lineView.model = line
                             
-                            node.children = line.mainPointSequence.enumerated().flatMap {
-                                let p = sheetView.convertToWorld($0.element)
-                                return [Node(path: .init(circleRadius: 0.35 * 1.5 * line.size, position: p),
+                            node.children = line.mainControlSequence.flatMap {
+                                let p = sheetView.convertToWorld($0.point)
+                                return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
+                                                         position: p),
                                              fillType: .color(.content)),
-                                        Node(path: .init(circleRadius: 0.35 * line.size, position: p),
-                                             fillType: .color(isSnapped && $0.offset == pointIndex ? .selected : .background))]
+                                        Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
+                                                         position: p),
+                                             fillType: .color(.background))]
                             }
                         }
                     case .warp:

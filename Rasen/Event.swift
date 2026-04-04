@@ -435,15 +435,20 @@ struct InputKeyEvent: Event {
 }
 
 struct DragEvent: Event {
-    var screenPoint: Point, time: Double, pressure: Double, isTablet: Bool, phase: Phase
+    var screenPoint: Point, time: Double,
+        pressure: Double, tilt: Point, isTablet: Bool, phase: Phase
 }
 extension DragEvent {
     init(_ event: InputKeyEvent) {
         screenPoint = event.screenPoint
         time = event.time
         pressure = 1
+        tilt = .init()
         isTablet = false
         phase = event.phase
+    }
+    var tiltAngle: Double {
+        tilt.length()
     }
 }
 

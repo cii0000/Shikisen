@@ -483,6 +483,7 @@ final class PlayAction: InputKeyEventAction {
                         v.sheetView?.stop()
                     }
                 }
+                rootView.hideSelected()
                 
                 rootView.updateFromAroundWithTimeline(at: cShp)
                 
@@ -587,11 +588,13 @@ final class InsertControlPointAction: InputKeyEventAction {
                     
                     let rp = sheetView.convertToWorld(np)
                     
-                    linesNode.children = line.mainPointSequence.flatMap {
-                        let p = sheetView.convertToWorld($0)
-                        return [Node(path: .init(circleRadius: 0.35 * 1.5 * line.size, position: p),
+                    linesNode.children = line.mainControlSequence.flatMap {
+                        let p = sheetView.convertToWorld($0.point)
+                        return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
                                      fillType: .color(.content)),
-                                Node(path: .init(circleRadius: 0.35 * line.size, position: p),
+                                Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
                                      fillType: .color(.background))]
                     } + [Node(path: .init(circleRadius: 0.5 * 1.5 * line.size, position: rp),
                               fillType: .color(.content)),
@@ -928,6 +931,65 @@ final class InterpolateAction: InputKeyEventAction {
             
             let cos = Pasteboard.shared.copiedObjects
             for co in cos {
+                if let sheetView = rootView.sheetView(at: p),
+                   case .sheetValue(let v) = co, v.lines.count == 1,
+                    sheetView.id == v.id,
+                   sheetView.model.animation.rootIndex == v.rootKeyframeIndex,
+                   let li0 = sheetView.model.animation.keyframe(atRoot: v.rootKeyframeIndex).picture.lines
+                    .firstIndex(where: { $0.id == v.lines[0].id }),
+                   let (lineView, li1) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
+                                                             scale: rootView.screenToWorldScale),
+                   li0 != li1,
+                   lineView.model.controls.count >= 2 {
+                    
+                    let l0 = sheetView.model.animation
+                        .keyframe(atRoot: v.rootKeyframeIndex).picture.lines[li0]
+                    let l1 = sheetView.model.picture.lines[li1]
+                    let vs: [(d: Double, fol0: FirstOrLast, fol1: FirstOrLast)]
+                    = [(l0.firstPoint.distanceSquared(l1.firstPoint), .first, .first),
+                       (l0.firstPoint.distanceSquared(l1.lastPoint), .first, .last),
+                       (l0.lastPoint.distanceSquared(l1.firstPoint), .last, .first),
+                       (l0.lastPoint.distanceSquared(l1.lastPoint), .last, .last)]
+                        .sorted { $0.d < $1.d }
+                    let fol0 = vs.first!.fol0, fol1 = vs.first!.fol1
+                    
+                    let line0 = fol0 == .first ? l0.reversed() : l0
+                    let line1 = fol1 == .first ? l1 : l1.reversed()
+                    
+                    var line = line0
+                    line.controls = line0.lastPoint == line1.firstPoint ?
+                    line0.controls + .init(line1.controls[1...]) :
+                    line0.controls + .init(line1.controls)
+                    line.size = line0.size.mid(line1.size)
+                    
+                    sheetView.newUndoGroup()
+                    sheetView.removeLines(at: [li0, li1].sorted())
+                    sheetView.insert([.init(value: line, index: li0 < li1 ? li0 : li0 - 1)])
+                    
+                    let nLine = sheetView.convertToWorld(line)
+                    let p0 = nLine.mainPoint(at: line0.controls.count - 1)
+                    let p1 = nLine.mainPoint(at: line0.controls.count)
+                    let size0 = nLine.size(atMain: line0.controls.count - 1)
+                    let size1 = nLine.size(atMain: line0.controls.count)
+                    
+                    linesNode.children = [Node(path: Path(nLine),
+                                               lineWidth: nLine.size * 1.5,
+                                               lineType: .color(.selected)),
+                                          Node(path: Path([Pathline(circleRadius: size0 * 1.5,
+                                                                    position: p0),
+                                                           Pathline(circleRadius: size1 * 1.5,
+                                                                    position: p1)]),
+                                               fillType: .color(.selected)),
+                                          Node(path: Path([Pathline(circleRadius: size0 * 1,
+                                                                    position: p0),
+                                                           Pathline(circleRadius: size1 * 1,
+                                                                    position: p1)]),
+                                               fillType: .color(.background))]
+                    rootView.node.append(child: linesNode)
+                    
+                    return
+                }
+                
                 if case .sheetValue(let v) = co,
                    v.lines.isEmpty,
                     let oUUColor = v.planes.first?.uuColor {
@@ -1199,13 +1261,9 @@ final class InterpolateAction: InputKeyEventAction {
                 let nidivs = idivs.filter { idiv in
                     let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                     let idLines = animationView.model.keyframes[nKI].picture.lines.filter { $0.id == idiv.value.id }
-                    if ((oRootKI == nRootKI
-                        || !animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI))
-                        && idLines.isEmpty)
-                        || idLines.count == 1 && idLines[0] == line {
-                        return true
-                    } else if idLines.isEmpty
-                                && animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI) {
+                    if idLines.isEmpty
+                        && animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI) {
+                        
                         let lw = Line.defaultLineWidth
                         let scale = 1 / rootView.worldToScreenScale
                         let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)

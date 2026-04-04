@@ -813,7 +813,7 @@ final class RootView: View, @unchecked Sendable {
                 selectedFrameNode.children = nodes
             }
             
-            selectedFrameNode.isHidden = false
+            selectedFrameNode.isHidden = isHiddenSelected
             selectedNode.isHidden = true
         } else {
             if selectedSheetPositions.isEmpty {
@@ -852,7 +852,7 @@ final class RootView: View, @unchecked Sendable {
                 }
             }
             
-            selectedFrameNode.isHidden = false
+            selectedFrameNode.isHidden = isHiddenSelected
             selectedNode.isHidden = true
         } else {
             let l = worldLineWidth
@@ -890,6 +890,17 @@ final class RootView: View, @unchecked Sendable {
         sheetViewValues.forEach {
             $0.value.sheetView?.updateSelectedColor(isMain: isMain)
         }
+    }
+    var isHiddenSelected = false {
+        didSet {
+            selectedFrameNode.isHidden = isHiddenSelected ? true : !isEditingSheet
+        }
+    }
+    func showSelected() {
+        isHiddenSelected = false
+    }
+    func hideSelected() {
+        isHiddenSelected = true
     }
     
     var finding = Finding() {
