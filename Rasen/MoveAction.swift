@@ -58,7 +58,10 @@ final class MoveAction: DragEventAction {
     
     var oldTime = 0.0
     func flow(with event: DragEvent) {
-        if event.phase == .began {
+        switch event.phase {
+        case .began:
+            rootView.isHiddenSelected = true
+            
             let sp = rootView.screenPointFromMenu ?? event.screenPoint
             let p = rootView.convertScreenToWorld(sp)
             
@@ -95,12 +98,14 @@ final class MoveAction: DragEventAction {
             }
             
             oldTime = event.time
-        } else if event.phase == .changed {
+        case .changed:
             if event.time - oldTime <= 1 / 70 {
                 return
             } else {
                 oldTime = oldTime + ((event.time - oldTime) / (1 / 70)).rounded(.down) * 1 / 70
             }
+        case .ended:
+            rootView.isHiddenSelected = false
         }
         
         switch type {
@@ -326,6 +331,8 @@ final class MoveAnimationAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledAnimation {
                 beganSP = sp
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 beganSheetP = sheetP
                 beganTimelineX = sheetView.animationView
@@ -345,10 +352,10 @@ final class MoveAnimationAction: DragEventAction {
                         beganKeyframeBeat = keyframe.beat
                         beganKeyframeX = animationView.x(atBeat: animationView.model.localBeat(at: minI))
                         
-                        if !animationView.selectedFrameIndexes.isEmpty
-                            && animationView.selectedFrameIndexes.contains(keyframeIndex) {
+                        if !animationView.selectedIs.isEmpty
+                            && animationView.selectedIs.contains(keyframeIndex) {
                             
-                            beganKeyframeOptions = animationView.selectedFrameIndexes.reduce(into: .init()) {
+                            beganKeyframeOptions = animationView.selectedIs.reduce(into: .init()) {
                                 $0[$1] = animationView.model.keyframes[$1].option
                             }
                         } else {
@@ -543,7 +550,9 @@ final class MoveAnimationAction: DragEventAction {
         case .ended:
             node.removeFromParent()
             
-            if let sheetView = sheetView {
+            if let sheetView {
+                sheetView.showSelected()
+                
                 var isNewUndoGroup = false
                 func updateUndoGroup() {
                     if !isNewUndoGroup {
@@ -652,6 +661,8 @@ final class MoveScoreAction: DragEventAction {
                 beganSP = sp
                 beganSheetP = sheetP
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 beganTime = sheetView.animationView.beat(atX: sheetP.x)
                 
                 func updatePlayer(from vs: [Note.PitResult], in sheetView: SheetView) {
@@ -721,7 +732,12 @@ final class MoveScoreAction: DragEventAction {
                     
                     let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
+                    
+                    let dSecStr = scoreView.isFullEdit ?
+                    " "
+                    + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
+                     : ""
+                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString() + dSecStr)
                 } else if let (noteI, result) = v {
                     self.noteI = noteI
                     
@@ -1126,11 +1142,12 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.replace(nivs)
                             rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                             
+                            let isChangedBeat = nsBeat != oldBeat
                             oldBeat = nsBeat
                             
                             octaveNode?.children = scoreView.octaveNode(noteIs: beganNotes.keys.sorted()).children
                             
-                            if pitch != oldPitch {
+                            if pitch != oldPitch || isChangedBeat {
                                 notePlayer?.notes = playerBeatNoteIndexes.map {
                                     scoreView.rendableNormarizedPitResult(atBeat: nsBeat, at: $0)
                                 }
@@ -1140,7 +1157,11 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
+                                    let dSecStr = scoreView.isFullEdit ?
+                                    " "
+                                    + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
+                                     : ""
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedNodes()
@@ -1177,11 +1198,12 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.replace(nivs)
                             rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                             
+                            let isChangedBeat = neBeat != oldBeat
                             oldBeat = neBeat
                             
                             octaveNode?.children = scoreView.octaveNode(noteIs: beganNotes.keys.sorted()).children
                             
-                            if pitch != oldPitch {
+                            if pitch != oldPitch || isChangedBeat {
                                 notePlayer?.notes = playerBeatNoteIndexes.map {
                                     scoreView.rendableNormarizedPitResult(atBeat: neBeat, at: $0)
                                 }
@@ -1191,7 +1213,11 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(neBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
+                                    let dSecStr = scoreView.isFullEdit ?
+                                    " "
+                                    + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
+                                     : ""
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedNodes()
@@ -1229,11 +1255,12 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.replace(nivs)
                             rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                             
+                            let isChangedBeat = nsBeat != oldBeat
                             oldBeat = nsBeat
                             
                             octaveNode?.children = scoreView.octaveNode(noteIs: beganNotes.keys.sorted()).children
                             
-                            if pitch != oldPitch {
+                            if pitch != oldPitch || isChangedBeat {
                                 let beat: Rational = scoreView.beat(atX: scoreP.x)
                                 notePlayer?.notes = playerBeatNoteIndexes.map {
                                     scoreView.rendableNormarizedPitResult(atBeat: beat, at: $0)
@@ -1244,7 +1271,11 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(beat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch))
+                                    let dSecStr = scoreView.isFullEdit ?
+                                    " "
+                                    + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
+                                     : ""
+                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedNodes()
@@ -1451,18 +1482,23 @@ final class MoveScoreAction: DragEventAction {
                                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                             }
                             
+                            let isChangedBeat = nsBeat != oldBeat
                             oldBeat = nsBeat
                             
                             octaveNode?.children = scoreView.octaveNode(noteIs: [noteI]).children
                             
-                            if pitch != oldPitch {
+                            if pitch != oldPitch || isChangedBeat {
                                 notePlayer?.notes = playerBeatNoteIndexes.map {
                                     scoreView.rendableNormarizedPitResult(atBeat: nsBeat, at: $0)
                                 }
                                 
                                 oldPitch = pitch
                                 
-                                rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch))
+                                let dSecStr = scoreView.isFullEdit ?
+                                " "
+                                + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
+                                 : ""
+                                rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + dSecStr)
                             }
                             rootView.updateSelectedNodes()
                         }
@@ -1563,6 +1599,8 @@ final class MoveScoreAction: DragEventAction {
             octaveNode = nil
             
             if let sheetView {
+                sheetView.showSelected()
+                
                 if type == .keyBeats || type == .scale
                     || type == .loopDurBeat
                     || type == .endBeat || type == .isShownSpectrogram {
@@ -1704,7 +1742,6 @@ final class MoveContentAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p),
                 let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                 scale: rootView.screenToWorldScale) {
-                
                 let sheetP = sheetView.convertFromWorld(p)
                 let contentView = sheetView.contentsView.elementViews[ci]
                 let content = contentView.model
@@ -1713,6 +1750,8 @@ final class MoveContentAction: DragEventAction {
                 beganSP = sp
                 beganInP = sheetP
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 beganContent = content
                 if let timeOption = content.timeOption {
                     beganContentEndP = .init(sheetView.animationView.x(atBeat: timeOption.beatRange.end), content.origin.y)
@@ -1815,16 +1854,20 @@ final class MoveContentAction: DragEventAction {
                 }
             }
         case .ended:
-            if let sheetView, let beganContent,
-               let contentI, contentI < sheetView.contentsView.elementViews.count {
-               
-                let contentView = sheetView.contentsView.elementViews[contentI]
-                if contentView.model != beganContent {
-                    sheetView.newUndoGroup()
-                    sheetView.capture(contentView.model, old: beganContent, at: contentI)
-                }
-                if type == .all || type == .startBeat || type == .endBeat {
-                    sheetView.updatePlaying()
+            if let sheetView {
+                sheetView.showSelected()
+                
+                if let beganContent,
+                   let contentI, contentI < sheetView.contentsView.elementViews.count {
+                    
+                    let contentView = sheetView.contentsView.elementViews[contentI]
+                    if contentView.model != beganContent {
+                        sheetView.newUndoGroup()
+                        sheetView.capture(contentView.model, old: beganContent, at: contentI)
+                    }
+                    if type == .all || type == .startBeat || type == .endBeat {
+                        sheetView.updatePlaying()
+                    }
                 }
             }
             
@@ -1865,7 +1908,6 @@ final class MoveTextAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p),
                let ci = sheetView.textIndex(at: sheetView.convertFromWorld(p),
                                             scale: rootView.screenToWorldScale) {
-                
                 let sheetP = sheetView.convertFromWorld(p)
                 let textView = sheetView.textsView.elementViews[ci]
                 let text = textView.model
@@ -1873,6 +1915,8 @@ final class MoveTextAction: DragEventAction {
                 beganSP = sp
                 beganInP = sheetP
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 beganText = text
                 if let timeOption = text.timeOption {
                     beganTextEndP = .init(sheetView.animationView.x(atBeat: timeOption.beatRange.end), text.origin.y)
@@ -1959,15 +2003,19 @@ final class MoveTextAction: DragEventAction {
                 }
             }
         case .ended:
-            if let sheetView, let beganText,
-               let textI, textI < sheetView.textsView.elementViews.count {
-               
-                let textView = sheetView.textsView.elementViews[textI]
-                if textView.model != beganText {
-                    sheetView.newUndoGroup()
-                    sheetView.capture(textView.model, old: beganText, at: textI)
+            if let sheetView {
+                sheetView.showSelected()
+                
+                if let beganText,
+                   let textI, textI < sheetView.textsView.elementViews.count {
+                   
+                    let textView = sheetView.textsView.elementViews[textI]
+                    if textView.model != beganText {
+                        sheetView.newUndoGroup()
+                        sheetView.capture(textView.model, old: beganText, at: textI)
+                    }
+                    sheetView.updatePlaying()
                 }
-                sheetView.updatePlaying()
             }
             
             rootView.cursor = rootView.defaultCursor
@@ -2015,6 +2063,8 @@ final class MoveTempoAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledTimeline {
                 beganSP = sp
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 let inP = sheetView.convertFromWorld(p)
                 beganSheetP = inP
                 if let tempo = sheetView.tempo(at: inP, scale: rootView.screenToWorldScale) {
@@ -2079,7 +2129,9 @@ final class MoveTempoAction: DragEventAction {
         case .ended:
             node.removeFromParent()
             
-            if let sheetView = sheetView {
+            if let sheetView {
+                sheetView.showSelected()
+                
                 var isNewUndoGroup = false
                 func updateUndoGroup() {
                     if !isNewUndoGroup {
@@ -2183,6 +2235,7 @@ final class MoveSheetAction: DragEventAction {
                     oldP = p
                     sheetOrigin = rootView.sheetFrame(with: shp).origin
                     self.sheetView = sheetView
+                    sheetView.hideSelected()
                     
                     if let rect = sheetView.selectedFrame {
                         typeRect = sheetView.convertToWorld(rect)
@@ -2300,6 +2353,8 @@ final class MoveSheetAction: DragEventAction {
             node.removeFromParent()
             
             if let sheetView {
+                sheetView.showSelected()
+                
                 let lines = sheetView.model.picture.lines[lineIs]
                 let planes = sheetView.model.picture.planes[planeIs]
                 let texts = sheetView.model.texts[textIs]
@@ -2404,6 +2459,8 @@ final class MoveLineAction: DragEventAction {
                 if let (lineView, li) = sheetView.lineTuple(at: sheetP,
                                                             scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
+                    sheetView.hideSelected()
+                    
                     if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
                         let line = lineView.model
                         beganLine = line
@@ -2592,6 +2649,8 @@ final class MoveLineAction: DragEventAction {
             node.removeFromParent()
             
             if let sheetView {
+                sheetView.showSelected()
+                
                 if lineIndex < sheetView.linesView.elementViews.count {
                     let line = sheetView.linesView.elementViews[lineIndex].model
                     if line != beganLine {
@@ -2643,6 +2702,8 @@ final class MoveLineZAction: DragEventAction {
                                                             scale: rootView.screenToWorldScale) {
                     
                     self.sheetView = sheetView
+                    sheetView.hideSelected()
+                    
                     lineIndex = li
                     lineView.node.isHidden = true
                     self.lineView = lineView
@@ -2676,6 +2737,8 @@ final class MoveLineZAction: DragEventAction {
                           let li = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p),
                                                                  scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
+                    sheetView.hideSelected()
+                    
                     lineIndex = li
                     let noteNode = sheetView.scoreView.notesNode.children[li]
                     self.noteNode = noteNode
@@ -2748,35 +2811,38 @@ final class MoveLineZAction: DragEventAction {
             lineView?.node.isHidden = false
             noteNode?.isHidden = false
             
-            if let sheetView = sheetView,
-               lineIndex < sheetView.linesView.elementViews.count {
+            if let sheetView {
+                sheetView.showSelected()
                 
-                guard !crossIndexes.isEmpty else { return }
-                
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                    .clipped(min: 0, max: crossIndexes.count - 1)
-                let li = crossIndexes[cli]
-                    .clipped(min: 0, max: sheetView.linesView.elementViews.count)
-                let line = sheetView.linesView.elementViews[lineIndex].model
-                if lineIndex != li {
-                    sheetView.newUndoGroup()
-                    sheetView.removeLines(at: [lineIndex])
-                    sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
-                }
-            } else if let sheetView = sheetView, sheetView.scoreView.model.enabled,
-                      lineIndex < sheetView.scoreView.model.notes.count {
-                
-                guard !crossIndexes.isEmpty else { return }
-                
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                    .clipped(min: 0, max: crossIndexes.count - 1)
-                let li = crossIndexes[cli]
-                    .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
-                let line = sheetView.scoreView.model.notes[lineIndex]
-                if lineIndex != li {
-                    sheetView.newUndoGroup()
-                    sheetView.removeNote(at: lineIndex)
-                    sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
+                if lineIndex < sheetView.linesView.elementViews.count {
+                    
+                    guard !crossIndexes.isEmpty else { return }
+                    
+                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                        .clipped(min: 0, max: crossIndexes.count - 1)
+                    let li = crossIndexes[cli]
+                        .clipped(min: 0, max: sheetView.linesView.elementViews.count)
+                    let line = sheetView.linesView.elementViews[lineIndex].model
+                    if lineIndex != li {
+                        sheetView.newUndoGroup()
+                        sheetView.removeLines(at: [lineIndex])
+                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
+                    }
+                } else if sheetView.scoreView.model.enabled,
+                          lineIndex < sheetView.scoreView.model.notes.count {
+                    
+                    guard !crossIndexes.isEmpty else { return }
+                    
+                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                        .clipped(min: 0, max: crossIndexes.count - 1)
+                    let li = crossIndexes[cli]
+                        .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
+                    let line = sheetView.scoreView.model.notes[lineIndex]
+                    if lineIndex != li {
+                        sheetView.newUndoGroup()
+                        sheetView.removeNote(at: lineIndex)
+                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
+                    }
                 }
             }
 
@@ -2977,6 +3043,8 @@ final class MoveMainFrameAction: DragEventAction {
                let shp = rootView.sheetPosition(from: sheetView) {
                 
                 self.sheetView = sheetView
+                sheetView.hideSelected()
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 beganSP = sp
                 beganInP = sheetP
@@ -2997,10 +3065,14 @@ final class MoveMainFrameAction: DragEventAction {
                 rootView.cursor = rootView.cursor(from: "\(LookUpAction.sizeString(from: .init(width: width, height: height)))")
             }
         case .ended:
-            if let sheetView, let beganOption {
-                if sheetView.model.option != beganOption {
-                    sheetView.newUndoGroup()
-                    sheetView.capture(sheetView.model.option, old: beganOption)
+            if let sheetView {
+                sheetView.showSelected()
+                
+                if let beganOption {
+                    if sheetView.model.option != beganOption {
+                        sheetView.newUndoGroup()
+                        sheetView.capture(sheetView.model.option, old: beganOption)
+                    }
                 }
             }
             

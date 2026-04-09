@@ -46,14 +46,14 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
             updateColor()
         }
     }
-    var isHiddenSeleted = false {
+    var isHiddenSelected = false {
         didSet {
-            guard isHiddenSeleted != oldValue else { return }
+            guard isHiddenSelected != oldValue else { return }
             updateColor()
         }
     }
     func updateColor() {
-        node.lineType = .color(isSelected && !isHiddenSeleted ? .selected : model.uuColor.value)
+        node.lineType = .color(isSelected && !isHiddenSelected ? .selected : model.uuColor.value)
     }
     func updatePath() {
         node.path = Path(model)
@@ -124,14 +124,14 @@ final class PlaneView<T: BinderProtocol>: BindableView, @unchecked Sendable {
             updateColor()
         }
     }
-    var isHiddenSeleted = false {
+    var isHiddenSelected = false {
         didSet {
-            guard isHiddenSeleted != oldValue else { return }
+            guard isHiddenSelected != oldValue else { return }
             updateColor()
         }
     }
     func updateColor() {
-        node.fillType = .color(isSelected && !isHiddenSeleted ? .selected + model.uuColor.value :  model.uuColor.value)
+        node.fillType = .color(isSelected && !isHiddenSelected ? .selected + model.uuColor.value :  model.uuColor.value)
     }
     func updatePath() {
         node.path = model.path
@@ -206,6 +206,8 @@ final class KeyframeView: BindableView, @unchecked Sendable {
     let draftLinesView: ArrayView<SheetLineView>
     let draftPlanesView: ArrayView<SheetPlaneView>
     
+    var isSelected = false
+    
     var selectedLineIs: [Int] {
         get {
             linesView.elementViews.count.range.filter { linesView.elementViews[$0].isSelected }
@@ -230,12 +232,12 @@ final class KeyframeView: BindableView, @unchecked Sendable {
     }
     
     func showSelected() {
-        linesView.elementViews.forEach { $0.isHiddenSeleted = false }
-        planesView.elementViews.forEach { $0.isHiddenSeleted = false }
+        linesView.elementViews.forEach { $0.isHiddenSelected = false }
+        planesView.elementViews.forEach { $0.isHiddenSelected = false }
     }
     func hideSelected() {
-        linesView.elementViews.forEach { $0.isHiddenSeleted = true }
-        planesView.elementViews.forEach { $0.isHiddenSeleted = true }
+        linesView.elementViews.forEach { $0.isHiddenSelected = true }
+        planesView.elementViews.forEach { $0.isHiddenSelected = true }
     }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
@@ -380,12 +382,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     
-    var isSelected = false {
-        didSet {
-            updateTimeline()
-        }
-    }
-    
     var selectedColor = Color.selected {
         didSet {
             timelineNode.children.forEach {
@@ -395,9 +391,16 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             }
         }
     }
-    var selectedFrameIndexes = [Int]() {
-        didSet {
-            guard selectedFrameIndexes != oldValue else { return }
+    var selectedIs: [Int] {
+        get {
+            elementViews.count.range.filter { elementViews[$0].isSelected }
+        }
+        set {
+            guard newValue != selectedIs else { return }
+            let value = Set(newValue)
+            elementViews.enumerated().forEach {
+                $0.element.isSelected = value.contains($0.offset)
+            }
             updateTimeline()
         }
     }
@@ -735,7 +738,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let ey = centerY + Sheet.timelineHalfHeight
         let w = ex - sx
         
-        let iSet = Set(selectedFrameIndexes)
+        let iSet = Set(selectedIs)
         
         var contentPathlines = [Pathline](), warningPathlines = [Pathline](),
             borderPathlines = [Pathline](), subBorderPathlines = [Pathline]()
@@ -835,36 +838,34 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             contentPathlines.append(.init(llkb))
         }
         
-        if isSelected {
-            let d = knobH / 2
-            let kx = x(atBeat: model.currentKeyframe.beat + beatRange.start)
-            let kd = model.currentKeyframe.isKey ? knobH / 2 : iKnobH / 2
-            contentPathlines.append(.init(Rect(x: kx - lw / 2,
-                                               y: sy,
-                                               width: lw,
-                                               height: (centerY - kd - knobW / 2) - sy)))
-            contentPathlines.append(.init(Rect(x: kx - lw / 2,
-                                               y: centerY + kd + knobW / 2,
-                                               width: lw,
-                                               height: ey - (centerY + kd + knobW / 2))))
-            
-            contentPathlines.append(.init(Rect(x: mainBeatX - lw / 2,
-                                               y: sy,
-                                               width: lw,
-                                               height: (centerY - d - knobW / 2) - sy)))
-            contentPathlines.append(.init(Rect(x: mainBeatX - lw * 2,
-                                               y: sy,
-                                               width: lw * 4,
-                                               height: lw)))
-            contentPathlines.append(.init(Rect(x: mainBeatX - lw / 2,
-                                               y: centerY + d + knobW / 2,
-                                               width: lw,
-                                               height: ey - (centerY + d + knobW / 2))))
-            contentPathlines.append(.init(Rect(x: mainBeatX - lw * 2,
-                                               y: ey - lw,
-                                               width: lw * 4,
-                                               height: lw)))
-        }
+        let d = knobH / 2
+        let kkx = x(atBeat: model.currentKeyframe.beat + beatRange.start)
+        let kd = model.currentKeyframe.isKey ? knobH / 2 : iKnobH / 2
+        contentPathlines.append(.init(Rect(x: kkx - lw / 2,
+                                           y: sy,
+                                           width: lw,
+                                           height: (centerY - kd - knobW / 2) - sy)))
+        contentPathlines.append(.init(Rect(x: kkx - lw / 2,
+                                           y: centerY + kd + knobW / 2,
+                                           width: lw,
+                                           height: ey - (centerY + kd + knobW / 2))))
+        
+        contentPathlines.append(.init(Rect(x: mainBeatX - lw / 2,
+                                           y: sy,
+                                           width: lw,
+                                           height: (centerY - d - knobW / 2) - sy)))
+        contentPathlines.append(.init(Rect(x: mainBeatX - lw * 2,
+                                           y: sy,
+                                           width: lw * 4,
+                                           height: lw)))
+        contentPathlines.append(.init(Rect(x: mainBeatX - lw / 2,
+                                           y: centerY + d + knobW / 2,
+                                           width: lw,
+                                           height: ey - (centerY + d + knobW / 2))))
+        contentPathlines.append(.init(Rect(x: mainBeatX - lw * 2,
+                                           y: ey - lw,
+                                           width: lw * 4,
+                                           height: lw)))
         
         let secRange = model.secRange
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + model.loopDurSec).rounded(.up)) {
@@ -1485,8 +1486,6 @@ final class SheetView: BindableView, @unchecked Sendable {
         updateWithKeyframeIndex()
         updateTimeline()
         updateMainFrame()
-        
-        animationView.isSelected = true
     }
     
     func cancelTasks() {
@@ -1653,11 +1652,11 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     var isSelectedKeyframes: Bool {
-        !animationView.selectedFrameIndexes.isEmpty
+        !animationView.selectedIs.isEmpty
     }
     func unselectKeyframes() {
         if isSelectedKeyframes {
-            animationView.selectedFrameIndexes = []
+            animationView.selectedIs = []
         }
     }
     
@@ -2014,11 +2013,6 @@ final class SheetView: BindableView, @unchecked Sendable {
         set { animationView.currentKeyframe = newValue }
     }
     
-    var selectedFrameIndexes: [Int] {
-        get { animationView.selectedFrameIndexes }
-        set { animationView.selectedFrameIndexes = newValue }
-    }
-    
     func goNext() {
         if isPlaying {
             stop()
@@ -2044,6 +2038,19 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
         let deltaTime = Rational(-1, animationView.frameRate)
         self.rootBeat = Rational.saftyAdd(rootBeat, deltaTime)
+    }
+    
+    func showSelected() {
+        scoreView.isHiddenSelected = false
+        textsView.elementViews.forEach { $0.isHiddenSelected = false }
+        contentsView.elementViews.forEach { $0.isHiddenSelected = false }
+        keyframeView.showSelected()
+    }
+    func hideSelected() {
+        scoreView.isHiddenSelected = true
+        textsView.elementViews.forEach { $0.isHiddenSelected = true }
+        contentsView.elementViews.forEach { $0.isHiddenSelected = true }
+        keyframeView.hideSelected()
     }
     
     weak var left, right, top, bottom: SheetView?
@@ -2190,7 +2197,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             self.mainDurSec = seqTrack.durSec
             seqTracks.append(seqTrack)
             
-            if model.enabledMusic {
+            if model.isEnabledAudio {
                 musicBackgroundNode = Node(path: .init(bounds), fillType: .color(.musicBacground))
             }
             
@@ -2965,7 +2972,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             let uuColor = lineView.model.uuColor
             
             if model.enabledAnimation {
-                if !selectedFrameIndexes.isEmpty {
+                if !animationView.selectedIs.isEmpty {
                     return (true, sheetColorOwnerFromAnimation(with: uuColor, isLine: true))
                 } else {
                     let cv = ColorValue(uuColor: uuColor,
@@ -2993,7 +3000,8 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     func sheetColorOwnerFromAnimation(with uuColor: UUColor,
                                       isLine: Bool = false) -> SheetColorOwner {
-        let planeValue: [IndexValue<[Int]>] = !isLine ? [] : selectedFrameIndexes.compactMap {
+        let planeValue: [IndexValue<[Int]>] = !isLine ? [] :
+        animationView.selectedIs.compactMap {
             let pis = animationView.elementViews[$0].planesView.elementViews.enumerated().filter { $0.element.model.uuColor == uuColor }
                 .map { $0.offset }
             if pis.isEmpty {
@@ -3002,7 +3010,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 return IndexValue(value: pis, index: $0)
             }
         }
-        let lineValue: [IndexValue<[Int]>] = selectedFrameIndexes.compactMap {
+        let lineValue: [IndexValue<[Int]>] = animationView.selectedIs.compactMap {
             let lis = animationView.elementViews[$0].linesView.elementViews.enumerated().filter { $0.element.model.uuColor == uuColor }
                 .map { $0.offset }
             if lis.isEmpty {
@@ -3022,7 +3030,7 @@ final class SheetView: BindableView, @unchecked Sendable {
     func sheetColorOwnerFromPlane(at p: Point) -> SheetColorOwner {
         if let pi = planesView.firstIndex(at: p) {
             if model.enabledAnimation {
-                if !selectedFrameIndexes.isEmpty {
+                if !animationView.selectedIs.isEmpty {
                     let uuColor = model.picture.planes[pi].uuColor
                     return sheetColorOwnerFromAnimation(with: uuColor)
                 } else {
@@ -3495,16 +3503,6 @@ final class SheetView: BindableView, @unchecked Sendable {
             if !kivs.isEmpty {
                 animationView.insert(kivs)
                 
-                var sfis = animationView.selectedFrameIndexes
-                for i in 0 ..< sfis.count {
-                    for kiv in kivs {
-                        if sfis[i] > kiv.index {
-                            sfis[i] += 1
-                        }
-                    }
-                }
-                animationView.selectedFrameIndexes = sfis
-                
                 binder[keyPath: keyPath].animation.rootIndex = kivs.last?.index ?? 0
                 
                 updateWithKeyframeIndex()
@@ -3522,16 +3520,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                 let rect = isMakeRect ? indexes.reduce(into: Rect?.none) {
                     $0 += animationView.transformedKeyframeBounds(at: $1)
                 } : Rect?.none
-                
-                var sfis = animationView.selectedFrameIndexes
-                for i in 0 ..< sfis.count {
-                    for ni in indexes {
-                        if sfis[i] > ni {
-                            sfis[i] -= 1
-                        }
-                    }
-                }
-                animationView.selectedFrameIndexes = sfis
                 
                 animationView.remove(at: indexes)
                 
@@ -7181,9 +7169,9 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             }
         } else {
-            if !selectedFrameIndexes.isEmpty {
+            if !animationView.selectedIs.isEmpty {
                 newUndoGroup()
-                let sfis = selectedFrameIndexes.sorted()
+                let sfis = animationView.selectedIs.sorted()
                 
                 insertDraftKeyLines(sfis.compactMap {
                     let lines = model.animation.keyframes[$0].picture.lines
@@ -7262,12 +7250,12 @@ final class SheetView: BindableView, @unchecked Sendable {
     
     @MainActor
     func makeFaces(with path: Path?, isSelection: Bool) {
-        if selectedFrameIndexes.isEmpty {
+        if animationView.selectedIs.isEmpty {
             makeFacesFromKeyframeIndex(with: path, isSelection: isSelection)
             return
         }
         
-        let indexes = selectedFrameIndexes.sorted()
+        let indexes = animationView.selectedIs.sorted()
         let b = bounds, borders = model.borders
         let pictures = model.animation.keyframes[indexes].map { $0.picture }
         
@@ -7385,9 +7373,9 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     func cutFaces(with path: Path?) {
-        if !selectedFrameIndexes.isEmpty {
+        if !animationView.selectedIs.isEmpty {
             newUndoGroup()
-            removeKeyPlanes(selectedFrameIndexes.sorted().compactMap {
+            removeKeyPlanes(animationView.selectedIs.sorted().compactMap {
                 let planes = model.animation.keyframes[$0].picture.planes
                 return planes.isEmpty ?
                     nil :
@@ -7450,10 +7438,10 @@ final class SheetColorOwner {
     }
     
     func showSelected() {
-        sheetView.keyframeView.showSelected()
+        sheetView.showSelected()
     }
     func hideSelected() {
-        sheetView.keyframeView.hideSelected()
+        sheetView.hideSelected()
     }
     
     init(sheetView: SheetView, colorValue: ColorValue) {

@@ -618,9 +618,9 @@ final class PastableAction: Action {
             
             let animationView = sheetView.animationView
             
-            let isSelected = animationView.selectedFrameIndexes.contains(ki)
+            let isSelected = animationView.selectedIs.contains(ki)
             let indexes = isSelected ?
-                animationView.selectedFrameIndexes.sorted() : [ki]
+                animationView.selectedIs.sorted() : [ki]
             var beat: Rational = 0
             let kfs = indexes.map {
                 var kf = animationView.model.keyframes[$0]
@@ -661,13 +661,15 @@ final class PastableAction: Action {
             let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
             let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
             
+            let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
+                .result.isPit ?? false
             let nis = scoreView.selectedNotePitIs
             let noteIs = nis.keys.sorted()
             var ps = [Point]()
             let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
                 let note = scoreView.model.notes[v.key]
                 let pitIs = v.value
-                if !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
+                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
                     var currentBeat: Rational = 0, nPits = [Pit]()
                     for pitI in pitIs {
                         let pit = note.pits[pitI]
@@ -1210,9 +1212,9 @@ final class PastableAction: Action {
             
             let animationView = sheetView.animationView
             
-            let isSelected = animationView.selectedFrameIndexes.contains(ki)
+            let isSelected = animationView.selectedIs.contains(ki)
             var indexes = isSelected ?
-            animationView.selectedFrameIndexes.sorted() : [ki]
+            animationView.selectedIs.sorted() : [ki]
             if indexes.last == animationView.model.keyframes.count {
                 indexes.removeLast()
             }
@@ -1227,9 +1229,6 @@ final class PastableAction: Action {
                 return kf
             }
             
-            if isSelected {
-                animationView.selectedFrameIndexes = []
-            }
             sheetView.newUndoGroup(enabledKeyframeIndex: false)
             if indexes == animationView.model.keyframes.count.array {
                 let keyframe = Keyframe(beat: 0)
@@ -1261,12 +1260,15 @@ final class PastableAction: Action {
             
             let nis = scoreView.selectedNotePitIs
             
+            let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
+                .result.isPit ?? false
+            
             var removeNoteIs = [Int](), replaceNIVs = [IndexValue<Note>]()
             let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
                 let noteI = v.key
                 let note = scoreView.model.notes[noteI]
                 let pitIs = v.value
-                if !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
+                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
                     var currentBeat: Rational = 0, nPits = [Pit]()
                     for pitI in pitIs {
                         let pit = note.pits[pitI]

@@ -21,6 +21,12 @@ extension Duration {
     var sec: Double {
         .init(components.seconds) + .init(components.attoseconds) * 1e-18
     }
+    var msString: String {
+        formatted(Duration.UnitsFormatStyle(allowedUnits: [.milliseconds], width: .narrow))
+    }
+    static func msString(fromSec sec: Double) -> String {
+        String(format: "%.2f ms", sec * 1000)
+    }
 }
 
 final class OneshotTimer: @unchecked Sendable {

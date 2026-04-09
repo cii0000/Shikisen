@@ -354,6 +354,8 @@ final class ColorAction: Action {
             let p = rootView.convertScreenToWorld(sp)
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
+                rootView.hideSelected()
+                sheetView.hideSelected()
                 
                 func updateContentsWithSelections() {
                     beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
@@ -661,6 +663,9 @@ final class ColorAction: Action {
             notePlayer?.stop()
             
             if let sheetView {
+                rootView.showSelected()
+                sheetView.showSelected()
+                
                 var isNewUndoGroup = false
                 func updateUndoGroup() {
                     if !isNewUndoGroup {
@@ -773,6 +778,8 @@ final class ColorAction: Action {
             preEventTime = event.time
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
+                rootView.hideSelected()
+                sheetView.hideSelected()
                 
                 func updateContentsWithSelections() {
                     beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
@@ -1097,6 +1104,9 @@ final class ColorAction: Action {
             notePlayer?.stop()
             
             if let sheetView {
+                rootView.showSelected()
+                sheetView.showSelected()
+                
                 var isNewUndoGroup = false
                 func updateUndoGroup() {
                     if !isNewUndoGroup {
@@ -1167,6 +1177,8 @@ final class ColorAction: Action {
             let p = rootView.convertScreenToWorld(sp)
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
+                rootView.hideSelected()
+                sheetView.hideSelected()
                 
                 func updateContentsWithSelections() {
                     beganContents = sheetView.selectedContentIs.reduce(into: [Int: Content]()) {
@@ -1363,6 +1375,9 @@ final class ColorAction: Action {
             notePlayer?.stop()
             
             if let sheetView {
+                rootView.showSelected()
+                sheetView.showSelected()
+                
                 var isNewUndoGroup = false
                 func updateUndoGroup() {
                     if !isNewUndoGroup {

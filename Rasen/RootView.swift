@@ -500,7 +500,7 @@ final class RootView: View, @unchecked Sendable {
             autoreleasepool {
                 let record = sheetRecorder.sheetRecord
                 guard let sheet = record.decodedValue else { return }
-                if sheet.enabledMusic {
+                if sheet.isEnabledAudio {
                     record.value = sheet
                     record.isWillwrite = true
                     syncSave()
@@ -3069,7 +3069,7 @@ final class RootView: View, @unchecked Sendable {
     func currentSampless(at shp: IntPoint,
                          sampleRate: Double = Audio.defaultSampleRate) -> [[Double]] {
         guard let sheetView = sheetViewValue(at: shp)?.sheetView,
-                sheetView.model.enabledMusic else { return [] }
+                sheetView.model.isEnabledAudio else { return [] }
         
         updateFromAroundWithTimeline(at: shp)
         

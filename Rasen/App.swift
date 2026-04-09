@@ -272,7 +272,9 @@ final class SubNSApplication: NSApplication {
                          action: #selector(SubMTKView.exportAsSound(_:)))
         fileMenu.addItem(withTitle: "Export as Linear PCM...".localized,
                          action: #selector(SubMTKView.exportAsLinearPCM(_:)))
-        
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(withTitle: "Export as Caption...".localized,
+                         action: #selector(SubMTKView.exportAsCaption(_:)))
         fileMenu.addItem(NSMenuItem.separator())
         fileMenu.addItem(withTitle: "Export as Document...".localized,
                          action: #selector(SubMTKView.exportAsDocument(_:)))
@@ -827,6 +829,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         case #selector(SubMTKView.exportAsLinearPCM(_:)):
             return rootView.editableFromMenu
             
+        case #selector(SubMTKView.exportAsCaption(_:)):
+            return rootView.editableFromMenu
+            
         case #selector(SubMTKView.exportAsDocument(_:)):
             return rootView.editableFromMenu
         case #selector(SubMTKView.exportAsDocumentWithHistory(_:)):
@@ -1229,6 +1234,15 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     @objc func exportAsLinearPCM(_ sender: Any) {
         rootView.isFromMenu = true
         let action = ExportAsLinearPCMAction(rootAction)
+        action.flow(with: inputKeyEventWith(.began))
+        Sleep.start()
+        action.flow(with: inputKeyEventWith(.ended))
+        rootView.isFromMenu = false
+    }
+    
+    @objc func exportAsCaption(_ sender: Any) {
+        rootView.isFromMenu = true
+        let action = ExportAsCaptionAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
@@ -2454,7 +2468,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         
         if !isBeganScroll && !isBeganPinch && !isBeganRotate && !isBeganSwipe && isPrepare3FingersTap {
             if event.isAllEnded, let beganTouchTime,
-                event.time - beganTouchTime >= 0.1 && event.time - beganTouchTime < 0.2 {
+                event.time - beganTouchTime >= 0.08 && event.time - beganTouchTime < 0.2 {
                 
                 var event = InputKeyEvent(screenPoint: event.screenPoint,
                                           time: event.time,

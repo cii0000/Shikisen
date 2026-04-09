@@ -900,6 +900,7 @@ final class MultiSelectFrameAction: Action {
     private func updateSelected(fromRootBeeat nRootBeat: Rational,
                                 in animationView: AnimationView, isUnselect: Bool) {
         var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
+        beganSelectedFrameIndexes.forEach { isSelects[$0] = true }
         let beganRootIndex = animationView.model.nearestRootIndex(atRootBeat: beganSelectedRootBeat)
         let ni = animationView.model.rootIndex(atRootBeat: nRootBeat)
         let range = beganRootIndex <= ni ? beganRootIndex ... ni : ni ... beganRootIndex
@@ -909,7 +910,7 @@ final class MultiSelectFrameAction: Action {
         }
         
         let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
-        animationView.selectedFrameIndexes = fis
+        animationView.selectedIs = fis
     }
     
     func select(with event: DragEvent, isUnselect: Bool) {
@@ -944,7 +945,7 @@ final class MultiSelectFrameAction: Action {
                 animationView.shownInterTypeKeyframeIndex = animationView.model.index
                 
                 movedBeganRootBeatPosition = sheetView.rootBeatPosition
-                beganSelectedFrameIndexes = animationView.selectedFrameIndexes
+                beganSelectedFrameIndexes = animationView.selectedIs
                 beganSelectedRootBeat = nRootBeat
                 lastRootBeats.append((event.time, beganSelectedRootBeat))
                 var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
@@ -958,7 +959,7 @@ final class MultiSelectFrameAction: Action {
                 }
                 beganSelectedFrameIndexes.forEach { isSelects[$0] = true }
                 let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
-                animationView.selectedFrameIndexes = fis
+                animationView.selectedIs = fis
                 
                 self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
                                                   progress: sheetView.currentTimeProgress(),
@@ -1176,9 +1177,9 @@ final class DraftAction: Action {
                         Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
                     }
                 } else {
-                    if !sheetView.selectedFrameIndexes.isEmpty {
+                    if !sheetView.animationView.selectedIs.isEmpty {
                         sheetView.newUndoGroup()
-                        let sfis = sheetView.selectedFrameIndexes.sorted()
+                        let sfis = sheetView.animationView.selectedIs.sorted()
                         sheetView.removeDraftKeyLines(sfis.compactMap {
                             let lines = sheetView.model.animation.keyframes[$0].draftPicture.lines
                             return lines.isEmpty ?

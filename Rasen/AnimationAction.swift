@@ -275,7 +275,7 @@ final class SelectFrameAction: SwipeEventAction, DragEventAction {
                         beganRootI = animationView.rootKeyframeIndex
                         beganRootBeat = animationView.rootBeat
                         beganBeat = animationView.model.localBeat
-                        beganSelectedFrameIndexes = animationView.selectedFrameIndexes
+                        beganSelectedFrameIndexes = animationView.selectedIs
                         animationView.shownInterTypeKeyframeIndex = animationView.model.index
                     }
                 }
@@ -496,7 +496,7 @@ final class PlayAction: InputKeyEventAction {
                     let sec = contentView.model.sec(fromBeat: contentView.model.beat)
                     cSheetView.play(atSec: sec)
                 } else if !(rootAction.containsAllTimelines(with: event)
-                    || (!cSheetView.model.enabledAnimation && cSheetView.model.enabledMusic)) {
+                    || (!cSheetView.model.enabledAnimation && cSheetView.model.isEnabledAudio)) {
                     
                     if cSheetView.model.enabledTimeline {
                         var secRange = cSheetView.model.animation.secRange
@@ -605,11 +605,9 @@ final class InsertControlPointAction: InputKeyEventAction {
                 } else if animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale),
                    let i = animationView.slidableKeyframeIndex(at: timelineP,
                                                                maxDistance: rootView.worldKnobEditDistance)?.i,
-                   sheetView.selectedFrameIndexes.contains(i) {
+                        animationView.selectedIs.contains(i) {
                     
-                    let kis = sheetView.selectedFrameIndexes
-                    sheetView.selectedFrameIndexes = []
-                    
+                    let kis = animationView.selectedIs
                     let beat = animationView.model.localBeat
                     let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
                     
@@ -658,7 +656,6 @@ final class InsertControlPointAction: InputKeyEventAction {
                     rootAction.updateActionNode()
                     rootView.updateSelectedNodes()
                 } else if sheetView.animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale) {
-                    sheetView.selectedFrameIndexes = []
                     
                     let animationView = sheetView.animationView
                     let animation = animationView.model
@@ -672,7 +669,6 @@ final class InsertControlPointAction: InputKeyEventAction {
                     rootBP.beat = beat
                     if beat < animation.keyframes.first?.beat ?? 0 {
                         let keyframe = Keyframe(beat: beat)
-                        animationView.selectedFrameIndexes = []
                         sheetView.newUndoGroup(enabledKeyframeIndex: false)
                         sheetView.insert([IndexValue(value: keyframe, index: 0)])
                     } else if let (i, iBeat) = animation.indexAndInternalBeat(atRootBeat: beat) {
@@ -697,7 +693,6 @@ final class InsertControlPointAction: InputKeyEventAction {
                         if iBeat != 0 {
                             let nBeat = animation.keyframes[i].beat + iBeat
                             let keyframe = Keyframe(beat: nBeat)
-                            animationView.selectedFrameIndexes = []
                             sheetView.newUndoGroup(enabledKeyframeIndex: false)
                             sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
                         } else if !animation.keyframes[i].isKey {

@@ -30,6 +30,13 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
     var replacedRange: Range<String.Index>?
     var selectedRange: Range<String.Index>?
     var selectedLineLocation = 0.0
+    
+    var isHiddenSelected = false {
+        didSet {
+            guard isHiddenSelected != oldValue else { return }
+            selectedNode.isHidden = isHiddenSelected
+        }
+    }
     var selectedRanges = [Range<String.Index>]() {
         didSet {
             guard selectedRanges != oldValue else { return }
@@ -38,11 +45,11 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
     }
     func updateWithSelectedRanges() {
         guard !selectedRanges.isEmpty else {
-            selectionNode.path = .init()
+            selectedNode.path = .init()
             return
         }
         
-        selectionNode.path = Path(selectedRects.map { .init($0) })
+        selectedNode.path = Path(selectedRects.map { .init($0) })
     }
     
     var editGrid = EditGrid.main {
@@ -100,7 +107,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
                           lineWidth: 0.5, lineType: .color(.border))
     let clippingNode = Node(isHidden: true,
                             lineWidth: 4, lineType: .color(.warning))
-    let selectionNode = Node(lineWidth: 1, lineType: .color(.selected), fillType: .color(.subSelected))
+    let selectedNode = Node(lineWidth: 1, lineType: .color(.selected), fillType: .color(.subSelected))
     var isHiddenSelectedRange = true {
         didSet {
             cursorNode.isHidden = isHiddenSelectedRange
@@ -117,7 +124,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
         typesetter = binder[keyPath: keyPath].typesetter
         
         node = Node(children: [markedRangeNode, replacedRangeNode,
-                               cursorNode, borderNode, timelineNode, clippingNode, selectionNode],
+                               cursorNode, borderNode, timelineNode, clippingNode, selectedNode],
                     attitude: Attitude(position: binder[keyPath: keyPath].origin),
                     fillType: .color(.content))
         updateLineWidth()

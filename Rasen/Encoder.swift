@@ -206,7 +206,7 @@ final class Movie {
     private let pbAdaptor: AVAssetWriterInputPixelBufferAdaptor
     let isAlphaChannel: Bool
     
-    private var isAppend = false, isStop = false
+    private var isAppend = true, isStop = false
     private var settings = [Setting](), currentTime = CMTime(value: 0, timescale: 1)
     
     init(url: URL, renderSize: Size, isAlphaChannel: Bool, isLinearPCM: Bool,
@@ -405,7 +405,7 @@ final class CaptionRenderer {
     private let writer: AVAssetWriter,
                 captionInput: AVAssetWriterInput,
                 cAdaptor: AVAssetWriterInputCaptionAdaptor
-    private var isAppend = false, isStop = false, currentSec = Rational()
+    private var isAppend = true, isStop = false, currentSec = Rational()
 
     init(url: URL, frameRate: Int) throws {
         self.url = url

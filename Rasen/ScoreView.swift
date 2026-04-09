@@ -240,7 +240,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     let pitsNode = Node(fillType: .color(.background))
     var tonesNode = Node(), reverbsNode = Node(), otherNotesNode = Node()
     var noteLines = [Pointline]()
-    var selectedsNode = Node()
+    var selectedNode = Node()
     let clippingNode = Node(isHidden: true, lineWidth: 4, lineType: .color(.warning))
     var chordResults = [Note.ChordResult?](), draftChordResults = [Note.ChordResult?]()
     
@@ -249,6 +249,12 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     
     var scoreTrackItem: ScoreTrackItem?
     
+    var isHiddenSelected = false {
+        didSet {
+            guard isHiddenSelected != oldValue else { return }
+            selectedNode.isHidden = isHiddenSelected
+        }
+    }
     var selectedNotePitSprolIs = [Int: [Int: Set<Int>]]() {
         didSet {
             guard selectedNotePitSprolIs != oldValue else { return }
@@ -263,7 +269,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     }
     func updateWithSelected(old: [Int: [Int: Set<Int>]]) {
         guard !selectedNotePitSprolIs.isEmpty else {
-            selectedsNode.children = []
+            selectedNode.children = []
             return
         }
         
@@ -272,26 +278,39 @@ final class ScoreView: TimelineView, @unchecked Sendable {
         for (noteI, pitSprols) in selectedNotePitSprolIs {
             let note = score.notes[noteI]
             
-            children.append(Node(path: Path(noteLines[noteI].controls.map { $0.point }),
-                                 lineWidth: 1.5,
-                                 lineType: .color(.selected.with(opacity: 0.75))))
+            let ps = noteLines[noteI].controls.map { $0.point }
+            if !ps.isEmpty {
+                children.append(Node(path: Path(ps),
+                                     lineWidth: 1.5,
+                                     lineType: .color(.selected.with(opacity: 0.75))))
+            }
             
             var pathlines = [Pathline]()
             if note.isDefaultTone {
                 pitSprols.keys.forEach {
                     let pitP = pitPosition(atPit: $0, from: note)
-                    pathlines.append(.init(circleRadius: 0.25 * 8, position: pitP))
+                    pathlines.append(.init(circleRadius: 0.2 * 8, position: pitP))
                 }
             } else {
-                for (pitIs, toneFrame) in toneFrames(from: note) {
-                    for pitI in pitIs {
-                        if let sprolIs = pitSprols[pitI] {
+                let toneFrames = toneFrames(from: note)
+                if toneFrames.isEmpty {
+                    for pitI in note.pits.count.range {
+                        if pitSprols[pitI] != nil {
                             let pitP = pitPosition(atPit: pitI, from: note)
-                            pathlines.append(.init(circleRadius: 0.25 * 8, position: pitP))
-                            for sprolI in sprolIs {
-                                let sprolP = sprolPosition(atSprol: sprolI, atPit: pitI,
-                                                           from: note, atY: toneFrame.minY)
-                                pathlines.append(.init(circleRadius: 0.125 * 2, position: sprolP))
+                            pathlines.append(.init(circleRadius: 0.175 * 8, position: pitP))
+                        }
+                    }
+                } else {
+                    for (pitIs, toneFrame) in toneFrames {
+                        for pitI in pitIs {
+                            if let sprolIs = pitSprols[pitI] {
+                                let pitP = pitPosition(atPit: pitI, from: note)
+                                pathlines.append(.init(circleRadius: 0.175 * 8, position: pitP))
+                                for sprolI in sprolIs {
+                                    let sprolP = sprolPosition(atSprol: sprolI, atPit: pitI,
+                                                               from: note, atY: toneFrame.minY)
+                                    pathlines.append(.init(circleRadius: 0.1 * 2, position: sprolP))
+                                }
                             }
                         }
                     }
@@ -300,7 +319,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
             children.append(Node(path: Path(pathlines),
                                  fillType: .color(.selected)))
         }
-        selectedsNode.children = children
+        selectedNode.children = children
     }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
@@ -313,7 +332,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
                                chordNode,
                                timelineContentNode,
                                draftNotesNode, otherNotesNode, notesNode, pitsNode, tonesNode,
-                               clippingNode, selectedsNode])
+                               clippingNode, selectedNode])
         updateClippingNode()
         updateTimeline()
         updateDraftNotes()

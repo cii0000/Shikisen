@@ -53,6 +53,12 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
     var pcmTrackItem: PCMTrackItem?
     var volms = [Double]()
     
+    var isHiddenSelected = false {
+        didSet {
+            guard isHiddenSelected != oldValue else { return }
+            selectedNode.isHidden = isHiddenSelected
+        }
+    }
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }

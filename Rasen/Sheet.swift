@@ -2711,11 +2711,13 @@ extension Sheet {
         return v
     }
     
-    var enabledMusic: Bool {
-        !audiotrack.values.isEmpty
+    var isEnabledAudio: Bool {
+        score.enabled || contents.contains { $0.type.isAudio }
     }
     var audiotrack: Audiotrack {
-        .init(values: (score.enabled ? [.score(score)] : []) + contents.compactMap { $0.type.isAudio ? .sound($0) : nil })
+        .init(values: (score.enabled ? [.score(score)] : [.score(.init(beatRange: 0 ..< 16,
+                                                                       tempo: animation.tempo))])
+              + contents.compactMap { $0.type.isAudio ? .sound($0) : nil })
     }
     var pcmBuffer: PCMBuffer? {
         let audiotrack = audiotrack

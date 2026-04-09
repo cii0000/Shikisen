@@ -168,10 +168,15 @@ final class LookUpAction: InputKeyEventAction {
         } else if let sheetView = rootView.sheetView(at: p),
                   let noteI = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p),
                                                             scale: rootView.screenToWorldScale) {
-            let y = sheetView.scoreView.noteY(atX: sheetView.scoreView.convertFromWorld(p).x, at: noteI)
+            let scoreView = sheetView.scoreView
+            let y = scoreView.noteY(atX: sheetView.scoreView.convertFromWorld(p).x, at: noteI)
+            let scoreP = scoreView.convertFromWorld(p)
             let pitch = Pitch(value: sheetView.scoreView.pitch(atY: y, interval: Rational(1, 12)))
+            let beat = scoreView.beat(atX: scoreP.x, interval: rootView.currentBeatInterval)
             let fq = pitch.fq
-            let fqStr = "\("Note".localized) \(pitch.displayString()) (\(fq.string(digitsCount: 2)) Hz)".localized
+            let fqStr = "\("Note".localized) \(pitch.displayString()) (\(fq.string(digitsCount: 2)) Hz)"
+            + "\n" + Animation.timeString(fromTime: beat,
+                                          frameRate: Rational(Keyframe.defaultFrameRate))
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
@@ -191,22 +196,28 @@ final class LookUpAction: InputKeyEventAction {
             } else {
                 let pitchInterval = rootView.currentPitchInterval
                 let pitch = Pitch(value: scoreView.pitch(atY: scoreP.y, interval: pitchInterval))
-                let fqStr = "\(pitch.displayString()) (\(pitch.fq.string(digitsCount: 2)) Hz)".localized
+                let beat = scoreView.beat(atX: scoreP.x, interval: rootView.currentBeatInterval)
                 let typers = scoreView.chordTypers(at: scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale)
-                if !typers.isEmpty {
-                    let str = typers.reduce(into: "") { $0 += (!$0.isEmpty ? " " : "") + $1.type.description }
-                    rootView.show(fqStr + " " + str, at: p)
-                } else {
-                    rootView.show(fqStr, at: p)
-                }
+                let typerStr = !typers.isEmpty ?
+                typers.reduce(into: "") { $0 += (!$0.isEmpty ? " " : "") + $1.type.description }
+                : ""
+                let fqStr = "\(pitch.displayString()) (\(pitch.fq.string(digitsCount: 2)) Hz)"
+                + (typerStr.isEmpty ? typerStr : " " + typerStr)
+                + "\n" + Animation.timeString(fromTime: beat,
+                                              frameRate: Rational(Keyframe.defaultFrameRate))
+                rootView.show(fqStr, at: p)
             }
         } else if let sheetView = rootView.sheetView(at: p),
                   let (node, contentView) = sheetView.spectrogramNode(at: sheetView.convertFromWorld(p)) {
-            let y = node.convertFromWorld(p).y
-            let pitch = contentView.spectrogramPitch(atY: y)!
+            let pitch = contentView.spectrogramPitch(atY: node.convertFromWorld(p).y)!
+            let beat = contentView.beat(atX: sheetView.convertFromWorld(p).x,
+                                        interval: rootView.currentBeatInterval)
+            - (contentView.model.timeOption?.localStartBeat ?? 0) + contentView.model.beat
             let pitchRat = Rational(pitch, intervalScale: EditGrid.fullEditPitchInterval)
             let nfq = Pitch(value: pitchRat).fq
-            let fqStr = "\(Pitch(value: pitchRat).displayString()) (\(nfq.string(digitsCount: 2)) Hz)".localized
+            let fqStr = "\(Pitch(value: pitchRat).displayString()) (\(nfq.string(digitsCount: 2)) Hz)"
+            + "\n" + Animation.timeString(fromTime: beat,
+                                          frameRate: Rational(Keyframe.defaultFrameRate))
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                     let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
