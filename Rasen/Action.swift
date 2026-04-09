@@ -690,7 +690,8 @@ final class SelectAction: Action {
     }
     
     private var firstP = Point(), multiSelectFrameAction: MultiSelectFrameAction?,
-                captures = [SheetView: Capture](), firstSelectedSheetPositions = [IntPoint]()
+                captures = [SheetView: Capture](), firstSelectedSheetPositions = [IntPoint](),
+                firstSheetView: SheetView?, firstTextI: Int?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
     
@@ -715,6 +716,12 @@ final class SelectAction: Action {
             
             if !isEditingSheet {
                 firstSelectedSheetPositions = rootView.selectedSheetPositions
+            } else if let sheetView = rootView.sheetView(at: p),
+                      let ti = sheetView.textIndex(at: sheetView.convertFromWorld(p),
+                                                   scale: rootView.screenToWorldScale) {
+                firstSheetView = sheetView
+                firstTextI = ti
+                node.isHidden = true
             }
         case .changed:
             if let multiSelectFrameAction {
@@ -725,8 +732,41 @@ final class SelectAction: Action {
             let rect = AABB(firstP, p).rect
             node.path = .init(rect)
             
-            if rootView.isEditingSheet {
-                var isSelectedTextOnly = false
+            if rootView.isEditingSheet, let sheetView = firstSheetView,
+                let ti = firstTextI, ti < sheetView.model.texts.count {
+                
+                let capture: Capture
+                if let aCapture = captures[sheetView] {
+                    capture = aCapture
+                } else {
+                    let aCapture = Capture(selectedLineIs: sheetView.keyframeView.selectedLineIs,
+                          selectedPlaneIs: sheetView.keyframeView.selectedPlaneIs,
+                          selectedContentIs: sheetView.selectedContentIs,
+                          selectedNotePitSprolIs: sheetView.scoreView.selectedNotePitSprolIs,
+                          selectedTextRanegs: sheetView.textsView.elementViews.enumerated().reduce(into: .init()) { $0[$1.offset] = $1.element.selectedRanges })
+                    captures[sheetView] = aCapture
+                    capture = aCapture
+                }
+                
+                let textView = sheetView.textsView.elementViews[ti]
+                guard let oRanges = capture.selectedTextRanegs[ti] else { return }
+                let nRect = textView.convertFromWorld(rect)
+                guard textView.intersectsHalf(nRect) else { return }
+                let tfp = textView.convertFromWorld(firstP)
+                let tlp = textView.convertFromWorld(p)
+                
+                guard let fi = textView.characterIndexWithOutOfBounds(for: tfp),
+                      let li = textView.characterIndexWithOutOfBounds(for: tlp) else { return }
+                let range = fi < li ? fi ..< li : li ..< fi
+                
+                var nRanges = oRanges
+                if isUnselect {
+                    Range.subtracting(range, in: &nRanges)
+                } else {
+                    Range.union(range, in: &nRanges)
+                }
+                textView.selectedRanges = nRanges
+            } else if rootView.isEditingSheet {
                 for v in rootView.sheetViewValues {
                     guard rootView.sheetFrame(with: v.key).intersects(rect),
                           let sheetView = v.value.sheetView else { continue }
@@ -844,14 +884,10 @@ final class SelectAction: Action {
                             Range.union(range, in: &nRanges)
                         }
                         textView.selectedRanges = nRanges
-                        
-                        isSelectedTextOnly = textView.characterIndex(for: tfp) != nil
-                        && textView.characterIndex(for: tlp) != nil
                     }
                     
                     rootView.updateSelectedNodes()
                 }
-                node.isHidden = isSelectedTextOnly
             } else {
                 let oShps = Set(firstSelectedSheetPositions)
                 let nShps = rootView.world.sheetIDs.keys.filter {
