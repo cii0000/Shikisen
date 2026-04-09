@@ -515,10 +515,10 @@ final class LineAction: Action {
     
     nonisolated
     private static func revision(pressure: Double, tiltAngle: Double,
-                                 mainPressure: Double = 0.325,
+                                 targetPressure: Double = 0.325,
                                  revisonMinPressure: Double = 0.1875) -> Double {
-        ((pressure / mainPressure) * tiltAngle.clipped(min: .pi * 0.25, max: .pi * 0.35,
-                                                       newMin: 1, newMax: 0))
+        ((pressure / targetPressure) * tiltAngle.clipped(min: .pi * 0.25, max: .pi * 0.3,
+                                                         newMin: 1, newMax: 0))
         .clipped(min: revisonMinPressure, max: 1)
     }
     

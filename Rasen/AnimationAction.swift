@@ -1261,9 +1261,12 @@ final class InterpolateAction: InputKeyEventAction {
                 let nidivs = idivs.filter { idiv in
                     let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                     let idLines = animationView.model.keyframes[nKI].picture.lines.filter { $0.id == idiv.value.id }
-                    if idLines.isEmpty
-                        && animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI) {
-                        
+                    if (!animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI)
+                        && idLines.isEmpty)
+                        || idLines.count == 1 && idLines[0] == line {
+                        return true
+                    } else if idLines.isEmpty
+                                && animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI) {
                         let lw = Line.defaultLineWidth
                         let scale = 1 / rootView.worldToScreenScale
                         let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)

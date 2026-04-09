@@ -1638,8 +1638,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     
-    var enableFirstPressure: Float = 0.0
-    
     private var beganDragEvent: DragEvent?,
                 oldPressureStage = 0, isDrag = false, isStrongDrag = false,
                 firstTime = 0.0, firstP = Point(), isMovedDrag = false, maxPressure: Float = 0.0
@@ -1661,11 +1659,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         isMovedDrag = true
         maxPressure = max(maxPressure, nsEvent.pressure)
         if !isDrag {
-            guard nsEvent.pressure >= enableFirstPressure else {
+            guard nsEvent.pressure >= 0 else {
                 beganDragEvent = dragEventWith(nsEvent, .began)
-                if beganDragEvent.time - firstTime < 0.02 {
-                    beganDragEvent.screenPoint = firstP
-                }
                 self.beganDragEvent = beganDragEvent
                 return
             }
@@ -2458,7 +2453,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
         
         if !isBeganScroll && !isBeganPinch && !isBeganRotate && !isBeganSwipe && isPrepare3FingersTap {
-            if event.isAllEnded, let beganTouchTime, event.time - beganTouchTime < 0.2 {
+            if event.isAllEnded, let beganTouchTime,
+                event.time - beganTouchTime >= 0.1 && event.time - beganTouchTime < 0.2 {
+                
                 var event = InputKeyEvent(screenPoint: event.screenPoint,
                                           time: event.time,
                                           pressure: 1, phase: .began, isRepeat: false,
