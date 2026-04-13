@@ -256,7 +256,7 @@ final class VersionAction: Action {
             selectingRootNode.removeFromParent()
             rootNode.removeFromParent()
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             if let sheetView = sheetView {
                 rootView.updateFinding(from: sheetView)
             }
@@ -538,7 +538,7 @@ final class VersionAction: Action {
             selectingRootNode.removeFromParent()
             rootNode.removeFromParent()
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             if let sheetView = sheetView {
                 rootView.updateFinding(from: sheetView)
             }
@@ -592,7 +592,7 @@ final class ClearHistoryAction: InputKeyEventAction {
             rootView.cursor = .arrow
             
             if rootView.containsSelectedSheetPositions(p) {
-                let vs = rootView.selectedSheetPositions.map { rootView.sheetFrame(with: $0) }
+                let vs = rootView.world.selectedSheetPositions.map { rootView.sheetFrame(with: $0) }
                 selectingLineNode.children = vs.map {
                     Node(path: Path($0),
                          lineWidth: rootView.worldLineWidth,
@@ -617,7 +617,7 @@ final class ClearHistoryAction: InputKeyEventAction {
             break
         case .ended:
             if rootView.containsSelectedSheetPositions(p) {
-                let shps = rootView.selectedSheetPositions
+                let shps = rootView.world.selectedSheetPositions
                 
                 let mes = shps.count == 1 ?
                     "Do you want to clear history of this sheet?".localized :

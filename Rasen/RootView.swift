@@ -199,6 +199,8 @@ final class RootView: View, @unchecked Sendable {
             sheetView(at: shp)?.node.attitude.position = sf.origin
         }
         updateMap()
+        updateSelected()
+        updateSelectedFrame()
     }
     
     func newUndoGroup() {
@@ -240,6 +242,9 @@ final class RootView: View, @unchecked Sendable {
                 updateMap()
                 updateGrid(with: screenToWorldTransform, in: screenBounds)
                 updateWithCursorPosition()
+                if !world.selectedSheetIDs.isEmpty {
+                    updateSelected()
+                }
                 return rect
             case .removeSheets(let shps):
                 var rect = Rect?.none
@@ -263,14 +268,17 @@ final class RootView: View, @unchecked Sendable {
                 updateMap()
                 updateGrid(with: screenToWorldTransform, in: screenBounds)
                 updateWithCursorPosition()
-                
-                //
-                if !selectedSheetPositions.isEmpty {
-                    let nSHPs = selectedSheetPositions.filter { world.sheetIDs[$0] != nil }
-                    if nSHPs != selectedSheetPositions {
-                        selectedSheetPositions = nSHPs
-                    }
+                if !world.selectedSheetIDs.isEmpty {
+                    updateSelected()
                 }
+                
+                return rect
+            case .setSelectedSheetIDs(let sids):
+                let rect = Set(sids + world.selectedSheetIDs).reduce(into: Rect?.none) {
+                    $0 += sheetFrame(at: $1)
+                }
+                world.selectedSheetIDs = sids
+                updateSelected()
                 
                 return rect
             }
@@ -304,13 +312,13 @@ final class RootView: View, @unchecked Sendable {
                     world.sheetIDs[shp] = nil
                 }
                 
-                //
-                if !selectedSheetPositions.isEmpty {
-                    let nSHPs = selectedSheetPositions.filter { world.sheetIDs[$0] != nil }
-                    if nSHPs != selectedSheetPositions {
-                        selectedSheetPositions = nSHPs
-                    }
+                return rect
+                
+            case .setSelectedSheetIDs(let sids):
+                let rect = Set(sids + world.selectedSheetIDs).reduce(into: Rect?.none) {
+                    $0 += sheetFrame(at: $1)
                 }
+                world.selectedSheetIDs = sids
                 
                 return rect
             }
@@ -331,6 +339,17 @@ final class RootView: View, @unchecked Sendable {
         let redoItem = WorldUndoItem.removeSheets(shps)
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
+    }
+    func setSelectedSheet(_ sids: [UUID]) {
+        let undoItem = WorldUndoItem.setSelectedSheetIDs(world.selectedSheetIDs)
+        let redoItem = WorldUndoItem.setSelectedSheetIDs(sids)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(_  sids: [UUID], old oldSIDs: [UUID]) {
+        let undoItem = WorldUndoItem.setSelectedSheetIDs(oldSIDs)
+        let redoItem = WorldUndoItem.setSelectedSheetIDs(sids)
+        append(undo: undoItem, redo: redoItem)
     }
     
     @discardableResult
@@ -367,9 +386,10 @@ final class RootView: View, @unchecked Sendable {
         guard let uiv = history[result.version].values[result.valueIndex]
             .undoItemValue else { return }
         
-        let isReversed = result.type == .undo
+        let isUndo = result.type == .undo
+        let reversedType: UndoType = isUndo ? .redo : .undo
         
-        switch !isReversed ? uiv.undoItem : uiv.redoItem {
+        switch !isUndo ? uiv.undoItem : uiv.redoItem {
         case .insertSheets(let sids):
             for (shp, sid) in sids {
                 if world.sheetIDs[shp] != sid {
@@ -377,12 +397,27 @@ final class RootView: View, @unchecked Sendable {
                     break
                 }
             }
-        default: break
+        case .removeSheets: break
+        case .setSelectedSheetIDs(let selectedSIDs):
+            if world.selectedSheetIDs != selectedSIDs {
+                history[result.version].values[result.valueIndex]
+                    .saveUndoItemValue?.set(.setSelectedSheetIDs(world.selectedSheetIDs),
+                                            type: reversedType)
+            }
         }
         
-        switch isReversed ? uiv.undoItem : uiv.redoItem {
+        switch isUndo ? uiv.undoItem : uiv.redoItem {
         case .insertSheets(_): break
         case .removeSheets(_): break
+        case .setSelectedSheetIDs:
+            switch result.type {
+            case .undo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.redoItem = .setSelectedSheetIDs(world.selectedSheetIDs)
+            case .redo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.undoItem = .setSelectedSheetIDs(world.selectedSheetIDs)
+            }
         }
     }
     
@@ -459,6 +494,10 @@ final class RootView: View, @unchecked Sendable {
                 
                 sheetView.contentsView.elementViews.forEach { $0.updateSpectrogram() }
                 sheetView.scoreView.updateSpectrogram()
+                
+                sheetView.stopNotifications.append { [weak self] _ in
+                    self?.showSelected()
+                }
                 
                 makeThumbnailRecord(at: sheetID, with: sheetView)
                 syncSave()
@@ -775,71 +814,62 @@ final class RootView: View, @unchecked Sendable {
         return minSHP
     }
     
-    var selectedSheetPositions = [IntPoint]() {
-        didSet {
-            updateSelectedNodes()
-        }
-    }
     var selectedBounds: Rect? {
-        selectedSheetPositions.reduce(into: Rect?.none) { $0 += sheetFrame(with: $1) }
+        world.selectedSheetIDs.reduce(into: Rect?.none) { $0 += sheetFrame(at: $1) }
     }
-    func updateSelectedNodes() {
-        if isEditingSheet {
-            let nodes: [Node] = sheetViewValues.flatMap {
-                guard let sheetVeiw = $0.value.sheetView,
-                        let selectedFrame = sheetVeiw.selectedFrame else {
-                    return [Node]()
-                }
-                let scale = screenToWorldScale
-                let rect = sheetVeiw.convertToWorld(selectedFrame)
-                let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
-                                 rect.midXMinYPoint, rect.midXMaxYPoint,
-                                 rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
-                    Node(name: "knob",
-                         attitude: .init(position: $0, scale: .init(square: scale)),
-                         path: Path(circleRadius: 3),
-                         fillType: .color(.selected))
-                }
-                return knobNodes + [Node(path: .init(rect),
-                                         lineWidth: scale,
-                                         lineType: .color(.selected))]
+    func updateSelectedFrame() {
+        let nodes: [Node] = sheetViewValues.flatMap {
+            guard let sheetVeiw = $0.value.sheetView,
+                  let selectedFrame = sheetVeiw.selectedFrame else {
+                return [Node]()
             }
-            
-            if nodes.isEmpty {
-                if !selectedFrameNode.children.isEmpty {
-                    selectedFrameNode.children = []
-                }
-            } else {
-                selectedFrameNode.children = nodes
+            let scale = screenToWorldScale
+            let rect = sheetVeiw.convertToWorld(selectedFrame)
+            let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+                             rect.midXMinYPoint, rect.midXMaxYPoint,
+                             rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
+                Node(name: "knob",
+                     attitude: .init(position: $0, scale: .init(square: scale)),
+                     path: Path(circleRadius: 3),
+                     fillType: .color(.selected))
             }
-            
-            selectedFrameNode.isHidden = isHiddenSelected
-            selectedNode.isHidden = true
-        } else {
-            if selectedSheetPositions.isEmpty {
-                if !selectedNode.children.isEmpty {
-                    selectedNode.children = []
-                }
-            } else {
-                let roads = roads(fromMap: Set(selectedSheetPositions))
-                let roadPath = Path(roads.compactMap {
-                    $0.pathlineWith(width: Sheet.width, height: Sheet.height)
-                }, isCap: false)
-                let framePath = Path(selectedSheetPositions.map { .init(sheetFrame(with: $0)) })
-                
-                let l = worldLineWidth
-                selectedNode.children = [Node(path: framePath,
-                                              lineWidth: l,
-                                              lineType: .color(.selected),
-                                              fillType: .color(.subSelected))] +
-                (!roads.isEmpty ? [.init(path: roadPath,
-                                             lineWidth: l * 0.5,
-                                             lineType: .color(.selected))] : [])
-            }
-            
-            selectedFrameNode.isHidden = true
-            selectedNode.isHidden = false
+            return knobNodes + [Node(path: .init(rect),
+                                     lineWidth: scale,
+                                     lineType: .color(.selected))]
         }
+        
+        if nodes.isEmpty {
+            if !selectedFrameNode.children.isEmpty {
+                selectedFrameNode.children = []
+            }
+        } else {
+            selectedFrameNode.children = nodes
+        }
+        updateSelectedWithIsEditingSheet()
+    }
+    func updateSelected() {
+        let shps = Set(world.selectedSheetPositions)
+        if shps.isEmpty {
+            if !selectedNode.children.isEmpty {
+                selectedNode.children = []
+            }
+        } else {
+            let roads = roads(fromMap: shps)
+            let roadPath = Path(roads.compactMap {
+                $0.pathlineWith(width: Sheet.width, height: Sheet.height)
+            }, isCap: false)
+            let framePath = Path(shps.map { .init(sheetFrame(with: $0)) })
+            
+            let l = worldLineWidth
+            selectedNode.children = [Node(path: framePath,
+                                          lineWidth: l,
+                                          lineType: .color(.selected),
+                                          fillType: .color(.subSelected))] +
+            (!roads.isEmpty ? [.init(path: roadPath,
+                                         lineWidth: l * 0.5,
+                                         lineType: .color(.selected))] : [])
+        }
+        updateSelectedWithIsEditingSheet()
     }
     func updateSelectedNodesWithScale() {
         if isEditingSheet {
@@ -851,9 +881,6 @@ final class RootView: View, @unchecked Sendable {
                     $0.lineWidth = scale
                 }
             }
-            
-            selectedFrameNode.isHidden = isHiddenSelected
-            selectedNode.isHidden = true
         } else {
             let l = worldLineWidth
             if selectedNode.children.count == 1 {
@@ -862,9 +889,16 @@ final class RootView: View, @unchecked Sendable {
                 selectedNode.children[0].lineWidth = l
                 selectedNode.children[1].lineWidth = l * 0.5
             }
-            
+        }
+        updateSelectedWithIsEditingSheet()
+    }
+    func updateSelectedWithIsEditingSheet() {
+        if isEditingSheet {
+            selectedFrameNode.isHidden = isHiddenSelected
+            selectedNode.isHidden = true
+        } else {
             selectedFrameNode.isHidden = true
-            selectedNode.isHidden = false
+            selectedNode.isHidden = isHiddenSelected
         }
     }
     func updateSelectedColor(isMain: Bool) {
@@ -893,6 +927,7 @@ final class RootView: View, @unchecked Sendable {
     }
     var isHiddenSelected = false {
         didSet {
+            selectedNode.isHidden = isHiddenSelected ? true : isEditingSheet
             selectedFrameNode.isHidden = isHiddenSelected ? true : !isEditingSheet
         }
     }
@@ -1191,6 +1226,10 @@ final class RootView: View, @unchecked Sendable {
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
                                 
+                                sheetView.stopNotifications.append { [weak self] _ in
+                                    self?.showSelected()
+                                }
+                                
                                 if make(sheetView) {
                                     if self.savingItem != nil {
                                         self.savingFuncs.append { [model = sheetView.model, um = sheetView.history,
@@ -1333,6 +1372,10 @@ final class RootView: View, @unchecked Sendable {
                                 let frame = self.sheetFrame(with: shp)
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
+                                
+                                sheetView.stopNotifications.append { [weak self] _ in
+                                    self?.showSelected()
+                                }
                                 
                                 if make(sheetView) {
                                     if self.savingItem != nil {
@@ -1517,10 +1560,11 @@ final class RootView: View, @unchecked Sendable {
                 }
                 sheetView.selectedContentIs = []
                 sheetView.scoreView.selectedNotePitSprolIs = [:]
-                updateSelectedNodes()
+                updateSelectedFrame()
             }
         } else {
-            selectedSheetPositions = []
+            newUndoGroup()
+            setSelectedSheet([])
         }
     }
     func closeAllPanels(at p: Point) {
@@ -1962,7 +2006,8 @@ final class RootView: View, @unchecked Sendable {
     }
     
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
-        selectedSheetPositions.contains { sheetFrame(with: $0).contains(p) }
+        isEditingSheet ?
+        false : world.selectedSheetIDs.contains { sheetFrame(at: $0)?.contains(p) ?? false }
     }
     
     struct SheetFramePosition {
@@ -1970,12 +2015,7 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetFramePositions(at p: Point) -> [SheetFramePosition] {
         if containsSelectedSheetPositions(p) {
-            let vs: [SheetFramePosition] = world.sheetIDs.keys.compactMap { shp in
-                let frame = sheetFrame(with: shp)
-                return selectedSheetPositions.contains(shp) ?
-                    SheetFramePosition(shp: shp, frame: frame) : nil
-            }
-            return vs
+            return world.selectedSheetPositions.map { .init(shp: $0, frame: sheetFrame(with: $0)) }
         } else {
             let shp = sheetPosition(at: p)
             if sheetID(at: shp) != nil {
@@ -2181,7 +2221,7 @@ final class RootView: View, @unchecked Sendable {
                 sheetViewValue.sheetView?.node.removeFromParent()
                 sheetViewValue.loadingNode?.removeFromParent()
                 
-                updateSelectedNodes()
+                updateSelectedFrame()
                 updateFindingNodes(at: shp)
                 
                 self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
@@ -2278,10 +2318,14 @@ final class RootView: View, @unchecked Sendable {
                         
                         self.thumbnailNodeValues[shp]?.node?.removeFromParent()
                         
-                        self.updateSelectedNodes()
+                        self.updateSelectedFrame()
                         self.updateFindingNodes(at: shp)
                         if shp == self.sheetPosition(at: self.convertScreenToWorld(self.cursorPoint)) {
                             self.updateTextCursor()
+                        }
+                        
+                        sheetView.stopNotifications.append { [weak self] _ in
+                            self?.showSelected()
                         }
                     }
                 } onCancel: {
@@ -2343,6 +2387,10 @@ final class RootView: View, @unchecked Sendable {
         sheetView.node.enableCache = true
         updateWithEditGrid(in: sheetView)
         
+        sheetView.stopNotifications.append { [weak self] _ in
+            self?.showSelected()
+        }
+        
         sheetRecord.willwriteClosure = { [weak sheetView, weak sheetHistoryRecord, weak self] (record) in
             if let sheetView = sheetView {
                 record.value = sheetView.model
@@ -2368,6 +2416,13 @@ final class RootView: View, @unchecked Sendable {
     
     func sheetPosition(at sid: UUID) -> IntPoint? {
         world.sheetPositions[sid]
+    }
+    func sheetFrame(at sid: UUID) -> Rect? {
+        if let shp = world.sheetPositions[sid] {
+            sheetFrame(with: shp)
+        } else {
+            nil
+        }
     }
     func sheetID(at shp: IntPoint) -> UUID? {
         world.sheetIDs[shp]
@@ -2491,6 +2546,10 @@ final class RootView: View, @unchecked Sendable {
                 self?.makeThumbnailRecord(at: sid, with: sheetView,
                                           isPreparedWrite: true)// -> write
             }
+        }
+        
+        sheetView.stopNotifications.append { [weak self] _ in
+            self?.showSelected()
         }
         
         self.sheetView(at: shp)?.node.removeFromParent()
@@ -2846,6 +2905,13 @@ final class RootView: View, @unchecked Sendable {
         }
         return nil
     }
+    func sheetViewWithSelectedFrame(at p: Point) -> SheetView? {
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            sheetView(at: shp)
+        } else {
+            nil
+        }
+    }
     func sheetViewWithSelectedSheetValue(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
         for v in sheetViewValues {
@@ -2895,6 +2961,17 @@ final class RootView: View, @unchecked Sendable {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedContent(sheetView.convertFromWorld(p),
                                                  scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedKeyframe(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedKeyframe(sheetView.convertFromWorld(p),
+                                                  scale: screenToWorldScale) {
                 return sheetView
             }
         }

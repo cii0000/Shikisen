@@ -903,8 +903,8 @@ final class PastableAction: Action {
                                     lineType: .color(.selected))
             if sheetView.model.enabledAnimation {
                 selectingLineNode.children = [selectedNode]
-                + sheetView.animationView.interpolationNodes(from: [lineView.model.id], scale: scale)
-                + sheetView.interporatedTimelineNodes(from: [lineView.model.id])
+                + sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale)
+                + sheetView.interporatedTimelineNodes(from: [lineView.model.interID])
             } else {
                 selectingLineNode.children = [selectedNode]
             }
@@ -1198,6 +1198,8 @@ final class PastableAction: Action {
                 return true
             }
         }
+        
+        rootView.cursor = .arrowWith(string: "Empty".localized)
         return false
     }
     
@@ -1242,7 +1244,7 @@ final class PastableAction: Action {
             } else {
                 sheetView.removeKeyframes(at: indexes)
             }
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             
             Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
             
@@ -1407,7 +1409,7 @@ final class PastableAction: Action {
             
             if sheetView.model.enabledAnimation {
                 let scale = 1 / rootView.worldToScreenScale
-                let nodes = sheetView.animationView.interpolationNodes(from: [lineView.model.id], scale: scale,
+                let nodes = sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale,
                                                          removeLineIndex: li)
                 if nodes.count > 1 {
                     selectingLineNode.children = nodes
@@ -1748,6 +1750,7 @@ final class PastableAction: Action {
                 return true
             }
         }
+        rootView.cursor = .arrowWith(string: "Empty".localized)
         return false
     }
     
@@ -2465,10 +2468,10 @@ final class PastableAction: Action {
                            let (sheetView, isNew) = rootView
                             .madeSheetViewIsNew(at: nshp, isNewUndoGroup: isRootNewUndoGroup) {
                             
-                            let idSet = Set(sheetView.model.picture.lines.map { $0.id })
+                            let idSet = Set(sheetView.model.picture.lines.map { $0.interID })
                             for (i, l) in nLines.enumerated() {
-                                if idSet.contains(l.id) {
-                                    nLines[i].id = UUID()
+                                if idSet.contains(l.interID) {
+                                    nLines[i].interID = UUID()
                                 }
                             }
                             if isNew {
@@ -2819,10 +2822,10 @@ final class PastableAction: Action {
                                                    in: Rect(size: frame.size))
                         guard !nLines.isEmpty else { return nil }
                         
-                        let idSet = Set(oldLines.map { $0.id })
+                        let idSet = Set(oldLines.map { $0.interID })
                         for (i, l) in nLines.enumerated() {
-                            if idSet.contains(l.id) {
-                                nLines[i].id = UUID()
+                            if idSet.contains(l.interID) {
+                                nLines[i].interID = UUID()
                             }
                         }
                         
@@ -2994,7 +2997,7 @@ final class PastableAction: Action {
                         }
                     }
                 }
-                rootView.updateSelectedNodes()
+                rootView.updateSelectedFrame()
             } else if let _ = rootView.madeSheetView(at: shp) {
                 let colorOwners = rootView.madeColorOwner(at: p, enabledLine: false,
                                                           removingUUColor: uuColor)
@@ -3009,7 +3012,7 @@ final class PastableAction: Action {
                         filledSheetViews[$0.sheetView.id] = $0.sheetView
                     }
                 }
-                rootView.updateSelectedNodes()
+                rootView.updateSelectedFrame()
             }
             
         case .animation(let animation):
@@ -3043,7 +3046,7 @@ final class PastableAction: Action {
             sheetView.insert(kivs)
             sheetView.rootKeyframeIndex = sheetView.model.animation.keyframes.count * count + ni
             rootAction.updateActionNode()
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
         case .ids(let idv):
             let ids = idv.ids
             guard let sheetView = rootView.sheetView(at: shp) else { return }
@@ -3451,7 +3454,7 @@ final class PastableAction: Action {
             editingP = rootView.convertScreenToWorld(sp)
             cut(at: editingP)
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(at: editingP)
             rootView.updateTextCursor()
             rootView.node.append(child: selectingLineNode)
@@ -3578,7 +3581,7 @@ final class PastableAction: Action {
                 selectingLineNode.removeFromParent()
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(at: editingP)
             rootView.updateTextCursor()
             
@@ -3596,6 +3599,8 @@ final class PastableAction: Action {
         if !csv.sheetIDs.isEmpty {
             csv.deltaPoint = dp
             Pasteboard.shared.copiedObjects = [.copiedSheetsValue(csv)]
+        } else {
+            rootView.cursor = .arrowWith(string: "Empty".localized)
         }
     }
     
@@ -3656,12 +3661,19 @@ final class PastableAction: Action {
                 }
             }
             if !removeIndexes.isEmpty || !nIndexes.isEmpty {
+                let removeIsSet = Set(removeIndexes.compactMap { rootView.world.sheetIDs[$0] })
+                let nSelectedSheetIs = Set(rootView.world.selectedSheetIDs)
+                    .subtracting(removeIsSet).union(nIndexes.values).sorted()
+                
                 rootView.history.newUndoGroup()
                 if !removeIndexes.isEmpty {
                     rootView.removeSheets(at: removeIndexes)
                 }
                 if !nIndexes.isEmpty {
                     rootView.append(nIndexes)
+                }
+                if nIndexes.count > 1, nSelectedSheetIs != rootView.world.selectedSheetIDs {
+                    rootView.setSelectedSheet(nSelectedSheetIs)
                 }
                 rootView.updateNode()
             }
@@ -3689,6 +3701,13 @@ final class PastableAction: Action {
                 rootView.close(from: shps)
                 rootView.newUndoGroup()
                 rootView.removeSheets(at: shps)
+                
+                let nssids = rootView.world.selectedSheetIDs.filter {
+                    rootView.world.sheetPositions[$0] != nil
+                }
+                if nssids != rootView.world.selectedSheetIDs {
+                    rootView.setSelectedSheet(nssids)
+                }
             }
             
             rootView.updateWithFinding()
@@ -3790,7 +3809,9 @@ final class CutLinePointAction: InputKeyEventAction {
             rootView.cursor = .arrow
             
             let p = rootView.convertScreenToWorld(sp)
-            if let sheetView = rootView.madeSheetView(at: p) {
+            var isCut = false
+            if isEditingSheet,
+               let sheetView = rootView.madeSheetView(at: p) {
                 let inP = sheetView.convertFromWorld(p)
                 
                 if let (lineView, li) = sheetView.lineTuple(at: inP,
@@ -3802,6 +3823,7 @@ final class CutLinePointAction: InputKeyEventAction {
                     sheetView.newUndoGroup()
                     sheetView.removeLines(at: [li])
                     sheetView.insert([.init(value: line, index: li)])
+                    isCut = true
                     
                     node.children = line.mainControlSequence.flatMap {
                         let p = sheetView.convertToWorld($0.point)
@@ -3814,6 +3836,11 @@ final class CutLinePointAction: InputKeyEventAction {
                     }
                 }
             }
+            
+            if !isCut {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
+            }
+            
             rootView.node.append(child: node)
         case .changed:
             break
@@ -3892,8 +3919,8 @@ final class CopyLineColorAction: InputKeyEventAction {
                                     lineType: .color(.selected))
             if sheetView.model.enabledAnimation {
                 selectingLineNode.children = [selectedNode]
-                + sheetView.animationView.interpolationNodes(from: [lineView.model.id], scale: scale)
-                + sheetView.interporatedTimelineNodes(from: [lineView.model.id])
+                + sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale)
+                + sheetView.interporatedTimelineNodes(from: [lineView.model.interID])
             } else {
                 selectingLineNode.children = [selectedNode]
             }
@@ -3936,7 +3963,10 @@ final class CopyLineColorAction: InputKeyEventAction {
                     show(ps, color: .background)
                 }
             }
+            
+            return true
         }
+        rootView.cursor = .arrowWith(string: "Empty".localized)
         return false
     }
 }

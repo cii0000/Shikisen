@@ -34,17 +34,18 @@ final class FindAction: InputKeyEventAction {
                 rootAction.keepOut(with: event)
                 return
             }
-            rootView.cursor = .arrow
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
             guard let sheetView = rootView.sheetView(at: p) else { return }
             let inP = sheetView.convertFromWorld(p)
+            var isFind = false
             if let (textView, _, i, _) = sheetView.textTuple(at: inP) {
                 if let range = textView.selectedRange(at: textView.convertFromWorld(p))
                     ?? textView.wordRange(at: i) {
                     
                     let string = String(textView.model.string[range])
                     rootView.finding = Finding(worldPosition: p, string: string)
+                    isFind = true
                 }
             } else {
                 let topOwner = sheetView.sheetColorOwner(at: inP, scale: rootView.screenToWorldScale).value
@@ -52,9 +53,14 @@ final class FindAction: InputKeyEventAction {
                 if uuColor != Sheet.defalutBackgroundUUColor {
                     let string = uuColor.id.uuidString
                     rootView.finding = Finding(worldPosition: p, string: string)
-                } else {
-                    rootView.finding = Finding()
+                    isFind = true
                 }
+            }
+            if !isFind {
+                rootView.finding = Finding()
+                rootView.cursor = .arrowWith(string: "Empty".localized)
+            } else {
+                rootView.cursor = .arrow
             }
         case .changed:
             break
@@ -123,7 +129,7 @@ final class LookUpAction: InputKeyEventAction {
         if !rootView.isEditingSheet {
             let shp = rootView.sheetPosition(at: p)
             if rootView.containsSelectedSheetPositions(p) {
-                let sheetCount = rootView.selectedSheetPositions.count
+                let sheetCount = rootView.world.selectedSheetIDs.count
                 rootView.show("Sheet".localized
                               + "\n\t\("Count".localized): \(sheetCount)",
                               at: p)
@@ -426,7 +432,7 @@ final class TextOrientationAction: Action {
                 }
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(at: p)
         case .changed:
             break
@@ -572,7 +578,7 @@ final class TextScriptAction: Action {
                 }
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(at: p)
         case .changed:
             break
@@ -872,7 +878,7 @@ final class TextAction: InputTextEventAction {
                 Cursor.isHidden = false
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             if let oldEditingSheetView = oldEditingSheetView {
                 rootView.updateFinding(from: oldEditingSheetView)
             }
@@ -890,7 +896,7 @@ final class TextAction: InputTextEventAction {
                 removeText(in: editingTextView, in: sheetView)
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             if let editingSheetView = editingSheetView {
                 rootView.updateFinding(from: editingSheetView)
             }
@@ -1080,7 +1086,7 @@ final class TextAction: InputTextEventAction {
                 editingSheetView = nil
                 editingTextView = nil
             }
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(from: sheetView)
         }
     }
@@ -1176,7 +1182,7 @@ final class TextAction: InputTextEventAction {
             rootView.isUpdateWithCursorPosition = true
         }
         
-        rootView.updateSelectedNodes()
+        rootView.updateSelectedFrame()
         rootView.updateFinding(from: sheetView)
     }
     

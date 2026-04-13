@@ -534,17 +534,17 @@ final class LineAction: Action {
     }
     nonisolated
     static func snap(_ c: Line.Control, _ nc: Line.Control?,
-                     size: Double, paddingD: Double = 0.5,
+                     size: Double,
                      screenToWorldScale: Double,
                      from lines: [Line]) -> Line.Control? {
+        let scale = screenToWorldScale.clipped(min: 0.06, max: 2, newMin: 0.5, newMax: 2)
         let dd = size / 2
-        let wPaddingD = screenToWorldScale * paddingD
-        var minDSQ = Double.infinity, minP: Line.Control?
+        var minDSq = Double.infinity, minP: Line.Control?
         func update(_ oc: Line.Control, _ oSize: Double) {
-            let ond = dd + oSize / 2 + wPaddingD
-            let dSQ = c.distanceSquared(oc)
-            if dSQ < ond * ond && dSQ < minDSQ {
-                minDSQ = dSQ
+            let ond = (dd + oSize / 2) * scale
+            let dSq = c.distanceSquared(oc)
+            if dSq < ond * ond && dSq < minDSq {
+                minDSq = dSq
                 minP = oc
             }
         }
@@ -1131,7 +1131,7 @@ final class LineAction: Action {
                 isStraightNode = nil
             }
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
         }
     }
     
@@ -1310,7 +1310,7 @@ final class LineAction: Action {
             outlineLassoNode = nil
             rectNode?.removeFromParent()
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
             rootView.updateFinding(at: p)
         }
     }
@@ -1593,7 +1593,7 @@ final class LineAction: Action {
             
             let nLine = tempLine * Transform(translation: -centerBounds.origin)
             let path = Path(nLine)
-            sheetView.cutFaces(with: path)
+            _ = sheetView.cutFaces(with: path)
         }
     }
 }

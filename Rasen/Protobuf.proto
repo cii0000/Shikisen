@@ -113,7 +113,7 @@ message PBLine {
     }
     repeated PBControl controls = 1;
     double size = 2;
-    PBUUID id = 4;
+    PBUUID interID = 4;
     PBInterType interType = 7;
     bytes controlsData = 6;
     oneof uuColorOptional {
@@ -366,6 +366,7 @@ message PBSheet {
 
 message PBWorld {
     PBIntPointStringDic sheetPositions = 1;
+    PBUUIDArray selectedSheetIDs = 2;
 }
 
 enum PBRectCorner {
@@ -493,6 +494,9 @@ message PBLineArray {
 message PBPlaneArray {
     repeated PBPlane value = 1;
 }
+message PBUUIDArray {
+    repeated PBUUID value = 1;
+}
 message PBIntPointArray {
     repeated PBIntPoint value = 1;
 }
@@ -605,6 +609,7 @@ message PBWorldUndoItem {
     oneof value {
         PBStringIntPointDic insertSheets = 1;
         PBIntPointArray removeSheets = 2;
+        PBUUIDArray setSelectedSheetIDs = 3;
     }
 }
 

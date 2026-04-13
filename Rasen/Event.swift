@@ -362,8 +362,8 @@ extension Quasimode {
     static let move = Self(modifier: [.control], .drag)
     static let moveLineZ = Self(modifier: [.shift, .control], .drag)
     
-    static let selectFrame = Self(.swipe)
-    static let keySelectFrame = Self(modifier: [.control, .command], .drag)
+    static let selectTime = Self(.swipe)
+    static let keySelectTime = Self(modifier: [.control, .command], .drag)
     static let goPrevious = Self(modifier: [.control], .z)
     static let goNext = Self(modifier: [.control], .x)
     static let play = Self(.fourFingersTap)
@@ -376,19 +376,16 @@ extension Quasimode {
     static let rotate = Self(.rotate)
     static let keyRotate = Self(modifier: [.shift, .control, .option, .command], .drag)
     
-    static let lookUp = Self(.threeFingersTap)
-    static let keyLookUp = Self(modifier: [.control, .command], .d)
     static let selectByRange = Self(.subDrag)
     static let unselectByRange = Self(modifier: [.shift], .subDrag)
-    static let openMenu = Self(.subClick)
     
+    static let openMenu = Self(.subClick)
+    static let lookUp = Self(.threeFingersTap)
+    static let keyLookUp = Self(modifier: [.control, .command], .d)
     static let runOrClose = Self(.click)
     static let stop = Self(.escape)
     
     static let inputCharacter = Self(.keyInput)
-    
-    static let changeToSuperscript = Self(modifier: [.command], .up)
-    static let changeToSubscript = Self(modifier: [.command], .down)
     
     static let undo = Self(modifier: [.command], .z)
     static let redo = Self(modifier: [.shift, .command], .z)
@@ -407,16 +404,21 @@ extension Quasimode {
     static let makeFaces = Self(modifier: [.command], .b)
     static let cutFaces = Self(modifier: [.shift, .command], .b)
     
-    static let changeToVerticalText = Self(modifier: [.command], .l)
-    static let changeToHorizontalText = Self(modifier: [.shift, .command], .l)
-    
     static let insertControlPoint = Self(modifier: [.command], .e)
-    static let addScore = Self(modifier: [.shift, .command], .e)
+    
+    static let addTime = Self(modifier: [.command], .no1)
+    static let addScore = Self(modifier: [.command], .no2)
     
     static let justFit = Self(modifier: [.command], .j)
     
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
+    
+    static let changeToSuperscript = Self(modifier: [.command], .up)
+    static let changeToSubscript = Self(modifier: [.command], .down)
+    
+    static let changeToVerticalText = Self(modifier: [.command], .l)
+    static let changeToHorizontalText = Self(modifier: [.shift, .command], .l)
     
     static let changeABC = Self(.abc)
     static let changeAIU = Self(.aiu)
@@ -524,7 +526,7 @@ extension ActionList {
         [.init(name: "Move".localized, .move),
          .init(name: "Move Line Z".localized, .moveLineZ)],
         
-        [.init(name: "Select Frame".localized, .selectFrame),
+        [.init(name: "Select Time".localized, .selectTime),
          .init(name: "Play".localized, .play)],
         
         [.init(name: "Zoom".localized, .zoom),
@@ -554,14 +556,16 @@ extension ActionList {
         [.init(name: "Make Faces".localized, .makeFaces),
          .init(name: "Cut Faces".localized, .cutFaces)],
         
-        [.init(name: "Change to Vertical Text".localized, .changeToVerticalText),
-         .init(name: "Change to Horizontal Text".localized, .changeToHorizontalText)],
+        [.init(name: "Insert Control Point".localized, .insertControlPoint)],
         
-        [.init(name: "Insert Control Point".localized, .insertControlPoint),
+        [.init(name: "Add Time".localized, .addTime),
          .init(name: "Add Score".localized, .addScore)],
         
         [.init(name: "Interpolate".localized, .interpolate),
-         .init(name: "Disconnect".localized, .disconnect)]
+         .init(name: "Disconnect".localized, .disconnect)],
+        
+        [.init(name: "Change to Vertical Text".localized, .changeToVerticalText),
+         .init(name: "Change to Horizontal Text".localized, .changeToHorizontalText)]
     ])
 }
 extension ActionList {

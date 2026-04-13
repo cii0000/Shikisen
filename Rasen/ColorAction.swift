@@ -1056,7 +1056,7 @@ final class ColorAction: Action {
                     oldPan = pan
                 }
                 let ndPan = pan - beganPan
-                rootView.cursor = .arrowWith(string: "\(pan.string(digitsCount: 2)) (\((ndPan > 0 ? "+" : "") + ndPan.string(digitsCount: 2)))")
+                rootView.cursor = .arrowWith(string: "\(pan.string(digitsCount: 2)) LR (\((ndPan > 0 ? "+" : "") + ndPan.string(digitsCount: 2)) LR)")
                 
                 func newPan(from otherPan: Double) -> Double {
                     if beganPan == otherPan {

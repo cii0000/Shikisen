@@ -44,10 +44,10 @@ extension InterOption: Protobuf {
 extension Line {
     var interOption: InterOption {
         get {
-            .init(id: id, interType: interType)
+            .init(id: interID, interType: interType)
         }
         set {
-            self.id = newValue.id
+            self.interID = newValue.id
             self.interType = newValue.interType
         }
     }
@@ -271,6 +271,14 @@ extension Array where Element == Plane {
         self = try pb.value.map { try Plane($0) }
     }
     var pb: PBPlaneArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == UUID {
+    init(_ pb: PBUUIDArray) throws {
+        self = try pb.value.map { try .init($0) }
+    }
+    var pb: PBUUIDArray {
         .with { $0.value = map { $0.pb } }
     }
 }
@@ -1535,10 +1543,10 @@ extension Keyframe {
 //        (picture.lines.contains { $0.interType != .interpolated }) || isEmpty
 //    }
     func containsInterline(_ id: UUID) -> Bool {
-        picture.lines.contains { $0.id == id }
+        picture.lines.contains { $0.interID == id }
     }
     func containsKeyline(_ id: UUID) -> Bool {
-        picture.lines.contains { $0.id == id && $0.interType == .key }
+        picture.lines.contains { $0.interID == id && $0.interType == .key }
     }
     
     var option: KeyframeOption {
@@ -2527,7 +2535,7 @@ extension Sheet {
                             }
                             idI = j
                         }
-                        inLines[idI].id = $1.id
+                        inLines[idI].interID = $1.interID
                         inLines[idI].interType = $1.interType
                         
                         $0 += inLines
@@ -2715,8 +2723,7 @@ extension Sheet {
         score.enabled || contents.contains { $0.type.isAudio }
     }
     var audiotrack: Audiotrack {
-        .init(values: (score.enabled ? [.score(score)] : [.score(.init(beatRange: 0 ..< 16,
-                                                                       tempo: animation.tempo))])
+        .init(values: (score.enabled ? [.score(score)] : [])
               + contents.compactMap { $0.type.isAudio ? .sound($0) : nil })
     }
     var pcmBuffer: PCMBuffer? {

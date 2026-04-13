@@ -302,7 +302,7 @@ extension Stereo {
     }
     
     var displayName: String {
-        "\(Volm.db(fromVolm: volm).string(digitsCount: 2)) db, \(pan.string(digitsCount: 2))"
+        "\(Volm.db(fromVolm: volm).string(digitsCount: 2)) db, \(pan.string(digitsCount: 2)) LR"
     }
 }
 extension Stereo: Protobuf {

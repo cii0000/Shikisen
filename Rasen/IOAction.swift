@@ -224,7 +224,7 @@ final class IOAction: Action {
         selectingLineNode.removeFromParent()
         
         if isUpdateSelect {
-            rootView.updateSelectedNodes()
+            rootView.updateSelectedFrame()
         }
         if isUpdateCursor {
             rootView.cursor = rootView.defaultCursor
@@ -244,44 +244,35 @@ final class IOAction: Action {
         }
     }
     
-    func rectCorner(_ vs: [SelectingValue], at ip: IntPoint) -> RectCorner {
-        let minX = vs.minValue { $0.shp.x } ?? ip.x
-        let maxX = vs.maxValue { $0.shp.x } ?? ip.x
-        let minY = vs.minValue { $0.shp.y } ?? ip.y
-        let maxY = vs.maxValue { $0.shp.y } ?? ip.y
-        let isLeft = minX.mid(maxX) > ip.x
-        let isBottom = minY.mid(maxY) > ip.y
-        return if isLeft {
-            isBottom ? .minXMinY : .minXMaxY
-        } else {
-            isBottom ? .maxXMinY : .maxXMaxY
+    func orientation(_ vs: [SelectingValue], at shp: IntPoint) -> Orientation {
+        let vsSHPs = Set(vs.map { $0.shp })
+        let svvs = rootView.sheetViewValues.filter { vsSHPs.contains($0.key) }
+        let isEnabledTimeline = svvs.contains { $0.value.sheetView?.model.enabledTimeline ?? false }
+        if isEnabledTimeline {
+            return .horizontal
         }
+        var allV = 0, allT = 0
+        svvs.forEach {
+            if let sheetView = $0.value.sheetView {
+                for text in sheetView.model.texts {
+                    if text.orientation == .vertical {
+                        allV += 1
+                    }
+                    allT += 1
+                }
+            }
+        }
+        return allV > allT / 2 ? .vertical : .horizontal
     }
-    func sorted(_ vs: [SelectingValue], with rectCorner: RectCorner) -> [SelectingValue] {
-        switch rectCorner {
-        case .minXMinY:
+    func sorted(_ vs: [SelectingValue], with orientation: Orientation) -> [SelectingValue] {
+        switch orientation {
+        case .horizontal:
             vs.sorted {
-                $0.shp.y != $1.shp.y ?
-                    $0.shp.y > $1.shp.y :
-                    $0.shp.x > $1.shp.x
+                $0.shp.y != $1.shp.y ? $0.shp.y > $1.shp.y : $0.shp.x < $1.shp.x
             }
-        case .minXMaxY:
+        case .vertical:
             vs.sorted {
-                $0.shp.y != $1.shp.y ?
-                    $0.shp.y < $1.shp.y :
-                    $0.shp.x > $1.shp.x
-            }
-        case .maxXMinY:
-            vs.sorted {
-                $0.shp.y != $1.shp.y ?
-                    $0.shp.y > $1.shp.y :
-                    $0.shp.x < $1.shp.x
-            }
-        case .maxXMaxY:
-            vs.sorted {
-                $0.shp.y != $1.shp.y ?
-                    $0.shp.y < $1.shp.y :
-                    $0.shp.x < $1.shp.x
+                $0.shp.y != $1.shp.y ? $0.shp.y > $1.shp.y : $0.shp.x > $1.shp.x
             }
         }
     }
@@ -331,7 +322,7 @@ final class IOAction: Action {
         let nSHPs = onSHPs
         
         var oldP: Point?
-        let viewSHPs = sorted(nSHPs.map { SelectingValue(shp: $0, bounds: Rect()) }, with: .maxXMinY)
+        let viewSHPs = sorted(nSHPs.map { SelectingValue(shp: $0, bounds: Rect()) }, with: .horizontal)
             .map { $0.shp }
         selectingLineNode.children = viewSHPs.map {
             let frame = rootView.sheetFrame(with: $0)
@@ -590,10 +581,10 @@ final class IOAction: Action {
             fp = rootView.convertScreenToWorld(sp)
             if rootView.containsSelectedSheetPositions(fp) {
                 let fshp = rootView.sheetPosition(at: fp)
-                let vs = rootView.selectedSheetPositions.map {
+                let vs = rootView.world.selectedSheetPositions.map {
                     SelectingValue(shp: $0, bounds: rootView.sheetFrame(with: $0).bounds)
                 }
-                let nvs = sorted(vs, with: rectCorner(vs, at: fshp))
+                let nvs = sorted(vs, with: orientation(vs, at: fshp))
                 
                 let mainFrame = rootView.sheetView(at: fp)?.model.mainFrame
                 
@@ -686,10 +677,10 @@ final class IOAction: Action {
         let isSelect = rootView.containsSelectedSheetPositions(p)
         if isSelect {
             let fshp = rootView.sheetPosition(at: p)
-            let vs = rootView.selectedSheetPositions.map {
+            let vs = rootView.world.selectedSheetPositions.map {
                 SelectingValue(shp: $0, bounds: rootView.sheetFrame(with: $0).bounds)
             }
-            nvs = sorted(vs, with: rectCorner(vs, at: fshp))
+            nvs = sorted(vs, with: orientation(vs, at: fshp))
         } else {
             let (shp, sheetView, frame, _) = rootView.sheetViewAndFrame(at: p)
             if let sheetView {

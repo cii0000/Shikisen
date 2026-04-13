@@ -132,7 +132,7 @@ final class MoveAction: DragEventAction {
         case .none:
             switch event.phase {
             case .began:
-                rootView.cursor = .arrow
+                rootView.cursor = .arrowWith(string: "Empty".localized)
             case .changed: break
             case .ended:
                 rootView.cursor = rootView.defaultCursor
@@ -214,7 +214,7 @@ final class MoveSheetsAction: DragEventAction {
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
             
-            rootView.updateSelectedNodes()
+            rootView.updateSelected()
             rootView.updateWithFinding()
             
             rootView.cursor = rootView.defaultCursor
@@ -1164,7 +1164,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .endNoteBeat:
@@ -1220,7 +1220,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .note:
@@ -1278,7 +1278,7 @@ final class MoveScoreAction: DragEventAction {
                                     rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                     
@@ -1298,7 +1298,7 @@ final class MoveScoreAction: DragEventAction {
                             option.keyBeats[keyBeatI] = nkBeat
                             option.keyBeats.sort()
                             scoreView.option = option
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .scale:
@@ -1311,7 +1311,7 @@ final class MoveScoreAction: DragEventAction {
                             var option = beganScoreOption
                             option.scales = option.scales.map { ($0 + dPitch).mod(12) }
                             scoreView.option = option
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                             
                             octaveNode?.children = scoreView.scaleNode(mainPitch: pitch).children
                             
@@ -1351,7 +1351,7 @@ final class MoveScoreAction: DragEventAction {
                         option.beatRange.start = beat
                         option.timelineY = py
                         scoreView.option = option
-                        rootView.updateSelectedNodes()
+                        rootView.updateSelectedFrame()
                     }
                 case .loopDurBeat:
                     if let beganScoreOption {
@@ -1381,7 +1381,7 @@ final class MoveScoreAction: DragEventAction {
                             
                             oldBeat = nkBeat
                             scoreView.option.beatRange.end = nkBeat
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .isShownSpectrogram:
@@ -1500,7 +1500,7 @@ final class MoveScoreAction: DragEventAction {
                                  : ""
                                 rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + dSecStr)
                             }
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .even:
@@ -1542,7 +1542,7 @@ final class MoveScoreAction: DragEventAction {
                             
                             oldBeat = nsBeat
                             
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .sprol:
@@ -1589,7 +1589,7 @@ final class MoveScoreAction: DragEventAction {
                     }
                     scoreView.replace(nivs)
                     
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 }
             }
         case .ended:
@@ -1800,7 +1800,7 @@ final class MoveContentAction: DragEventAction {
                         timeOption?.beatRange.start = beat
                         
                         contentView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat), timelineY))
-                        rootView.updateSelectedNodes()
+                        rootView.updateSelectedFrame()
                     }
                     
                 case .startBeat:
@@ -1819,7 +1819,7 @@ final class MoveContentAction: DragEventAction {
                             timeOption.beatRange.length += dBeat
                             contentView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start), content.origin.y))
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .endBeat:
@@ -1833,7 +1833,7 @@ final class MoveContentAction: DragEventAction {
                             timeOption.beatRange.end = beat
                             contentView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start), content.origin.y))
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .isShownSpectrogram:
@@ -1850,7 +1850,7 @@ final class MoveContentAction: DragEventAction {
                         nnp += nFrame.origin - contentFrame.origin
                     }
                     contentView.origin = nnp
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 }
             }
         case .ended:
@@ -1956,7 +1956,7 @@ final class MoveTextAction: DragEventAction {
                     var timeOption = text.timeOption
                     timeOption?.beatRange.start = beat
                     textView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat) + tw, np.y))
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 case .startBeat:
                     if var timeOption = text.timeOption {
                         let np = beganText.origin + sheetP - beganInP
@@ -1971,7 +1971,7 @@ final class MoveTextAction: DragEventAction {
                             timeOption.beatRange.length += dBeat
                             textView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start) + tw, text.origin.y))
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .endBeat:
@@ -1985,7 +1985,7 @@ final class MoveTextAction: DragEventAction {
                             var beatRange = beganTimeOption.beatRange
                             beatRange.end = beat
                             textView.timeOption?.beatRange = beatRange
-                            rootView.updateSelectedNodes()
+                            rootView.updateSelectedFrame()
                         }
                     }
                 case .position:
@@ -1999,7 +1999,7 @@ final class MoveTextAction: DragEventAction {
                     }
                     textView.origin = text.origin
                     
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 }
             }
         case .ended:
@@ -2119,7 +2119,7 @@ final class MoveTempoAction: DragEventAction {
                         sheetView.scoreView.tempo = tempo
                     }
                     
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                     
                     rootView.cursor = .arrowWith(string: Sheet.tempoNameFromStandardFrameRate(withTempo: tempo))
                     
@@ -2347,7 +2347,7 @@ final class MoveSheetAction: DragEventAction {
                         oldStr = str
                     }
                 }
-                rootView.updateSelectedNodes()
+                rootView.updateSelectedFrame()
             }
         case .ended:
             node.removeFromParent()
@@ -2665,192 +2665,6 @@ final class MoveLineAction: DragEventAction {
     }
 }
 
-final class MoveLineZAction: DragEventAction {
-    let rootAction: RootAction, rootView: RootView
-    let isEditingSheet: Bool
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-        isEditingSheet = rootView.isEditingSheet
-    }
-    
-    private var sheetView: SheetView?, lineNode = Node(),
-    crossIndexes = [Int](), crossLineIndex = 0,
-    lineIndex = 0, lineView: SheetLineView?, oldSP = Point(),
-                isNote = false, noteNode: Node?
-    
-    func flow(with event: DragEvent) {
-        guard isEditingSheet else {
-            rootAction.keepOut(with: event)
-            return
-        }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
-
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
-
-        switch event.phase {
-        case .began:
-            rootView.cursor = .arrow
-            
-            if let sheetView = rootView.sheetView(at: p) {
-                let inP = sheetView.convertFromWorld(p)
-                if let (lineView, li) = sheetView.lineTuple(at: inP,
-                                                            scale: rootView.screenToWorldScale) {
-                    
-                    self.sheetView = sheetView
-                    sheetView.hideSelected()
-                    
-                    lineIndex = li
-                    lineView.node.isHidden = true
-                    self.lineView = lineView
-                    
-                    let line = lineView.model
-                    if let lb = lineView.node.path.bounds?.outset(by: line.size / 2) {
-                        crossIndexes = sheetView.linesView.elementViews.enumerated().compactMap {
-                            let nLine = $0.element.model
-                            return if $0.offset == li {
-                                li
-                            } else if let nb = $0.element.node.path.bounds,
-                                      nb.outset(by: nLine.size / 2).intersects(lb) {
-                                nLine.minDistanceSquared(line) < (line.size / 2 + nLine.size / 2).squared ?
-                                $0.offset : nil
-                            } else {
-                                nil
-                            }
-                        }
-                        if let lastI = crossIndexes.last {
-                            crossIndexes.append(lastI + 1)
-                        }
-                        crossLineIndex = crossIndexes.firstIndex(of: li)!
-                    }
-                    
-                    oldSP = sp
-                    lineNode.path = Path(lineView.model)
-                    lineNode.lineType = lineView.node.lineType
-                    lineNode.lineWidth = lineView.node.lineWidth
-                    sheetView.linesView.node.children.insert(lineNode, at: li)
-                } else if sheetView.scoreView.model.enabled,
-                          let li = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p),
-                                                                 scale: rootView.screenToWorldScale) {
-                    self.sheetView = sheetView
-                    sheetView.hideSelected()
-                    
-                    lineIndex = li
-                    let noteNode = sheetView.scoreView.notesNode.children[li]
-                    self.noteNode = noteNode
-                    noteNode.isHidden = true
-                    
-                    let noteI0 = li, noteNode0 = noteNode
-                    let line0 = sheetView.scoreView.pointline(from: sheetView.scoreView.model.notes[noteI0])
-                    let noteH0 = sheetView.scoreView.noteH(from: sheetView.scoreView.model.notes[noteI0])
-                    if let noteB0 = noteNode0.path.bounds?.outset(by: noteH0 / 2) {
-                        let toneFrames0 = sheetView.scoreView.toneFrames(at: noteI0)
-                        let maxB0 = toneFrames0.reduce(noteB0) { $0 + $1.frame }
-                        crossIndexes = sheetView.scoreView.model.notes.enumerated().compactMap { (noteI1, note1) in
-                            if noteI0 == noteI1 {
-                                return noteI0
-                            }
-                            let noteNode1 = sheetView.scoreView.notesNode.children[noteI1]
-                            let line1 = sheetView.scoreView.pointline(from: note1)
-                            let noteH1 = sheetView.scoreView.noteH(from: note1)
-                            guard let noteB1 = noteNode1.path.bounds?.outset(by: noteH1 / 2) else { return nil }
-                            let toneFrames1 = sheetView.scoreView.toneFrames(at: noteI1)
-                            let maxB1 = toneFrames1.reduce(noteB1) { $0 + $1.frame }
-                            guard maxB0.intersects(maxB1) else { return nil }
-                            
-                            if line0.minDistanceSquared(line1) < (noteH0 / 2 + noteH1 / 2).squared
-                                || toneFrames0.contains(where: { line1.minDistanceSquared($0.frame) < (noteH1 / 2).squared })
-                                || toneFrames1.contains(where: { line0.minDistanceSquared($0.frame) < (noteH0 / 2).squared })
-                                || toneFrames0.contains(where: { v0 in toneFrames1.contains(where: { v1 in v0.frame.intersects(v1.frame) }) }) {
-                                return noteI1
-                            }
-                            return nil
-                        }
-                        if let lastI = crossIndexes.last {
-                            crossIndexes.append(lastI + 1)
-                        }
-                        crossLineIndex = crossIndexes.firstIndex(of: li)!
-                    }
-                    
-                    oldSP = sp
-                    lineNode = noteNode.clone
-                    lineNode.isHidden = false
-                    sheetView.scoreView.notesNode.children.insert(lineNode, at: li)
-                }
-            }
-        case .changed:
-            if let sheetView = sheetView,
-               lineIndex < sheetView.linesView.elementViews.count {
-                
-                guard !crossIndexes.isEmpty else { return }
-                
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                    .clipped(min: 0, max: crossIndexes.count - 1)
-                let li = crossIndexes[cli]
-                    .clipped(min: 0, max: sheetView.linesView.elementViews.count)
-                lineNode.removeFromParent()
-                sheetView.linesView.node.children.insert(lineNode, at: li)
-            } else if let sheetView = sheetView, sheetView.scoreView.model.enabled,
-                      lineIndex < sheetView.scoreView.model.notes.count {
-                
-                guard !crossIndexes.isEmpty else { return }
-                
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                    .clipped(min: 0, max: crossIndexes.count - 1)
-                let li = crossIndexes[cli]
-                    .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
-                lineNode.removeFromParent()
-                sheetView.scoreView.notesNode.children.insert(lineNode, at: li)
-            }
-        case .ended:
-            lineNode.removeFromParent()
-            lineView?.node.isHidden = false
-            noteNode?.isHidden = false
-            
-            if let sheetView {
-                sheetView.showSelected()
-                
-                if lineIndex < sheetView.linesView.elementViews.count {
-                    
-                    guard !crossIndexes.isEmpty else { return }
-                    
-                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                        .clipped(min: 0, max: crossIndexes.count - 1)
-                    let li = crossIndexes[cli]
-                        .clipped(min: 0, max: sheetView.linesView.elementViews.count)
-                    let line = sheetView.linesView.elementViews[lineIndex].model
-                    if lineIndex != li {
-                        sheetView.newUndoGroup()
-                        sheetView.removeLines(at: [lineIndex])
-                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
-                    }
-                } else if sheetView.scoreView.model.enabled,
-                          lineIndex < sheetView.scoreView.model.notes.count {
-                    
-                    guard !crossIndexes.isEmpty else { return }
-                    
-                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
-                        .clipped(min: 0, max: crossIndexes.count - 1)
-                    let li = crossIndexes[cli]
-                        .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
-                    let line = sheetView.scoreView.model.notes[lineIndex]
-                    if lineIndex != li {
-                        sheetView.newUndoGroup()
-                        sheetView.removeNote(at: lineIndex)
-                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
-                    }
-                }
-            }
-
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-}
-
 final class MoveBorderAction: DragEventAction {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
@@ -3076,6 +2890,200 @@ final class MoveMainFrameAction: DragEventAction {
                 }
             }
             
+            rootView.cursor = rootView.defaultCursor
+        }
+    }
+}
+
+final class MoveLineZAction: DragEventAction {
+    let rootAction: RootAction, rootView: RootView
+    let isEditingSheet: Bool
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+        isEditingSheet = rootView.isEditingSheet
+    }
+    
+    private var sheetView: SheetView?, lineNode = Node(),
+    crossIndexes = [Int](), crossLineIndex = 0,
+    lineIndex = 0, lineView: SheetLineView?, oldSP = Point(),
+                isNote = false, noteNode: Node?
+    
+    func flow(with event: DragEvent) {
+        guard isEditingSheet else {
+            rootAction.keepOut(with: event)
+            return
+        }
+        if rootAction.isPlaying(with: event) {
+            rootAction.stopPlaying(with: event)
+        }
+
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
+
+        switch event.phase {
+        case .began:
+            var isChange = false
+            if let sheetView = rootView.sheetView(at: p) {
+                let inP = sheetView.convertFromWorld(p)
+                if let (lineView, li) = sheetView.lineTuple(at: inP,
+                                                            scale: rootView.screenToWorldScale) {
+                    
+                    self.sheetView = sheetView
+                    sheetView.hideSelected()
+                    
+                    lineIndex = li
+                    lineView.node.isHidden = true
+                    self.lineView = lineView
+                    
+                    let line = lineView.model
+                    if let lb = lineView.node.path.bounds?.outset(by: line.size / 2) {
+                        crossIndexes = sheetView.linesView.elementViews.enumerated().compactMap {
+                            let nLine = $0.element.model
+                            return if $0.offset == li {
+                                li
+                            } else if let nb = $0.element.node.path.bounds,
+                                      nb.outset(by: nLine.size / 2).intersects(lb) {
+                                nLine.minDistanceSquared(line) < (line.size / 2 + nLine.size / 2).squared ?
+                                $0.offset : nil
+                            } else {
+                                nil
+                            }
+                        }
+                        if let lastI = crossIndexes.last {
+                            crossIndexes.append(lastI + 1)
+                        }
+                        crossLineIndex = crossIndexes.firstIndex(of: li)!
+                    }
+                    
+                    oldSP = sp
+                    lineNode.path = Path(lineView.model)
+                    lineNode.lineType = lineView.node.lineType
+                    lineNode.lineWidth = lineView.node.lineWidth
+                    sheetView.linesView.node.children.insert(lineNode, at: li)
+                    
+                    isChange = true
+                } else if sheetView.scoreView.model.enabled,
+                          let li = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p),
+                                                                 scale: rootView.screenToWorldScale) {
+                    self.sheetView = sheetView
+                    sheetView.hideSelected()
+                    
+                    lineIndex = li
+                    let noteNode = sheetView.scoreView.notesNode.children[li]
+                    self.noteNode = noteNode
+                    noteNode.isHidden = true
+                    
+                    let noteI0 = li, noteNode0 = noteNode
+                    let line0 = sheetView.scoreView.pointline(from: sheetView.scoreView.model.notes[noteI0])
+                    let noteH0 = sheetView.scoreView.noteH(from: sheetView.scoreView.model.notes[noteI0])
+                    if let noteB0 = noteNode0.path.bounds?.outset(by: noteH0 / 2) {
+                        let toneFrames0 = sheetView.scoreView.toneFrames(at: noteI0)
+                        let maxB0 = toneFrames0.reduce(noteB0) { $0 + $1.frame }
+                        crossIndexes = sheetView.scoreView.model.notes.enumerated().compactMap { (noteI1, note1) in
+                            if noteI0 == noteI1 {
+                                return noteI0
+                            }
+                            let noteNode1 = sheetView.scoreView.notesNode.children[noteI1]
+                            let line1 = sheetView.scoreView.pointline(from: note1)
+                            let noteH1 = sheetView.scoreView.noteH(from: note1)
+                            guard let noteB1 = noteNode1.path.bounds?.outset(by: noteH1 / 2) else { return nil }
+                            let toneFrames1 = sheetView.scoreView.toneFrames(at: noteI1)
+                            let maxB1 = toneFrames1.reduce(noteB1) { $0 + $1.frame }
+                            guard maxB0.intersects(maxB1) else { return nil }
+                            
+                            if line0.minDistanceSquared(line1) < (noteH0 / 2 + noteH1 / 2).squared
+                                || toneFrames0.contains(where: { line1.minDistanceSquared($0.frame) < (noteH1 / 2).squared })
+                                || toneFrames1.contains(where: { line0.minDistanceSquared($0.frame) < (noteH0 / 2).squared })
+                                || toneFrames0.contains(where: { v0 in toneFrames1.contains(where: { v1 in v0.frame.intersects(v1.frame) }) }) {
+                                return noteI1
+                            }
+                            return nil
+                        }
+                        if let lastI = crossIndexes.last {
+                            crossIndexes.append(lastI + 1)
+                        }
+                        crossLineIndex = crossIndexes.firstIndex(of: li)!
+                    }
+                    
+                    oldSP = sp
+                    lineNode = noteNode.clone
+                    lineNode.isHidden = false
+                    sheetView.scoreView.notesNode.children.insert(lineNode, at: li)
+                    
+                    isChange = true
+                }
+            }
+            if !isChange {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
+            } else {
+                rootView.cursor = .arrow
+            }
+        case .changed:
+            if let sheetView = sheetView,
+               lineIndex < sheetView.linesView.elementViews.count {
+                
+                guard !crossIndexes.isEmpty else { return }
+                
+                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                    .clipped(min: 0, max: crossIndexes.count - 1)
+                let li = crossIndexes[cli]
+                    .clipped(min: 0, max: sheetView.linesView.elementViews.count)
+                lineNode.removeFromParent()
+                sheetView.linesView.node.children.insert(lineNode, at: li)
+            } else if let sheetView = sheetView, sheetView.scoreView.model.enabled,
+                      lineIndex < sheetView.scoreView.model.notes.count {
+                
+                guard !crossIndexes.isEmpty else { return }
+                
+                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                    .clipped(min: 0, max: crossIndexes.count - 1)
+                let li = crossIndexes[cli]
+                    .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
+                lineNode.removeFromParent()
+                sheetView.scoreView.notesNode.children.insert(lineNode, at: li)
+            }
+        case .ended:
+            lineNode.removeFromParent()
+            lineView?.node.isHidden = false
+            noteNode?.isHidden = false
+            
+            if let sheetView {
+                sheetView.showSelected()
+                
+                if lineIndex < sheetView.linesView.elementViews.count {
+                    
+                    guard !crossIndexes.isEmpty else { return }
+                    
+                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                        .clipped(min: 0, max: crossIndexes.count - 1)
+                    let li = crossIndexes[cli]
+                        .clipped(min: 0, max: sheetView.linesView.elementViews.count)
+                    let line = sheetView.linesView.elementViews[lineIndex].model
+                    if lineIndex != li {
+                        sheetView.newUndoGroup()
+                        sheetView.removeLines(at: [lineIndex])
+                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
+                    }
+                } else if sheetView.scoreView.model.enabled,
+                          lineIndex < sheetView.scoreView.model.notes.count {
+                    
+                    guard !crossIndexes.isEmpty else { return }
+                    
+                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                        .clipped(min: 0, max: crossIndexes.count - 1)
+                    let li = crossIndexes[cli]
+                        .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
+                    let line = sheetView.scoreView.model.notes[lineIndex]
+                    if lineIndex != li {
+                        sheetView.newUndoGroup()
+                        sheetView.removeNote(at: lineIndex)
+                        sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
+                    }
+                }
+            }
+
             rootView.cursor = rootView.defaultCursor
         }
     }

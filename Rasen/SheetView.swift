@@ -1100,11 +1100,11 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     
     func isInterpolated(atLineI li: Int, atKeyframeI fki: Int) -> Bool {
         guard model.keyframes.count >= 2 else { return false }
-        let id = model.keyframes[fki].picture.lines[li].id
+        let id = model.keyframes[fki].picture.lines[li].interID
         return model.keyframes.enumerated().contains(where: { (ki, kf) in
             guard ki != fki else { return false }
             return kf.picture.lines.enumerated().contains(where: {
-                $0.element.id == id
+                $0.element.interID == id
             })
         })
     }
@@ -1112,9 +1112,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                         atRootKI: Int, fromRootKI: Int) -> Bool {
         guard model.keyframes.count >= 2 else { return false }
         let ki = model.index(atRoot: atRootKI)
-        let id = model.keyframes[ki].picture.lines[li].id
+        let id = model.keyframes[ki].picture.lines[li].interID
         func isID(at ki: Int) -> Bool {
-            model.keyframes[ki].picture.lines.contains { $0.id == id }
+            model.keyframes[ki].picture.lines.contains { $0.interID == id }
         }
         return if fromRootKI <= atRootKI {
             !(fromRootKI ..< atRootKI).contains(where: { isID(at: model.index(atRoot: $0)) })
@@ -1212,7 +1212,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                         isAppend = false
                     }
                 }
-                if isAppend, idSet.contains(line.id) {
+                if isAppend, idSet.contains(line.interID) {
                     if let node = lineNodeDic[line.controls] {
                         node.lineWidth = blw
                     } else {
@@ -1245,7 +1245,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let beatRange = model.beatRange
         for keyframe in model.keyframes {
-            let nLines = keyframe.picture.lines.filter { idSet.contains($0.id) }
+            let nLines = keyframe.picture.lines.filter { idSet.contains($0.interID) }
             guard !nLines.isEmpty else { continue }
             let kx = x(atBeat: keyframe.beat + beatRange.start)
             
@@ -1790,6 +1790,17 @@ final class SheetView: BindableView, @unchecked Sendable {
         selectedContentIs.contains {
             let view = contentsView.elementViews[$0]
             return view.contains(view.convert(p, from: node), scale: scale)
+        }
+    }
+    func containsSelectedKeyframe(_ p: Point, scale: Double) -> Bool {
+        if animationView.containsTimeline(animationView.timelineNode.convertFromWorld(p),
+                                          scale: scale),
+           let ki = animationView
+            .keyframeIndex(at: animationView.timelineNode.convert(p, from: node)) {
+            
+            animationView.selectedIs.contains(ki)
+        } else {
+            false
         }
     }
     
@@ -2691,10 +2702,12 @@ final class SheetView: BindableView, @unchecked Sendable {
         self.playingOtherTimelineIDs = otherTimelineIDs
         isPlaying = true
     }
+    var stopNotifications = [((SheetView) -> ())]()
     func stop() {
         playingSecRange = nil
         playingOtherTimelineIDs = []
         isPlaying = false
+        stopNotifications.forEach { $0(self) }
     }
     func updatePlaying() {
         if isPlaying {
@@ -3864,7 +3877,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 var nodes = [Node]()
                 let rect = model.animation.keyframes.enumerated().reduce(into: Rect?.none) { (n, v) in
                     n += v.element.picture.lines.enumerated().reduce(into: Rect?.none) {
-                        if idSet.contains($1.element.id) {
+                        if idSet.contains($1.element.interID) {
                             let node = animationView.elementViews[v.offset].linesView
                                 .elementViews[$1.offset].node.clone
                             node.lineType = .color(.selected)
@@ -6733,12 +6746,11 @@ final class SheetView: BindableView, @unchecked Sendable {
                     return (linesView.elementViews[i], i)
                 }
             } else {
+                let (dSq, pressure) = line.minDistanceSquaredAndPressure(at: p)
                 let nd = smallScale != nil ?
-                (line.size / 2 + ds) / smallScale! : line.size / 2 + ds * 5
+                (line.size / 2 * pressure + ds) / smallScale! :
+                line.size / 2 * pressure + ds * 5
                 let ldSq = nd * nd
-                let dSq0 = (line.controls.minValue { $0.point.distanceSquared(p) } ?? 0)
-                let dSq1 = line.minDistanceSquared(at: p)
-                let dSq = dSq0 < (line.size / 2).squared ? 0 : dSq1
                 if dSq < minDSq && dSq < ldSq {
                     minDSq = dSq
                     minI = i
@@ -6906,10 +6918,10 @@ final class SheetView: BindableView, @unchecked Sendable {
                             }
                             for i in aSplitLines.count.range {
                                 if i == idI {
-                                    aSplitLines[idI].id = aLine.id
+                                    aSplitLines[idI].interID = aLine.interID
                                     aSplitLines[idI].interType = aLine.interType
                                 } else {
-                                    aSplitLines[i].id = .init()
+                                    aSplitLines[i].interID = .init()
                                 }
                             }
                             
@@ -7151,7 +7163,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             })
         }
     }
-    func changeToDraft(with line: Line?) {
+    func changeToDraft(with line: Line?) -> Bool {
         if let line = line {
             if let value = lassoErase(with: Lasso(line: line),
                                       isRemove: true, isEnableText: false) {
@@ -7167,6 +7179,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                         IndexValue(value: $0.element, index: pi + $0.offset)
                     })
                 }
+                return true
             }
         } else {
             if !animationView.selectedIs.isEmpty {
@@ -7209,7 +7222,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                         nil :
                     IndexValue(value: Array(0 ..< planes.count), index: $0)
                 })
-                return
+                return true
             }
             
             if !model.picture.isEmpty {
@@ -7233,8 +7246,10 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                     set(Picture())
                 }
+                return true
             }
         }
+        return false
     }
     
     func changeToDraft(withNoteInexes nis: [Int]) {
@@ -7372,18 +7387,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             return nil
         }
     }
-    func cutFaces(with path: Path?) {
-        if !animationView.selectedIs.isEmpty {
-            newUndoGroup()
-            removeKeyPlanes(animationView.selectedIs.sorted().compactMap {
-                let planes = model.animation.keyframes[$0].picture.planes
-                return planes.isEmpty ?
-                    nil :
-                IndexValue(value: Array(0 ..< planes.count), index: $0)
-            })
-            return
-        }
-        
+    func cutFaces(with path: Path?) -> Bool {
         var removePlaneValues = Array(planesView.elementViews.enumerated())
         if let path = path {
             removePlaneValues = removePlaneValues.filter {
@@ -7418,7 +7422,9 @@ final class SheetView: BindableView, @unchecked Sendable {
                 backgroundUUColor = ncv.uuColor
                 capture(ncv, oldColorValue: ocv)
             }
+            return true
         }
+        return false
     }
 }
 

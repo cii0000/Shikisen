@@ -3291,7 +3291,7 @@ extension O {
             switch bo {
             case .error: return bo
             default:
-                guard let n = a[bo] else { return O(OError(String(format: "'%1$@' is out of bounds dictionary range".localized, bo.name))) }
+                guard let n = a[bo] else { return .empty }
                 return n
             }
         case .sheet(let a):

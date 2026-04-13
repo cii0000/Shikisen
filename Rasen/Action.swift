@@ -131,7 +131,7 @@ final class RootAction: Action {
         }
     }
     
-    private(set) var oldSwipeEvent: SwipeEvent?, swipeAction: SelectFrameAction?
+    private(set) var oldSwipeEvent: SwipeEvent?, swipeAction: SelectTimeAction?
     func swipe(with event: SwipeEvent) {
         textAction.moveEndInputKey()
         if !(dragAction is DrawLineAction || dragAction is DrawStraightLineAction) {
@@ -141,7 +141,7 @@ final class RootAction: Action {
         case .began:
             stopInputTextEvent()
             updateLastEditedSheetPosition(from: event)
-            swipeAction = SelectFrameAction(self)
+            swipeAction = SelectTimeAction(self)
             swipeAction?.flow(with: event)
             oldSwipeEvent = event
         case .changed:
@@ -235,7 +235,7 @@ final class RootAction: Action {
         case .changeLightness: ChangeLightnessAction(self)
         case .changeTint: ChangeTintAction(self)
         case .changeOpacity: ChangeOpacityAction(self)
-        case .keySelectFrame: SelectFrameAction(self)
+        case .keySelectTime: SelectTimeAction(self)
         case .selectVersion: SelectVersionAction(self)
         case .move: MoveAction(self)
         case .moveLineZ: MoveLineZAction(self)
@@ -249,7 +249,7 @@ final class RootAction: Action {
             updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
             let quasimode = Quasimode(modifier: modifierKeys, .drag)
-            if quasimode != .selectFrame {
+            if quasimode != .selectTime {
                 stopInputKeyEvent()
             }
             dragAction = self.dragAction(with: quasimode)
@@ -321,6 +321,7 @@ final class RootAction: Action {
         case .goPrevious: GoPreviousAction(self)
         case .goNext: GoNextAction(self)
         case .insertControlPoint: InsertControlPointAction(self)
+        case .addTime: AddTimeAction(self)
         case .addScore: AddScoreAction(self)
         case .justFit: JustFitAction(self)
         case .interpolate: InterpolateAction(self)
@@ -690,7 +691,7 @@ final class SelectAction: Action {
     }
     
     private var firstP = Point(), multiSelectFrameAction: MultiSelectFrameAction?,
-                captures = [SheetView: Capture](), firstSelectedSheetPositions = [IntPoint](),
+                captures = [SheetView: Capture](), firstSelectedSheetIDs = [UUID](),
                 firstSheetView: SheetView?, firstTextI: Int?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
@@ -715,7 +716,7 @@ final class SelectAction: Action {
             rootView.node.append(child: node)
             
             if !isEditingSheet {
-                firstSelectedSheetPositions = rootView.selectedSheetPositions
+                firstSelectedSheetIDs = rootView.world.selectedSheetIDs
             } else if let sheetView = rootView.sheetView(at: p),
                       let ti = sheetView.textIndex(at: sheetView.convertFromWorld(p),
                                                    scale: rootView.screenToWorldScale) {
@@ -886,16 +887,16 @@ final class SelectAction: Action {
                         textView.selectedRanges = nRanges
                     }
                     
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 }
             } else {
-                let oShps = Set(firstSelectedSheetPositions)
-                let nShps = rootView.world.sheetIDs.keys.filter {
-                    rect.intersects(rootView.sheetFrame(with: $0))
-                }
-                rootView.selectedSheetPositions
-                = (isUnselect ? oShps.subtracting(nShps) : oShps.union(nShps))
-                .sorted { $0.x == $1.x ? $0.y < $1.y : $0.x < $1.x }
+                let oSIDs = Set(firstSelectedSheetIDs)
+                let nSIDs = rootView.world.sheetIDs.filter {
+                    rect.intersects(rootView.sheetFrame(with: $0.key))
+                }.map { $0.value }
+                rootView.world.selectedSheetIDs
+                = (isUnselect ? oSIDs.subtracting(nSIDs) : oSIDs.union(nSIDs)).sorted()
+                rootView.updateSelected()
             }
             
         case .ended:
@@ -905,6 +906,11 @@ final class SelectAction: Action {
             }
             
             node.removeFromParent()
+            
+            if firstSelectedSheetIDs != rootView.world.selectedSheetIDs {
+                rootView.newUndoGroup()
+                rootView.capture(rootView.world.selectedSheetIDs, old: firstSelectedSheetIDs)
+            }
             
             rootView.cursor = rootView.defaultCursor
         }
@@ -976,7 +982,7 @@ final class MultiSelectFrameAction: Action {
                 if animationView.rootBeat != nRootBeat {
                     sheetView.rootBeat = nRootBeat
                     rootAction.updateActionNode()
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                 }
                 animationView.shownInterTypeKeyframeIndex = animationView.model.index
                 
@@ -1015,7 +1021,7 @@ final class MultiSelectFrameAction: Action {
                 if sheetView.rootBeat != nRootBeat {
                     sheetView.rootBeat = nRootBeat
                     rootAction.updateActionNode()
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
                     
                     if oldKI != animationView.model.index {
                         lastRootBeats.append((event.time, nRootBeat))
@@ -1135,12 +1141,14 @@ final class DraftAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
                 let nis = sheetView.scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
                 if !nis.isEmpty {
                     sheetView.newUndoGroup()
                     sheetView.changeToDraft(withNoteInexes: nis)
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
+                    isChanged = true
                 }
             } else if let sheetView = rootView.sheetViewWithSelectedLine(at: p)
                         ?? rootView.sheetViewWithSelectedPlane(at: p) {
@@ -1150,7 +1158,8 @@ final class DraftAction: Action {
                     sheetView.newUndoGroup()
                     sheetView.changeToDraft(withLineInexes: lis,
                                             planeInexes: pis)
-                    rootView.updateSelectedNodes()
+                    rootView.updateSelectedFrame()
+                    isChanged = true
                 }
             } else {
                 if let sheetView = rootView.sheetView(at: p) {
@@ -1163,11 +1172,15 @@ final class DraftAction: Action {
                         if !nis.isEmpty {
                             sheetView.newUndoGroup()
                             sheetView.changeToDraft(withNoteInexes: nis)
+                            isChanged = true
                         }
                     } else {
-                        sheetView.changeToDraft(with: nil)
+                        isChanged = sheetView.changeToDraft(with: nil)
                     }
                 }
+            }
+            if !isChanged {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
             }
         case .changed:
             break
@@ -1190,6 +1203,7 @@ final class DraftAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            var isChanged = false
             if let sheetView = rootView.sheetView(at: p) {
                 if sheetView.model.score.enabled {
                     let nis = (0 ..< sheetView.model.score.draftNotes.count).map { $0 }
@@ -1211,6 +1225,8 @@ final class DraftAction: Action {
                         sheetView.removeDraftNotes(at: nis)
                         
                         Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
+                        
+                        isChanged = true
                     }
                 } else {
                     if !sheetView.animationView.selectedIs.isEmpty {
@@ -1228,15 +1244,22 @@ final class DraftAction: Action {
                                 nil :
                             IndexValue(value: Array(0 ..< planes.count), index: $0)
                         })
+                        
+                        isChanged = true
                     } else {
                         let object = PastableObject.picture(sheetView.model.draftPicture)
                         if !sheetView.model.draftPicture.isEmpty {
                             sheetView.newUndoGroup()
                             sheetView.removeDraft()
                             Pasteboard.shared.copiedObjects = [object]
+                            
+                            isChanged = true
                         }
                     }
                 }
+            }
+            if !isChanged {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
             }
         case .changed:
             break
@@ -1331,10 +1354,10 @@ final class FaceAction: Action {
                 return
             }
             
-            if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
-                let planes = sheetView.keyframeView.selectedPlaneIs
-                    .map { sheetView.model.picture.planes[$0] }
-                if let rect = planes.reduce(into: Rect?.none, { $0 += $1.bounds }) {
+            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
+                ?? rootView.sheetViewWithSelectedSheetValue(at: p) {
+                
+                if let rect = sheetView.selectedFrame {
                     let path = Path(rect)
                     sheetView.makeFaces(with: path, isSelection: true)
                 }
@@ -1369,6 +1392,7 @@ final class FaceAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            var isChanged = false
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let score = sheetView.scoreView.model
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
@@ -1395,11 +1419,10 @@ final class FaceAction: Action {
                     
                     sheetView.newUndoGroup()
                     sheetView.replace(nivs)
+                    
+                    isChanged = true
                 }
-                return
-            }
-            
-            if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
+            } else if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
                 sheetView.newUndoGroup()
                 let planes = sheetView.keyframeView.selectedPlaneIs
                     .map { sheetView.model.picture.planes[$0] }
@@ -1407,16 +1430,125 @@ final class FaceAction: Action {
                 sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
                 let value = SheetValue(lines: [], planes: planes, texts: []) * t
                 Pasteboard.shared.copiedObjects = [.sheetValue(value)]
+                
+                isChanged = true
+            } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
+                let vs = sheetView.animationView.selectedIs.sorted().compactMap {
+                    let planes = sheetView.model.animation.keyframes[$0].picture.planes
+                    return planes.isEmpty ?
+                        nil :
+                    IndexValue(value: Array(0 ..< planes.count), index: $0)
+                }
+                if !vs.isEmpty {
+                    sheetView.newUndoGroup()
+                    sheetView.removeKeyPlanes(vs)
+                    
+                    isChanged = true
+                }
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView = sheetView {
                     if isAll {
-                        sheetView.cutFaces(with: nil)
+                        isChanged = sheetView.cutFaces(with: nil)
                     } else {
                         let f = sheetView.convertFromWorld(frame).inset(by: 1)
-                        sheetView.cutFaces(with: Path(f))
+                        isChanged = sheetView.cutFaces(with: Path(f))
                     }
                 }
+            }
+            
+            if !isChanged {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
+            }
+        case .changed:
+            break
+        case .ended:
+            rootView.cursor = rootView.defaultCursor
+        }
+    }
+}
+
+final class AddTimeAction: InputKeyEventAction {
+    let rootAction: RootAction, rootView: RootView
+    let isEditingSheet: Bool
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+        isEditingSheet = rootView.isEditingSheet
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        guard isEditingSheet else {
+            rootAction.keepOut(with: event)
+            return
+        }
+        if rootAction.isPlaying(with: event) {
+            rootAction.stopPlaying(with: event)
+        }
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
+        switch event.phase {
+        case .began:
+            rootView.cursor = .arrow
+            
+            if let sheetView = rootView.madeSheetView(at: p) {
+                let sheetP = sheetView.convertFromWorld(p)
+                
+                if let ci = sheetView.contentIndex(at: sheetP,
+                                                   scale: rootView.screenToWorldScale) {
+                   let contentView = sheetView.contentsView.elementViews[ci]
+                   if contentView.model.timeOption == nil {
+                       var content = contentView.model
+                       let startBeat: Rational = sheetView.animationView.beat(atX: content.origin.x)
+                       let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
+                       content.timeOption = .init(beatRange: startBeat ..< (4 + startBeat),
+                                                  tempo: tempo)
+                       
+                       sheetView.newUndoGroup()
+                       sheetView.replace(IndexValue(value: content, index: ci))
+                       
+                       sheetView.updatePlaying()
+                   } else {
+                       rootView.cursor = .arrowWith(string: "Added".localized)
+                   }
+               } else if let ti = sheetView.textIndex(at: sheetP,
+                                                      scale: rootView.screenToWorldScale) {
+                   let textView = sheetView.textsView.elementViews[ti]
+                   if textView.model.timeOption == nil {
+                       var text = textView.model
+                       let startBeat: Rational = sheetView.animationView.beat(atX: text.origin.x)
+                       let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
+                       text.timeOption = .init(beatRange: startBeat ..< (4 + startBeat),
+                                               tempo: tempo)
+                       
+                       sheetView.newUndoGroup()
+                       sheetView.replace([IndexValue(value: text, index: ti)])
+                       
+                       sheetView.updatePlaying()
+                   } else {
+                       rootView.cursor = .arrowWith(string: "Added".localized)
+                   }
+               } else if !sheetView.model.enabledAnimation {
+                   if sheetView.model.score.enabled {
+                       rootView.cursor = .block
+                   } else {
+                       sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                       sheetView.set(beat: 0, at: 0)
+                       var option = sheetView.model.animation.option
+                       option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
+                       option.timelineY = sheetP.y.clipped(min: Sheet.timelineY,
+                                                           max: Sheet.height - Sheet.timelineY)
+                       option.enabled = true
+                       sheetView.set(option)
+                       
+                       rootAction.updateActionNode()
+                   }
+               } else {
+                   rootView.cursor = .arrowWith(string: "Added".localized)
+               }
+            } else {
+                rootView.cursor = .arrowWith(string: "Added".localized)
             }
         case .changed:
             break
@@ -1450,15 +1582,21 @@ final class AddScoreAction: InputKeyEventAction {
         case .began:
             rootView.cursor = .arrow
             
-            if let sheetView = rootView.madeSheetView(at: p) {
-                let inP = sheetView.convertFromWorld(p)
-                let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
-                let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
-                
-                sheetView.newUndoGroup()
-                sheetView.set(option)
-                
-                rootAction.updateActionNode()
+            if let sheetView = rootView.madeSheetView(at: p), !sheetView.model.score.enabled {
+                if sheetView.model.animation.enabled {
+                    rootView.cursor = .block
+                } else {
+                    let inP = sheetView.convertFromWorld(p)
+                    let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
+                    let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
+                    
+                    sheetView.newUndoGroup()
+                    sheetView.set(option)
+                    
+                    rootAction.updateActionNode()
+                }
+            } else {
+                rootView.cursor = .arrowWith(string: "Added".localized)
             }
         case .changed:
             break
@@ -1492,6 +1630,7 @@ final class JustFitAction: InputKeyEventAction {
         case .began:
             rootView.cursor = .arrow
             
+            var isChanged = false
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let scoreView = sheetView.scoreView
                 let score = scoreView.model
@@ -1540,8 +1679,14 @@ final class JustFitAction: InputKeyEventAction {
                     if !nivs.isEmpty {
                         sheetView.newUndoGroup()
                         sheetView.replace(nivs)
+                        
+                        isChanged = true
                     }
                 }
+            }
+            
+            if !isChanged {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
             }
         case .changed:
             break

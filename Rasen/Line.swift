@@ -122,7 +122,7 @@ struct Line {
     }
     var controls = [Control]()
     var size = Line.defaultLineWidth
-    var id = UUID()
+    var interID = UUID()
     var interType = InterType.none
     var uuColor = Line.defaultUUColor
 }
@@ -158,7 +158,7 @@ extension Line: Protobuf {
         let size = (try? pb.size.notZeroAndNaN()) ?? Line.defaultLineWidth
         self.size = size.clipped(min: 0, max: Line.maxLineWidth)
         
-        self.id = (try? UUID(pb.id)) ?? UUID()
+        self.interID = (try? UUID(pb.interID)) ?? UUID()
         self.interType = (try? InterType(pb.interType)) ?? .none
         
         if case .uuColor(let uuColor)? = pb.uuColorOptional {
@@ -178,7 +178,7 @@ extension Line: Protobuf {
                 $0.size = size
             }
             
-            $0.id = id.pb
+            $0.interID = interID.pb
             if interType != .none {
                 $0.interType = interType.pb
             }
@@ -317,7 +317,7 @@ extension Line: Codable {
         controls = try container.decode([Control].self)
         let size = (try? container.decode(Double.self)) ?? Line.defaultLineWidth
         self.size = size.clipped(min: 0, max: Line.maxLineWidth)
-        self.id = try container.decode(UUID.self)
+        self.interID = try container.decode(UUID.self)
         self.interType = try container.decode(InterType.self)
         self.uuColor = try container.decode(UUColor.self)
     }
@@ -325,7 +325,7 @@ extension Line: Codable {
         var container = encoder.unkeyedContainer()
         try container.encode(controls)
         try container.encode(size)
-        try container.encode(id)
+        try container.encode(interID)
         try container.encode(interType)
         try container.encode(uuColor)
     }
@@ -342,7 +342,7 @@ extension Line: Interpolatable {
             let uuColor = f0.uuColor == f1.uuColor ?
             f0.uuColor :
             UUColor.linear(f0.uuColor, f1.uuColor, t: t)
-            return Line(controls: controls, size: size, id: f0.id,
+            return Line(controls: controls, size: size, interID: f0.interID,
                         uuColor: uuColor)
         }
     }
@@ -360,7 +360,7 @@ extension Line: Interpolatable {
             let uuColor = f1.uuColor == f2.uuColor && f2.uuColor == f3.uuColor ?
             f1.uuColor :
             UUColor.firstSpline(f1.uuColor, f2.uuColor, f3.uuColor, t: t)
-            return Line(controls: controls, size: size, id: f1.id,
+            return Line(controls: controls, size: size, interID: f1.interID,
                         uuColor: uuColor)
         }
     }
@@ -380,7 +380,7 @@ extension Line: Interpolatable {
             let uuColor = f0.uuColor == f1.uuColor && f1.uuColor == f2.uuColor && f2.uuColor == f3.uuColor ?
             f1.uuColor :
             UUColor.spline(f0.uuColor, f1.uuColor, f2.uuColor, f3.uuColor, t: t)
-            return Line(controls: controls, size: size, id: f1.id,
+            return Line(controls: controls, size: size, interID: f1.interID,
                         uuColor: uuColor)
         }
         
@@ -399,7 +399,7 @@ extension Line: Interpolatable {
             let uuColor = f0.uuColor == f1.uuColor && f1.uuColor == f2.uuColor ?
             f1.uuColor :
             UUColor.lastSpline(f0.uuColor, f1.uuColor, f2.uuColor, t: t)
-            return Line(controls: controls, size: size, id: f1.id,
+            return Line(controls: controls, size: size, interID: f1.interID,
                         uuColor: uuColor)
         }
     }
@@ -421,7 +421,7 @@ extension Line: Interpolatable {
         guard controls.count < count else { fatalError() }
         guard controls.count > 1 else {
             return Line(controls: [Control](repeating: controls[0], count: count),
-                        size: size, id: id, uuColor: uuColor)
+                        size: size, interID: interID, uuColor: uuColor)
         }
         guard controls.count > 2 else {
             let edge = Edge(firstPoint, lastPoint)
@@ -432,7 +432,7 @@ extension Line: Interpolatable {
                                         controls.last!.pressure, t: t)
                 return Control(point: p, weight: 0.5, pressure: pre)
             }
-            return Line(controls: ncs, size: size, id: id, uuColor: uuColor)
+            return Line(controls: ncs, size: size, interID: interID, uuColor: uuColor)
         }
         var line = self
         line.controls.reserveCapacity(count)
@@ -604,7 +604,7 @@ extension Line: MonoInterpolatable {
             let uuColor =  f1.uuColor == f2.uuColor && f2.uuColor == f3.uuColor ?
             f1.uuColor :
             UUColor.firstMonospline(f1.uuColor, f2.uuColor, f3.uuColor, with: ms)
-            return Line(controls: controls, size: size, id: f1.id, uuColor: uuColor)
+            return Line(controls: controls, size: size, interID: f1.interID, uuColor: uuColor)
         }
     }
     static func monospline(_ f0: Line, _ f1: Line, _ f2: Line, _ f3: Line,
@@ -624,7 +624,7 @@ extension Line: MonoInterpolatable {
             f1.uuColor :
             UUColor.monospline(f0.uuColor, f1.uuColor, f2.uuColor, f3.uuColor, with: ms)
             return Line(controls: controls, size: size,
-                        id: f1.id, uuColor: uuColor)
+                        interID: f1.interID, uuColor: uuColor)
         }
     }
     static func lastMonospline(_ f0: Line, _ f1: Line,
@@ -642,7 +642,7 @@ extension Line: MonoInterpolatable {
             f1.uuColor :
             UUColor.lastMonospline(f0.uuColor, f1.uuColor, f2.uuColor, with: ms)
             return Line(controls: controls, size: size,
-                        id: f1.id, uuColor: uuColor)
+                        interID: f1.interID, uuColor: uuColor)
         }
     }
 }
@@ -653,7 +653,7 @@ extension Line: AppliableTransform {
             Control(point: $0.point * rhs,
                     weight: $0.weight,
                     pressure: $0.pressure)
-        }, size: lhs.size, id: lhs.id, uuColor: lhs.uuColor)
+        }, size: lhs.size, interID: lhs.interID, uuColor: lhs.uuColor)
     }
 }
 extension Line {
@@ -845,10 +845,10 @@ extension Line {
                 rcs[i - 1].weight = 1 - rcs[i].weight
             }
             return Line(controls: rcs, size: size,
-                        id: id, uuColor: uuColor)
+                        interID: interID, uuColor: uuColor)
         } else {
             return Line(controls: controls.reversed(), size: size,
-                        id: id, uuColor: uuColor)
+                        interID: interID, uuColor: uuColor)
         }
     }
     
@@ -856,12 +856,12 @@ extension Line {
         Line(controls: controls.map { Control(point: $0.point.inverted(),
                                               weight: $0.weight,
                                               pressure: $0.pressure) },
-             size: size, id: id, uuColor: uuColor)
+             size: size, interID: interID, uuColor: uuColor)
     }
     
     func splited(startIndex: Int, endIndex: Int) -> Line {
         Line(controls: Array(controls[startIndex ... endIndex]),
-             size: size, id: id, uuColor: uuColor)
+             size: size, interID: interID, uuColor: uuColor)
     }
     func splited(with range: LineRange) -> Line {
         if range.startIndexValue == firstIndexValue
@@ -880,7 +880,7 @@ extension Line {
                                            weight: 0.5, pressure: bpr.cx),
                                    Control(point: b.p1,
                                            weight: 0.5, pressure: bpr.x1)],
-                        size: size, id: id, uuColor: uuColor)
+                        size: size, interID: interID, uuColor: uuColor)
         } else if startIndex + 1 == endIndex {
             let p0 = bezier(at: startIndex).position(withT: startT)
             let p1 = Point.linear(controls[startIndex + 1].point,
@@ -905,7 +905,7 @@ extension Line {
                                    Control(point: p1, weight: w, pressure: pr1),
                                    Control(point: p2, weight: 0.5, pressure: pr2),
                                    Control(point: p3, weight: 0.5, pressure: pr3)],
-                        size: size, id: id, uuColor: uuColor)
+                        size: size, interID: interID, uuColor: uuColor)
         } else {
             let indexes = startIndex ... (endIndex + 2)
             var cs = Array(controls[indexes])
@@ -954,7 +954,7 @@ extension Line {
                 cs[cs.count - 1].pressure = lpr
                 cs[cs.count - 1].weight = 0.5
             }
-            return Line(controls: cs, size: size, id: id, uuColor: uuColor)
+            return Line(controls: cs, size: size, interID: interID, uuColor: uuColor)
         }
     }
     
@@ -995,7 +995,7 @@ extension Line {
                 cs[i + pi + 1].point += dp * t
             }
         }
-        return Line(controls: cs, size: size, id: id, uuColor: uuColor)
+        return Line(controls: cs, size: size, interID: interID, uuColor: uuColor)
     }
     
     mutating func split(t: Double, at i: Int) {
@@ -1119,7 +1119,7 @@ extension Line {
     
     func with(size: Double) -> Self {
         .init(controls: controls, size: size,
-              id: id, interType: interType, uuColor: uuColor)
+              interID: interID, interType: interType, uuColor: uuColor)
     }
     
     var firstIndexValue: LineIndexValue {
@@ -1209,7 +1209,7 @@ extension Line {
             Control(point: $0.point.rounded(rule),
                     weight: $0.weight.rounded(rule),
                     pressure: $0.pressure.rounded(rule))
-        }, size: size.rounded(rule), id: id, uuColor: uuColor)
+        }, size: size.rounded(rule), interID: interID, uuColor: uuColor)
     }
     var isEmpty: Bool {
         controls.isEmpty
@@ -1480,6 +1480,28 @@ extension Line {
                 }
             }
             return false
+        }
+    }
+    func minDistanceSquaredAndPressure(at p: Point) -> (dSq: Double, pressure: Double) {
+        if controls.count == 1 {
+            return (controls[0].point.distanceSquared(p), controls[0].pressure)
+        } else if controls.count == 2 {
+            let edge = Edge(controls[0].point, controls[1].point)
+            let t = edge.nearestT(from: p)
+            let pressure = Double.linear(controls[0].pressure, controls[1].pressure, t: t)
+            return (edge.position(atT: t).distanceSquared(p), pressure)
+        } else {
+            var minDSq = Double.infinity, minPressure = controls[0].pressure
+            for (bi, b) in bezierSequence.enumerated() {
+                let v = b.nearest(at: p)
+                let pressure = pressureInterpolation(at: bi).position(withT: v.t)
+                let dSq = v.distanceSquared
+                if dSq < minDSq {
+                    minDSq = dSq
+                    minPressure = pressure
+                }
+            }
+            return (minDSq, minPressure)
         }
     }
     func nearestIndexValue(at p: Point) -> LineIndexValue {

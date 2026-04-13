@@ -568,14 +568,14 @@ struct PBLine: @unchecked Sendable {
     set {_uniqueStorage()._size = newValue}
   }
 
-  var id: PBUUID {
-    get {return _storage._id ?? PBUUID()}
-    set {_uniqueStorage()._id = newValue}
+  var interID: PBUUID {
+    get {return _storage._interID ?? PBUUID()}
+    set {_uniqueStorage()._interID = newValue}
   }
-  /// Returns true if `id` has been explicitly set.
-  var hasID: Bool {return _storage._id != nil}
-  /// Clears the value of `id`. Subsequent reads from it will return its default value.
-  mutating func clearID() {_uniqueStorage()._id = nil}
+  /// Returns true if `interID` has been explicitly set.
+  var hasInterID: Bool {return _storage._interID != nil}
+  /// Clears the value of `interID`. Subsequent reads from it will return its default value.
+  mutating func clearInterID() {_uniqueStorage()._interID = nil}
 
   var interType: PBInterType {
     get {return _storage._interType}
@@ -1840,11 +1840,21 @@ struct PBWorld: Sendable {
   /// Clears the value of `sheetPositions`. Subsequent reads from it will return its default value.
   mutating func clearSheetPositions() {self._sheetPositions = nil}
 
+  var selectedSheetIds: PBUUIDArray {
+    get {return _selectedSheetIds ?? PBUUIDArray()}
+    set {_selectedSheetIds = newValue}
+  }
+  /// Returns true if `selectedSheetIds` has been explicitly set.
+  var hasSelectedSheetIds: Bool {return self._selectedSheetIds != nil}
+  /// Clears the value of `selectedSheetIds`. Subsequent reads from it will return its default value.
+  mutating func clearSelectedSheetIds() {self._selectedSheetIds = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _sheetPositions: PBIntPointStringDic? = nil
+  fileprivate var _selectedSheetIds: PBUUIDArray? = nil
 }
 
 struct PBCornerRectValue: Sendable {
@@ -2446,6 +2456,18 @@ struct PBPlaneArray: Sendable {
   // methods supported on all messages.
 
   var value: [PBPlane] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+struct PBUUIDArray: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var value: [PBUUID] = []
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3142,11 +3164,20 @@ struct PBWorldUndoItem: Sendable {
     set {value = .removeSheets(newValue)}
   }
 
+  var setSelectedSheetIds: PBUUIDArray {
+    get {
+      if case .setSelectedSheetIds(let v)? = value {return v}
+      return PBUUIDArray()
+    }
+    set {value = .setSelectedSheetIds(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Value: Equatable, Sendable {
     case insertSheets(PBStringIntPointDic)
     case removeSheets(PBIntPointArray)
+    case setSelectedSheetIds(PBUUIDArray)
 
   }
 
@@ -4197,7 +4228,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "controls"),
     2: .same(proto: "size"),
-    4: .same(proto: "id"),
+    4: .same(proto: "interID"),
     7: .same(proto: "interType"),
     6: .same(proto: "controlsData"),
     8: .same(proto: "uuColor"),
@@ -4206,7 +4237,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
   fileprivate class _StorageClass {
     var _controls: [PBLine.PBControl] = []
     var _size: Double = 0
-    var _id: PBUUID? = nil
+    var _interID: PBUUID? = nil
     var _interType: PBInterType = .none
     var _controlsData: Data = Data()
     var _uuColorOptional: PBLine.OneOf_UuColorOptional?
@@ -4226,7 +4257,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
     init(copying source: _StorageClass) {
       _controls = source._controls
       _size = source._size
-      _id = source._id
+      _interID = source._interID
       _interType = source._interType
       _controlsData = source._controlsData
       _uuColorOptional = source._uuColorOptional
@@ -4250,7 +4281,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
         switch fieldNumber {
         case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._controls) }()
         case 2: try { try decoder.decodeSingularDoubleField(value: &_storage._size) }()
-        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._id) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._interID) }()
         case 6: try { try decoder.decodeSingularBytesField(value: &_storage._controlsData) }()
         case 7: try { try decoder.decodeSingularEnumField(value: &_storage._interType) }()
         case 8: try {
@@ -4284,7 +4315,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
       if _storage._size.bitPattern != 0 {
         try visitor.visitSingularDoubleField(value: _storage._size, fieldNumber: 2)
       }
-      try { if let v = _storage._id {
+      try { if let v = _storage._interID {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       } }()
       if !_storage._controlsData.isEmpty {
@@ -4307,7 +4338,7 @@ extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBas
         let rhs_storage = _args.1
         if _storage._controls != rhs_storage._controls {return false}
         if _storage._size != rhs_storage._size {return false}
-        if _storage._id != rhs_storage._id {return false}
+        if _storage._interID != rhs_storage._interID {return false}
         if _storage._interType != rhs_storage._interType {return false}
         if _storage._controlsData != rhs_storage._controlsData {return false}
         if _storage._uuColorOptional != rhs_storage._uuColorOptional {return false}
@@ -6398,6 +6429,7 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
   static let protoMessageName: String = "PBWorld"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "sheetPositions"),
+    2: .same(proto: "selectedSheetIDs"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -6407,6 +6439,7 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._sheetPositions) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._selectedSheetIds) }()
       default: break
       }
     }
@@ -6420,11 +6453,15 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     try { if let v = self._sheetPositions {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
+    try { if let v = self._selectedSheetIds {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBWorld, rhs: PBWorld) -> Bool {
     if lhs._sheetPositions != rhs._sheetPositions {return false}
+    if lhs._selectedSheetIds != rhs._selectedSheetIds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7596,6 +7633,38 @@ extension PBPlaneArray: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
   }
 
   static func ==(lhs: PBPlaneArray, rhs: PBPlaneArray) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension PBUUIDArray: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBUUIDArray"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "value"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.value.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.value, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBUUIDArray, rhs: PBUUIDArray) -> Bool {
     if lhs.value != rhs.value {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -9065,6 +9134,7 @@ extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "insertSheets"),
     2: .same(proto: "removeSheets"),
+    3: .same(proto: "setSelectedSheetIDs"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -9099,6 +9169,19 @@ extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
           self.value = .removeSheets(v)
         }
       }()
+      case 3: try {
+        var v: PBUUIDArray?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .setSelectedSheetIds(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .setSelectedSheetIds(v)
+        }
+      }()
       default: break
       }
     }
@@ -9117,6 +9200,10 @@ extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     case .removeSheets?: try {
       guard case .removeSheets(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .setSelectedSheetIds?: try {
+      guard case .setSelectedSheetIds(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     }()
     case nil: break
     }
