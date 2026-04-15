@@ -49,11 +49,11 @@ struct InputKeyType {
     static let w = InputKeyType(name: "Ｗ"), x = InputKeyType(name: "Ｘ")
     static let y = InputKeyType(name: "Ｙ"), z = InputKeyType(name: "Ｚ")
     
-    static let no0 = InputKeyType(name: "0"), no1 = InputKeyType(name: "1")
-    static let no2 = InputKeyType(name: "2"), no3 = InputKeyType(name: "3")
-    static let no4 = InputKeyType(name: "4"), no5 = InputKeyType(name: "5")
-    static let no6 = InputKeyType(name: "6"), no7 = InputKeyType(name: "7")
-    static let no8 = InputKeyType(name: "8"), no9 = InputKeyType(name: "9")
+    static let no0 = InputKeyType(name: "０"), no1 = InputKeyType(name: "１")
+    static let no2 = InputKeyType(name: "２"), no3 = InputKeyType(name: "３")
+    static let no4 = InputKeyType(name: "４"), no5 = InputKeyType(name: "５")
+    static let no6 = InputKeyType(name: "６"), no7 = InputKeyType(name: "７")
+    static let no8 = InputKeyType(name: "８"), no9 = InputKeyType(name: "９")
     
     static let exclamationMark = InputKeyType(name: "!")
     static let quotationMarks = InputKeyType(name: "\"")
@@ -357,10 +357,9 @@ extension Quasimode {
     
     static let changeLightness = Self(modifier: [.option], .drag)
     static let changeTint = Self(modifier: [.shift, .option], .drag)
-    static let changeOpacity = Self(modifier: [.control, .option], .drag)
     
     static let move = Self(modifier: [.control], .drag)
-    static let moveLineZ = Self(modifier: [.shift, .control], .drag)
+    static let moveZ = Self(modifier: [.shift, .control], .drag)
     
     static let selectTime = Self(.swipe)
     static let keySelectTime = Self(modifier: [.control, .command], .drag)
@@ -379,23 +378,21 @@ extension Quasimode {
     static let selectByRange = Self(.subDrag)
     static let unselectByRange = Self(modifier: [.shift], .subDrag)
     
+    static let runOrClose = Self(.click)
     static let openMenu = Self(.subClick)
     static let lookUp = Self(.threeFingersTap)
     static let keyLookUp = Self(modifier: [.control, .command], .d)
-    static let runOrClose = Self(.click)
-    static let stop = Self(.escape)
-    
     static let inputCharacter = Self(.keyInput)
+    static let stop = Self(.escape)
     
     static let undo = Self(modifier: [.command], .z)
     static let redo = Self(modifier: [.shift, .command], .z)
     
     static let cut = Self(modifier: [.command], .x)
-    static let cutLinePoint = Self(modifier: [.option, .command], .x)
     static let copy = Self(modifier: [.command], .c)
-    static let copyLineColor = Self(modifier: [.option, .command], .c)
     static let paste = Self(modifier: [.command], .v)
     
+    static let insert = Self(modifier: [.command], .e)
     static let find = Self(modifier: [.command], .f)
     
     static let changeToDraft = Self(modifier: [.command], .d)
@@ -403,11 +400,6 @@ extension Quasimode {
     
     static let makeFaces = Self(modifier: [.command], .b)
     static let cutFaces = Self(modifier: [.shift, .command], .b)
-    
-    static let insertControlPoint = Self(modifier: [.command], .e)
-    
-    static let addTime = Self(modifier: [.command], .no1)
-    static let addScore = Self(modifier: [.command], .no2)
     
     static let justFit = Self(modifier: [.command], .j)
     
@@ -419,6 +411,9 @@ extension Quasimode {
     
     static let changeToVerticalText = Self(modifier: [.command], .l)
     static let changeToHorizontalText = Self(modifier: [.shift, .command], .l)
+    
+    static let addTime = Self(modifier: [.command], .no1)
+    static let addScore = Self(modifier: [.command], .no2)
     
     static let changeABC = Self(.abc)
     static let changeAIU = Self(.aiu)
@@ -520,11 +515,9 @@ extension ActionList {
          .init(name: "Select Version".localized, .selectVersion)],
         
         [.init(name: "Change Lightness".localized, .changeLightness),
-         .init(name: "Change Tint".localized, .changeTint),
-         .init(name: "Change Opacity".localized, .changeOpacity)],
+         .init(name: "Change Tint".localized, .changeTint)],
         
-        [.init(name: "Move".localized, .move),
-         .init(name: "Move Line Z".localized, .moveLineZ)],
+        [.init(name: "Move".localized, .move)],
         
         [.init(name: "Select Time".localized, .selectTime),
          .init(name: "Play".localized, .play)],
@@ -545,10 +538,10 @@ extension ActionList {
         
         [.init(name: "Cut".localized, .cut),
          .init(name: "Copy".localized, .copy),
-         .init(name: "Copy Line Color".localized, .copyLineColor),
          .init(name: "Paste".localized, .paste),],
         
-        [.init(name: "Find".localized, .find)],
+        [.init(name: "Insert".localized, .insert),
+         .init(name: "Find".localized, .find)],
         
         [.init(name: "Change to Draft".localized, .changeToDraft),
          .init(name: "Cut Draft".localized, .cutDraft)],
@@ -556,16 +549,14 @@ extension ActionList {
         [.init(name: "Make Faces".localized, .makeFaces),
          .init(name: "Cut Faces".localized, .cutFaces)],
         
-        [.init(name: "Insert Control Point".localized, .insertControlPoint)],
-        
-        [.init(name: "Add Time".localized, .addTime),
-         .init(name: "Add Score".localized, .addScore)],
-        
         [.init(name: "Interpolate".localized, .interpolate),
          .init(name: "Disconnect".localized, .disconnect)],
         
         [.init(name: "Change to Vertical Text".localized, .changeToVerticalText),
-         .init(name: "Change to Horizontal Text".localized, .changeToHorizontalText)]
+         .init(name: "Change to Horizontal Text".localized, .changeToHorizontalText)],
+        
+        [.init(name: "Add Time".localized, .addTime),
+         .init(name: "Add Score".localized, .addScore)]
     ])
 }
 extension ActionList {

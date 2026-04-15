@@ -145,14 +145,15 @@ extension Color {
     static let next = Color(red: 0.2, green: 0.9, blue: 0.35, opacity: 0.125)
     static let disabledText = Color(white: 0.5)
     static let draftLine = Color(red: 0.1, green: 0.4, blue: 1, opacity: 0.125)
+    static let empty = Color(white: 1, opacity: 0)
     
     static let selectedWhite = 0.5
     static let subSelectedWhite = 0.8
     static let subSelectedOpacity = 0.25
     nonisolated(unsafe) static var selected = Color(white: selectedWhite)
     nonisolated(unsafe) static var subSelected = Color(white: subSelectedWhite, opacity: subSelectedOpacity)
-    static let diselected = Color(white: 0.75)
-    static let subDiselected = Color(white: 0.9, opacity: subSelectedOpacity)
+    static let diselected = Color(white: 0.5)
+    static let subDiselected = Color(white: 0.85, opacity: subSelectedOpacity)
 
     static let removing = Color(white: 0.7)
     static let subRemoving = Color(white: 1, opacity: 0.8)

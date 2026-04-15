@@ -453,7 +453,7 @@ extension RunAction {
         }
     }
     func draw(_ ss: OSheet, from text: Text, at shp: IntPoint) {
-        guard let sheetView = rootView.readSheetView(at: shp) else { return }
+        guard !ss.undos.isEmpty, let sheetView = rootView.readSheetView(at: shp) else { return }
         sheetView.newUndoGroup()
         func lineCount(_ line: Line) -> Int {
             line.controls.count * MemoryLayout<Point>.size
@@ -504,6 +504,11 @@ extension RunAction {
                 sheetView.insert(tivs)
             case .removeTexts(let textIndexes):
                 sheetView.removeText(at: textIndexes)
+            case .changedColors(let colorValue):
+                let oldColorValue = sheetView.currentColorValue(from: colorValue)
+                if colorValue != oldColorValue {
+                    sheetView.set(colorValue, oldColorValue: oldColorValue)
+                }
             default: fatalError()
             }
         }

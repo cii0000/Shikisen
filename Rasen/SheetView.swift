@@ -53,7 +53,13 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         }
     }
     func updateColor() {
-        node.lineType = .color(isSelected && !isHiddenSelected ? .selected : model.uuColor.value)
+        let uuColor = model.uuColor
+        node.lineType = .color(isSelected && !isHiddenSelected ?
+                               (uuColor == Line.defaultUUColor ?
+                                .selected :
+                                    .linear(.selected, uuColor.value,
+                                            t: uuColor.value.lightness / 100 * 0.5)) :
+                                uuColor.value)
     }
     func updatePath() {
         node.path = Path(model)
@@ -6722,12 +6728,42 @@ final class SheetView: BindableView, @unchecked Sendable {
         return n
     }
     
+    func currentColorValue(from cv: ColorValue) -> ColorValue {
+        var ncv = cv
+        if !cv.planeIndexes.isEmpty {
+            ncv.uuColor = model.picture.planes[cv.planeIndexes.first!].uuColor
+        } else if !cv.planeAnimationIndexes.isEmpty {
+            ncv.uuColor = model.animation
+                .keyframes[cv.planeAnimationIndexes.first!.index].picture
+                .planes[cv.planeIndexes.first!]
+                .uuColor
+        }
+        
+        if !cv.lineIndexes.isEmpty {
+            ncv.uuColor = model.picture.lines[cv.lineIndexes.first!].uuColor
+        } else if !cv.lineAnimationIndexes.isEmpty {
+            ncv.uuColor = model.animation
+                .keyframes[cv.lineAnimationIndexes.first!.index].picture
+                .lines[cv.lineIndexes.first!]
+                .uuColor
+        }
+        
+        if cv.isBackground {
+            ncv.uuColor = model.backgroundUUColor
+        }
+        return ncv
+    }
+    
+    func isDefaultPlaneColor(at p: Point) -> Bool {
+        let uuColor = sheetColorOwnerFromPlane(at: p).uuColor
+        return uuColor == Sheet.defalutBackgroundUUColor
+        || (uuColor.id == .two && uuColor.value.opacity == 0)
+    }
     func lineTuple(at p: Point, enabledPlane: Bool = false,
                    isSelectedOnly: Bool = false,
                    removingUUColor: UUColor? = nil,
                    scale: Double) -> (lineView: SheetLineView, lineIndex: Int)? {
-        let isNoneDefaultColorPlane = !model.picture.planes.isEmpty
-        && sheetColorOwnerFromPlane(at: p).uuColor != Sheet.defalutBackgroundUUColor
+        let isNoneDefaultColorPlane = !model.picture.planes.isEmpty && !isDefaultPlaneColor(at: p)
         let smallScale: Double? = if enabledPlane && isNoneDefaultColorPlane {
             8.0
         } else if textTuple(at: p) != nil {
@@ -6740,7 +6776,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         var minI: Int?, minDSq = Double.infinity
         for (i, line) in model.picture.lines.enumerated().reversed() {
             guard !isSelectedOnly || keyframeView.linesView.elementViews[i].isSelected else { continue }
-            guard line.uuColor != removingUUColor else { return nil }
+            guard line.uuColor != removingUUColor else { continue }
             if line.uuColor != Line.defaultUUColor && isNoneDefaultColorPlane {
                 if line.containsPressure(at: p) {
                     return (linesView.elementViews[i], i)

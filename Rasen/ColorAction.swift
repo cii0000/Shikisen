@@ -71,7 +71,7 @@ final class ColorAction: Action {
     
     var colorOwners = [SheetColorOwner]()
     var fp = Point()
-    var beganMainUUColor = UU(Color())
+    var beganMainUUColor = UU(Color()), beganBackgroundUUColor = UU(Color())
     var editingMainUUColor = UU(Color())
     
     let isEditableMaxLightness = ColorSpace.default.isHDR
@@ -234,6 +234,8 @@ final class ColorAction: Action {
         
         if let (uuColor, owners) = rootView.madeColorOwnersWithSelection(at: p) {
             self.beganMainUUColor = uuColor
+            beganBackgroundUUColor = rootView.sheetView(at: p)?.backgroundUUColor
+            ?? Sheet.defalutBackgroundUUColor
             self.colorOwners = owners
             rootView.hideSelected()
             colorOwners.forEach { $0.hideSelected() }
@@ -1523,6 +1525,9 @@ final class ColorAction: Action {
             
             var uuColor = beganMainUUColor
             uuColor.value.lightness = lightness
+            if beganMainUUColor.value == .empty && beganMainUUColor.id == .two {
+                uuColor.value.opacity = 1
+            }
             if isEditableOpacity {
                 uuColor.value.opacity = opacity(atX: p.x)
             }
@@ -1711,6 +1716,9 @@ final class ColorAction: Action {
             }
             uuColor.value.chroma = isSnappedTint ? 0 : r - dr
             uuColor.value.hue = theta
+            if beganMainUUColor.value == .empty && beganMainUUColor.id == .two {
+                uuColor.value.opacity = 1
+            }
             let polarPoint = Point(uuColor.value.a, uuColor.value.b).polar
             uuColor.value.hue = polarPoint.theta
             uuColor.value.chroma = min(polarPoint.r, Color.maxChroma)

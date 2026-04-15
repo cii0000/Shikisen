@@ -524,20 +524,22 @@ final class LineAction: Action {
     
     nonisolated
     static func snap(_ fol: FirstOrLast, _ line: Line,
-                     isSnapSelf: Bool = true,
+                     isSnapSelf: Bool = true, distanceScale: Double = 1,
                      screenToWorldScale: Double,
                      from lines: [Line]) -> Line.Control? {
         snap(line.controls[fol],
              isSnapSelf && line.length() > line.size * 2 ? line.controls[fol.reversed] : nil,
              size: line.size * line.controls[fol].pressure,
+             distanceScale: distanceScale,
              screenToWorldScale: screenToWorldScale, from: lines)
     }
     nonisolated
     static func snap(_ c: Line.Control, _ nc: Line.Control?,
-                     size: Double,
+                     size: Double, distanceScale: Double = 1,
                      screenToWorldScale: Double,
                      from lines: [Line]) -> Line.Control? {
         let scale = screenToWorldScale.clipped(min: 0.06, max: 2, newMin: 0.5, newMax: 2)
+        * distanceScale
         let dd = size / 2
         var minDSq = Double.infinity, minP: Line.Control?
         func update(_ oc: Line.Control, _ oSize: Double) {
@@ -804,6 +806,28 @@ final class LineAction: Action {
                                          from: lastSnapLines) {
                     nLine.controls[.last].point = nc.point
                 }
+                
+                func toStraight() {
+                    let edge = Edge(nLine.firstPoint, nLine.lastPoint)
+                    let length = edge.length
+                    if length > 0 {
+                        let lScale = length.clipped(min: 10 * event.screenToWorldScale,
+                                                    max: 100 * event.screenToWorldScale,
+                                                    newMin: 0.25, newMax: 0.5)
+                        if nLine.straightDistance() * event.worldToScreenScale < lScale {
+                            nLine.controls = [nLine.controls.first!, nLine.controls.last!]
+                            let pd = nLine.controls.first!.pressure
+                                .distance(nLine.controls.last!.pressure)
+                            if pd < 0.1 {
+                                let pres = max(nLine.controls.first!.pressure,
+                                               nLine.controls.last!.pressure)
+                                nLine.controls[.first].pressure = pres
+                                nLine.controls[.last].pressure = pres
+                            }
+                        }
+                    }
+                }
+                toStraight()
             }
         }
         

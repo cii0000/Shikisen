@@ -28,7 +28,7 @@
 "Change Opacity" = "透明度を変更";
 
 "Move" = "移動";
-"Move Line Z" = "線の高さを変更";
+"Move Z" = "Z移動";
 
 "Select Time" = "時間を選択";
 "Play" = "再生";
@@ -38,7 +38,7 @@
 "Rotate" = "回転";
 
 "Select by Range" = "範囲選択";
-"Unselect by Range" = "範囲選択解除";
+"Unselect by Range" = "範囲解除";
 
 "Run" = "実行";
 "Run / Close" = "実行 / 閉じる";
@@ -52,9 +52,9 @@
 
 "Cut" = "カット";
 "Copy" = "コピー";
-"Copy Line Color" = "線色をコピー";
 "Paste" = "ペースト";
 
+"Insert" = "挿入";
 "Find" = "検索";
 
 "Change to Draft" = "下書きに変更";
@@ -62,8 +62,6 @@
 
 "Make Faces" = "面を作成";
 "Cut Faces" = "面をカット";
-
-"Insert Control Point" = "制御点を挿入";
 
 "Add Time" = "時間を追加";
 "Add Score" = "楽譜を追加";
@@ -84,6 +82,14 @@
 
 "Added" = "追加済み";
 "There is no line on the pasteboard" = "ペーストボードに線がありません";
+
+"Hidden Prev, Hidden Next" = "前を非表示、次を非表示";
+"Shown  Prev, Hidden Next" = "前を表示、　次を非表示";
+"Hidden Prev, Shown  Next" = "前を非表示、次を表示";
+"Shown  Prev, Shown  Next" = "前を表示、　次を表示";
+
+"Shown Spectrogram" = "スペクトログラムを表示";
+"Hidden Spectrogram" = "スペクトログラムを非表示";
 
 "Line" = "線";
 "Length" = "長さ";
@@ -264,7 +270,7 @@
 "Help" = "ヘルプ";
 "About Action" = "アクションについて";
 "Acknowledgments" = "謝辞";
-
+"Privacy Policy" = "プライバシーポリシー";
 
 
 

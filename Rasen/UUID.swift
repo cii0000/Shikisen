@@ -42,6 +42,7 @@ extension UUID {
     
     static let zero = Self(index: 0)
     static let one = Self(index: 1)
+    static let two = Self(index: 2)
     
     init?(data: Data) {
         guard data.count == 16 else { return nil }

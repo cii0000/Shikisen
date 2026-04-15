@@ -59,6 +59,56 @@ extension OSheet {
             value.texts.insert(tivs)
         case .removeTexts(let textIndexes):
             value.texts.remove(at: textIndexes)
+        case .changedColors(let colorValue):
+            if !colorValue.planeIndexes.isEmpty {
+                colorValue.planeIndexes.forEach {
+                    value.picture.planes[$0].uuColor = colorValue.uuColor
+                }
+            } else if !colorValue.planeAnimationIndexes.isEmpty {
+                if colorValue.animationColors.count == colorValue.planeAnimationIndexes.count {
+                    for (ki, v) in colorValue.planeAnimationIndexes.enumerated() {
+                        let uuColor = UUColor(colorValue.animationColors[ki],
+                                              id: colorValue.uuColor.id)
+                        for i in v.value {
+                            value.animation.keyframes[v.index].picture.planes[i]
+                                .uuColor = uuColor
+                        }
+                    }
+                } else {
+                    for v in colorValue.planeAnimationIndexes {
+                        for i in v.value {
+                            value.animation.keyframes[v.index].picture.planes[i].uuColor = colorValue.uuColor
+                        }
+                    }
+                }
+            }
+            
+            if !colorValue.lineIndexes.isEmpty {
+                colorValue.lineIndexes.forEach {
+                    value.picture.lines[$0].uuColor = colorValue.uuColor
+                }
+            } else if !colorValue.lineAnimationIndexes.isEmpty {
+                if colorValue.animationColors.count == colorValue.lineAnimationIndexes.count {
+                    for (ki, v) in colorValue.lineAnimationIndexes.enumerated() {
+                        let uuColor = UUColor(colorValue.animationColors[ki],
+                                              id: colorValue.uuColor.id)
+                        for i in v.value {
+                            value.animation.keyframes[v.index].picture.lines[i]
+                                .uuColor = uuColor
+                        }
+                    }
+                } else {
+                    for v in colorValue.lineAnimationIndexes {
+                        for i in v.value {
+                            value.animation.keyframes[v.index].picture.lines[i].uuColor = colorValue.uuColor
+                        }
+                    }
+                }
+            }
+            
+            if colorValue.isBackground {
+                value.backgroundUUColor = colorValue.uuColor
+            }
         default: fatalError()
         }
     }
@@ -179,6 +229,24 @@ extension OSheet {
         if !value.texts.isEmpty {
             removeTexts(at: Array(0 ..< value.texts.count))
         }
+    }
+    mutating func set(backgroundUUColor: UUColor) {
+        let ocv = ColorValue(uuColor: value.backgroundUUColor,
+                             planeIndexes: [], lineIndexes: [],
+                             isBackground: true,
+                             planeAnimationIndexes: [],
+                             lineAnimationIndexes: [],
+                             animationColors: [])
+        let cv = ColorValue(uuColor: backgroundUUColor,
+                            planeIndexes: [], lineIndexes: [],
+                            isBackground: true,
+                            planeAnimationIndexes: [],
+                            lineAnimationIndexes: [],
+                            animationColors: [])
+        let undoItem = SheetUndoItem.changedColors(ocv)
+        let redoItem = SheetUndoItem.changedColors(cv)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
     }
 }
 extension Sheet {
@@ -3498,8 +3566,28 @@ extension O {
                 }
             } else if case .sheet(var ss) = no,
                case .string(let str) = io, i < ios.count - 1 {
-                
-                if str == linesName {
+                if str == "backgroundColor" {
+                    if i + 1 == ios.count - 1,
+                       case .string(let cStr) = ios[i + 1] {
+                        if cStr == "opacity" {
+                            if let v = bo.asDouble {
+                                let v = ((try? v.notNaN()) ?? 0)
+                                    .clipped(min: 0, max: 1)
+                                var nColor = ss.value.backgroundUUColor
+                                if v != nColor.value.opacity {
+                                    nColor.value.opacity = v
+                                    ss.set(backgroundUUColor: nColor)
+                                }
+                                if oss.isEmpty {
+                                    return O(ss)
+                                } else {
+                                    oss[.last].i = O(ss)
+                                }
+                                break iosLoop
+                            }
+                        }
+                    }
+                } else if str == linesName {
                     if let li = ios[i + 1].asInt, li < ss.value.picture.lines.count {
                         if i + 1 == ios.count - 1 {
                             if let line = bo.asLine {

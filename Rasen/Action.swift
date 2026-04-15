@@ -234,11 +234,10 @@ final class RootAction: Action {
         case .unselectByRange: UnselectByRangeAction(self)
         case .changeLightness: ChangeLightnessAction(self)
         case .changeTint: ChangeTintAction(self)
-        case .changeOpacity: ChangeOpacityAction(self)
         case .keySelectTime: SelectTimeAction(self)
         case .selectVersion: SelectVersionAction(self)
         case .move: MoveAction(self)
-        case .moveLineZ: MoveLineZAction(self)
+        case .moveZ: MoveZAction(self)
         default: nil
         }
     }
@@ -299,33 +298,31 @@ final class RootAction: Action {
     
     private func inputKeyAction(with quasimode: Quasimode) -> (any InputKeyEventAction)? {
         switch quasimode {
-        case .cut: CutAction(self)
-        case .cutLinePoint: CutLinePointAction(self)
-        case .copy: CopyAction(self)
-        case .copyLineColor: CopyLineColorAction(self)
-        case .paste: PasteAction(self)
         case .undo: UndoAction(self)
         case .redo: RedoAction(self)
+        case .cut: CutAction(self)
+        case .copy: CopyAction(self)
+        case .paste: PasteAction(self)
+        case .insert: InsertAction(self)
         case .find: FindAction(self)
-        case .lookUp, .keyLookUp: LookUpAction(self)
-        case .changeToVerticalText: ChangeToVerticalTextAction(self)
-        case .changeToHorizontalText: ChangeToHorizontalTextAction(self)
-        case .changeToSuperscript: ChangeToSuperscriptAction(self)
-        case .changeToSubscript: ChangeToSubscriptAction(self)
-        case .runOrClose: RunAction(self)
         case .changeToDraft: ChangeToDraftAction(self)
         case .cutDraft: CutDraftAction(self)
         case .makeFaces: MakeFacesAction(self)
         case .cutFaces: CutFacesAction(self)
-        case .keyPlay: PlayAction(self)
-        case .goPrevious: GoPreviousAction(self)
-        case .goNext: GoNextAction(self)
-        case .insertControlPoint: InsertControlPointAction(self)
-        case .addTime: AddTimeAction(self)
-        case .addScore: AddScoreAction(self)
         case .justFit: JustFitAction(self)
         case .interpolate: InterpolateAction(self)
         case .disconnect: DisconnectAction(self)
+        case .changeToVerticalText: ChangeToVerticalTextAction(self)
+        case .changeToHorizontalText: ChangeToHorizontalTextAction(self)
+        case .changeToSuperscript: ChangeToSuperscriptAction(self)
+        case .changeToSubscript: ChangeToSubscriptAction(self)
+        case .addTime: AddTimeAction(self)
+        case .addScore: AddScoreAction(self)
+        case .lookUp, .keyLookUp: LookUpAction(self)
+        case .runOrClose: RunAction(self)
+        case .keyPlay: PlayAction(self)
+        case .goPrevious: GoPreviousAction(self)
+        case .goNext: GoNextAction(self)
         case .stop: StopAction(self)
         case .changeABC: ChangeLanguageAction(self)
         case .changeAIU: ChangeLanguageAction(self)
@@ -690,7 +687,7 @@ final class SelectAction: Action {
         var selectedTextRanegs: [Int: [Range<String.Index>]]
     }
     
-    private var firstP = Point(), multiSelectFrameAction: MultiSelectFrameAction?,
+    private var firstP = Point(), selectKeyframeAction: SelectKeyframeAction?,
                 captures = [SheetView: Capture](), firstSelectedSheetIDs = [UUID](),
                 firstSheetView: SheetView?, firstTextI: Int?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
@@ -704,10 +701,13 @@ final class SelectAction: Action {
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
                                                         scale: rootView.screenToWorldScale) {
                 
-                multiSelectFrameAction = .init(rootAction)
-                multiSelectFrameAction?.select(with: event, isUnselect: isUnselect)
+                selectKeyframeAction = .init(rootAction)
+                selectKeyframeAction?.select(with: event, isUnselect: isUnselect)
                 return
             }
+            
+            node.lineType = .color(!isUnselect ? .selected : .diselected)
+            node.fillType = .color(!isUnselect ? .subSelected : .subDiselected)
             
             rootView.cursor = .arrow
             firstP = p
@@ -725,8 +725,8 @@ final class SelectAction: Action {
                 node.isHidden = true
             }
         case .changed:
-            if let multiSelectFrameAction {
-                multiSelectFrameAction.select(with: event, isUnselect: isUnselect)
+            if let selectKeyframeAction {
+                selectKeyframeAction.select(with: event, isUnselect: isUnselect)
                 return
             }
             
@@ -900,8 +900,8 @@ final class SelectAction: Action {
             }
             
         case .ended:
-            if let multiSelectFrameAction {
-                multiSelectFrameAction.select(with: event, isUnselect: isUnselect)
+            if let selectKeyframeAction {
+                selectKeyframeAction.select(with: event, isUnselect: isUnselect)
                 return
             }
             
@@ -916,7 +916,7 @@ final class SelectAction: Action {
         }
     }
 }
-final class MultiSelectFrameAction: Action {
+final class SelectKeyframeAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     

@@ -1563,8 +1563,10 @@ final class RootView: View, @unchecked Sendable {
                 updateSelectedFrame()
             }
         } else {
-            newUndoGroup()
-            setSelectedSheet([])
+            if !world.selectedSheetIDs.isEmpty {
+                newUndoGroup()
+                setSelectedSheet([])
+            }
         }
     }
     func closeAllPanels(at p: Point) {
@@ -3186,6 +3188,12 @@ final class RootView: View, @unchecked Sendable {
     }
     func smoothPitch(from scoreView: ScoreView, at scoreP: Point) -> Double? {
         scoreView.smoothPitch(atY: scoreP.y)
+    }
+    var isFullEdit: Bool {
+        EditGrid(logScale: pov.logScale) == .full
+    }
+    var isSecondEdit: Bool {
+        EditGrid(logScale: pov.logScale) == .second
     }
     
     static let mapScale = 16

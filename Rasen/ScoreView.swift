@@ -3095,6 +3095,7 @@ extension ScoreView {
             if newValue != oldValue {
                 binder[keyPath: keyPath].isShownSpectrogram = newValue
                 updateTimeline()
+                Sleep.start()
                 updateSpectrogram()
             }
         }

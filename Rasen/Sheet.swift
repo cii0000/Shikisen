@@ -100,7 +100,7 @@ extension ColorValue: Protobuf {
         }
     }
 }
-extension ColorValue: Codable {}
+extension ColorValue: Hashable, Codable {}
 
 struct TextValue: Hashable, Codable {
     var string: String, replacedRange: Range<Int>,
@@ -2265,6 +2265,16 @@ extension Animation {
 
 enum PreviousNext: Int32, Hashable, Codable {
     case none, previous, next, previousAndNext
+}
+extension PreviousNext {
+    var displayName: String {
+        switch self {
+        case .none: "Hidden Prev, Hidden Next".localized
+        case .previous: "Shown  Prev, Hidden Next".localized
+        case .next: "Hidden Prev, Shown  Next".localized
+        case .previousAndNext: "Shown  Prev, Shown  Next".localized
+        }
+    }
 }
 extension PreviousNext: Protobuf {
     init(_ pb: PBPreviousNext) throws {

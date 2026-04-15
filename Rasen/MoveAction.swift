@@ -368,6 +368,8 @@ final class MoveAnimationAction: DragEventAction {
                         type = .previousNext
                         
                         beganAnimationOption = sheetView.model.animation.option
+                        
+                        rootView.cursor = .arrowWith(string: animationView.previousNext.displayName)
                     case .startBeat:
                         type = .startBeat
                         
@@ -502,6 +504,7 @@ final class MoveAnimationAction: DragEventAction {
                     }
                 case .previousNext:
                     animationView.previousNext = animationView.previousNext(at: sheetP)
+                    rootView.cursor = .arrowWith(string: animationView.previousNext.displayName)
                 case .key:
                     let interval = rootView.currentKeyframeBeatInterval
                     let durBeat = animationView.model.beatRange.length
@@ -737,7 +740,7 @@ final class MoveScoreAction: DragEventAction {
                     " "
                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                      : ""
-                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString() + dSecStr)
+                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString() + dSecStr)
                 } else if let (noteI, result) = v {
                     self.noteI = noteI
                     
@@ -821,7 +824,7 @@ final class MoveScoreAction: DragEventAction {
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                                                  
-                        rootView.cursor = .circle(string: Pitch(value: beganPitch).displayString())
+                        rootView.cursor = .arrowWith(string: Pitch(value: beganPitch).displayString())
                         
                     case .even(let pitI):
                         type = .even
@@ -909,7 +912,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
+                        rootView.cursor = .arrowWith(string: Pitch(value: .init(beganTone.spectlope.sprols[sprolI].pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     case .allSprol(let sprolI, let sprol, let spectlopeY):
                         type = .sprol
                         
@@ -968,7 +971,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(sprol.pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
+                        rootView.cursor = .arrowWith(string: Pitch(value: .init(sprol.pitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     case .spectlopeHeight:
                         type = .spectlopeHeight
                         
@@ -995,7 +998,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         beganPitchY = scoreView.y(fromPitch: note.pitch)
                         
-                        rootView.cursor = .circle(string: Pitch(value: note.f0Pitch).displayString())
+                        rootView.cursor = .arrowWith(string: Pitch(value: note.f0Pitch).displayString())
                     case .note, .startBeat, .endBeat:
                         self.noteI = noteI
                         
@@ -1046,12 +1049,14 @@ final class MoveScoreAction: DragEventAction {
                         
                         let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                         let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                        rootView.cursor = .circle(string: Pitch(value: cPitch).displayString())
+                        rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString())
                     }
                 } else if scoreView.containsIsShownSpectrogram(scoreP, scale: rootView.screenToWorldScale) {
                     type = .isShownSpectrogram
                     
                     beganScoreOption = scoreView.model.option
+                    
+                    rootView.cursor = .arrowWith(string: (scoreView.model.isShownSpectrogram ? "Shown Spectrogram" : "Hidden Spectrogram").localized)
                 } else if scoreView.isLoopDurBeat(at: scoreP, scale: rootView.screenToWorldScale) {
                     type = .loopDurBeat
                     
@@ -1161,7 +1166,7 @@ final class MoveScoreAction: DragEventAction {
                                     " "
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedFrame()
@@ -1217,7 +1222,7 @@ final class MoveScoreAction: DragEventAction {
                                     " "
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedFrame()
@@ -1275,7 +1280,7 @@ final class MoveScoreAction: DragEventAction {
                                     " "
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
-                                    rootView.cursor = .circle(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
                                 }
                             }
                             rootView.updateSelectedFrame()
@@ -1389,6 +1394,7 @@ final class MoveScoreAction: DragEventAction {
                     let isShownSpectrogram = scoreView.isShownSpectrogram(at: scoreP)
                     scoreView.isShownSpectrogram = isShownSpectrogram
                     
+                    rootView.cursor = .arrowWith(string: (scoreView.model.isShownSpectrogram ? "Shown Spectrogram" : "Hidden Spectrogram").localized)
                 case .f0:
                     let pitchInterval = rootView.currentPitchInterval
                     let pitch = scoreView.pitch(atY: scoreView.convertFromWorld(p).y,
@@ -1409,7 +1415,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         oldPitch = nPitch
                         
-                        rootView.cursor = .circle(string: Pitch(value: beganF0Pitch + dPitch).displayString())
+                        rootView.cursor = .arrowWith(string: Pitch(value: beganF0Pitch + dPitch).displayString())
                     }
                 case .pit, .strightPit:
                     if let noteI, noteI < score.notes.count {
@@ -1498,7 +1504,7 @@ final class MoveScoreAction: DragEventAction {
                                 " "
                                 + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                  : ""
-                                rootView.cursor = .circle(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + dSecStr)
                             }
                             rootView.updateSelectedFrame()
                         }
@@ -1574,7 +1580,7 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.rendableNormarizedPitResult(atBeat: beganStartBeat, at: $0)
                         }
                         
-                        rootView.cursor = .circle(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
+                        rootView.cursor = .arrowWith(string: Pitch(value: .init(nPitch, intervalScale: EditGrid.fullEditPitchInterval)).displayString(hidableDecimal: false))
                     }
                 case .spectlopeHeight:
                     var nivs = [IndexValue<Note>](capacity: beganNotes.count)
@@ -1763,7 +1769,7 @@ final class MoveContentAction: DragEventAction {
                 if contentView.containsIsShownSpectrogram(contentP, scale: rootView.screenToWorldScale) {
                     type = .isShownSpectrogram
                     beganIsShownSpectrogram = contentView.model.isShownSpectrogram
-                    contentView.updateSpectrogram()
+                    rootView.cursor = .arrowWith(string: (contentView.model.isShownSpectrogram ? "Shown Spectrogram" : "Hidden Spectrogram").localized)
                 } else if let timeOption = content.timeOption {
                     if abs(sheetP.x - sheetView.animationView.x(atBeat: timeOption.beatRange.start)) < maxMD {
                         type = .startBeat
@@ -1839,7 +1845,11 @@ final class MoveContentAction: DragEventAction {
                 case .isShownSpectrogram:
                     let contentP = contentView.convertFromWorld(p)
                     let isShownSpectrogram = contentView.isShownSpectrogram(at: contentP)
-                    contentView.isShownSpectrogram = isShownSpectrogram
+                    if contentView.isShownSpectrogram != isShownSpectrogram {
+                        contentView.isShownSpectrogram = isShownSpectrogram
+                        
+                        rootView.cursor = .arrowWith(string: (contentView.model.isShownSpectrogram ? "Shown Spectrogram" : "Hidden Spectrogram").localized)
+                    }
                 case .position:
                     let np = rootView.roundedPoint(from: beganContent.origin + sheetP - beganInP)
                     var nnp = np
@@ -2418,12 +2428,22 @@ final class MoveLineAction: DragEventAction {
     }
     
     enum MoveType {
-        case point, warp, all
+        case point, warp, straight, all
     }
     
     private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0
     private var beganLine = Line(), beganMainP = Point(), beganSheetP = Point(),
-                lastSnapTime: Double?, snapP = Point(), snapDP = Point()
+                lastSnapTime: Double?, snapP = Point(), snapDP = Point(), isEnabledFeedback = true
+    private var lineView: SheetLineView?, lastSnapStraightTime: Double?, nsd = Point()
+    private var isSnapStraight = false {
+        didSet {
+            guard isSnapStraight != oldValue else { return }
+            if isSnapStraight && isEnabledFeedback {
+                Feedback.performAlignment()
+            }
+        }
+    }
+    
     let snappableDistance = 2.0
     private var node = Node()
     private var type = MoveType.point
@@ -2431,7 +2451,7 @@ final class MoveLineAction: DragEventAction {
     var isSnapped = false {
         didSet {
             guard isSnapped != oldValue else { return }
-            if isSnapped {
+            if isSnapped && isEnabledFeedback {
                 Feedback.performAlignment()
             }
         }
@@ -2456,6 +2476,7 @@ final class MoveLineAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
                 
+                isEnabledFeedback = false
                 if let (lineView, li) = sheetView.lineTuple(at: sheetP,
                                                             scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
@@ -2471,14 +2492,15 @@ final class MoveLineAction: DragEventAction {
                         
                         let d = line.minDistanceSquared(at: sheetP).squareRoot()
                         type = if d < line.size + 0.5 * rootView.screenToWorldScale {
-                            .point
+                            line.controls.count == 2 ? .straight : .point
                         } else if d < line.size + 20 * rootView.screenToWorldScale {
-                            .warp
+                            line.controls.count == 2 ? .straight : .warp
                         } else {
                             .all
                         }
                         
-                        if type == .point {
+                        switch type {
+                        case .point:
                             node.children = line.mainControlSequence.flatMap {
                                 let p = sheetView.convertToWorld($0.point)
                                 return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
@@ -2489,7 +2511,7 @@ final class MoveLineAction: DragEventAction {
                                              fillType: .color(.background))]
                             }
                             rootView.node.append(child: node)
-                        } else if type == .warp {
+                        case .warp:
                             let niv = line.nearestIndexValue(at: sheetP)
                             
                             let length = line.length()
@@ -2502,6 +2524,22 @@ final class MoveLineAction: DragEventAction {
                                     pointIndex = line.mainPointCount - 1
                                 }
                             }
+                        case .straight:
+                            self.lineView = lineView
+                            let fp = sheetView.convertToWorld(pointIndex == 0 ?
+                                                              line.lastPoint : line.firstPoint)
+                            isSnapStraight = line.firstPoint.x == line.lastPoint.x
+                            || line.firstPoint.y == line.lastPoint.y
+                            let lw = Line.defaultLineWidth
+                            let wb = rootView.worldBounds
+                            let b0 = Rect(x: fp.x - lw / 2, y: wb.minY, width: lw, height: wb.height)
+                            let b1 = Rect(x: wb.minX, y: fp.y - lw / 2, width: wb.width, height: lw)
+                            let paths = [Path(b0), Path(b1)]
+                            node.children = paths.map {
+                                Node(path: $0, fillType: .color(.subSelected))
+                            }
+                            rootView.node.append(child: node)
+                        case .all: break
                         }
                         
                         if type != .all {
@@ -2511,6 +2549,7 @@ final class MoveLineAction: DragEventAction {
                             let nnp = pointIndex == 0 || pointIndex == beganLine.mainPointCount - 1 ?
                             LineAction.snap(pointIndex == 0 ? .first : .last, beganLine,
                                             isSnapSelf: true,
+                                            distanceScale: 2,
                                             screenToWorldScale: rootView.screenToWorldScale,
                                             from: lines)?.point :
                             nil
@@ -2522,6 +2561,7 @@ final class MoveLineAction: DragEventAction {
                     }
                 }
             }
+            isEnabledFeedback = true
         case .changed:
             if let sheetView {
                 if lineIndex < sheetView.linesView.elementViews.count {
@@ -2546,6 +2586,7 @@ final class MoveLineAction: DragEventAction {
                             let nnp = pointIndex == 0 || pointIndex == nLine.mainPointCount - 1 ?
                             LineAction.snap(pointIndex == 0 ? .first : .last, nLine,
                                             isSnapSelf: true,
+                                            distanceScale: 2,
                                             screenToWorldScale: rootView.screenToWorldScale,
                                             from: lines)?.point :
                             nil
@@ -2597,6 +2638,7 @@ final class MoveLineAction: DragEventAction {
                             let nnp = pointIndex == 0 || pointIndex == line.mainPointCount - 1 ?
                             LineAction.snap(pointIndex == 0 ? .first : .last, nLine,
                                             isSnapSelf: true,
+                                            distanceScale: 2,
                                             screenToWorldScale: rootView.screenToWorldScale,
                                             from: lines)?.point :
                             nil
@@ -2632,6 +2674,87 @@ final class MoveLineAction: DragEventAction {
                         line = line.warpedWith(deltaPoint: dp, at: pointIndex)
                         
                         lineView.model = line
+                    case .straight:
+                        let fol0: FirstOrLast = pointIndex == 0 ? .last : .first
+                        let fol1 = fol0.reversed
+                        
+                        var lines = sheetView.keyframeView.linesView.model
+                        lines.remove(at: lineIndex)
+                        
+                        let np = sheetView.convertFromWorld(p)
+                        
+                        var nLine = beganLine
+                        nLine.controls[fol1].point = np
+                        
+                        let nnp = LineAction.snap(fol1, nLine,
+                                                  isSnapSelf: false,
+                                                  distanceScale: 2,
+                                                  screenToWorldScale: rootView.screenToWorldScale,
+                                                  from: lines)?.point
+                        
+                        if nnp != nil {
+                            if let lastSnapTime = lastSnapTime {
+                                if event.time - lastSnapTime > 1 {
+                                    if isSnapped {
+                                        snapDP = np - nnp!
+                                    }
+                                    isSnapped = false
+                                }
+                            } else {
+                                if !isSnapped {
+                                    lastSnapTime = event.time
+                                    snapP = nnp!
+                                }
+                                isSnapped = true
+                            }
+                        } else {
+                            lastSnapTime = nil
+                            isSnapped = false
+                        }
+                        
+                        nLine.controls[fol1].point = isSnapped ? snapP : np - snapDP
+                        
+                        let dp = nLine.controls[fol1].point - nLine.controls[fol0].point
+                        
+                        let sd: Point, isSnapS: Bool
+                        if abs(dp.x) < abs(dp.y) {
+                            sd = .init(dp.x, 0)
+                            isSnapS = abs(dp.x * rootView.worldToScreenScale) < abs(dp.y * rootView.worldToScreenScale)
+                                .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
+                        } else {
+                            sd = .init(0, dp.y)
+                            isSnapS = abs(dp.y * rootView.worldToScreenScale) < abs(dp.x * rootView.worldToScreenScale)
+                                .clipped(min: 5, max: 20, newMin: 0, newMax: snappableDistance)
+                        }
+                        if isSnapS {
+                            if let lastSnapStraightTime = lastSnapStraightTime {
+                                if event.time - lastSnapStraightTime > 1 {
+                                    isSnapStraight = false
+                                    nsd = sd
+                                }
+                            } else {
+                                if !isSnapStraight {
+                                    lastSnapStraightTime = event.time
+                                    nsd = sd
+                                }
+                                isSnapStraight = true
+                            }
+                        } else {
+                            lastSnapStraightTime = nil
+                            isSnapStraight = false
+                        }
+                        if isSnapStraight {
+                            if abs(nsd.x) > 0 {
+                                nLine.controls[fol1].point.x = nLine.controls[fol0].point.x
+                            } else {
+                                nLine.controls[fol1].point.y = nLine.controls[fol0].point.y
+                            }
+                        } else {
+                            nLine.controls[fol1].point -= nsd
+                        }
+                        
+                        lineView.model = nLine
+                        lineView.node.lineType = isSnapStraight ? .color(.selected) : .color(.content)
                     case .all:
                         var line = beganLine
                         let sheetP = sheetView.convertFromWorld(p)
@@ -2648,6 +2771,7 @@ final class MoveLineAction: DragEventAction {
         case .ended:
             node.removeFromParent()
             
+            lineView?.updateColor()
             if let sheetView {
                 sheetView.showSelected()
                 
@@ -2895,7 +3019,7 @@ final class MoveMainFrameAction: DragEventAction {
     }
 }
 
-final class MoveLineZAction: DragEventAction {
+final class MoveZAction: DragEventAction {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     

@@ -548,7 +548,7 @@ final class PlayAction: InputKeyEventAction {
     }
 }
 
-final class InsertControlPointAction: InputKeyEventAction {
+final class InsertAction: InputKeyEventAction {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     

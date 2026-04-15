@@ -1397,12 +1397,14 @@ final class PastableAction: Action {
         } else if let sheetView = rootView.sheetView(at: p),
                   let (lineView, li) = sheetView
                     .lineTuple(at: sheetView.convertFromWorld(p),
+                               enabledPlane: true,
                                scale: 1 / rootView.worldToScreenScale) {
             
-            let t = Transform(translation: -sheetView.convertFromWorld(p))
+            let sheetP = sheetView.convertFromWorld(p)
+            let t = Transform(translation: -sheetP)
             let ssv = SheetValue(lines: [lineView.model],
                                  planes: [], texts: [],
-                                 origin: sheetView.convertFromWorld(p),
+                                 origin: sheetP,
                                  id: sheetView.id,
                                  rootKeyframeIndex: sheetView.model.animation.rootIndex) * t
             Pasteboard.shared.copiedObjects = [.sheetValue(ssv)]
@@ -1417,7 +1419,21 @@ final class PastableAction: Action {
             }
             
             sheetView.newUndoGroup()
-            sheetView.removeLines(at: [li])
+            
+            let line = lineView.model
+            if rootView.isSecondEdit,
+               line.controls.count > 2,
+               let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP),
+               lineView.model.mainPoint(at: pi).distanceSquared(sheetP)
+                < (lineView.model.mainPressure(at: pi) * line.size / 2).squared {
+                
+                var line = line
+                line.controls.remove(at: pi)
+                sheetView.removeLines(at: [li])
+                sheetView.insert([IndexValue(value: line, index: li)])
+            } else {
+                sheetView.removeLines(at: [li])
+            }
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, ti, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
@@ -1719,28 +1735,20 @@ final class PastableAction: Action {
                 colorOwners.forEach {
                     if $0.colorValue.isBackground {
                         $0.uuColor = Sheet.defalutBackgroundUUColor
-                        if !nug.contains($0.sheetView) {
-                            $0.captureUUColor(isNewUndoGroup: true)
-                            nug.insert($0.sheetView)
-                        }
-                    }
-                    if !$0.colorValue.planeIndexes.isEmpty {
-                        if !nug.contains($0.sheetView) {
-                            $0.sheetView.newUndoGroup()
-                            nug.insert($0.sheetView)
-                        }
-                        $0.sheetView.removePlanes(at: $0.colorValue.planeIndexes)
-                    }
-                    if !$0.colorValue.planeAnimationIndexes.isEmpty {
+                        $0.captureUUColor(isNewUndoGroup: !nug.contains($0.sheetView))
+                        nug.insert($0.sheetView)
+                    } else if !$0.colorValue.planeIndexes.isEmpty {
+                        $0.uuColor = .init(.empty, id: .two)
+                        $0.captureUUColor(isNewUndoGroup: !nug.contains($0.sheetView))
+                        nug.insert($0.sheetView)
+                    } else if !$0.colorValue.planeAnimationIndexes.isEmpty {
                         let ki = $0.sheetView.model.animation.index
                         for v in $0.colorValue.planeAnimationIndexes {
                             if ki == v.index {
                                 if !v.value.isEmpty {
-                                    if !nug.contains($0.sheetView) {
-                                        $0.sheetView.newUndoGroup()
-                                        nug.insert($0.sheetView)
-                                    }
-                                    $0.sheetView.removePlanes(at: v.value)
+                                    $0.uuColor = .init(.empty, id: .two)
+                                    $0.captureUUColor(isNewUndoGroup: !nug.contains($0.sheetView))
+                                    nug.insert($0.sheetView)
                                 }
                                 break
                             }

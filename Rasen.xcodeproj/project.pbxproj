@@ -62,6 +62,7 @@
 		23B50CFE2997C21E002CA640 /* Loudness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B50CFD2997C21E002CA640 /* Loudness.swift */; };
 		23B9940B24E8F214000D544F /* Acknowledgments.txt in Resources */ = {isa = PBXBuildFile; fileRef = 23B9940A24E8F214000D544F /* Acknowledgments.txt */; };
 		23BD590924BBEB5B00C948D0 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 23BD590824BBEB5B00C948D0 /* SwiftProtobuf */; };
+		23BE9F562F8E538100EF3987 /* PrivacyPolicy.md in Resources */ = {isa = PBXBuildFile; fileRef = 2371F6622F11331600A81A45 /* PrivacyPolicy.md */; };
 		23C0A9C2237ED0010054ECCC /* Action.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C0A9C1237ED0010054ECCC /* Action.swift */; };
 		23C4BC0A28F9344500DEF37E /* Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C4BC0928F9344500DEF37E /* Voice.swift */; };
 		23C5B4142B903EB60081127C /* GensenCN-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = 23C5B40F2B903EB50081127C /* GensenCN-Medium.otf */; };
@@ -207,7 +208,6 @@
 			children = (
 				23A728DE216CF481000A7350 /* Readme.md */,
 				2379E032219C54910092892E /* License.md */,
-				2371F6622F11331600A81A45 /* PrivacyPolicy.md */,
 				23A72875216CF1B5000A7350 /* Rasen */,
 				23A72874216CF1B5000A7350 /* Products */,
 				23A877A12A5EA8FB00855F0E /* Frameworks */,
@@ -292,6 +292,7 @@
 				235BF0CB21771B0F00EEFABE /* Shaders.metal */,
 				2340EF7A2AAE14D200FD874F /* Fonts */,
 				23B9940A24E8F214000D544F /* Acknowledgments.txt */,
+				2371F6622F11331600A81A45 /* PrivacyPolicy.md */,
 				23A7287A216CF1B6000A7350 /* Assets.xcassets */,
 				238AAA402CF30276002EAD83 /* PrivacyInfo.xcprivacy */,
 				2331701921F43AFA008F21D6 /* Info.plist */,
@@ -390,6 +391,7 @@
 				235F1FE82E29292A00D8BF58 /* NotoSansSymbols2-Regular.ttf in Resources */,
 				23C5B4182B903EB60081127C /* GensenTW-Medium.otf in Resources */,
 				2321DCF121AD1B5400F8B5C5 /* Localizable.strings in Resources */,
+				23BE9F562F8E538100EF3987 /* PrivacyPolicy.md in Resources */,
 				23C5B4162B903EB60081127C /* GensenKR-Medium.otf in Resources */,
 				23C5B4142B903EB60081127C /* GensenCN-Medium.otf in Resources */,
 				23B9940B24E8F214000D544F /* Acknowledgments.txt in Resources */,

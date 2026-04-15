@@ -171,7 +171,7 @@ final class SubNSApplication: NSApplication {
         let viewController = NSViewController()
         viewController.view = view
         window = NSWindow(contentViewController: viewController)
-        window.title = ""
+        window.title = System.appName.localized
         window.center()
         window.setFrameAutosaveName("Main")
         window.delegate = self
@@ -367,6 +367,9 @@ final class SubNSApplication: NSApplication {
         helpMenu.addItem(withTitle: "Acknowledgments".localized,
                          action: #selector(AppDelegate.showAcknowledgments(_:)),
                          keyEquivalent: "")
+        helpMenu.addItem(withTitle: "Privacy Policy".localized,
+                         action: #selector(AppDelegate.showPrivacyPolicy(_:)),
+                         keyEquivalent: "")
         let helpMenuItem = NSMenuItem(title: helpString,
                                       action: nil, keyEquivalent: "")
         helpMenuItem.submenu = helpMenu
@@ -493,11 +496,28 @@ final class SubNSApplication: NSApplication {
         let string = try! String(contentsOf: url, encoding: .utf8)
         acknowledgmentsPanel = AppDelegate.makePanel(from: string, title: "Acknowledgments".localized)
     }
+    weak var privacyPolicyPanel: NSPanel?
+    @objc func showPrivacyPolicy(_ sender: Any) {
+        guard privacyPolicyPanel == nil else {
+            privacyPolicyPanel?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let url = Bundle.main.url(forResource: "PrivacyPolicy", withExtension: "md")!
+        let string = try! AttributedString(markdown: try! String(contentsOf: url, encoding: .utf8))
+        privacyPolicyPanel = AppDelegate.makePanel(from: "", attString: string,
+                                                   title: "Privacy Policy".localized)
+    }
     
-    static func makePanel(from string: String, title: String) -> NSPanel {
+    static func makePanel(from string: String, attString: AttributedString? = nil,
+                          title: String) -> NSPanel {
         let nsFrame = NSRect(x: 0, y: 0, width: 550, height: 620)
         let nsTextView = NSTextView(frame: nsFrame)
-        nsTextView.string = string
+        if let attString {
+            nsTextView.textStorage?.setAttributedString(.init(attString).viewed())
+        } else {
+            nsTextView.string = string
+        }
+        nsTextView.textContainerInset = .init(width: 10, height: 20)
         nsTextView.isEditable = false
         nsTextView.autoresizingMask = [.width, .height, .minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         let nsScrollView = NSScrollView(frame: nsFrame)
@@ -515,6 +535,51 @@ final class SubNSApplication: NSApplication {
         nsScrollView.flashScrollers()
         
         return nsPanel
+    }
+}
+extension NSAttributedString {
+    func viewed() -> NSAttributedString {
+        let nAttString = NSMutableAttributedString()
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 10
+        paragraphStyle.paragraphSpacing = 15
+        let paragraphStyle0 = NSMutableParagraphStyle()
+        paragraphStyle0.lineSpacing = 10
+        paragraphStyle0.paragraphSpacing = 15
+        paragraphStyle0.paragraphSpacingBefore = 25
+        let paragraphStyle1 = NSMutableParagraphStyle()
+        paragraphStyle1.lineSpacing = 10
+        paragraphStyle1.paragraphSpacing = 15
+        paragraphStyle1.paragraphSpacingBefore = 15
+        enumerateAttribute(.presentationIntentAttributeName,
+                           in: NSRange(location: 0, length: length),
+                           options: []) { value, range, _ in
+            guard let intent = value as? PresentationIntent else { return }
+            let str = (self.string as NSString).substring(with: range)
+            for component in intent.components {
+                switch component.kind {
+                case .paragraph:
+                    nAttString.append(.init(string: (nAttString.string.isEmpty ? "" : "\n") + str,
+                                            attributes: [.font: NSFont.systemFont(ofSize: 14),
+                                                         .paragraphStyle: paragraphStyle]))
+                case .header(let level):
+                    let fontSize: CGFloat = switch level {
+                    case 1: 26
+                    case 2: 22
+                    default: 18
+                    }
+                    nAttString.append(.init(string: (nAttString.string.isEmpty ? "" : "\n") + str,
+                                            attributes: [.font: NSFont.systemFont(ofSize: fontSize),
+                                                         .paragraphStyle: level >= 3 ? paragraphStyle1 : paragraphStyle0]))
+                default:
+                    nAttString.append(.init(string: (nAttString.string.isEmpty ? "" : "\n") + str,
+                                            attributes: [.font: NSFont.systemFont(ofSize: 14),
+                                                         .paragraphStyle: paragraphStyle]))
+                }
+            }
+        }
+        
+        return nAttString
     }
 }
 private extension NSMenu {
