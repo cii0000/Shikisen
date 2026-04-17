@@ -1152,6 +1152,11 @@ extension Topolygon {
               holePolygons: holePolygons.map { $0.sortedTopCounterClockwise().inverted() })
     }
 }
+extension Rect {
+    func contains(_ tpoly: Topolygon) -> Bool {
+        tpoly.allPoints.allSatisfy { containsEnableLast($0) }
+    }
+}
 
 struct Tripolygon {
     var triangles = [Triangle]()

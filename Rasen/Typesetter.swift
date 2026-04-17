@@ -19,7 +19,7 @@ enum Alignment {
     case left, center, right, natural, justified
 }
 
-struct Typobute {
+struct Typobute: Hashable {
     static let minWidthCount = 4.0
     static let defaultWidthCount = 40.0
     static let maxWidthCount = 40.0
@@ -32,13 +32,13 @@ struct Typobute {
         orientation = Orientation.horizontal
 }
 
-struct Indent {
+struct Indent: Hashable {
     var firstIndex, lastIndex: String.Index,
         offsetIndex: String.Index,
         isTabstop = false
 }
 
-struct Typesetter {
+struct Typesetter: Hashable {
     let string: String,
         typobute: Typobute,
         typelines: [Typeline],

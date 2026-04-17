@@ -75,7 +75,7 @@ final class LassoCopyAction: DragEventAction {
     }
 }
 enum LassoType {
-    case cut, copy, makeFaces, cutFaces, changeDraft, cutDraft
+    case cut, copy
 }
 final class LineAction: Action {
     let rootAction: RootAction, rootView: RootView
@@ -1318,14 +1318,6 @@ final class LineAction: Action {
                 } else {
                     copySheets(at: p)
                 }
-            case .changeDraft:
-                changeDraft()
-            case .cutDraft:
-                cutDraft(at: p)
-            case .makeFaces:
-                makeFaces()
-            case .cutFaces:
-                cutFaces()
             }
             
             lassoNode?.removeFromParent()
@@ -1504,120 +1496,5 @@ final class LineAction: Action {
     }
     func copySheets(at p: Point) {
         updateWithCopySheet(at: p, from: values(with: tempLine))
-    }
-    
-    func changeDraft() {
-        guard let lb = tempLine.bounds else { return }
-        if centerBounds.contains(lb),
-           let sheetView = rootView.madeSheetView(at: centerSHP) {
-            
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            if let value = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                  isRemove: true,
-                                                  isEnableText: false) {
-                let li = sheetView.model.draftPicture.lines.count
-                sheetView.insertDraft(value.lines.enumerated().map {
-                    IndexValue(value: $0.element, index: li + $0.offset)
-                })
-                let pi = sheetView.model.draftPicture.planes.count
-                sheetView.insertDraft(value.planes.enumerated().map {
-                    IndexValue(value: $0.element, index: pi + $0.offset)
-                })
-            }
-        } else {
-            for shp in nearestShps {
-                let b = rootView.sheetFrame(with: shp)
-                if b.contains(lb),
-                   let sheetView = rootView.sheetView(at: shp),
-                   !sheetView.model.picture.isEmpty {
-                    
-                    sheetView.newUndoGroup()
-                    sheetView.changeToDraft()
-                } else if lb.intersects(b),
-                          let sheetView = rootView.sheetView(at: shp) {
-                    let nLine = tempLine * Transform(translation: -b.origin)
-                    
-                    if let value = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                   isRemove: true,
-                                                   isEnableText: false) {
-                        let li = sheetView.model.draftPicture.lines.count
-                        sheetView.insertDraft(value.lines.enumerated().map {
-                            IndexValue(value: $0.element, index: li + $0.offset)
-                        })
-                        let pi = sheetView.model.draftPicture.planes.count
-                        sheetView.insertDraft(value.planes.enumerated().map {
-                            IndexValue(value: $0.element, index: pi + $0.offset)
-                        })
-                    }
-                }
-            }
-        }
-    }
-    func cutDraft(at p: Point) {
-        guard let lb = tempLine.bounds else { return }
-        if centerBounds.contains(lb),
-           let sheetView = rootView.madeSheetView(at: centerSHP) {
-            
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            if let value = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                  isRemove: true,
-                                                  isEnableText: false,
-                                                  isDraft: true) {
-                let t = Transform(translation: -sheetView.convertFromWorld(p))
-                Pasteboard.shared.copiedObjects = [.sheetValue(value * t)]
-            }
-        } else {
-            var value = SheetValue()
-            for shp in nearestShps {
-                let b = rootView.sheetFrame(with: shp)
-                if lb.intersects(b),
-                   let sheetView = rootView.sheetView(at: shp) {
-                    let nLine = tempLine * Transform(translation: -b.origin)
-                    if let aValue = sheetView.lassoErase(with: Lasso(line: nLine),
-                                                    isRemove: true,
-                                                    isEnableText: false,
-                                                    isDraft: true) {
-                        let t = Transform(translation: -sheetView.convertFromWorld(p))
-                        value += aValue * t
-                    }
-                }
-            }
-            if !value.isEmpty {
-                Pasteboard.shared.copiedObjects = [.sheetValue(value)]
-            }
-        }
-    }
-    
-    func makeFaces() {
-        guard let lb = tempLine.bounds else { return }
-        if centerBounds.contains(lb),
-           let sheetView = rootView.madeSheetView(at: centerSHP) {
-            
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            let path = Path(nLine)
-            sheetView.makeFaces(with: path, isSelection: true)
-        } else {
-            for shp in nearestShps {
-                let b = rootView.sheetFrame(with: shp)
-                if lb.intersects(b),
-                   let sheetView = rootView.sheetView(at: shp) {
-                    
-                    let nLine = tempLine * Transform(translation: -b.origin)
-                    
-                    let path = Path(nLine)
-                    sheetView.makeFaces(with: path, isSelection: true)
-                }
-            }
-        }
-    }
-    func cutFaces() {
-        guard let lb = tempLine.bounds else { return }
-        if centerBounds.contains(lb),
-           let sheetView = rootView.madeSheetView(at: centerSHP) {
-            
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            let path = Path(nLine)
-            _ = sheetView.cutFaces(with: path)
-        }
     }
 }

@@ -1799,7 +1799,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     func containsSelectedKeyframe(_ p: Point, scale: Double) -> Bool {
-        if animationView.containsTimeline(animationView.timelineNode.convertFromWorld(p),
+        if animationView.containsTimeline(animationView.timelineNode.convert(p, from: node),
                                           scale: scale),
            let ki = animationView
             .keyframeIndex(at: animationView.timelineNode.convert(p, from: node)) {
@@ -7300,27 +7300,26 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     @MainActor
-    func makeFaces(with path: Path?, isSelection: Bool) {
-        if animationView.selectedIs.isEmpty {
-            makeFacesFromKeyframeIndex(with: path, isSelection: isSelection)
-            return
+    func makeFaces(withClipping cb: Rect?,
+                   selectedKeyframeIs: [Int], isOutClip: Bool) -> Bool {
+        if selectedKeyframeIs.isEmpty {
+            return makeFacesFromKeyframeIndex(withClipping: cb, isOutClip: isOutClip)
         }
         
-        let indexes = animationView.selectedIs.sorted()
         let b = bounds, borders = model.borders
-        let pictures = model.animation.keyframes[indexes].map { $0.picture }
+        let pictures = model.animation.keyframes[selectedKeyframeIs].map { $0.picture }
         
         let progressPanel = ProgressPanel(message: "Making Faces".localized)
         node.root.show(progressPanel)
         let task = Task.detached {
-            let progress = ActorProgress(total: indexes.count)
+            let progress = ActorProgress(total: selectedKeyframeIs.count)
             let nPolyss = try? await withThrowingTaskGroup(of: (i: Int, polys: [Topolygon]).self,
                                                           returning: [[Topolygon]]?.self) { group in
-                for i in indexes.count.range {
+                for i in selectedKeyframeIs.count.range {
                     group.addTask(priority: .high) {
                         try Task.checkCancellation()
-                        let v = pictures[i].makePolygons(inFrame: b, clipingPath: path,
-                                                         borders: borders, isSelection: isSelection)
+                        let v = pictures[i].makePolygons(in: b, clippingBounds: cb,
+                                                         borders: borders, isOutClip: isOutClip)
                         await progress.addCount()
                         Task(priority: .high) { @MainActor in
                             progressPanel.progress = await progress.fractionCompleted
@@ -7329,42 +7328,43 @@ final class SheetView: BindableView, @unchecked Sendable {
                     }
                 }
                 
-                return try await group.reduce(into: .init(repeating: [], count: indexes.count)) {
+                return try await group.reduce(into: .init(repeating: [], count: selectedKeyframeIs.count)) {
                     $0[$1.i] = $1.polys
                 }
             }
             Task { @MainActor in
                 defer { progressPanel.closePanel() }
-                guard let nPolyss, nPolyss.count == indexes.count else { return }
+                guard let nPolyss, nPolyss.count == selectedKeyframeIs.count else { return }
                 self.newUndoGroup()
-                for (j, i) in indexes.enumerated() {
+                for (j, i) in selectedKeyframeIs.enumerated() {
                     autoreleasepool {
                         self.setRootKeyframeIndex(rootKeyframeIndex: i)
-                        self.makeFacesFromKeyframeIndex(with: path,
-                                                        topolygons: nPolyss[j],
-                                                        isSelection: isSelection,
-                                                        isNewUndoGroup: false)
+                        _ = self.makeFacesFromKeyframeIndex(withClipping: cb,
+                                                            topolygons: nPolyss[j],
+                                                            isOutClip: isOutClip,
+                                                            isNewUndoGroup: false)
                         self.setRootKeyframeIndex(rootKeyframeIndex: i)
                     }
                 }
             }
         }
         progressPanel.cancelHandler = { task.cancel() }
+        return true
     }
-    func makeFacesFromKeyframeIndex(with path: Path?, isSelection: Bool,
-                                    isNewUndoGroup: Bool = true) {
-        let topolygons = model.picture.makePolygons(inFrame: bounds,
-                                                    clipingPath: path,
+    func makeFacesFromKeyframeIndex(withClipping cb: Rect?, isOutClip: Bool,
+                                    isNewUndoGroup: Bool = true) -> Bool {
+        let topolygons = model.picture.makePolygons(in: bounds,
+                                                    clippingBounds: cb,
                                                     borders: model.borders,
-                                                    isSelection: isSelection)
-        return makeFacesFromKeyframeIndex(with: path,
+                                                    isOutClip: isOutClip)
+        return makeFacesFromKeyframeIndex(withClipping: cb,
                                           topolygons: topolygons,
-                                          isSelection: isSelection,
+                                          isOutClip: isOutClip,
                                           isNewUndoGroup: isNewUndoGroup)
     }
-    func makeFacesFromKeyframeIndex(with path: Path?, topolygons: [Topolygon],
-                                    isSelection: Bool,
-                                    isNewUndoGroup: Bool = true) {
+    func makeFacesFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
+                                    isOutClip: Bool,
+                                    isNewUndoGroup: Bool = true) -> Bool {
         func enabledPlanes(at otherKI: Int) -> [Plane]? {
             let planes = model.animation.keyframes[otherKI].picture.planes
             return planes.isEmpty ? nil : planes
@@ -7382,15 +7382,13 @@ final class SheetView: BindableView, @unchecked Sendable {
             result = Picture.autoFill(fromOther: otherPlanes(),
                                       from: topolygons,
                                       from: model.picture.planes,
-                                      inFrame: b,
-                                      clipingPath: path, borders: model.borders,
-                                      isSelection: isSelection)
+                                      in: b,
+                                      clippingBounds: cb, borders: model.borders)
         } else {
             result = Picture.autoFill(from: topolygons,
                                       from: model.picture.planes,
-                                      inFrame: b,
-                                      clipingPath: path, borders: model.borders,
-                                      isSelection: isSelection)
+                                      in: b,
+                                      clippingBounds: cb, borders: model.borders)
         }
         switch result {
         case .planes(let planes):
@@ -7398,12 +7396,32 @@ final class SheetView: BindableView, @unchecked Sendable {
                 newUndoGroup()
             }
             append(planes)
+            return true
         case .planeValue(let planeValue):
             if isNewUndoGroup {
                 newUndoGroup()
             }
             set(planeValue)
-        case .none: break
+            return true
+        case .none:
+            return false
+        case .background(let uuColor):
+            if model.backgroundUUColor == Sheet.defalutBackgroundUUColor {
+                if isNewUndoGroup {
+                    newUndoGroup()
+                }
+                if !model.picture.planes.isEmpty {
+                    removePlanes(at: .init(model.picture.planes.count.range))
+                }
+                let cv = ColorValue(uuColor: uuColor, planeIndexes: [], lineIndexes: [],
+                                    isBackground: true,
+                                    planeAnimationIndexes: [], lineAnimationIndexes: [],
+                                    animationColors: [])
+                set(cv, oldColorValue: currentColorValue(from: cv))
+                return true
+            } else {
+                return false
+            }
         }
     }
     func removeFilledFaces(with path: Path?, at p: Point) -> SheetValue? {

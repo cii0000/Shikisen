@@ -43,8 +43,8 @@ extension TriangleStrip: AppliableTransform {
     }
 }
 
-struct Pathline {
-    enum Element {
+struct Pathline: Hashable {
+    enum Element: Hashable {
         case linear(Point)
         case bezier(point: Point, control: Point)
         case line(Line)
@@ -947,6 +947,7 @@ extension Path {
         return !intersectsLine(other)
     }
 }
+extension Path: Hashable {}
 extension Path {
     func topolygon(withQuality quality: Double = 1) -> Topolygon {
         if pathlines.isEmpty {

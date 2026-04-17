@@ -54,47 +54,46 @@ extension Picture {
     static let defaultRenderingScale = 8.0
     
     enum AutoFillResult {
+        case background(_ color: UUColor)
         case planes(_ planes: [Plane])
         case planeValue(_ planeValue: PlaneValue)
         case none
     }
     
     func autoFill(fromOther otherPlanes: [Plane]? = nil,
-                  inFrame bounds: Rect,
-                  clipingPath: Path?,
+                  in bounds: Rect,
+                  clippingBounds: Rect?,
                   renderingScale: Double = Self.defaultRenderingScale,
                   borders: [Border] = [],
-                  isSelection: Bool) -> AutoFillResult {
-        let nPolys = makePolygons(inFrame: bounds, clipingPath: clipingPath,
+                  isOutClip: Bool) -> AutoFillResult {
+        let nPolys = makePolygons(in: bounds, clippingBounds: clippingBounds,
                                   renderingScale: renderingScale,
-                                  isSelection: isSelection)
+                                  isOutClip: isOutClip)
         return Self.autoFill(fromOther: otherPlanes, from: nPolys,
                              from: planes,
-                             inFrame: bounds,
-                             clipingPath: clipingPath, isSelection: isSelection)
+                             in: bounds,
+                             clippingBounds: clippingBounds)
     }
-    func makePolygons(inFrame bounds: Rect,
-                      clipingPath: Path?,
+    func makePolygons(in bounds: Rect,
+                      clippingBounds: Rect?,
                       renderingScale: Double = Self.defaultRenderingScale,
                       borders: [Border] = [],
-                      isSelection: Bool) -> [Topolygon] {
-        let bounds = (isSelection ? bounds : (clipingPath?.bounds ?? bounds)).integral
+                      isOutClip: Bool) -> [Topolygon] {
+        let bounds = (isOutClip ? bounds : (clippingBounds ?? bounds)).integral
         return Self.topolygons(with: bounds, from: lines,
                                renderingScale: renderingScale, borders: borders)
     }
     static func autoFill(fromOther otherPlanes: [Plane]? = nil,
                          from nPolys: [Topolygon],
                          from planes: [Plane],
-                         inFrame bounds: Rect,
-                         clipingPath: Path?,
+                         in bounds: Rect,
+                         clippingBounds: Rect?,
                          renderingScale: Double = Self.defaultRenderingScale,
-                         borders: [Border] = [],
-                         isSelection: Bool) -> AutoFillResult {
-        if nPolys.isEmpty {
-            if !planes.isEmpty {
-                return .planeValue(.init(planes: [], moveIndexValues: []))
-            }
-            return .none
+                         borders: [Border] = []) -> AutoFillResult {
+        if (nPolys.isEmpty && clippingBounds == nil) || (nPolys.count == 1 && nPolys[0] == bounds) {
+            return .background(UU(bounds.area < 1 ?
+                                  Color.randomLightness(45 ... 55) :
+                                    Color.randomLightness(60 ... 85)))
         }
         var nPlanes: [(plane: Plane, area: Double)] = nPolys.map {
             let area = $0.area
@@ -104,13 +103,10 @@ extension Picture {
             return (Plane(topolygon: $0, uuColor: UU(color)), area)
         }
         nPlanes.sort { $0.area > $1.area }
-        if !nPlanes.isEmpty && nPlanes[0].plane.topolygon == bounds {
-            nPlanes.removeFirst()
-        }
         
         if otherPlanes?.isEmpty ?? planes.isEmpty {
-            if let path = clipingPath?.inset(by: 0.01) ?? clipingPath {
-                nPlanes = nPlanes.filter { path.intersects($0.plane.path) }
+            if let clippingBounds {
+                nPlanes = nPlanes.filter { clippingBounds.contains($0.plane.topolygon) }
                 return nPlanes.isEmpty ? .none : .planes(nPlanes.map { $0.plane })
             } else {
                 return nPlanes.isEmpty ? .none : .planes(nPlanes.map { $0.plane })
@@ -125,11 +121,11 @@ extension Picture {
         var indexValues = [IndexValue<Int>]()
         var isIndexesArray = Array(repeating: false, count: planes.count)
         
-        if let path = clipingPath?.inset(by: 0.01) ?? clipingPath {
+        if let clippingBounds {
             nPlanes = planes.lazy
-                .filter { !path.intersects($0.path) }
+                .filter { !clippingBounds.contains($0.topolygon) }
                 .map { ($0, $0.topolygon.area) }
-                + nPlanes.filter { path.intersects($0.plane.path) }
+            + nPlanes.filter { clippingBounds.contains($0.plane.topolygon) }
             nPlanes.sort { $0.area > $1.area }
         }
         
@@ -144,7 +140,8 @@ extension Picture {
             }
         }
         if indexValues.count == nPlanes.count && planes.count == nPlanes.count {
-            return .none
+            return nPlanes.count == 1 && nPlanes[0].plane.uuColor.value == .empty
+            && nPlanes[0].plane.uuColor.id == .two ? .planes(nPlanes.map { $0.plane }) : .none
         }
         let removePlaneIndexes = isIndexesArray.enumerated().compactMap {
             $0.element ? nil : $0.offset
@@ -231,7 +228,10 @@ extension Picture {
                                    straightConnectableScale scd: Double = 4.0,
                                    renderingScale: Double,
                                    borders: [Border]) -> [Topolygon] {
-        guard !lines.isEmpty else { return [] }
+        guard !lines.isEmpty else {
+            return [.init(points: [bounds.minXMaxYPoint, bounds.minXMinYPoint,
+                                   bounds.maxXMinYPoint, bounds.maxXMaxYPoint])]
+        }
         
         let size = bounds.size * renderingScale
         

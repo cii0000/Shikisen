@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Rasen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Arc {
+struct Arc: Hashable {
     var centerPosition: Point {
         didSet {
             startPosition = Arc.positionWith(centerPosition,

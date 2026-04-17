@@ -1354,23 +1354,44 @@ final class FaceAction: Action {
                 return
             }
             
+            var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
-                ?? rootView.sheetViewWithSelectedSheetValue(at: p) {
+                ?? rootView.sheetViewWithSelectedSheetValue(at: p),
+               let rect = sheetView.selectedFrame {
                 
-                if let rect = sheetView.selectedFrame {
-                    let path = Path(rect)
-                    sheetView.makeFaces(with: path, isSelection: true)
+                isChanged = sheetView.makeFaces(withClipping: rect,
+                                                selectedKeyframeIs: [], isOutClip: true)
+            } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
+                let kis = sheetView.animationView.selectedIs.sorted()
+                let (frame, isAll) = rootView.frame(at: p, with: sheetView)
+                if isAll {
+                    isChanged = sheetView.makeFaces(withClipping: nil,
+                                                    selectedKeyframeIs: kis, isOutClip: false)
+                } else {
+                    let f = sheetView.convertFromWorld(frame)
+                    isChanged = sheetView.makeFaces(withClipping: f,
+                                                    selectedKeyframeIs: kis, isOutClip: false)
                 }
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
-                if let sheetView = sheetView {
+                if let sheetView {
                     if isAll {
-                        sheetView.makeFaces(with: nil, isSelection: false)
+                        isChanged = sheetView.makeFaces(withClipping: nil,
+                                                        selectedKeyframeIs: [], isOutClip: false)
                     } else {
                         let f = sheetView.convertFromWorld(frame)
-                        sheetView.makeFaces(with: Path(f), isSelection: false)
+                        isChanged = sheetView.makeFaces(withClipping: f,
+                                                        selectedKeyframeIs: [], isOutClip: false)
                     }
+                } else if let sheetView = rootView.madeSheetView(at: p) {
+                    isChanged = sheetView.makeFacesFromKeyframeIndex(withClipping: nil,
+                                                                     isOutClip: false,
+                                                                     isNewUndoGroup: true)
                 }
+            }
+            if !isChanged {
+                rootView.cursor = .arrowWith(string: "No Update".localized)
+                Sleep.start(atTime: 0.2)
             }
         case .changed:
             break

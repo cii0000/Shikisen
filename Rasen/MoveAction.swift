@@ -95,6 +95,8 @@ final class MoveAction: DragEventAction {
                 } else if rootView.border(at: p) != nil {
                     type = .border(MoveBorderAction(rootAction))
                 }
+            } else if rootView.mainFrame(at: p) != nil {
+                type = .mainFrame(MoveMainFrameAction(rootAction))
             }
             
             oldTime = event.time
@@ -998,7 +1000,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         beganPitchY = scoreView.y(fromPitch: note.pitch)
                         
-                        rootView.cursor = .arrowWith(string: Pitch(value: note.f0Pitch).displayString())
+                        rootView.cursor = .arrowWith(string: "F0: " + Pitch(value: note.f0Pitch).displayString())
                     case .note, .startBeat, .endBeat:
                         self.noteI = noteI
                         
@@ -1415,7 +1417,7 @@ final class MoveScoreAction: DragEventAction {
                         
                         oldPitch = nPitch
                         
-                        rootView.cursor = .arrowWith(string: Pitch(value: beganF0Pitch + dPitch).displayString())
+                        rootView.cursor = .arrowWith(string: "F0: " + Pitch(value: beganF0Pitch + dPitch).displayString())
                     }
                 case .pit, .strightPit:
                     if let noteI, noteI < score.notes.count {
@@ -2977,7 +2979,7 @@ final class MoveMainFrameAction: DragEventAction {
         case .began:
             rootView.cursor = .arrow
             
-            if let sheetView = rootView.sheetView(at: p),
+            if let sheetView = rootView.madeSheetView(at: p),
                let shp = rootView.sheetPosition(from: sheetView) {
                 
                 self.sheetView = sheetView

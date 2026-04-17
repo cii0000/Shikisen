@@ -2813,6 +2813,17 @@ final class RootView: View, @unchecked Sendable {
             return (shp, nil, frame, false)
         }
     }
+    func frame(at p: Point, with sheetView: SheetView) -> (frame: Rect, isAll: Bool) {
+        let frame = sheetFrame(at: sheetView.id) ?? sheetFrame(with: sheetPosition(at: p))
+        if !isEditingSheet {
+            return (frame, true)
+        } else {
+            let (bounds, isAll) = sheetView.model
+                .boundsTuple(at: sheetView.convertFromWorld(p),
+                             in: frame.bounds)
+            return (bounds + frame.origin, isAll)
+        }
+    }
     
     func nearestAroundTempo(at p: Point) -> Rational {
         let shp = sheetPosition(at: p)

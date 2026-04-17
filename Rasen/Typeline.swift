@@ -19,6 +19,7 @@ import struct Foundation.Locale
 import class Foundation.NSAttributedString
 import class Foundation.NSMutableAttributedString
 import struct Foundation.NSRange
+public import struct CoreFoundation.CFRange
 
 //#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
 import CoreText
@@ -72,7 +73,7 @@ extension String {
     }
 }
 
-struct Font {
+struct Font: Hashable {
     static let jpName = "GensenJP-Medium"
     static let cnName = "GensenCN-Medium"
     static let hkName = "GensenHK-Medium"
@@ -814,7 +815,7 @@ extension Path {
     }
 }
 
-struct Typeline {
+struct Typeline: Hashable {
     let string: String
     let range: Range<String.Index>
     let origin: Point, baseDeltaOrigin: Point
@@ -1222,7 +1223,7 @@ extension Typeline {
     }
 }
 
-struct Typerun {
+struct Typerun: Hashable {
     fileprivate let ctRun: CTRun, ctFont: CTFont?, isEnableFont: Bool
     init(ctRun: CTRun, mainFont: Font) {
         let attributes = CTRunGetAttributes(ctRun)
@@ -1397,9 +1398,13 @@ extension Typerun {
     }
 }
 
-extension CFRange: @retroactive Equatable {
-    static func == (lhs: CFRange, rhs: CFRange) -> Bool {
+extension CFRange: @retroactive Hashable {
+    public static func == (lhs: CFRange, rhs: CFRange) -> Bool {
         return lhs.location == rhs.location && lhs.length == rhs.length
+    }
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(location)
+        hasher.combine(length)
     }
 }
 extension CFRange {

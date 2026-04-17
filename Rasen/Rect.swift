@@ -381,6 +381,10 @@ extension Rect {
         p.x >= origin.x && p.x < origin.x + size.width
             && p.y >= origin.y && p.y < origin.y + size.height
     }
+    func containsEnableLast(_ p: Point) -> Bool {
+        p.x >= origin.x && p.x <= origin.x + size.width
+            && p.y >= origin.y && p.y <= origin.y + size.height
+    }
     func contains(_ r: Rect) -> Bool {
         r.origin.x >= origin.x && r.origin.y >= origin.y
             && r.maxX <= maxX && r.maxY <= maxY
