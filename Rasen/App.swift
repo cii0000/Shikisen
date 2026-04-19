@@ -3431,7 +3431,7 @@ extension String {
 struct System {
     static let appName = "Rasen".localized
     static let dataName = String(format: "%@ Data".localized, appName)
-    static let id = Bundle.main.bundleIdentifier ?? "cii0000lemma.Rasen"
+    static let id = Bundle.main.bundleIdentifier ?? "cii0000.Rasen"
     
     static let oldAppName = "Rasen".localized
     static let oldDataName = String(format: "%@ Data".localized, oldAppName)
