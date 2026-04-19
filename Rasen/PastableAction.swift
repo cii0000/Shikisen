@@ -1421,7 +1421,7 @@ final class PastableAction: Action {
             sheetView.newUndoGroup()
             
             let line = lineView.model
-            if rootView.isSecondEdit,
+            if rootView.isFullEdit,
                line.controls.count > 2,
                let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP),
                lineView.model.mainPoint(at: pi).distanceSquared(sheetP)
@@ -3741,6 +3741,11 @@ final class PastableAction: Action {
             
             let p = rootView.convertScreenToWorld(sp)
             let values = rootView.sheetFramePositions(at: p)
+            let roads = rootView.roads(fromMap: Set(values.map { $0.shp }))
+            let roadPath = Path(roads.compactMap {
+                $0.pathlineWith(width: Sheet.width, height: Sheet.height)
+            }, isCap: false)
+            
             selectingLineNode.children = values.map {
                 let sf = $0.frame
                 return Node(attitude: Attitude(position: sf.origin),
@@ -3748,7 +3753,9 @@ final class PastableAction: Action {
                             lineWidth: selectingLineNode.lineWidth,
                             lineType: selectingLineNode.lineType,
                             fillType: selectingLineNode.fillType)
-            }
+            } + (!roads.isEmpty ? [.init(path: roadPath,
+                                         lineWidth: selectingLineNode.lineWidth * 0.5,
+                                         lineType: .color(.selected))] : [])
             updateWithCopySheet(at: p, from: values)
             
             rootView.node.append(child: selectingLineNode)

@@ -194,6 +194,37 @@ extension Array {
     }
 }
 
+extension Collection {
+    func minValue<V: Comparable>(by handler: (Element) throws -> V) rethrows -> V? {
+        var minV: V?
+        for e in self {
+            let v = try handler(e)
+            if let aMinV = minV {
+                if v < aMinV {
+                    minV = v
+                }
+            } else {
+                minV = v
+            }
+        }
+        return minV
+    }
+    func maxValue<V: Comparable>(by handler: (Element) throws -> V) rethrows -> V? {
+        var minV: V?
+        for e in self {
+            let v = try handler(e)
+            if let aMinV = minV {
+                if v > aMinV {
+                    minV = v
+                }
+            } else {
+                minV = v
+            }
+        }
+        return minV
+    }
+}
+
 extension Array {
     init(capacityUninitialized capacity: Int) {
         let ptr = UnsafeMutablePointer<Element>.allocate(capacity: capacity)

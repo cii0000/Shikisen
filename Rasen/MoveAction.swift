@@ -60,8 +60,6 @@ final class MoveAction: DragEventAction {
     func flow(with event: DragEvent) {
         switch event.phase {
         case .began:
-            rootView.isHiddenSelected = true
-            
             let sp = rootView.screenPointFromMenu ?? event.screenPoint
             let p = rootView.convertScreenToWorld(sp)
             
@@ -106,8 +104,7 @@ final class MoveAction: DragEventAction {
             } else {
                 oldTime = oldTime + ((event.time - oldTime) / (1 / 70)).rounded(.down) * 1 / 70
             }
-        case .ended:
-            rootView.isHiddenSelected = false
+        case .ended: break
         }
         
         switch type {
@@ -146,6 +143,13 @@ final class MoveAction: DragEventAction {
 final class MoveSheetsAction: DragEventAction {
     let rootAction: RootAction, rootView: RootView
     
+    func updateNode() {
+        let lw = Line.defaultLineWidth / rootView.worldToScreenScale
+        pasteSheetNode.children.forEach {
+            $0.lineWidth = lw
+        }
+    }
+    
     init(_ rootAction: RootAction) {
         self.rootAction = rootAction
         rootView = rootAction.rootView
@@ -177,6 +181,8 @@ final class MoveSheetsAction: DragEventAction {
                 rootAction.stopPlaying(with: event)
             }
             
+            rootView.isHiddenSelected = true
+            
             let p = rootView.convertScreenToWorld(sp)
             let vs = rootView.sheetFramePositions(at: p)
             var csv = CopiedSheetsValue()
@@ -196,6 +202,8 @@ final class MoveSheetsAction: DragEventAction {
                 isNewUndoGroup = true
                 rootView.newUndoGroup()
                 rootView.removeSheets(at: shps)
+            } else {
+                rootView.cursor = .arrowWith(string: "Empty".localized)
             }
             
             firstScale = rootView.worldToScreenScale
@@ -206,12 +214,26 @@ final class MoveSheetsAction: DragEventAction {
             selectingLineNode.lineWidth = rootView.worldLineWidth
             
             rootView.node.append(child: selectingLineNode)
+            
+            let lw = Line.defaultLineWidth / rootView.worldToScreenScale
+            pasteSheetNode.children = csv.sheetIDs.map {
+                let fillType = rootView.readFillType(at: $0.value)
+                    ?? .color(.disabled)
+                
+                let sf = rootView.sheetFrame(with: $0.key)
+                return Node(attitude: Attitude(position: sf.origin),
+                            path: Path(Rect(size: sf.size)),
+                            lineWidth: lw,
+                            lineType: .color(.selected), fillType: fillType)
+            }
             rootView.node.append(child: pasteSheetNode)
             
             updateWithPasteSheet(at: sp, phase: event.phase)
         case .changed:
             updateWithPasteSheet(at: sp, phase: event.phase)
         case .ended:
+            rootView.isHiddenSelected = false
+            
             pasteSheet(at: sp)
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
@@ -223,16 +245,9 @@ final class MoveSheetsAction: DragEventAction {
         }
     }
     func updateWithPasteSheet(at sp: Point, phase: Phase) {
-        let lw = Line.defaultLineWidth / rootView.worldToScreenScale
-        pasteSheetNode.children = csv.sheetIDs.map {
-            let fillType = rootView.readFillType(at: $0.value)
-                ?? .color(.disabled)
-            
-            let sf = rootView.sheetFrame(with: $0.key)
-            return Node(attitude: Attitude(position: sf.origin),
-                        path: Path(Rect(size: sf.size)),
-                        lineWidth: lw,
-                        lineType: .color(.selected), fillType: fillType)
+        zip(csv.sheetIDs, pasteSheetNode.children).forEach { (sheetID, node) in
+            let sf = rootView.sheetFrame(with: sheetID.key)
+            node.attitude = Attitude(position: sf.origin)
         }
         
         let p = rootView.convertScreenToWorld(sp)
@@ -404,7 +419,7 @@ final class MoveAnimationAction: DragEventAction {
                         beganAnimationOption = sheetView.model.animation.option
                         beganBeatX = animationView.x(atBeat: sheetView.model.animation.endLoopDurBeat)
                         
-                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.endLoopDurBeat),
+                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.endLoopDurBeat) + " " + "Loop".localized,
                                                           isArrow: true)
                     case .all:
                         type = .all
@@ -501,7 +516,7 @@ final class MoveAnimationAction: DragEventAction {
                             animationView.endLoopDurBeat = nkBeat
                         }
                         
-                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.endLoopDurBeat),
+                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.animation.endLoopDurBeat) + " " + "Loop".localized,
                                                           isArrow: true)
                     }
                 case .previousNext:
@@ -1065,7 +1080,7 @@ final class MoveScoreAction: DragEventAction {
                     beganScoreOption = sheetView.model.score.option
                     beganBeatX = scoreView.x(atBeat: sheetView.model.score.endLoopDurBeat)
                     
-                    rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.score.endLoopDurBeat),
+                    rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.score.endLoopDurBeat) + " " + "Loop".localized,
                                                       isArrow: true)
                 } else if abs(scoreP.x - scoreView.x(atBeat: score.beatRange.end)) < rootView.worldKnobEditDistance
                             && abs(scoreP.y - scoreView.timelineCenterY) < Sheet.timelineHalfHeight {
@@ -1244,20 +1259,48 @@ final class MoveScoreAction: DragEventAction {
                             let startBeat = sheetView.animationView.beat(atX: Sheet.textPadding.width, interval: beatInterval)
                             let endBeat = sheetView.animationView.beat(atX: sheetView.animationView.bounds.width - Sheet.textPadding.width, interval: beatInterval)
                            
+                            var justFitUnison: Int?
                             var nivs = [IndexValue<Note>](capacity: beganNotes.count)
-                            for (noteI, beganNote) in beganNotes {
-                                guard noteI < score.notes.count else { continue }
+                            for (aNoteI, beganNote) in beganNotes {
+                                guard aNoteI < score.notes.count else { continue }
                                 
                                 let nBeat = dBeat + beganNote.beatRange.start
                                 
                                 var note = beganNote
-                                note.pitch = (dPitch + beganNote.pitch)
-                                    .interval(scale: rootView.currentPitchInterval)
-                                    .clipped(min: Score.pitchRange.start, max: Score.pitchRange.end)
+                                if rootView.isFullEdit {
+                                    let nPitch = dPitch + beganNote.pitch
+                                    var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
+                                    let nny = scoreView.y(fromPitch: nnPitch)
+                                    var minD = scoreP.y.distance(nny)
+                                    let rnPitch = nnPitch.rounded()
+                                    for (ni, note) in score.notes.enumerated() {
+                                        if beganNotes[ni] == nil,
+                                           note.beatRange.contains(beganNote.beatRange.start),
+                                           let oPitch = note.pitchWithStraight(atBeat: beganNote.beatRange.start - note.beatRange.start) {
+                                            
+                                            let roPitch = oPitch.rounded()
+                                            let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
+                                            let jy = scoreView.y(fromPitch: jPitch)
+                                            let d = scoreP.y.distance(jy)
+                                            if d < minD {
+                                                minD = d
+                                                if noteI == aNoteI {
+                                                    justFitUnison = Int(Pitch(value: roPitch).unison)
+                                                }
+                                                nnPitch = jPitch
+                                            }
+                                        }
+                                    }
+                                    note.pitch = nnPitch.clipped(Score.pitchRange)
+                                } else {
+                                    note.pitch = (dPitch + beganNote.pitch)
+                                        .interval(scale: rootView.currentPitchInterval)
+                                        .clipped(Score.pitchRange)
+                                }
                                 
                                 note.beatRange.start = max(min(nBeat, endBeat), startBeat - beganNote.beatRange.length)
                                 
-                                nivs.append(.init(value: note, index: noteI))
+                                nivs.append(.init(value: note, index: aNoteI))
                             }
                             scoreView.replace(nivs)
                             rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
@@ -1278,11 +1321,12 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(beat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
-                                    let dSecStr = scoreView.isFullEdit ?
+                                    let dSecStr = scoreView.isFullEdit && dBeat != 0 ?
                                     " "
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
-                                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                    let jStr = justFitUnison != nil ? " JI:\(justFitUnison!)" : ""
+                                    rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + jStr + dSecStr)
                                 }
                             }
                             rootView.updateSelectedFrame()
@@ -1373,7 +1417,7 @@ final class MoveScoreAction: DragEventAction {
                             scoreView.endLoopDurBeat = nkBeat
                         }
                         
-                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.score.endLoopDurBeat),
+                        rootView.cursor = rootView.cursor(from: sheetView.timeString(fromBeat: sheetView.model.score.endLoopDurBeat) + " " + "Loop".localized,
                                                           isArrow: true)
                     }
                 case .endBeat:
@@ -1431,11 +1475,12 @@ final class MoveScoreAction: DragEventAction {
                             let dBeat = nsBeat - beganBeat
                             let dPitch = pitch - beganPitch
                             
-                            for (noteI, nv) in beganNotePits {
-                                guard noteI < score.notes.count else { continue }
+                            var justFitUnison: Int?
+                            for (aNoteI, nv) in beganNotePits {
+                                guard aNoteI < score.notes.count else { continue }
                                 var note = nv.note
                                 for (pitI, beganPit) in nv.pits {
-                                    guard pitI < score.notes[noteI].pits.count else { continue }
+                                    guard pitI < score.notes[aNoteI].pits.count else { continue }
                                     
                                     let preI = (0 ..< pitI).reversed().first { nv.pits[$0] == nil }
                                     let preBeat = preI != nil ? note.pits[preI!].beat : .min
@@ -1444,8 +1489,36 @@ final class MoveScoreAction: DragEventAction {
                                     
                                     note.pits[pitI].beat = (dBeat + beganPit.beat)
                                         .clipped(min: preBeat, max: nextBeat)
-                                    note.pits[pitI].pitch = (dPitch + beganPit.pitch)
-                                        .interval(scale: rootView.currentPitchInterval)
+                                    
+                                    if rootView.isFullEdit {
+                                        let nPitch = dPitch + beganPit.pitch + nv.note.pitch
+                                        var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
+                                        let nny = scoreView.y(fromPitch: nnPitch)
+                                        var minD = scoreP.y.distance(nny)
+                                        let rnPitch = nnPitch.rounded()
+                                        for (ni, note) in score.notes.enumerated() {
+                                            if beganNotePits[ni] == nil,
+                                               note.beatRange.contains(nv.note.beatRange.start + beganPit.beat),
+                                               let oPitch = note.pitchWithStraight(atBeat: nv.note.beatRange.start + beganPit.beat - note.beatRange.start) {
+                                                
+                                                let roPitch = oPitch.rounded()
+                                                let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
+                                                let jy = scoreView.y(fromPitch: jPitch)
+                                                let d = scoreP.y.distance(jy)
+                                                if d < minD {
+                                                    minD = d
+                                                    if noteI == aNoteI {
+                                                        justFitUnison = Int(Pitch(value: roPitch).unison)
+                                                    }
+                                                    nnPitch = jPitch.clipped(Score.pitchRange)
+                                                }
+                                            }
+                                        }
+                                        note.pits[pitI].pitch = nnPitch - nv.note.pitch
+                                    } else {
+                                        note.pits[pitI].pitch = (dPitch + beganPit.pitch)
+                                            .interval(scale: rootView.currentPitchInterval)
+                                    }
                                     
                                     if type == .strightPit && pitI == preStrightPitI,
                                         pitI + 1 < note.pits.count {
@@ -1486,7 +1559,7 @@ final class MoveScoreAction: DragEventAction {
                                     }
                                 }
                                 
-                                scoreView[noteI] = note
+                                scoreView[aNoteI] = note
                                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
                             }
                             
@@ -1502,11 +1575,12 @@ final class MoveScoreAction: DragEventAction {
                                 
                                 oldPitch = pitch
                                 
-                                let dSecStr = scoreView.isFullEdit ?
+                                let dSecStr = scoreView.isFullEdit && dBeat != 0 ?
                                 " "
                                 + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                  : ""
-                                rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + dSecStr)
+                                let jStr = justFitUnison != nil ? " JI:\(justFitUnison!)" : ""
+                                rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString(deltaPitch: dPitch) + jStr + dSecStr)
                             }
                             rootView.updateSelectedFrame()
                         }
@@ -2359,12 +2433,12 @@ final class MoveSheetAction: DragEventAction {
                         oldStr = str
                     }
                 }
-                rootView.updateSelectedFrame()
             }
         case .ended:
             node.removeFromParent()
             
             if let sheetView {
+                rootView.updateSelectedFrame()
                 sheetView.showSelected()
                 
                 let lines = sheetView.model.picture.lines[lineIs]

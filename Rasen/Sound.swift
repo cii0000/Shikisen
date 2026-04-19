@@ -1381,6 +1381,25 @@ extension Note {
             }
         }
     }
+    func pitchWithStraight(atBeat beat: Rational) -> Rational? {
+        if pits.count == 1 || beat <= pits[0].beat {
+            return pits[0].pitch + pitch
+        } else if let pit = pits.last, beat >= pit.beat {
+            return pit.pitch + pitch
+        }
+        var isStraight = false, straightPitch: Rational?
+        for pitI in 0 ..< pits.count - 1 {
+            let pit = pits[pitI], nextPit = pits[pitI + 1]
+            if beat >= pit.beat && beat < nextPit.beat {
+                isStraight = pit.pitch == nextPit.pitch
+                straightPitch = isStraight ? pit.pitch : nil
+                if pit.isEqualWithoutBeat(nextPit) {
+                    return pit.pitch + pitch
+                }
+            }
+        }
+        return straightPitch != nil ? straightPitch! + pitch : nil
+    }
     func pitResult(atBeat beat: Double) -> PitResult {
         pitResult(atBeat: beat, tempo: 120, from: pitbend(fromTempo: 120))
     }

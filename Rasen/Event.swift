@@ -401,8 +401,6 @@ extension Quasimode {
     static let makeFaces = Self(modifier: [.command], .b)
     static let cutFaces = Self(modifier: [.shift, .command], .b)
     
-    static let justFit = Self(modifier: [.command], .j)
-    
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
     

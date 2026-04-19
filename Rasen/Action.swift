@@ -234,10 +234,10 @@ final class RootAction: Action {
         case .unselectByRange: UnselectByRangeAction(self)
         case .changeLightness: ChangeLightnessAction(self)
         case .changeTint: ChangeTintAction(self)
-        case .keySelectTime: SelectTimeAction(self)
         case .selectVersion: SelectVersionAction(self)
         case .move: MoveAction(self)
-        case .moveZ: MoveZAction(self)
+//        case .moveZ: MoveZAction(self)
+        case .keySelectTime: SelectTimeAction(self)
         default: nil
         }
     }
@@ -309,13 +309,12 @@ final class RootAction: Action {
         case .cutDraft: CutDraftAction(self)
         case .makeFaces: MakeFacesAction(self)
         case .cutFaces: CutFacesAction(self)
-        case .justFit: JustFitAction(self)
         case .interpolate: InterpolateAction(self)
         case .disconnect: DisconnectAction(self)
-        case .changeToVerticalText: ChangeToVerticalTextAction(self)
-        case .changeToHorizontalText: ChangeToHorizontalTextAction(self)
         case .changeToSuperscript: ChangeToSuperscriptAction(self)
         case .changeToSubscript: ChangeToSubscriptAction(self)
+        case .changeToVerticalText: ChangeToVerticalTextAction(self)
+        case .changeToHorizontalText: ChangeToHorizontalTextAction(self)
         case .addTime: AddTimeAction(self)
         case .addScore: AddScoreAction(self)
         case .lookUp, .keyLookUp: LookUpAction(self)
@@ -388,7 +387,6 @@ final class RootAction: Action {
             for (_, v) in rootView.sheetViewValues {
                 v.sheetView?.stop()
             }
-            rootView.showSelected()
         case .changed:
             break
         case .ended:
@@ -1627,92 +1625,3 @@ final class AddScoreAction: InputKeyEventAction {
     }
 }
 
-final class JustFitAction: InputKeyEventAction {
-    let rootAction: RootAction, rootView: RootView
-    let isEditingSheet: Bool
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-        isEditingSheet = rootView.isEditingSheet
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        guard isEditingSheet else {
-            rootAction.keepOut(with: event)
-            return
-        }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
-        switch event.phase {
-        case .began:
-            rootView.cursor = .arrow
-            
-            var isChanged = false
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
-                let scoreView = sheetView.scoreView
-                let score = scoreView.model
-                
-                let scoreP = scoreView.convertFromWorld(p)
-                if let noteI = scoreView.noteIndex(at: scoreP,
-                                                   scale: rootView.screenToWorldScale) {
-                    let beat: Double = scoreView.beat(atX: scoreP.x)
-                    let result = score.notes[noteI].pitResult(atBeat: beat - Double(score.notes[noteI].beatRange.start))
-                    let pitch = (result.pitch.rationalValue(intervalScale: rootView.currentPitchInterval) + result.notePitch).rounded()
-                    var nivs = [IndexValue<Note>]()
-                    
-                    let nis: [Int]
-                    if scoreView.selectedNotePitSprolIs.isEmpty {
-                        let beat: Rational = scoreView.beat(atX: scoreP.x)
-                        nis = scoreView.model.notes.enumerated()
-                            .filter { $0.element.beatRange.contains(beat) }.map { $0.offset }
-                    } else {
-                        nis = scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
-                    }
-                    
-                    for ni in nis {
-                        var note = score.notes[ni]
-                        let oldNote = note
-                        if note.pits.count > 1 {
-                            let result = note.pitResult(atBeat: beat - Double(note.beatRange.start))
-                            if result.isStraight {
-                                note.pitch.round()
-                                let nPitch = Chord.approximationJustIntonation(pitch: note.pits[result.pitI].pitch + note.pitch - pitch) + pitch - note.pitch
-                                note.pits[result.pitI].pitch = nPitch
-                                if result.pitI + 1 < note.pits.count {
-                                    note.pits[result.pitI + 1].pitch = nPitch
-                                }
-                                if oldNote.pits[result.pitI].pitch != nPitch {
-                                    nivs.append(.init(value: note, index: ni))
-                                }
-                            }
-                        } else {
-                            note.pits[0].pitch.round()
-                            note.pitch = Chord.approximationJustIntonation(pitch: note.firstPitch - pitch) + pitch - note.pits[0].pitch
-                            if oldNote.pitch != note.pitch {
-                                nivs.append(.init(value: note, index: ni))
-                            }
-                        }
-                    }
-                    if !nivs.isEmpty {
-                        sheetView.newUndoGroup()
-                        sheetView.replace(nivs)
-                        
-                        isChanged = true
-                    }
-                }
-            }
-            
-            if !isChanged {
-                rootView.cursor = .arrowWith(string: "Empty".localized)
-            }
-        case .changed:
-            break
-        case .ended:
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-}

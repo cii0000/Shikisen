@@ -45,23 +45,27 @@ struct Road {
 }
 extension Road {
     func pathlineWith(width: Double, height: Double) -> Pathline? {
+        let ps = pointsWith(width: width, height: height)
+        return ps.isEmpty ? nil : .init(ps)
+    }
+    func pointsWith(width: Double, height: Double) -> [Point] {
         let hw = width / 2, hh = height / 2
         let dx = shp1.x - shp0.x, dy = shp1.y - shp0.y
         if abs(dx) <= 1 && abs(dy) <= 1 {
-            return nil
+            return []
         }
         if dx == 0 {
             let sy = dy < 0 ? shp1.y : shp0.y
             let ey = dy < 0 ? shp0.y : shp1.y
             let x = Double(shp0.x) * width + hw
-            return Pathline([Point(x, Double(sy) * height + 2 * hh),
-                             Point(x, Double(ey) * height)])
+            return [Point(x, Double(sy) * height + 2 * hh),
+                    Point(x, Double(ey) * height)]
         } else if dy == 0 {
             let sx = dx < 0 ? shp1.x : shp0.x
             let ex = dx < 0 ? shp0.x : shp1.x
             let y = Double(shp0.y) * height + hh
-            return Pathline([Point(Double(sx) * width + hw + hw, y),
-                             Point(Double(ex) * width - hw + hw, y)])
+            return [Point(Double(sx) * width + hw + hw, y),
+                    Point(Double(ex) * width - hw + hw, y)]
         } else {
             var points = [Point]()
             let isReversed = shp0.y > shp1.y
@@ -112,7 +116,7 @@ extension Road {
                     }
                 }
             }
-            return Pathline(points)
+            return points
         }
     }
 }

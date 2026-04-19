@@ -731,7 +731,7 @@ extension ScoreView {
         let scaleSet = Set(score.scales.map { $0.mod(12) })
         
         let roundedSPitch = pitchRange.start.rounded(.down)
-        let deltaPitch = EditGrid.fullEditPitchInterval
+        let deltaPitch = Rational(1, 16)
         let pitchR1 = EditGrid.pitchInterval
         var cPitch = roundedSPitch
         while cPitch <= pitchRange.end {

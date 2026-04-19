@@ -1462,6 +1462,28 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     
+    var selectedFrameNode: Node?
+    func updateSelectedFrame() {
+        guard let selectedFrame else {
+            selectedFrameNode?.removeFromParent()
+            selectedFrameNode = nil
+            return
+        }
+        let scale = screenToWorldScale
+        let rect = convertToWorld(selectedFrame)
+        let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+                         rect.midXMinYPoint, rect.midXMaxYPoint,
+                         rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
+            Node(name: "knob",
+                 attitude: .init(position: $0, scale: .init(square: scale)),
+                 path: Path(circleRadius: 3),
+                 fillType: .color(.selected))
+        }
+        selectedFrameNode = Node(children: knobNodes + [Node(path: .init(rect),
+                                                             lineWidth: scale,
+                                                             lineType: .color(.selected))])
+    }
+    
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder
         self.keyPath = keyPath
@@ -2058,12 +2080,14 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     
     func showSelected() {
+        selectedFrameNode?.isHidden = false
         scoreView.isHiddenSelected = false
         textsView.elementViews.forEach { $0.isHiddenSelected = false }
         contentsView.elementViews.forEach { $0.isHiddenSelected = false }
         keyframeView.showSelected()
     }
     func hideSelected() {
+        selectedFrameNode?.isHidden = true
         scoreView.isHiddenSelected = true
         textsView.elementViews.forEach { $0.isHiddenSelected = true }
         contentsView.elementViews.forEach { $0.isHiddenSelected = true }
@@ -2270,6 +2294,8 @@ final class SheetView: BindableView, @unchecked Sendable {
                     self?.loopPlay()
                 }
             }
+            
+            hideSelected()
         } else {
             playingSheetIndex = 0
             playingSec = nil
@@ -2314,6 +2340,8 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
 //            sequencer?.endEngine()
 //            sequencer = nil
+            
+            showSelected()
         }
     }
     var playingSec: Rational? {

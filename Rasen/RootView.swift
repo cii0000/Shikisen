@@ -818,24 +818,12 @@ final class RootView: View, @unchecked Sendable {
         world.selectedSheetIDs.reduce(into: Rect?.none) { $0 += sheetFrame(at: $1) }
     }
     func updateSelectedFrame() {
-        let nodes: [Node] = sheetViewValues.flatMap {
-            guard let sheetVeiw = $0.value.sheetView,
-                  let selectedFrame = sheetVeiw.selectedFrame else {
-                return [Node]()
+        let nodes: [Node] = sheetViewValues.compactMap {
+            guard let sheetView = $0.value.sheetView else {
+                return nil
             }
-            let scale = screenToWorldScale
-            let rect = sheetVeiw.convertToWorld(selectedFrame)
-            let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
-                             rect.midXMinYPoint, rect.midXMaxYPoint,
-                             rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
-                Node(name: "knob",
-                     attitude: .init(position: $0, scale: .init(square: scale)),
-                     path: Path(circleRadius: 3),
-                     fillType: .color(.selected))
-            }
-            return knobNodes + [Node(path: .init(rect),
-                                     lineWidth: scale,
-                                     lineType: .color(.selected))]
+            sheetView.updateSelectedFrame()
+            return sheetView.selectedFrameNode
         }
         
         if nodes.isEmpty {
@@ -875,10 +863,12 @@ final class RootView: View, @unchecked Sendable {
         if isEditingSheet {
             let scale = screenToWorldScale
             selectedFrameNode.children.forEach {
-                if $0.name == "knob" {
-                    $0.attitude.scale = .init(square: scale)
-                } else {
-                    $0.lineWidth = scale
+                $0.children.forEach {
+                    if $0.name == "knob" {
+                        $0.attitude.scale = .init(square: scale)
+                    } else {
+                        $0.lineWidth = scale
+                    }
                 }
             }
         } else {
@@ -913,11 +903,13 @@ final class RootView: View, @unchecked Sendable {
             }
         }
         selectedFrameNode.children.forEach {
-            if $0.fillType != nil {
-                $0.fillType = .color(selectedColor)
-            }
-            if $0.lineType != nil {
-                $0.lineType = .color(selectedColor)
+            $0.children.forEach {
+                if $0.fillType != nil {
+                    $0.fillType = .color(selectedColor)
+                }
+                if $0.lineType != nil {
+                    $0.lineType = .color(selectedColor)
+                }
             }
         }
         
@@ -1570,13 +1562,7 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func closeAllPanels(at p: Point) {
-        if isShownLookingUp,
-           let b = lookingUpBoundsNode?.transformedBounds,
-           !b.contains(p) {
-            
-            closeLookingUp()
-        }
-        
+        closeLookingUp()
         finding = Finding()
     }
     
@@ -2008,8 +1994,32 @@ final class RootView: View, @unchecked Sendable {
     }
     
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
-        isEditingSheet ?
-        false : world.selectedSheetIDs.contains { sheetFrame(at: $0)?.contains(p) ?? false }
+        if isEditingSheet {
+            return false
+        } else {
+            let maxDSq = (Sheet.knobEditDistance * screenToWorldScale).squared
+            if world.selectedSheetIDs.contains(where: {
+                if let f = sheetFrame(at: $0) {
+                    f.distanceSquared(p) < maxDSq
+                } else {
+                    false
+                }
+            }) {
+                return true
+            }
+            
+            let roads = roads(fromMap: Set(world.selectedSheetPositions))
+            return roads.contains {
+                let ps = $0.pointsWith(width: Sheet.width, height: Sheet.height)
+                return if ps.count > 1 {
+                    (1 ..< ps.count).contains(where: {
+                        Edge(ps[$0 - 1], ps[$0]).distanceSquared(from: p) < maxDSq
+                    })
+                } else {
+                    false
+                }
+            }
+        }
     }
     
     struct SheetFramePosition {
@@ -2227,6 +2237,8 @@ final class RootView: View, @unchecked Sendable {
                 updateFindingNodes(at: shp)
                 
                 self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
+                
+                updateSelectedFrame()
             }
         case .sheet:
             if sheetViewValues.contains(where: { $0.value.sheetID == sid }) { return }
@@ -2327,7 +2339,7 @@ final class RootView: View, @unchecked Sendable {
                         }
                         
                         sheetView.stopNotifications.append { [weak self] _ in
-                            self?.showSelected()
+                            self?.updateSelectedFrame()
                         }
                     }
                 } onCancel: {
@@ -3358,8 +3370,8 @@ final class RootView: View, @unchecked Sendable {
             }
         case .shown:
             let scale = transform.absXScale
-            mapNode.lineWidth = 3 * scale
-            currentMapNode.lineWidth = 3 * scale
+            mapNode.lineWidth = 2 * scale
+            currentMapNode.lineWidth = 2 * scale
             if oldMapType != .shown {
                 if oldMapType == .hidden {
                     mapNode.isHidden = false

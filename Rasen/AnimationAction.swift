@@ -495,7 +495,6 @@ final class PlayAction: InputKeyEventAction {
                     
                     let sec = contentView.model.sec(fromBeat: contentView.model.beat)
                     sheetView.play(atSec: sec)
-                    rootView.hideSelected()
                 } else if !(rootAction.containsAllTimelines(with: event)
                     || (!sheetView.model.enabledAnimation && sheetView.model.isEnabledAudio)) {
                     
@@ -510,7 +509,6 @@ final class PlayAction: InputKeyEventAction {
                                         && sheetView.previousSheetViews.isEmpty
                                         && sheetView.nextSheetViews.isEmpty
                                         ? secRange : nil)
-                        rootView.hideSelected()
                     } else {
                         rootView.cursor = .arrowWith(string: "Empty".localized)
                     }
@@ -530,10 +528,8 @@ final class PlayAction: InputKeyEventAction {
                                              interval: rootView.currentBeatInterval)
                     }
                     sheetView.play(atSec: sec)
-                    rootView.hideSelected()
                 } else {
                     rootView.cursor = .arrowWith(string: "Empty".localized)
-                    rootView.showSelected()
                 }
             }
         case .changed:
@@ -541,7 +537,6 @@ final class PlayAction: InputKeyEventAction {
         case .ended:
             if isEndStop {
                 sheetView?.stop()
-                rootView.showSelected()
             }
             rootView.cursor = rootView.defaultCursor
         }

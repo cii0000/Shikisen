@@ -182,7 +182,7 @@ final class LookUpAction: InputKeyEventAction {
             let fq = pitch.fq
             let fqStr = "\("Note".localized) \(pitch.displayString()) (\(fq.string(digitsCount: 2)) Hz)"
             + "\n" + Animation.timeString(fromTime: beat,
-                                          frameRate: Rational(Keyframe.defaultFrameRate))
+                                          frameRate: Rational(Keyframe.defaultFrameRate)) + " beat"
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
@@ -210,7 +210,7 @@ final class LookUpAction: InputKeyEventAction {
                 let fqStr = "\(pitch.displayString()) (\(pitch.fq.string(digitsCount: 2)) Hz)"
                 + (typerStr.isEmpty ? typerStr : " " + typerStr)
                 + "\n" + Animation.timeString(fromTime: beat,
-                                              frameRate: Rational(Keyframe.defaultFrameRate))
+                                              frameRate: Rational(Keyframe.defaultFrameRate)) + " beat"
                 rootView.show(fqStr, at: p)
             }
         } else if let sheetView = rootView.sheetView(at: p),
@@ -223,7 +223,7 @@ final class LookUpAction: InputKeyEventAction {
             let nfq = Pitch(value: pitchRat).fq
             let fqStr = "\(Pitch(value: pitchRat).displayString()) (\(nfq.string(digitsCount: 2)) Hz)"
             + "\n" + Animation.timeString(fromTime: beat,
-                                          frameRate: Rational(Keyframe.defaultFrameRate))
+                                          frameRate: Rational(Keyframe.defaultFrameRate)) + " beat"
             rootView.show(fqStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                     let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),

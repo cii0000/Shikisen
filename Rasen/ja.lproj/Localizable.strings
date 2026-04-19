@@ -84,6 +84,8 @@
 "Added" = "追加済み";
 "There is no line on the pasteboard" = "ペーストボードに線がありません";
 
+"Loop" = "ループ";
+
 "Hidden Prev, Hidden Next" = "前を非表示、次を非表示";
 "Shown  Prev, Hidden Next" = "前を表示、　次を非表示";
 "Hidden Prev, Shown  Next" = "前を非表示、次を表示";
