@@ -570,6 +570,13 @@ final class InsertAction: InputKeyEventAction {
             rootView.cursor = .arrow
             
             if let sheetView = rootView.madeSheetView(at: p) {
+                var isNewUndoGroup = true
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                }
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 let animationView = sheetView.animationView
                 let timelineP = animationView.timelineNode.convertFromWorld(p)
@@ -586,7 +593,9 @@ final class InsertAction: InputKeyEventAction {
                         line.controls.insert(line.controls[bi + 1].mid(line.controls[bi + 2]), at: bi + 2)
                     }
                     
-                    sheetView.newUndoGroup()
+                    if isNewUndoGroup {
+                        sheetView.newUndoGroup()
+                    }
                     sheetView.removeLines(at: [li])
                     sheetView.insert([.init(value: line, index: li)])
                     
@@ -606,59 +615,6 @@ final class InsertAction: InputKeyEventAction {
                               fillType: .color(.warning))]
                     
                     rootView.node.append(child: linesNode)
-                } else if animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale),
-                   let i = animationView.slidableKeyframeIndex(at: timelineP,
-                                                               maxDistance: rootView.worldKnobEditDistance)?.i,
-                        animationView.selectedIs.contains(i) {
-                    
-                    let kis = animationView.selectedIs
-                    let beat = animationView.model.localBeat
-                    let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
-                    
-                    let oneBeat = Rational(1, animationView.frameRate)
-                    
-                    var nj = 0, isNewUndoGroup = false
-                    let idvs = kis.compactMap {
-                        let keyframe = animationView.model.keyframes[$0]
-                        let idivs: [IndexValue<InterOption>] = keyframe.picture.lines.enumerated().compactMap {
-                            let option = $0.element.interOption
-                            return if option.interType == .interpolated {
-                                .init(value: option.with(.key), index: $0.offset)
-                            } else {
-                                nil
-                            }
-                        }
-                        return idivs.isEmpty ? nil : IndexValue(value: idivs, index: $0)
-                    }
-                    if !idvs.isEmpty {
-                        if !isNewUndoGroup {
-                            sheetView.newUndoGroup()
-                            isNewUndoGroup = true
-                        }
-                        sheetView.set(idvs)
-                    }
-                    
-                    for j in kis {
-                        let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
-                        if durBeat >= oneBeat {
-                            if !isNewUndoGroup {
-                                sheetView.newUndoGroup()
-                                isNewUndoGroup = true
-                            }
-                            
-                            let nBeat = animationView.model.keyframes[j + nj].beat
-                            let count = Int(durBeat / oneBeat) - 1
-                            sheetView.insert((0 ..< count).map { k in
-                                IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
-                                           index: k + j + nj + 1)
-                            })
-                            nj += count
-                        }
-                    }
-                    
-                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
-                    rootAction.updateActionNode()
-                    rootView.updateSelectedFrame()
                 } else if sheetView.animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale) {
                     
                     let animationView = sheetView.animationView
@@ -673,7 +629,9 @@ final class InsertAction: InputKeyEventAction {
                     rootBP.beat = beat
                     if beat < animation.keyframes.first?.beat ?? 0 {
                         let keyframe = Keyframe(beat: beat)
-                        sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                        }
                         sheetView.insert([IndexValue(value: keyframe, index: 0)])
                     } else if let (i, iBeat) = animation.indexAndInternalBeat(atRootBeat: beat) {
                         let i = iBeat != 0 ?
@@ -697,7 +655,9 @@ final class InsertAction: InputKeyEventAction {
                         if iBeat != 0 {
                             let nBeat = animation.keyframes[i].beat + iBeat
                             let keyframe = Keyframe(beat: nBeat)
-                            sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                            if isNewUndoGroup {
+                                sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                            }
                             sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
                         } else if !animation.keyframes[i].isKey {
                             let idivs: [IndexValue<InterOption>] = (0 ..< animation.keyframes[i].picture.lines.count).compactMap {
@@ -713,7 +673,9 @@ final class InsertAction: InputKeyEventAction {
                             guard !idivs.isEmpty else { return }
                             
                             sheetView.rootKeyframeIndex = i
-                            sheetView.newUndoGroup()
+                            if isNewUndoGroup {
+                                sheetView.newUndoGroup()
+                            }
                             sheetView.set([IndexValue(value: idivs, index: i)])
                             
                             let ids = idivs.map { $0.value.id }
@@ -767,7 +729,9 @@ final class InsertAction: InputKeyEventAction {
                                 return IndexValue(value: note, index: $0)
                             }
                             
-                            sheetView.newUndoGroup()
+                            if isNewUndoGroup {
+                                sheetView.newUndoGroup()
+                            }
                             sheetView.replace(nivs)
     //                        sheetView.set(ToneValue(tone: tone, noteIndexes: nis),
     //                                      old: ToneValue(tone: oldTone, noteIndexes: nis))
@@ -784,7 +748,9 @@ final class InsertAction: InputKeyEventAction {
                                 var note = score.notes[noteI]
                                 note.pits = pits
                                 
-                                sheetView.newUndoGroup()
+                                if isNewUndoGroup {
+                                    sheetView.newUndoGroup()
+                                }
                                 sheetView.replace(note, at: noteI)
                                 
                                 sheetView.updatePlaying()
@@ -796,7 +762,9 @@ final class InsertAction: InputKeyEventAction {
                         var option = scoreView.model.option
                         option.keyBeats.append(beat)
                         option.keyBeats.sort()
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.set(option)
                     } else {
                         rootView.cursor = .arrowWith(string: "Empty".localized)
@@ -900,6 +868,66 @@ final class InterpolateAction: InputKeyEventAction {
                 }
                 return
             }
+//            else if let sheetView = rootView.sheetView(at: p) {
+//                let sheetP = sheetView.convertFromWorld(p)
+//                let animationView = sheetView.animationView
+//                let timelineP = animationView.timelineNode.convertFromWorld(p)
+//                if animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale),
+//                   let i = animationView.slidableKeyframeIndex(at: timelineP,
+//                                                               maxDistance: rootView.worldKnobEditDistance)?.i,
+//                   animationView.selectedIs.contains(i) {
+//                    
+//                    let kis = animationView.selectedIs
+//                    let beat = animationView.model.localBeat
+//                    let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
+//                    
+//                    let oneBeat = Rational(1, animationView.frameRate)
+//                    
+//                    var nj = 0
+//                    let idvs = kis.compactMap {
+//                        let keyframe = animationView.model.keyframes[$0]
+//                        let idivs: [IndexValue<InterOption>] = keyframe.picture.lines.enumerated().compactMap {
+//                            let option = $0.element.interOption
+//                            return if option.interType == .interpolated {
+//                                .init(value: option.with(.key), index: $0.offset)
+//                            } else {
+//                                nil
+//                            }
+//                        }
+//                        return idivs.isEmpty ? nil : IndexValue(value: idivs, index: $0)
+//                    }
+//                    if !idvs.isEmpty {
+//                        if isNewUndoGroup {
+//                            sheetView.newUndoGroup()
+//                            isNewUndoGroup = false
+//                        }
+//                        sheetView.set(idvs)
+//                    }
+//                    
+//                    for j in kis {
+//                        let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
+//                        if durBeat >= oneBeat {
+//                            if isNewUndoGroup {
+//                                sheetView.newUndoGroup()
+//                                isNewUndoGroup = false
+//                            }
+//                            
+//                            let nBeat = animationView.model.keyframes[j + nj].beat
+//                            let count = Int(durBeat / oneBeat) - 1
+//                            sheetView.insert((0 ..< count).map { k in
+//                                IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
+//                                           index: k + j + nj + 1)
+//                            })
+//                            nj += count
+//                        }
+//                    }
+//                    
+//                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
+//                    rootAction.updateActionNode()
+//                    rootView.updateSelectedFrame()
+//                    return
+//                }
+//            }
             
             let cos = Pasteboard.shared.copiedObjects
             for co in cos {
@@ -1766,6 +1794,10 @@ final class DisconnectAction: InputKeyEventAction {
                     }
                     if !replaceIVs.isEmpty {
                         sheetView.newUndoGroup()
+                        if !sheetView.model.selection.isEmpty {
+                            sheetView.doSet(SheetSelection.empty)
+                            rootView.updateSelectedFrame()
+                        }
                         sheetView.replace(replaceIVs)
                         sheetView.append(notes)
                     } else {
@@ -1976,6 +2008,10 @@ final class DisconnectAction: InputKeyEventAction {
                     
                     if !values.isEmpty || !removeValues.isEmpty || !appendValues.isEmpty {
                         sheetView.newUndoGroup()
+                        if !sheetView.model.selection.isEmpty {
+                            sheetView.doSet(SheetSelection.empty)
+                            rootView.updateSelectedFrame()
+                        }
                         if !values.isEmpty {
                             values.sort(by: { $0.index < $1.index })
                             sheetView.replaceKeyLines(values)
@@ -2051,6 +2087,10 @@ final class DisconnectAction: InputKeyEventAction {
                     
                     if !values.isEmpty {
                         sheetView.newUndoGroup()
+                        if !sheetView.model.selection.isEmpty {
+                            sheetView.doSet(SheetSelection.empty)
+                            rootView.updateSelectedFrame()
+                        }
                         sheetView.removeKeyLines(values)
                     }
                     

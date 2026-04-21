@@ -680,7 +680,7 @@ final class SelectAction: Action {
     private var firstP = Point(), selectKeyframeAction: SelectKeyframeAction?,
                 captureSelections = [SheetView: SheetSelection](),
                 firstSelectedSheetIDs = [UUID](),
-                firstSheetView: SheetView?, firstTextI: Int?
+                firstSheetView: SheetView?, firstTextI: Int?, firstTextRect: Rect?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
     
@@ -703,15 +703,17 @@ final class SelectAction: Action {
             
             if !isEditingSheet {
                 firstSelectedSheetIDs = rootView.world.selectedSheetIDs
-            } else if let sheetView = rootView.sheetView(at: p),
-                      let ti = sheetView.textIndex(at: sheetView.convertFromWorld(p),
-                                                   scale: rootView.screenToWorldScale) {
-                firstSheetView = sheetView
-                captureSelections[sheetView] = sheetView.model.selection
-                firstTextI = ti
-                node.isHidden = true
             } else if let sheetView = rootView.sheetView(at: p) {
                 captureSelections[sheetView] = sheetView.model.selection
+                
+                if let ti = sheetView.textIndex(at: sheetView.convertFromWorld(p),
+                                                scale: rootView.screenToWorldScale),
+                let rect = sheetView.textsView.elementViews[ti].transformedBounds {
+                    firstSheetView = sheetView
+                    firstTextI = ti
+                    firstTextRect = sheetView.convertToWorld(rect.outset(by: 10))
+                    node.isHidden = true
+                }
             }
             
             node.lineType = .color(!isUnselect ? .selected : .diselected)
@@ -730,8 +732,10 @@ final class SelectAction: Action {
             
             if rootView.isEditingSheet, let sheetView = firstSheetView,
                 let ti = firstTextI, ti < sheetView.model.texts.count,
-                let selection = captureSelections[sheetView] {
+                let selection = captureSelections[sheetView],
+               let firstTextRect, firstTextRect.contains(p) {
                 
+                node.isHidden = true
                 let textView = sheetView.textsView.elementViews[ti]
                 let oRanges = selection.textSelections[ti]?.ranges ?? []
                 let nRect = textView.convertFromWorld(rect)
@@ -753,6 +757,8 @@ final class SelectAction: Action {
                 }
                 textView.selectedRanges = nRanges
             } else if rootView.isEditingSheet {
+                node.isHidden = false
+                
                 for v in rootView.sheetViewValues {
                     guard let sheetView = v.value.sheetView else { continue }
                     guard rootView.sheetFrame(with: v.key).intersects(rect) else {
@@ -1639,7 +1645,7 @@ final class AddTimeAction: InputKeyEventAction {
                        
                        sheetView.newUndoGroup()
                        if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(.empty)
+                           sheetView.doSet(SheetSelection.empty)
                            rootView.updateSelectedFrame()
                        }
                        sheetView.replace(IndexValue(value: content, index: ci))
@@ -1660,7 +1666,7 @@ final class AddTimeAction: InputKeyEventAction {
                        
                        sheetView.newUndoGroup()
                        if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(.empty)
+                           sheetView.doSet(SheetSelection.empty)
                            rootView.updateSelectedFrame()
                        }
                        sheetView.replace([IndexValue(value: text, index: ti)])
@@ -1675,7 +1681,7 @@ final class AddTimeAction: InputKeyEventAction {
                    } else {
                        sheetView.newUndoGroup(enabledKeyframeIndex: false)
                        if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(.empty)
+                           sheetView.doSet(SheetSelection.empty)
                            rootView.updateSelectedFrame()
                        }
                        sheetView.set(beat: 0, at: 0)
@@ -1736,7 +1742,7 @@ final class AddScoreAction: InputKeyEventAction {
                     
                     sheetView.newUndoGroup()
                     if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(.empty)
+                        sheetView.doSet(SheetSelection.empty)
                         rootView.updateSelectedFrame()
                     }
                     sheetView.set(option)

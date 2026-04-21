@@ -3387,6 +3387,8 @@ struct PBCopiedSheetsValue: Sendable {
   /// Clears the value of `sheetIds`. Subsequent reads from it will return its default value.
   mutating func clearSheetIds() {self._sheetIds = nil}
 
+  var isSelected: Bool = false
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -9716,6 +9718,7 @@ extension PBCopiedSheetsValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "deltaPoint"),
     2: .same(proto: "sheetIDs"),
+    3: .same(proto: "isSelected"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -9726,6 +9729,7 @@ extension PBCopiedSheetsValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._deltaPoint) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._sheetIds) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.isSelected) }()
       default: break
       }
     }
@@ -9742,12 +9746,16 @@ extension PBCopiedSheetsValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     try { if let v = self._sheetIds {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if self.isSelected != false {
+      try visitor.visitSingularBoolField(value: self.isSelected, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBCopiedSheetsValue, rhs: PBCopiedSheetsValue) -> Bool {
     if lhs._deltaPoint != rhs._deltaPoint {return false}
     if lhs._sheetIds != rhs._sheetIds {return false}
+    if lhs.isSelected != rhs.isSelected {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

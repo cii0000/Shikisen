@@ -661,6 +661,7 @@ message PBHistory {
 message PBCopiedSheetsValue {
     PBPoint deltaPoint = 1;
     PBStringIntPointDic sheetIDs = 2;
+    bool isSelected = 3;
 }
 message PBPlanesValue {
     repeated PBPlane planes = 1;

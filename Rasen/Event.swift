@@ -415,6 +415,8 @@ extension Quasimode {
     
     static let changeABC = Self(.abc)
     static let changeAIU = Self(.aiu)
+    static let insertWidth = Self(modifier: [.shift], .enter)
+    static let removeWidth = Self(modifier: [.shift], .delete)
 }
 
 protocol Event {

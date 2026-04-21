@@ -978,9 +978,19 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         if !selectedPathlines.isEmpty {
             nodes.append(Node(name: "selected",
                               path: Path(selectedPathlines),
-                              fillType: .color(.selected)))
+                              fillType: .color(isHiddenSelected ? .content : .selected)))
         }
         return nodes
+    }
+    var isHiddenSelected = false {
+        didSet {
+            guard isHiddenSelected != oldValue else { return }
+            timelineNode.children.forEach {
+                if $0.name == "selected" {
+                    $0.fillType = .color(isHiddenSelected ? .content : .selected)
+                }
+            }
+        }
     }
     func updatePreviousNext() {
         guard !isPlaying else { return }
@@ -1776,6 +1786,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 text.string.removeSubrange(range)
             }
             removedText.origin += minP
+            removedText.selectedIntRanges = [0 ..< removedText.string.count]
             return removedText
         }
         
@@ -2112,6 +2123,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         textsView.elementViews.forEach { $0.isHiddenSelected = false }
         contentsView.elementViews.forEach { $0.isHiddenSelected = false }
         keyframeView.showSelected()
+        animationView.isHiddenSelected = false
     }
     func hideSelected() {
         selectedFrameNode?.isHidden = true
@@ -2119,6 +2131,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         textsView.elementViews.forEach { $0.isHiddenSelected = true }
         contentsView.elementViews.forEach { $0.isHiddenSelected = true }
         keyframeView.hideSelected()
+        animationView.isHiddenSelected = true
     }
     
     weak var left, right, top, bottom: SheetView?
@@ -3029,6 +3042,21 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     
+    func unselect() {
+        if !model.selection.isEmpty {
+            doSet(SheetSelection.empty)
+        }
+    }
+    func unselect(isNewUndoGroup: inout Bool) {
+        if !model.selection.isEmpty {
+            if isNewUndoGroup {
+                newUndoGroup()
+                isNewUndoGroup = false
+            }
+            doSet(SheetSelection.empty)
+        }
+    }
+    
     func plane(at p: Point) -> Plane? {
         if let pi = planesView.firstIndex(at: p) {
             return model.picture.planes[pi]
@@ -3493,9 +3521,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             }
         case .replaceString(let ituv):
-            //
-            textsView.elementViews[ituv.index].selectedRanges = []
-            
             if isMakeRect {
                 let textView = textsView.elementViews[ituv.index]
                 let firstRect: Rect?
@@ -7037,7 +7062,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             if !isUpdateUndoGroup {
                 newUndoGroup()
                 if !model.selection.isEmpty {
-                    doSet(.empty)
+                    doSet(SheetSelection.empty)
                 }
                 isUpdateUndoGroup = true
             }
@@ -7243,6 +7268,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                     text.string.removeSubrange(range)
                 }
                 removedText.origin += minP
+                removedText.selectedIntRanges = [0 ..< removedText.string.count]
                 
                 if isRemove {
                     if text.string.isEmpty {
@@ -7506,7 +7532,10 @@ final class SheetColorOwner {
         oldColorValue = colorValue
     }
     
-    func captureUUColor(isNewUndoGroup: Bool = true) {
+    func captureUUColor() {
+        sheetView.capture(colorValue, oldColorValue: oldColorValue)
+    }
+    func captureUUColor(isNewUndoGroup: Bool) {
         if isNewUndoGroup {
             sheetView.newUndoGroup()
         }

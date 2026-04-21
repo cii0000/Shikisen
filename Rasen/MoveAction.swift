@@ -206,6 +206,11 @@ final class MoveSheetsAction: DragEventAction {
                 }
                 rootView.removeSheets(at: shps)
             } else {
+                isNewUndoGroup = true
+                rootView.newUndoGroup()
+                if !isSelected && !rootView.world.selectedSheetIDs.isEmpty {
+                    rootView.setSelectedSheet([])
+                }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
             }
             
@@ -331,6 +336,7 @@ final class MoveAnimationAction: DragEventAction {
     private var oldPnP: Point?, beganKeyframeOption: KeyframeOption?
     private var beganAnimationOption: AnimationOption?
     private var minLastSec = 1 / 12.0
+    private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -362,6 +368,14 @@ final class MoveAnimationAction: DragEventAction {
                 if sheetView.animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale) {
                     let animationView = sheetView.animationView
                     
+                    func unselect() {
+                        if !sheetView.model.selection.isEmpty {
+                            sheetView.newUndoGroup()
+                            isNewUndoGroup = false
+                            sheetView.doSet(SheetSelection.empty)
+                        }
+                    }
+                    
                     let result = animationView.hitTest(timelineP, scale: rootView.screenToWorldScale)
                     switch result {
                     case .key(let minI):
@@ -372,13 +386,12 @@ final class MoveAnimationAction: DragEventAction {
                         beganKeyframeBeat = keyframe.beat
                         beganKeyframeX = animationView.x(atBeat: animationView.model.localBeat(at: minI))
                         
-                        if !animationView.selectedIs.isEmpty
-                            && animationView.selectedIs.contains(keyframeIndex) {
-                            
+                        if animationView.selectedIs.contains(keyframeIndex) {
                             beganKeyframeOptions = animationView.selectedIs.reduce(into: .init()) {
                                 $0[$1] = animationView.model.keyframes[$1].option
                             }
                         } else {
+                            unselect()
                             beganKeyframeOptions = [keyframeIndex: keyframe.option]
                         }
                         
@@ -387,11 +400,15 @@ final class MoveAnimationAction: DragEventAction {
                     case .previousNext(_):
                         type = .previousNext
                         
+                        unselect()
+                        
                         beganAnimationOption = sheetView.model.animation.option
                         
                         rootView.cursor = .arrowWith(string: animationView.previousNext.displayName)
                     case .startBeat:
                         type = .startBeat
+                        
+                        unselect()
                         
                         beganAnimationOption = sheetView.model.animation.option
                         beganBeatX = animationView.x(atBeat: sheetView.model.animation.beatRange.start)
@@ -411,6 +428,8 @@ final class MoveAnimationAction: DragEventAction {
                     case .endBeat:
                         type = .endBeat
                         
+                        unselect()
+                        
                         beganAnimationOption = sheetView.model.animation.option
                         beganBeatX = animationView.x(atBeat: sheetView.model.animation.beatRange.end)
                         
@@ -419,6 +438,8 @@ final class MoveAnimationAction: DragEventAction {
                     case .loopDurBeat:
                         type = .loopDurBeat
                         
+                        unselect()
+                        
                         beganAnimationOption = sheetView.model.animation.option
                         beganBeatX = animationView.x(atBeat: sheetView.model.animation.endLoopDurBeat)
                         
@@ -426,6 +447,8 @@ final class MoveAnimationAction: DragEventAction {
                                                           isArrow: true)
                     case .all:
                         type = .all
+                        
+                        unselect()
                         
                         beganAnimationOption = sheetView.model.animation.option
                         
@@ -576,11 +599,10 @@ final class MoveAnimationAction: DragEventAction {
             if let sheetView {
                 sheetView.showSelected()
                 
-                var isNewUndoGroup = false
                 func updateUndoGroup() {
-                    if !isNewUndoGroup {
+                    if isNewUndoGroup {
                         sheetView.newUndoGroup()
-                        isNewUndoGroup = true
+                        isNewUndoGroup = false
                     }
                 }
                 func updateKeyframe() {
@@ -659,6 +681,7 @@ final class MoveScoreAction: DragEventAction {
     private var beganNotePits = [Int: (note: Note, pit: Pit, pits: [Int: Pit])]()
     private var beganSprolPitch = 0.0, beganSpectlopeY = 0.0
     private var beganNoteSprols = [UUID: (nid: UUID, dic: [Int: (note: Note, pits: [Int: (pit: Pit, sprolIs: Set<Int>)])])]()
+    private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -701,8 +724,16 @@ final class MoveScoreAction: DragEventAction {
                 
                 let scoreP = scoreView.convert(sheetP, from: sheetView.node)
                 let v = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale)
-                let containsSelectedNote = sheetView.containsSelectedNote(sheetP,
-                                                                          scale: rootView.screenToWorldScale)
+                let containsSelectedNote = sheetView
+                    .containsSelectedNote(sheetP, scale: rootView.screenToWorldScale)
+                if !containsSelectedNote {
+                    if !sheetView.model.selection.isEmpty {
+                        sheetView.newUndoGroup()
+                        isNewUndoGroup = false
+                        sheetView.doSet(SheetSelection.empty)
+                        rootView.updateSelectedFrame()
+                    }
+                }
                 if !(v?.result.isStartEndBeat ?? false)
                     && containsSelectedNote
                     && (v?.result.isNote ?? true) {
@@ -859,8 +890,7 @@ final class MoveScoreAction: DragEventAction {
                         beganBeatX = scoreView.x(atBeat: note.beatRange.start + pit.beat)
                         
                         var noteAndPitIs: [Int: [Int]]
-                        if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
-                                                          scale: rootView.screenToWorldScale) {
+                        if containsSelectedNote {
                             noteAndPitIs = sheetView.scoreView.selectedNotePitIs
                             if noteAndPitIs[noteI] != nil {
                                 if !noteAndPitIs[noteI]!.contains(pitI) {
@@ -1692,16 +1722,17 @@ final class MoveScoreAction: DragEventAction {
                     
                     sheetView.updatePlaying()
                     if let beganScoreOption, sheetView.model.score.option != beganScoreOption {
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.capture(sheetView.model.score.option,
                                           old: beganScoreOption)
                     }
                 } else {
-                    var isNewUndoGroup = false
                     func updateUndoGroup() {
-                        if !isNewUndoGroup {
+                        if isNewUndoGroup {
                             sheetView.newUndoGroup()
-                            isNewUndoGroup = true
+                            isNewUndoGroup = false
                         }
                     }
                     
@@ -1806,6 +1837,7 @@ final class MoveContentAction: DragEventAction {
     private var sheetView: SheetView?, contentI: Int?, beganContent: Content?
     private var type = SlideType.all
     private var beganSP = Point(), beganInP = Point(), beganContentEndP = Point()
+    private var isNewUndoGroup = true
     
     private var beganIsShownSpectrogram = false
     
@@ -1827,6 +1859,14 @@ final class MoveContentAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p),
                 let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                 scale: rootView.screenToWorldScale) {
+                self.sheetView = sheetView
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                    rootView.updateSelectedFrame()
+                }
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 let contentView = sheetView.contentsView.elementViews[ci]
                 let content = contentView.model
@@ -1834,8 +1874,6 @@ final class MoveContentAction: DragEventAction {
                 
                 beganSP = sp
                 beganInP = sheetP
-                self.sheetView = sheetView
-                sheetView.hideSelected()
                 
                 beganContent = content
                 if let timeOption = content.timeOption {
@@ -1944,14 +1982,14 @@ final class MoveContentAction: DragEventAction {
             }
         case .ended:
             if let sheetView {
-                sheetView.showSelected()
-                
                 if let beganContent,
                    let contentI, contentI < sheetView.contentsView.elementViews.count {
                     
                     let contentView = sheetView.contentsView.elementViews[contentI]
                     if contentView.model != beganContent {
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.capture(contentView.model, old: beganContent, at: contentI)
                     }
                     if type == .all || type == .startBeat || type == .endBeat {
@@ -1982,6 +2020,7 @@ final class MoveTextAction: DragEventAction {
     private var sheetView: SheetView?, textI: Int?, beganText: Text?
     private var type = SlideType.all
     private var beganSP = Point(), beganInP = Point(), beganTextEndP = Point()
+    private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -1997,14 +2036,20 @@ final class MoveTextAction: DragEventAction {
             if let sheetView = rootView.sheetView(at: p),
                let ci = sheetView.textIndex(at: sheetView.convertFromWorld(p),
                                             scale: rootView.screenToWorldScale) {
+                self.sheetView = sheetView
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                    rootView.updateSelectedFrame()
+                }
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 let textView = sheetView.textsView.elementViews[ci]
                 let text = textView.model
                 
                 beganSP = sp
                 beganInP = sheetP
-                self.sheetView = sheetView
-                sheetView.hideSelected()
                 
                 beganText = text
                 if let timeOption = text.timeOption {
@@ -2093,14 +2138,14 @@ final class MoveTextAction: DragEventAction {
             }
         case .ended:
             if let sheetView {
-                sheetView.showSelected()
-                
                 if let beganText,
                    let textI, textI < sheetView.textsView.elementViews.count {
                    
                     let textView = sheetView.textsView.elementViews[textI]
                     if textView.model != beganText {
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.capture(textView.model, old: beganText, at: textI)
                     }
                     sheetView.updatePlaying()
@@ -2132,6 +2177,7 @@ final class MoveTempoAction: DragEventAction {
                 beganContents = [Int: Content](),
                 beganTexts = [Int: Text]()
     private var tempos = [Rational](), beganTempoI = 0
+    private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -2149,12 +2195,17 @@ final class MoveTempoAction: DragEventAction {
         case .began:
             rootView.cursor = .arrow
             
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledTimeline {
-                beganSP = sp
+            if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
-                sheetView.hideSelected()
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                    rootView.updateSelectedFrame()
+                }
                 
                 let inP = sheetView.convertFromWorld(p)
+                beganSP = sp
                 beganSheetP = inP
                 if let tempo = sheetView.tempo(at: inP, scale: rootView.screenToWorldScale) {
                     beganTempo = tempo
@@ -2219,13 +2270,10 @@ final class MoveTempoAction: DragEventAction {
             node.removeFromParent()
             
             if let sheetView {
-                sheetView.showSelected()
-                
-                var isNewUndoGroup = false
                 func updateUndoGroup() {
-                    if !isNewUndoGroup {
+                    if isNewUndoGroup {
                         sheetView.newUndoGroup()
-                        isNewUndoGroup = true
+                        isNewUndoGroup = false
                     }
                 }
                 
@@ -2522,6 +2570,7 @@ final class MoveLineAction: DragEventAction {
             }
         }
     }
+    private var isNewUndoGroup = true
     
     let snappableDistance = 2.0
     private var node = Node()
@@ -2553,14 +2602,19 @@ final class MoveLineAction: DragEventAction {
             rootView.cursor = .arrow
             
             if let sheetView = rootView.sheetView(at: p) {
+                self.sheetView = sheetView
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                    rootView.updateSelectedFrame()
+                }
+                
                 let sheetP = sheetView.convertFromWorld(p)
                 
                 isEnabledFeedback = false
                 if let (lineView, li) = sheetView.lineTuple(at: sheetP,
                                                             scale: rootView.screenToWorldScale) {
-                    self.sheetView = sheetView
-                    sheetView.hideSelected()
-                    
                     if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
                         let line = lineView.model
                         beganLine = line
@@ -2832,8 +2886,16 @@ final class MoveLineAction: DragEventAction {
                             nLine.controls[fol1].point -= nsd
                         }
                         
+                        if rootView.isSecondEdit {
+                            nLine.controls[fol1].point = nLine.controls[fol1].point.interval(scale: 0.25)
+                        } else {
+                            nLine.controls[fol1].point.round()
+                        }
+                        
                         lineView.model = nLine
                         lineView.node.lineType = isSnapStraight ? .color(.selected) : .color(.content)
+                        
+                        rootView.cursor = .arrowWith(string: "(\(nLine.controls[fol1].point.x.string(digitsCount: 2, enabledZeroInteger: false)) \(nLine.controls[fol1].point.y.string(digitsCount: 2, enabledZeroInteger: false)))")
                     case .all:
                         var line = beganLine
                         let sheetP = sheetView.convertFromWorld(p)
@@ -2852,12 +2914,12 @@ final class MoveLineAction: DragEventAction {
             
             lineView?.updateColor()
             if let sheetView {
-                sheetView.showSelected()
-                
                 if lineIndex < sheetView.linesView.elementViews.count {
                     let line = sheetView.linesView.elementViews[lineIndex].model
                     if line != beganLine {
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.captureLine(line, old: beganLine, at: lineIndex)
                     }
                 }
@@ -3044,6 +3106,7 @@ final class MoveMainFrameAction: DragEventAction {
     
     private var sheetView: SheetView?, beganOption: SheetOption?, type = MoveType.minXmaxY
     private var beganSP = Point(), beganInP = Point(), shp = IntPoint()
+    private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
         guard isEditingSheet else {
@@ -3060,7 +3123,12 @@ final class MoveMainFrameAction: DragEventAction {
                let shp = rootView.sheetPosition(from: sheetView) {
                 
                 self.sheetView = sheetView
-                sheetView.hideSelected()
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                    rootView.updateSelectedFrame()
+                }
                 
                 let sheetP = sheetView.convertFromWorld(p)
                 beganSP = sp
@@ -3083,11 +3151,11 @@ final class MoveMainFrameAction: DragEventAction {
             }
         case .ended:
             if let sheetView {
-                sheetView.showSelected()
-                
                 if let beganOption {
                     if sheetView.model.option != beganOption {
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.capture(sheetView.model.option, old: beganOption)
                     }
                 }

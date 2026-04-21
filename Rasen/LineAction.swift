@@ -155,6 +155,7 @@ final class LineAction: Action {
             outlineLassoNode?.lineWidth = lassoPathNodeLineWidth
         }
     }
+    private var isNewUndoGroupNote = true
     
     private var isDrawNote = false
     private var noteSheetView: SheetView?, oldPitch = Rational(0), firstTone = Tone(),
@@ -202,10 +203,14 @@ final class LineAction: Action {
                 rootAction.stopPlaying(with: event)
             }
             
-            rootView.hideSelected()
-            
             let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = noteSheetView, sheetView.model.score.enabled {
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroupNote = false
+                    sheetView.doSet(SheetSelection.empty)
+                }
+                
                 let scoreView = sheetView.scoreView
                 let inP = sheetView.convertFromWorld(p)
                 let scoreP = scoreView.convertFromWorld(p)
@@ -339,9 +344,11 @@ final class LineAction: Action {
                 if beatRange.length == 0 {
                     scoreView.remove(at: noteI)
                 } else {
-                    sheetView.newUndoGroup()
+                    if isNewUndoGroupNote {
+                        sheetView.newUndoGroup()
+                    }
                     if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(.empty)
+                        sheetView.doSet(SheetSelection.empty)
                         rootView.updateSelectedFrame()
                     }
                     sheetView.captureAppend(sheetView.model.score.notes.last!)
@@ -404,7 +411,9 @@ final class LineAction: Action {
                     }
                 }
                 if !replaceIVs.isEmpty {
-                    sheetView.newUndoGroup()
+                    if isNewUndoGroupNote {
+                        sheetView.newUndoGroup()
+                    }
                     sheetView.replace(replaceIVs)
                     sheetView.append(notes)
                     rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
@@ -431,10 +440,8 @@ final class LineAction: Action {
                 }
                 
                 Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes, deltaPitch: pitch))]
-                sheetView.newUndoGroup()
-                if !sheetView.model.selection.isEmpty {
-                    sheetView.doSet(.empty)
-                    rootView.updateSelectedFrame()
+                if isNewUndoGroupNote {
+                    sheetView.newUndoGroup()
                 }
                 sheetView.removeNote(at: nis)
                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
@@ -986,8 +993,6 @@ final class LineAction: Action {
         case .began:
             rootView.cursor = rootView.defaultCursor
             
-            rootView.hideSelected()
-            
             updateClipBoundsAndIndexRange(at: p)
             let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
                                     path: Path(),
@@ -1128,7 +1133,7 @@ final class LineAction: Action {
                     sheetView.rootKeyframeIndex = beganAnimationRootIndex
                     sheetView.newUndoGroup()
                     if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(.empty)
+                        sheetView.doSet(SheetSelection.empty)
                         rootView.updateSelectedFrame()
                     }
                     sheetView.append(tempLine)
@@ -1136,7 +1141,7 @@ final class LineAction: Action {
                 } else {
                     sheetView.newUndoGroup()
                     if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(.empty)
+                        sheetView.doSet(SheetSelection.empty)
                         rootView.updateSelectedFrame()
                     }
                     sheetView.append(tempLine)
@@ -1164,7 +1169,7 @@ final class LineAction: Action {
                             if !nLines.isEmpty {
                                 sheetView.newUndoGroup()
                                 if !sheetView.model.selection.isEmpty {
-                                    sheetView.doSet(.empty)
+                                    sheetView.doSet(SheetSelection.empty)
                                     rootView.updateSelectedFrame()
                                 }
                                 sheetView.append(nLines)
@@ -1180,8 +1185,6 @@ final class LineAction: Action {
                 isStraightNode?.removeFromParent()
                 isStraightNode = nil
             }
-            
-            rootView.showSelected()
         }
     }
     
@@ -1199,14 +1202,26 @@ final class LineAction: Action {
             
             rootView.hideSelected()
             
-            let isScore = rootView.sheetView(at: p)?.model.score.enabled ?? false
+            let sheetView = rootView.sheetView(at: p)
+            let isScore = sheetView?.model.score.enabled ?? false
             
-            if !isScore && rootAction.isPlaying(with: event) {
+            if rootAction.isPlaying(with: event) {
                 rootAction.stopPlaying(with: event)
-                return
+                if !isScore {
+                    return
+                }
             }
             if isEditingSheet {
                 updateClipBoundsAndIndexRange(at: p)
+            }
+            
+            if let sheetView, isScore {
+                noteSheetView = sheetView
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroupNote = false
+                    sheetView.doSet(SheetSelection.empty)
+                }
             }
             
             let path = tempLine.path(isClosed: true, isPolygon: false)
@@ -1328,9 +1343,7 @@ final class LineAction: Action {
             switch type {
             case .cut:
                 if isEditingSheet {
-                    if let sheetView = rootView.sheetView(at: p),
-                       sheetView.scoreView.containsMainFrame(sheetView.scoreView.convertFromWorld(p),
-                                                             scale: rootView.screenToWorldScale) {
+                    if noteSheetView != nil {
                         removeNote(with: event)
                     } else {
                         lassoCopy(isRemove: true, distance: lassoDistance,

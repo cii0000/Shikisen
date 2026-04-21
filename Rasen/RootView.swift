@@ -1546,7 +1546,7 @@ final class RootView: View, @unchecked Sendable {
         if isEditingSheet {
             if let sheetView = sheetView(at: p), !sheetView.model.selection.isEmpty {
                 sheetView.newUndoGroup()
-                sheetView.doSet(.init())
+                sheetView.doSet(SheetSelection.empty)
                 updateSelectedFrame()
             }
         } else {

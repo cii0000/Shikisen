@@ -406,7 +406,15 @@ final class IOAction: Action {
                                         text.origin.y += d
                                         content.origin.y += d
                                     }
+                                    
+                                    content.isSelected = true
+                                    text.selectedIntRanges = [0 ..< text.string.count]
+                                    
                                     sheetView.newUndoGroup()
+                                    if !sheetView.model.selection.isEmpty {
+                                        sheetView.doSet(SheetSelection.empty)
+                                        self.rootView.updateSelectedFrame()
+                                    }
                                     sheetView.append(text)
                                     sheetView.append(content)
                                 }
@@ -442,7 +450,15 @@ final class IOAction: Action {
                             text.origin.y += d
                             content.origin.y += d
                         }
+                        
+                        content.isSelected = true
+                        text.selectedIntRanges = [0 ..< text.string.count]
+                        
                         sheetView.newUndoGroup()
+                        if !sheetView.model.selection.isEmpty {
+                            sheetView.doSet(SheetSelection.empty)
+                            rootView.updateSelectedFrame()
+                        }
                         sheetView.append(text)
                         sheetView.append(content)
                     }
@@ -526,6 +542,10 @@ final class IOAction: Action {
             }
             if !nSIDs.isEmpty {
                 rootView.append(nSIDs)
+            }
+            let nSelectedSheetIDs = Array(nSIDs.values)
+            if nSelectedSheetIDs != rootView.world.selectedSheetIDs {
+                rootView.setSelectedSheet(nSelectedSheetIDs)
             }
             if !resetSIDs.isEmpty {
                 rootView.moveSheetsToUpperRightCorner(with: Array(resetSIDs),

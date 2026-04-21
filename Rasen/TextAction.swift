@@ -395,6 +395,13 @@ final class TextOrientationAction: Action {
             } else {
                 rootAction.textAction.begin(atScreen: event.screenPoint)
                 
+                var isNewUndoGroup = true
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.newUndoGroup()
+                    isNewUndoGroup = false
+                    sheetView.doSet(SheetSelection.empty)
+                }
+                
                 if let aTextView = rootAction.textAction.editingTextView,
                    !aTextView.isHiddenSelectedRange,
                    let i = sheetView.textsView.elementViews.firstIndex(of: aTextView) {
@@ -420,7 +427,9 @@ final class TextOrientationAction: Action {
                             }
                         }
                         
-                        sheetView.newUndoGroup()
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                        }
                         sheetView.replace([IndexValue(value: text, index: i)])
                     }
                 } else {
@@ -1130,12 +1139,16 @@ final class TextAction: InputTextEventAction {
         let captureOrigin = textView.model.origin
         let captureSize = textView.model.size
         let captureWidthCount = textView.model.widthCount
+        let captureSheetSelection = sheetView.model.selection
         editingTextView = textView
         editingSheetView = sheetView
         textView.removeCharacters(in: removeRange)
         textView.unmark()
         if let value = captureString.difference(to: textView.model.string) {
             sheetView.newUndoGroup()
+            if captureSheetSelection != sheetView.model.selection {
+                sheetView.capture(old: captureSheetSelection)
+            }
             sheetView.capture(intRange: value.intRange,
                               subString: value.subString,
                               captureString: captureString,
