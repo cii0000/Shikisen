@@ -202,6 +202,8 @@ final class LineAction: Action {
                 rootAction.stopPlaying(with: event)
             }
             
+            rootView.hideSelected()
+            
             let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = noteSheetView, sheetView.model.score.enabled {
                 let scoreView = sheetView.scoreView
@@ -338,11 +340,17 @@ final class LineAction: Action {
                     scoreView.remove(at: noteI)
                 } else {
                     sheetView.newUndoGroup()
+                    if !sheetView.model.selection.isEmpty {
+                        sheetView.doSet(.empty)
+                        rootView.updateSelectedFrame()
+                    }
                     sheetView.captureAppend(sheetView.model.score.notes.last!)
                 }
                 
                 sheetView.updatePlaying()
             }
+            
+            rootView.showSelected()
             
             notePlayer?.stop()
             
@@ -424,6 +432,10 @@ final class LineAction: Action {
                 
                 Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes, deltaPitch: pitch))]
                 sheetView.newUndoGroup()
+                if !sheetView.model.selection.isEmpty {
+                    sheetView.doSet(.empty)
+                    rootView.updateSelectedFrame()
+                }
                 sheetView.removeNote(at: nis)
                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
             }
@@ -974,6 +986,8 @@ final class LineAction: Action {
         case .began:
             rootView.cursor = rootView.defaultCursor
             
+            rootView.hideSelected()
+            
             updateClipBoundsAndIndexRange(at: p)
             let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
                                     path: Path(),
@@ -1113,10 +1127,18 @@ final class LineAction: Action {
                     let oldRootI = sheetView.model.animation.rootIndex
                     sheetView.rootKeyframeIndex = beganAnimationRootIndex
                     sheetView.newUndoGroup()
+                    if !sheetView.model.selection.isEmpty {
+                        sheetView.doSet(.empty)
+                        rootView.updateSelectedFrame()
+                    }
                     sheetView.append(tempLine)
                     sheetView.rootKeyframeIndex = oldRootI
                 } else {
                     sheetView.newUndoGroup()
+                    if !sheetView.model.selection.isEmpty {
+                        sheetView.doSet(.empty)
+                        rootView.updateSelectedFrame()
+                    }
                     sheetView.append(tempLine)
                 }
 //                if sheetView.isSound {
@@ -1141,6 +1163,10 @@ final class LineAction: Action {
                             }
                             if !nLines.isEmpty {
                                 sheetView.newUndoGroup()
+                                if !sheetView.model.selection.isEmpty {
+                                    sheetView.doSet(.empty)
+                                    rootView.updateSelectedFrame()
+                                }
                                 sheetView.append(nLines)
                             }
                         }
@@ -1155,7 +1181,7 @@ final class LineAction: Action {
                 isStraightNode = nil
             }
             
-            rootView.updateSelectedFrame()
+            rootView.showSelected()
         }
     }
     
@@ -1170,6 +1196,8 @@ final class LineAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = rootView.defaultCursor
+            
+            rootView.hideSelected()
             
             let isScore = rootView.sheetView(at: p)?.model.score.enabled ?? false
             
@@ -1326,8 +1354,10 @@ final class LineAction: Action {
             outlineLassoNode = nil
             rectNode?.removeFromParent()
             
-            rootView.updateSelectedFrame()
             rootView.updateFinding(at: p)
+            
+            rootView.updateSelectedFrame()
+            rootView.showSelected()
         }
     }
     
@@ -1491,6 +1521,10 @@ final class LineAction: Action {
         updateWithCopySheet(at: p, from: values)
         if !values.isEmpty {
             rootView.newUndoGroup()
+            if !rootView.world.selectedSheetIDs.isEmpty {
+                rootView.newUndoGroup()
+                rootView.setSelectedSheet([])
+            }
             rootView.removeSheets(at: values.map { $0.shp })
         }
     }

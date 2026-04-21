@@ -258,6 +258,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     var selectedNotePitSprolIs = [Int: [Int: Set<Int>]]() {
         didSet {
             guard selectedNotePitSprolIs != oldValue else { return }
+            binder[keyPath: keyPath].selectedNotePitSprolIs = selectedNotePitSprolIs
             updateWithSelected(old: oldValue)
         }
     }
@@ -614,8 +615,6 @@ extension ScoreView {
         }
     }
     func remove(at noteI: Int) {
-        selectedNotePitSprolIs[noteI] = nil
-        
         unupdateModel.notes.remove(at: noteI)
         notesNode.remove(atChild: noteI)
         chordResults.remove(at: noteI)
@@ -626,8 +625,6 @@ extension ScoreView {
         scoreTrackItem?.remove(at: [noteI])
     }
     func remove(at noteIs: [Int]) {
-        noteIs.forEach { selectedNotePitSprolIs[$0] = nil }
-        
         unupdateModel.notes.remove(at: noteIs)
         noteIs.reversed().forEach { notesNode.remove(atChild: $0) }
         noteIs.reversed().forEach { chordResults.remove(at: $0) }
@@ -799,9 +796,13 @@ extension ScoreView {
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + score.loopDurSec).rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            let lw = sec == 1 ? knobW : lw
-            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                               width: lw, height: rulerH)))
+            if sec == 1 {
+                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                                   width: knobW, height: rulerH)))
+            } else {
+                subBorderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                     width: lw, height: rulerH)))
+            }
         }
         
         let sprH = Sheet.timelineMargin

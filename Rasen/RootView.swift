@@ -340,6 +340,7 @@ final class RootView: View, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func setSelectedSheet(_ sids: [UUID]) {
         let undoItem = WorldUndoItem.setSelectedSheetIDs(world.selectedSheetIDs)
         let redoItem = WorldUndoItem.setSelectedSheetIDs(sids)
@@ -1543,15 +1544,9 @@ final class RootView: View, @unchecked Sendable {
     
     func unselect(at p: Point) {
         if isEditingSheet {
-            if let sheetView = sheetView(at: p) {
-                sheetView.unselectKeyframes()
-                sheetView.keyframeView.selectedLineIs = []
-                sheetView.keyframeView.selectedPlaneIs = []
-                sheetView.textsView.elementViews.forEach {
-                    $0.selectedRanges = []
-                }
-                sheetView.selectedContentIs = []
-                sheetView.scoreView.selectedNotePitSprolIs = [:]
+            if let sheetView = sheetView(at: p), !sheetView.model.selection.isEmpty {
+                sheetView.newUndoGroup()
+                sheetView.doSet(.init())
                 updateSelectedFrame()
             }
         } else {
@@ -2025,15 +2020,15 @@ final class RootView: View, @unchecked Sendable {
     struct SheetFramePosition {
         var shp: IntPoint, frame: Rect
     }
-    func sheetFramePositions(at p: Point) -> [SheetFramePosition] {
+    func sheetFramePositions(at p: Point) -> (isSelected: Bool, sfps: [SheetFramePosition]) {
         if containsSelectedSheetPositions(p) {
-            return world.selectedSheetPositions.map { .init(shp: $0, frame: sheetFrame(with: $0)) }
+            return (true, world.selectedSheetPositions.map { .init(shp: $0, frame: sheetFrame(with: $0)) })
         } else {
             let shp = sheetPosition(at: p)
             if sheetID(at: shp) != nil {
-                return [.init(shp: shp, frame: sheetFrame(with: shp))]
+                return (false, [.init(shp: shp, frame: sheetFrame(with: shp))])
             } else {
-                return []
+                return (false, [])
             }
         }
     }
@@ -2943,6 +2938,17 @@ final class RootView: View, @unchecked Sendable {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
                                                     scale: screenToWorldScale) {
+                return sheetView
+            }
+        }
+        return nil
+    }
+    func sheetViewWithSelectedLineOrPlane(at p: Point) -> SheetView? {
+        guard isEditingSheet else { return nil }
+        for v in sheetViewValues {
+            guard let sheetView = v.value.sheetView else { continue }
+            if sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
+                                                     scale: screenToWorldScale) {
                 return sheetView
             }
         }

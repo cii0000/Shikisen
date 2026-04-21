@@ -627,18 +627,20 @@ final class PastableAction: Action {
                 let nextBeat = $0 + 1 < animationView.model.keyframes.count ? animationView.model.keyframes[$0 + 1].beat : animationView.model.beatRange.upperBound
                 let dBeat = nextBeat - kf.beat
                 kf.beat = beat
+                kf.isSelected = isSelected
                 beat += dBeat
                 return kf
             }
             
             Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
             
-            selectingLineNode.fillType = .color(.subSelected)
-            selectingLineNode.lineType = .color(.selected)
-            selectingLineNode.lineWidth = rootView.worldLineWidth
+            selectingLineNode.fillType = .color(.selected)
+            let scale = rootView.screenToWorldScale
             let rects = indexes
-                .compactMap { animationView.transformedKeyframeBounds(at: $0) }
+                .compactMap { animationView.transformedKeyframeBounds(at: $0)?.outset(by: 2 * scale) }
             selectingLineNode.path = Path(rects.map { Pathline(sheetView.convertToWorld($0)) })
+            
+            return true
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
                                                  scale: rootView.screenToWorldScale) {
@@ -1312,6 +1314,12 @@ final class PastableAction: Action {
                                                                       deltaPitch: pitch))]
             
             sheetView.newUndoGroup()
+            
+            let nSelection = SheetSelection()
+            if sheetView.model.selection != nSelection {
+                sheetView.doSet(nSelection)
+            }
+            
             if !replaceNIVs.isEmpty {
                 sheetView.replace(replaceNIVs)
             }
@@ -3403,8 +3411,7 @@ final class PastableAction: Action {
                 sheetView.set(SheetOption(mainFrame: rect))
             }
         case .tempo(let tempo):
-            let shps = rootView.sheetFramePositions(at: p).map { $0.shp }
-            rootView.replaceTempo(fromTempo: tempo, in: shps)
+            rootView.replaceTempo(fromTempo: tempo, in: [rootView.sheetPosition(at: p)])
         }
     }
     
@@ -3669,9 +3676,7 @@ final class PastableAction: Action {
                 }
             }
             if !removeIndexes.isEmpty || !nIndexes.isEmpty {
-                let removeIsSet = Set(removeIndexes.compactMap { rootView.world.sheetIDs[$0] })
-                let nSelectedSheetIs = Set(rootView.world.selectedSheetIDs)
-                    .subtracting(removeIsSet).union(nIndexes.values).sorted()
+                let nSelectedSheetIs = nIndexes.values.sorted()
                 
                 rootView.history.newUndoGroup()
                 if !removeIndexes.isEmpty {
@@ -3686,7 +3691,7 @@ final class PastableAction: Action {
                 rootView.updateNode()
             }
         } else if case .tempo(let tempo) = pasteObject {
-            let shps = rootView.sheetFramePositions(at: p).map { $0.shp }
+            let shps = rootView.sheetFramePositions(at: p).sfps.map { $0.shp }
             rootView.replaceTempo(fromTempo: tempo, in: shps)
         }
     }
@@ -3701,21 +3706,17 @@ final class PastableAction: Action {
             editingSP = sp
             editingP = rootView.convertScreenToWorld(sp)
             let p = rootView.convertScreenToWorld(sp)
-            let values = rootView.sheetFramePositions(at: p)
+            let (_, values) = rootView.sheetFramePositions(at: p)
             updateWithCopySheet(at: p, from: values)
             if !values.isEmpty {
                 let shps = values.map { $0.shp }
                 rootView.cursorPoint = sp
                 rootView.close(from: shps)
                 rootView.newUndoGroup()
+                if !rootView.world.selectedSheetIDs.isEmpty {
+                    rootView.setSelectedSheet([])
+                }
                 rootView.removeSheets(at: shps)
-                
-                let nssids = rootView.world.selectedSheetIDs.filter {
-                    rootView.world.sheetPositions[$0] != nil
-                }
-                if nssids != rootView.world.selectedSheetIDs {
-                    rootView.setSelectedSheet(nssids)
-                }
             }
             
             rootView.updateWithFinding()
@@ -3740,7 +3741,7 @@ final class PastableAction: Action {
             selectingLineNode.lineWidth = rootView.worldLineWidth * 2
             
             let p = rootView.convertScreenToWorld(sp)
-            let values = rootView.sheetFramePositions(at: p)
+            let (_, values) = rootView.sheetFramePositions(at: p)
             let roads = rootView.roads(fromMap: Set(values.map { $0.shp }))
             let roadPath = Path(roads.compactMap {
                 $0.pathlineWith(width: Sheet.width, height: Sheet.height)
@@ -3773,6 +3774,7 @@ final class PastableAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootView.hideSelected()
             
             type = .paste
             firstScale = rootView.worldToScreenScale
@@ -3797,6 +3799,7 @@ final class PastableAction: Action {
             
             rootView.updateWithFinding()
             
+            rootView.showSelected()
             rootView.cursor = rootView.defaultCursor
         }
     }

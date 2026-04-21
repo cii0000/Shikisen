@@ -1745,6 +1745,74 @@ struct PBSheetOption: Sendable {
   fileprivate var _mainFrame: PBRect? = nil
 }
 
+struct PBKeyframeSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var lineIs: [Int64] = []
+
+  var planeIs: [Int64] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+struct PBPitSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var sprolIs: [Int64] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+struct PBNoteSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var pitSelections: Dictionary<Int64,PBPitSelection> = [:]
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+struct PBTextSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var ranges: [PBIntRange] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+struct PBSheetSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var keyframeSelections: Dictionary<Int64,PBKeyframeSelection> = [:]
+
+  var noteSelections: Dictionary<Int64,PBNoteSelection> = [:]
+
+  var textSelections: Dictionary<Int64,PBTextSelection> = [:]
+
+  var contentIs: [Int64] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 struct PBSheet: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -3083,6 +3151,14 @@ struct PBSheetUndoItem: Sendable {
     set {value = .setSheetOption(newValue)}
   }
 
+  var setSelection: PBSheetSelection {
+    get {
+      if case .setSelection(let v)? = value {return v}
+      return PBSheetSelection()
+    }
+    set {value = .setSelection(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Value: Equatable, Sendable {
@@ -3135,6 +3211,7 @@ struct PBSheetUndoItem: Sendable {
     case insertDraftNotes(PBNoteIndexValueArray)
     case removeDraftNotes(PBInt64Array)
     case setSheetOption(PBSheetOption)
+    case setSelection(PBSheetSelection)
 
   }
 
@@ -6285,6 +6362,190 @@ extension PBSheetOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
   }
 }
 
+extension PBKeyframeSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBKeyframeSelection"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "lineIs"),
+    2: .same(proto: "planeIs"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedInt64Field(value: &self.lineIs) }()
+      case 2: try { try decoder.decodeRepeatedInt64Field(value: &self.planeIs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.lineIs.isEmpty {
+      try visitor.visitPackedInt64Field(value: self.lineIs, fieldNumber: 1)
+    }
+    if !self.planeIs.isEmpty {
+      try visitor.visitPackedInt64Field(value: self.planeIs, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBKeyframeSelection, rhs: PBKeyframeSelection) -> Bool {
+    if lhs.lineIs != rhs.lineIs {return false}
+    if lhs.planeIs != rhs.planeIs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension PBPitSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBPitSelection"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "sprolIs"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedInt64Field(value: &self.sprolIs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sprolIs.isEmpty {
+      try visitor.visitPackedInt64Field(value: self.sprolIs, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBPitSelection, rhs: PBPitSelection) -> Bool {
+    if lhs.sprolIs != rhs.sprolIs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension PBNoteSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBNoteSelection"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "pitSelections"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBPitSelection>.self, value: &self.pitSelections) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.pitSelections.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBPitSelection>.self, value: self.pitSelections, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBNoteSelection, rhs: PBNoteSelection) -> Bool {
+    if lhs.pitSelections != rhs.pitSelections {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension PBTextSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBTextSelection"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "ranges"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.ranges) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ranges.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.ranges, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBTextSelection, rhs: PBTextSelection) -> Bool {
+    if lhs.ranges != rhs.ranges {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBSheetSelection"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "keyframeSelections"),
+    2: .same(proto: "noteSelections"),
+    3: .same(proto: "textSelections"),
+    4: .same(proto: "contentIs"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBKeyframeSelection>.self, value: &self.keyframeSelections) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBNoteSelection>.self, value: &self.noteSelections) }()
+      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBTextSelection>.self, value: &self.textSelections) }()
+      case 4: try { try decoder.decodeRepeatedInt64Field(value: &self.contentIs) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.keyframeSelections.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBKeyframeSelection>.self, value: self.keyframeSelections, fieldNumber: 1)
+    }
+    if !self.noteSelections.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBNoteSelection>.self, value: self.noteSelections, fieldNumber: 2)
+    }
+    if !self.textSelections.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBTextSelection>.self, value: self.textSelections, fieldNumber: 3)
+    }
+    if !self.contentIs.isEmpty {
+      try visitor.visitPackedInt64Field(value: self.contentIs, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBSheetSelection, rhs: PBSheetSelection) -> Bool {
+    if lhs.keyframeSelections != rhs.keyframeSelections {return false}
+    if lhs.noteSelections != rhs.noteSelections {return false}
+    if lhs.textSelections != rhs.textSelections {return false}
+    if lhs.contentIs != rhs.contentIs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheet"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
@@ -8285,6 +8546,7 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     50: .same(proto: "insertDraftNotes"),
     51: .same(proto: "removeDraftNotes"),
     52: .same(proto: "setSheetOption"),
+    53: .same(proto: "setSelection"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -8910,6 +9172,19 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
           self.value = .setSheetOption(v)
         }
       }()
+      case 53: try {
+        var v: PBSheetSelection?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .setSelection(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .setSelection(v)
+        }
+      }()
       default: break
       }
     }
@@ -9116,6 +9391,10 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     case .setSheetOption?: try {
       guard case .setSheetOption(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 52)
+    }()
+    case .setSelection?: try {
+      guard case .setSelection(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 53)
     }()
     case nil: break
     }

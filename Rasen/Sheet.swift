@@ -625,6 +625,7 @@ enum SheetUndoItem {
     case removeContents(contentIndexes: [Int])
     case setScoreOption(_ option: ScoreOption)
     case setSheetOption(_ option: SheetOption)
+    case setSelection(_ selection: SheetSelection)
 }
 extension SheetUndoItem: UndoItem {
     var type: UndoItemType {
@@ -678,6 +679,7 @@ extension SheetUndoItem: UndoItem {
         case .removeContents: .unreversible
         case .setScoreOption: .lazyReversible
         case .setSheetOption: .lazyReversible
+        case .setSelection: .lazyReversible
         }
     }
     func reversed() -> SheetUndoItem? {
@@ -789,6 +791,9 @@ extension SheetUndoItem: UndoItem {
             
         case .setSheetOption:
              self
+            
+        case .setSelection:
+             self
         }
     }
 }
@@ -896,6 +901,8 @@ extension SheetUndoItem: Protobuf {
             self = .setScoreOption(try ScoreOption(option))
         case .setSheetOption(let option):
             self = .setSheetOption(try SheetOption(option))
+        case .setSelection(let selection):
+            self = .setSelection(try .init(selection))
         }
     }
     var pb: PBSheetUndoItem {
@@ -999,6 +1006,8 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .setScoreOption(option.pb)
             case .setSheetOption(let option):
                 $0.value = .setSheetOption(option.pb)
+            case .setSelection(let selection):
+                $0.value = .setSelection(selection.pb)
             }
         }
     }
@@ -1054,6 +1063,7 @@ extension SheetUndoItem: Codable {
         case removeContents = "47"
         case setScoreOption = "48"
         case setSheetOption = "51"
+        case setSelection = "52"
     }
     init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -1157,6 +1167,8 @@ extension SheetUndoItem: Codable {
             self = .setScoreOption(try container.decode(ScoreOption.self))
         case .setSheetOption:
             self = .setSheetOption(try container.decode(SheetOption.self))
+        case .setSelection:
+            self = .setSelection(try container.decode(SheetSelection.self))
         }
     }
     func encode(to encoder: any Encoder) throws {
@@ -1309,6 +1321,9 @@ extension SheetUndoItem: Codable {
         case .setSheetOption(let option):
             try container.encode(CodingTypeKey.setSheetOption)
             try container.encode(option)
+        case .setSelection(let selection):
+            try container.encode(CodingTypeKey.setSelection)
+            try container.encode(selection)
         }
     }
 }
@@ -1364,6 +1379,7 @@ extension SheetUndoItem: CustomStringConvertible {
         case .removeContents: "removeContents"
         case .setScoreOption: "setScoreOption"
         case .setSheetOption: "setSheetOption"
+        case .setSelection: "setSelection"
         }
     }
 }
@@ -1499,6 +1515,28 @@ extension KeyframeOption: Protobuf {
 }
 extension KeyframeOption: Hashable, Codable {}
 
+struct KeyframeSelection: Hashable, Codable {
+    var lineIs = Set<Int>()
+    var planeIs = Set<Int>()
+}
+extension KeyframeSelection {
+    var isEmpty: Bool {
+        lineIs.isEmpty && planeIs.isEmpty
+    }
+}
+extension KeyframeSelection: Protobuf {
+    init(_ pb: PBKeyframeSelection) throws {
+        lineIs = .init(pb.lineIs.map { .init($0) })
+        planeIs = .init(pb.planeIs.map { .init($0) })
+    }
+    var pb: PBKeyframeSelection {
+        .with {
+            $0.lineIs = lineIs.map { .init($0) }
+            $0.planeIs = planeIs.map { .init($0) }
+        }
+    }
+}
+
 struct Keyframe: Picable {
     var picture = Picture() {
         didSet {
@@ -1510,6 +1548,7 @@ struct Keyframe: Picable {
     var beat = Rational()
     var previousPosition = Point(), nextPosition = Point()
     private(set) var isKey = true
+    var isSelected = false
     
     init(picture: Picture = Picture(), draftPicture: Picture = Picture(),
          beat: Rational = Keyframe.defaultDurBeat,
@@ -1537,6 +1576,16 @@ extension Keyframe {
     }
     var containsInterpolated: Bool {
         picture.lines.contains { $0.interType == .interpolated }
+    }
+    
+    var selection: KeyframeSelection? {
+        let lineIs = picture.lines.count.range.filter { picture.lines[$0].isSelected }
+        let planeIs = picture.planes.count.range.filter { picture.planes[$0].isSelected }
+        return if !lineIs.isEmpty || !planeIs.isEmpty || isSelected {
+            .init(lineIs: .init(lineIs), planeIs: .init(planeIs))
+        } else {
+            nil
+        }
     }
     
 //    var isKey: Bool {
@@ -2314,6 +2363,83 @@ extension SheetOption: Protobuf {
 }
 extension SheetOption: Hashable, Codable {}
 
+struct TextSelection: Hashable, Codable {
+    var ranges = [Range<Int>]()
+}
+extension TextSelection {
+    var isEmpty: Bool {
+        ranges.isEmpty
+    }
+}
+extension TextSelection: Protobuf {
+    init(_ pb: PBTextSelection) throws {
+        ranges = pb.ranges.compactMap { try? .init($0) }
+    }
+    var pb: PBTextSelection {
+        .with {
+            $0.ranges = ranges.map { $0.pb }
+        }
+    }
+}
+struct SheetSelection: Hashable, Codable {
+    static let empty = Self()
+    
+    var keyframeSelections = [Int: KeyframeSelection]()
+    var noteSelections = [Int: NoteSelection]()
+    var textSelections = [Int: TextSelection]()
+    var contentIs = Set<Int>()
+}
+extension SheetSelection {
+    var isEmpty: Bool {
+        keyframeSelections.isEmpty && noteSelections.isEmpty
+        && textSelections.isEmpty && contentIs.isEmpty
+    }
+    var notePitSprolIs: [Int: [Int: Set<Int>]] {
+        get {
+            noteSelections.reduce(into: .init()) {
+                $0[$1.key] = $1.value.pitSelections.reduce(into: .init()) {
+                    $0[$1.key] = .init($1.value.sprolIs)
+                }
+            }
+        }
+        set {
+            noteSelections = newValue.reduce(into: .init()) {
+                $0[$1.key] = .init(pitSelections: $1.value.reduce(into: .init()) {
+                    $0[$1.key] = .init(sprolIs: .init($1.value))
+                })
+            }
+        }
+    }
+}
+extension SheetSelection: Protobuf {
+    init(_ pb: PBSheetSelection) throws {
+        keyframeSelections = pb.keyframeSelections.reduce(into: .init()) {
+            $0[.init($1.key)] = try? .init($1.value)
+        }
+        noteSelections = pb.noteSelections.reduce(into: .init()) {
+            $0[.init($1.key)] = try? .init($1.value)
+        }
+        textSelections = pb.textSelections.reduce(into: .init()) {
+            $0[.init($1.key)] = try? .init($1.value)
+        }
+        contentIs = .init(pb.contentIs.map { .init($0) })
+    }
+    var pb: PBSheetSelection {
+        .with {
+            $0.keyframeSelections = keyframeSelections.reduce(into: .init()) {
+                $0[.init($1.key)] = $1.value.pb
+            }
+            $0.noteSelections = noteSelections.reduce(into: .init()) {
+                $0[.init($1.key)] = $1.value.pb
+            }
+            $0.textSelections = textSelections.reduce(into: .init()) {
+                $0[.init($1.key)] = $1.value.pb
+            }
+            $0.contentIs = contentIs.map { .init($0) }
+        }
+    }
+}
+
 struct Sheet {
     var animation = Animation(keyframes: [Keyframe(beat: 0)])
     var score = Score()
@@ -2398,6 +2524,81 @@ extension Sheet {
     }
     var isEmpty: Bool {
         picture.lines.isEmpty && draftPicture.lines.isEmpty
+    }
+    
+    var selection: SheetSelection {
+        .init(keyframeSelections: animation.keyframes.enumerated().reduce(into: .init()) {
+            if let selection = $1.element.selection {
+                $0[$1.offset] = selection
+            }
+        },
+              noteSelections: score.noteSelections,
+              textSelections: texts.enumerated().reduce(into: .init()) {
+            if !$1.element.selectedIntRanges.isEmpty {
+                $0[$1.offset] = .init(ranges: $1.element.selectedIntRanges)
+            }
+        },
+              contentIs: .init(contents.count.range.filter { contents[$0].isSelected }))
+    }
+    func checkConsistency(_ selection: SheetSelection) -> Bool {
+        if let maxKeyframeI = selection.keyframeSelections.keys.max() {
+            if maxKeyframeI >= animation.keyframes.count {
+                return false
+            }
+            for (keyframeI, keyframeSelection) in selection.keyframeSelections {
+                let keyframe = animation.keyframes[keyframeI]
+                if let maxLineI = keyframeSelection.lineIs.max(),
+                   maxLineI >= keyframe.picture.lines.count {
+                   return false
+                }
+                if let maxPlaneI = keyframeSelection.planeIs.max(),
+                   maxPlaneI >= keyframe.picture.planes.count {
+                   return false
+                }
+            }
+        }
+        
+        if let maxNoteI = selection.noteSelections.keys.max() {
+            if maxNoteI >= score.notes.count {
+                return false
+            }
+            for (noteI, noteSelection) in selection.noteSelections {
+                let note = score.notes[noteI]
+                if let maxPitI = noteSelection.pitSelections.keys.max() {
+                    if maxPitI >= note.pits.count {
+                        return false
+                    }
+                    for (pitI, pitSelection) in noteSelection.pitSelections {
+                        let pit = note.pits[pitI]
+                        if let maxSprolI = pitSelection.sprolIs.max() {
+                            if maxSprolI >= pit.tone.spectlope.sprols.count {
+                                return false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if let maxTextI = selection.textSelections.keys.max() {
+            if maxTextI >= texts.count {
+                return false
+            }
+            for (textI, textSelection) in selection.textSelections {
+                let text = texts[textI]
+                for range in textSelection.ranges {
+                    if range.lowerBound < 0 || range.upperBound > text.string.count {
+                        return false
+                    }
+                }
+            }
+        }
+        
+        if let maxContentI = selection.contentIs.max(), maxContentI >= contents.count {
+            return false
+        }
+        
+        return true
     }
     
     var enabledAnimation: Bool {

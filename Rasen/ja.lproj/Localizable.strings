@@ -82,6 +82,8 @@
 "Under development" = "開発中";
 
 "Added" = "追加済み";
+"Conflict with Score" = "楽譜があるため追加できません";
+"Conflict with Timeline" = "タイムラインがあるため追加できません";
 "There is no line on the pasteboard" = "ペーストボードに線がありません";
 
 "Loop" = "ループ";

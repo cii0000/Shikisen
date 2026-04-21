@@ -144,9 +144,7 @@ final class SubNSApplication: NSApplication {
     
     func updateSelectedColor() {
         AppDelegate.updateSelectedColor()
-        if window.isMainWindow {
-            view.rootView.updateSelectedColor(isMain: true)
-        }
+        view.rootView.updateSelectedColor(isMain: window.isMainWindow)
     }
     static func updateSelectedColor() {
         var selectedColor = Color(NSColor.controlAccentColor.cgColor)

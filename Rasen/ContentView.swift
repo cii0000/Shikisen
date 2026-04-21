@@ -62,6 +62,7 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
+            binder[keyPath: keyPath].isSelected = isSelected
             updateWithIsSelected()
         }
     }
@@ -97,6 +98,8 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
             volms = pcmTrackItem?.pcmBuffer.volms() ?? []
         }
         
+        isSelected = binder[keyPath: keyPath].isSelected
+        
         updateClippingNode()
         updateTimeline()
         
@@ -119,6 +122,8 @@ extension ContentView {
             pcmTrackItem?.change(from: timeOption)
             updateSpectrogram()
         }
+        
+        isSelected = binder[keyPath: keyPath].isSelected
         updateWithIsSelected()
     }
     func updateClippingNode() {
@@ -517,9 +522,13 @@ extension ContentView {
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            let lw = sec == 1 ? knobW : lw
-            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                               width: lw, height: rulerH)))
+            if sec == 1 {
+                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                                   width: knobW, height: rulerH)))
+            } else {
+                subBorderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                     width: lw, height: rulerH)))
+            }
         }
         
         var nodes = [Node]()

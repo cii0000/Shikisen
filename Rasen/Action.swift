@@ -677,16 +677,9 @@ final class SelectAction: Action {
         isEditingSheet = rootView.isEditingSheet
     }
     
-    struct Capture {
-        var selectedLineIs: [Int]
-        var selectedPlaneIs: [Int]
-        var selectedContentIs: [Int]
-        var selectedNotePitSprolIs: [Int : [Int : Set<Int>]]
-        var selectedTextRanegs: [Int: [Range<String.Index>]]
-    }
-    
     private var firstP = Point(), selectKeyframeAction: SelectKeyframeAction?,
-                captures = [SheetView: Capture](), firstSelectedSheetIDs = [UUID](),
+                captureSelections = [SheetView: SheetSelection](),
+                firstSelectedSheetIDs = [UUID](),
                 firstSheetView: SheetView?, firstTextI: Int?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
@@ -704,14 +697,9 @@ final class SelectAction: Action {
                 return
             }
             
-            node.lineType = .color(!isUnselect ? .selected : .diselected)
-            node.fillType = .color(!isUnselect ? .subSelected : .subDiselected)
-            
             rootView.cursor = .arrow
+            
             firstP = p
-            node.lineWidth = rootView.worldLineWidth
-            node.path = .init(.init(p, distance: 0))
-            rootView.node.append(child: node)
             
             if !isEditingSheet {
                 firstSelectedSheetIDs = rootView.world.selectedSheetIDs
@@ -719,9 +707,18 @@ final class SelectAction: Action {
                       let ti = sheetView.textIndex(at: sheetView.convertFromWorld(p),
                                                    scale: rootView.screenToWorldScale) {
                 firstSheetView = sheetView
+                captureSelections[sheetView] = sheetView.model.selection
                 firstTextI = ti
                 node.isHidden = true
+            } else if let sheetView = rootView.sheetView(at: p) {
+                captureSelections[sheetView] = sheetView.model.selection
             }
+            
+            node.lineType = .color(!isUnselect ? .selected : .diselected)
+            node.fillType = .color(!isUnselect ? .subSelected : .subDiselected)
+            node.lineWidth = rootView.worldLineWidth
+            node.path = .init(.init(p, distance: 0))
+            rootView.node.append(child: node)
         case .changed:
             if let selectKeyframeAction {
                 selectKeyframeAction.select(with: event, isUnselect: isUnselect)
@@ -732,33 +729,23 @@ final class SelectAction: Action {
             node.path = .init(rect)
             
             if rootView.isEditingSheet, let sheetView = firstSheetView,
-                let ti = firstTextI, ti < sheetView.model.texts.count {
-                
-                let capture: Capture
-                if let aCapture = captures[sheetView] {
-                    capture = aCapture
-                } else {
-                    let aCapture = Capture(selectedLineIs: sheetView.keyframeView.selectedLineIs,
-                          selectedPlaneIs: sheetView.keyframeView.selectedPlaneIs,
-                          selectedContentIs: sheetView.selectedContentIs,
-                          selectedNotePitSprolIs: sheetView.scoreView.selectedNotePitSprolIs,
-                          selectedTextRanegs: sheetView.textsView.elementViews.enumerated().reduce(into: .init()) { $0[$1.offset] = $1.element.selectedRanges })
-                    captures[sheetView] = aCapture
-                    capture = aCapture
-                }
+                let ti = firstTextI, ti < sheetView.model.texts.count,
+                let selection = captureSelections[sheetView] {
                 
                 let textView = sheetView.textsView.elementViews[ti]
-                guard let oRanges = capture.selectedTextRanegs[ti] else { return }
+                let oRanges = selection.textSelections[ti]?.ranges ?? []
                 let nRect = textView.convertFromWorld(rect)
-                guard textView.intersectsHalf(nRect) else { return }
-                let tfp = textView.convertFromWorld(firstP)
-                let tlp = textView.convertFromWorld(p)
-                
-                guard let fi = textView.characterIndexWithOutOfBounds(for: tfp),
-                      let li = textView.characterIndexWithOutOfBounds(for: tlp) else { return }
+                var nRanges = oRanges.map { textView.model.string.range(fromInt: $0) }
+                guard textView.intersectsHalf(nRect),
+                      let fi = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(firstP)),
+                      let li = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(p)) else {
+                    if textView.selectedRanges != nRanges {
+                        textView.selectedRanges = nRanges
+                    }
+                    return
+                }
                 let range = fi < li ? fi ..< li : li ..< fi
                 
-                var nRanges = oRanges
                 if isUnselect {
                     Range.subtracting(range, in: &nRanges)
                 } else {
@@ -767,20 +754,22 @@ final class SelectAction: Action {
                 textView.selectedRanges = nRanges
             } else if rootView.isEditingSheet {
                 for v in rootView.sheetViewValues {
-                    guard rootView.sheetFrame(with: v.key).intersects(rect),
-                          let sheetView = v.value.sheetView else { continue }
+                    guard let sheetView = v.value.sheetView else { continue }
+                    guard rootView.sheetFrame(with: v.key).intersects(rect) else {
+                        if let selection = captureSelections[sheetView],
+                           sheetView.model.selection != selection {
+                            _ = sheetView.set(selection)
+                        }
+                        continue
+                    }
                     
-                    let capture: Capture
-                    if let aCapture = captures[sheetView] {
-                        capture = aCapture
+                    let selection: SheetSelection
+                    if let aSelection = captureSelections[sheetView] {
+                        selection = aSelection
                     } else {
-                        let aCapture = Capture(selectedLineIs: sheetView.keyframeView.selectedLineIs,
-                              selectedPlaneIs: sheetView.keyframeView.selectedPlaneIs,
-                              selectedContentIs: sheetView.selectedContentIs,
-                              selectedNotePitSprolIs: sheetView.scoreView.selectedNotePitSprolIs,
-                              selectedTextRanegs: sheetView.textsView.elementViews.enumerated().reduce(into: .init()) { $0[$1.offset] = $1.element.selectedRanges })
-                        captures[sheetView] = aCapture
-                        capture = aCapture
+                        let aSelection = sheetView.model.selection
+                        captureSelections[sheetView] = aSelection
+                        selection = aSelection
                     }
                     
                     let sheetRect = sheetView.convertFromWorld(rect)
@@ -825,13 +814,13 @@ final class SelectAction: Action {
                         }
                         
                         if isUnselect {
-                            let oNotePitSprolIs = capture.selectedNotePitSprolIs
+                            let oNotePitSprolIs = selection.notePitSprolIs
                             sheetView.scoreView.selectedNotePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
                                 v0.merging(v1) { w0, w1 in w0.subtracting(w1) }
                             }
                         } else {
-                            let oNotePitSprolIs = capture.selectedNotePitSprolIs
+                            let oNotePitSprolIs = selection.notePitSprolIs
                             sheetView.scoreView.selectedNotePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
                                 v0.merging(v1) { w0, w1 in w0.union(w1) }
@@ -839,24 +828,32 @@ final class SelectAction: Action {
                         }
                     }
                     
-                    let oSelectedLineIs = Set(capture.selectedLineIs)
+                    let ki = sheetView.model.animation.index
+                    let oSelectedLineIs = selection.keyframeSelections[ki]?.lineIs ?? []
                     let nSelectedLineIs = sheetView.linesView.elementViews.enumerated().compactMap {
                         $0.element.intersects(sheetRect) ? $0.offset : nil
                     }
-                    sheetView.keyframeView.selectedLineIs
+                    let selectedLineIs
                     = (isUnselect ? oSelectedLineIs.subtracting(nSelectedLineIs) :
                         oSelectedLineIs.union(nSelectedLineIs)).sorted()
+                    sheetView.keyframeView.selectedLineIs = selectedLineIs
                     
                     let sheetRectPath = Path(sheetRect)
-                    let oSelectedPlaneIs = Set(capture.selectedPlaneIs)
+                    let oSelectedPlaneIs = selection.keyframeSelections[ki]?.planeIs ?? []
                     let nSelectedPlaneIs = sheetView.planesView.elementViews.enumerated().compactMap {
                         sheetRectPath.contains($0.element.node.path) ? $0.offset : nil
                     }
-                    sheetView.keyframeView.selectedPlaneIs
-                    = (isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
+                    let selectedPlaneIs = (isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
                         oSelectedPlaneIs.union(nSelectedPlaneIs)).sorted()
+                    sheetView.keyframeView.selectedPlaneIs = selectedPlaneIs
                     
-                    let oSelectedContentIs = Set(capture.selectedContentIs)
+                    let isSelectedKeyframe = !selectedLineIs.isEmpty || !selectedPlaneIs.isEmpty
+                    if isSelectedKeyframe != sheetView.keyframeView.isSelected {
+                        sheetView.keyframeView.isSelected = isSelectedKeyframe
+                        sheetView.updateTimeline()
+                    }
+                    
+                    let oSelectedContentIs = selection.contentIs
                     let nSelectedContentIs = sheetView.contentsView.elementViews.enumerated().compactMap { (ci, contentView) in
                         if let b = contentView.transformedBounds,
                            sheetRectPath.intersects(b) { ci } else { nil }
@@ -866,17 +863,19 @@ final class SelectAction: Action {
                         oSelectedContentIs.union(nSelectedContentIs)).sorted()
                     
                     for (ti, textView) in sheetView.textsView.elementViews.enumerated() {
-                         guard let oRanges = capture.selectedTextRanegs[ti] else { continue }
+                        let oRanges = selection.textSelections[ti]?.ranges ?? []
                         let nRect = textView.convertFromWorld(rect)
-                        guard textView.intersectsHalf(nRect) else { continue }
-                        let tfp = textView.convertFromWorld(firstP)
-                        let tlp = textView.convertFromWorld(p)
-                        
-                        guard let fi = textView.characterIndexWithOutOfBounds(for: tfp),
-                              let li = textView.characterIndexWithOutOfBounds(for: tlp) else { continue }
+                        var nRanges = oRanges.map { textView.model.string.range(fromInt: $0) }
+                        guard textView.intersectsHalf(nRect),
+                              let fi = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(firstP)),
+                              let li = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(p)) else {
+                            if textView.selectedRanges != nRanges {
+                                textView.selectedRanges = nRanges
+                            }
+                            continue
+                        }
                         let range = fi < li ? fi ..< li : li ..< fi
                         
-                        var nRanges = oRanges
                         if isUnselect {
                             Range.subtracting(range, in: &nRanges)
                         } else {
@@ -909,6 +908,12 @@ final class SelectAction: Action {
                 rootView.newUndoGroup()
                 rootView.capture(rootView.world.selectedSheetIDs, old: firstSelectedSheetIDs)
             }
+            for (sheetView, oldSelection) in captureSelections {
+                if oldSelection != sheetView.model.selection {
+                    sheetView.newUndoGroup()
+                    sheetView.capture(old: oldSelection)
+                }
+            }
             
             rootView.cursor = rootView.defaultCursor
         }
@@ -928,7 +933,7 @@ final class SelectKeyframeAction: Action {
     private var beganRootBeatPosition = Animation.RootBeatPosition(),
                 movedBeganRootBeatPosition = Animation.RootBeatPosition(),
                 beganSelectedRootBeat = Rational(0),
-                beganSelectedFrameIndexes = [Int]()
+                beganSelectedFrameIndexes = [Int](), firstSelection = SheetSelection()
     private var lastRootBeats = [(sec: Double, rootBeat: Rational)](capacity: 128)
     private var minLastSec = 1 / 12.0
     
@@ -970,6 +975,7 @@ final class SelectKeyframeAction: Action {
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
                                                         scale: rootView.screenToWorldScale) {
                 self.sheetView = sheetView
+                firstSelection = sheetView.model.selection
                 let animationView = sheetView.animationView
                 beganRootBeatPosition = sheetView.rootBeatPosition
                 
@@ -1058,6 +1064,11 @@ final class SelectKeyframeAction: Action {
                         break
                     }
                 }
+                
+                if firstSelection != sheetView.model.selection {
+                    sheetView.newUndoGroup()
+                    sheetView.capture(old: firstSelection)
+                }
             }
             
             rootView.cursor = rootView.defaultCursor
@@ -1140,41 +1151,140 @@ final class DraftAction: Action {
             rootView.cursor = .arrow
             
             var isChanged = false
-            if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
-                let nis = sheetView.scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
-                if !nis.isEmpty {
+            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
+                ?? rootView.sheetViewWithSelectedLineOrPlane(at: p) {
+                let lis = sheetView.keyframeView.selectedLineIs
+                let pis = sheetView.keyframeView.selectedPlaneIs
+                if !lis.isEmpty || !pis.isEmpty {
                     sheetView.newUndoGroup()
-                    sheetView.changeToDraft(withNoteInexes: nis)
+                    if !lis.isEmpty {
+                        let lines = sheetView.model.picture.lines[lis]
+                        sheetView.removeLines(at: lis)
+                        let li = sheetView.model.draftPicture.lines.count
+                        sheetView.insertDraft(lines.enumerated().map {
+                            IndexValue(value: $0.element, index: li + $0.offset)
+                        })
+                    }
+                    if !pis.isEmpty {
+                        let planes = sheetView.model.picture.planes[pis]
+                        sheetView.removePlanes(at: pis)
+                        let pi = sheetView.model.draftPicture.planes.count
+                        sheetView.insertDraft(planes.enumerated().map {
+                            IndexValue(value: $0.element, index: pi + $0.offset)
+                        })
+                    }
                     rootView.updateSelectedFrame()
                     isChanged = true
                 }
-            } else if let sheetView = rootView.sheetViewWithSelectedLine(at: p)
-                        ?? rootView.sheetViewWithSelectedPlane(at: p) {
-                let lis = sheetView.keyframeView.selectedLineIs
-                let pis = sheetView.keyframeView.selectedPlaneIs
-                if !lis.isEmpty {
+            } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
+                let kis = sheetView.animationView.selectedIs.sorted()
+                
+                let insertKLs = kis.compactMap {
+                    let lines = sheetView.model.animation.keyframes[$0].picture.lines
+                    let oldLines = sheetView.model.animation.keyframes[$0].draftPicture.lines
+                    let li = oldLines.count
+                    let value = lines.enumerated().map {
+                        IndexValue(value: $0.element,
+                                   index: li + $0.offset)
+                    }
+                    return lines.isEmpty ?
+                        nil :
+                        IndexValue(value: value, index: $0)
+                }
+                let insertKPs = kis.compactMap {
+                    let planes = sheetView.model.animation.keyframes[$0].picture.planes
+                    let oldPlanes = sheetView.model.animation.keyframes[$0].draftPicture.planes
+                    let pi = oldPlanes.count
+                    let value = planes.enumerated().map {
+                        IndexValue(value: $0.element,
+                                   index: pi + $0.offset)
+                    }
+                    return planes.isEmpty ?
+                        nil :
+                        IndexValue(value: value, index: $0)
+                }
+                let removeKLs = kis.compactMap {
+                    let lines = sheetView.model.animation.keyframes[$0].picture.lines
+                    return lines.isEmpty ?
+                        nil :
+                    IndexValue(value: Array(0 ..< lines.count), index: $0)
+                }
+                let removeKPs = kis.compactMap {
+                    let planes = sheetView.model.animation.keyframes[$0].picture.planes
+                    return planes.isEmpty ?
+                        nil :
+                    IndexValue(value: Array(0 ..< planes.count), index: $0)
+                }
+                if !insertKLs.isEmpty || !insertKPs.isEmpty
+                    || !removeKLs.isEmpty || !removeKPs.isEmpty {
+                    
                     sheetView.newUndoGroup()
-                    sheetView.changeToDraft(withLineInexes: lis,
-                                            planeInexes: pis)
+                    if !insertKLs.isEmpty {
+                        sheetView.insertDraftKeyLines(insertKLs)
+                    }
+                    if !insertKPs.isEmpty {
+                        sheetView.insertDraftKeyPlanes(insertKPs)
+                    }
+                    if !removeKLs.isEmpty {
+                        sheetView.removeKeyLines(removeKLs)
+                    }
+                    if !removeKPs.isEmpty {
+                        sheetView.removeKeyPlanes(removeKPs)
+                    }
+                }
+            } else if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
+                let nis = sheetView.scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
+                if !nis.isEmpty {
+                    sheetView.newUndoGroup()
+                    let notes = sheetView.model.score.notes[nis]
+                    sheetView.removeNote(at: nis)
+                    let ni = sheetView.model.score.draftNotes.count
+                    sheetView.insertDraft(notes.enumerated().map {
+                        IndexValue(value: $0.element, index: ni + $0.offset)
+                    })
                     rootView.updateSelectedFrame()
                     isChanged = true
                 }
             } else {
                 if let sheetView = rootView.sheetView(at: p) {
                     if sheetView.model.score.enabled {
-                        let nis = if let i = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
-                            [i]
-                        } else {
-                            (0 ..< sheetView.model.score.notes.count).map { $0 }
-                        }
+                        let nis = (0 ..< sheetView.model.score.notes.count).map { $0 }
                         if !nis.isEmpty {
                             sheetView.newUndoGroup()
-                            sheetView.changeToDraft(withNoteInexes: nis)
+                            let notes = sheetView.model.score.notes[nis]
+                            sheetView.removeNote(at: nis)
+                            let ni = sheetView.model.score.draftNotes.count
+                            sheetView.insertDraft(notes.enumerated().map {
+                                IndexValue(value: $0.element, index: ni + $0.offset)
+                            })
                             isChanged = true
                         }
                     } else {
-                        isChanged = sheetView.changeToDraft(with: nil)
+                        if !sheetView.model.picture.isEmpty {
+                            if sheetView.model.draftPicture.isEmpty {
+                                sheetView.newUndoGroup()
+                                
+                                sheetView.changeToDraft()
+                            } else {
+                                sheetView.newUndoGroup()
+                                if !sheetView.model.picture.lines.isEmpty {
+                                    let li = sheetView.model.draftPicture.lines.count
+                                    sheetView.insertDraft(sheetView.model.picture.lines.enumerated().map {
+                                        IndexValue(value: $0.element, index: li + $0.offset)
+                                    })
+                                }
+                                if !sheetView.model.picture.planes.isEmpty {
+                                    let pi = sheetView.model.draftPicture.planes.count
+                                    sheetView.insertDraft(sheetView.model.picture.planes.enumerated().map {
+                                        IndexValue(value: $0.element, index: pi + $0.offset)
+                                    })
+                                }
+                                sheetView.set(Picture())
+                            }
+                            isChanged = true
+                        }
                     }
+                    rootView.updateSelectedFrame()
                 }
             }
             if !isChanged {
@@ -1202,7 +1312,32 @@ final class DraftAction: Action {
             rootView.cursor = .arrow
             
             var isChanged = false
-            if let sheetView = rootView.sheetView(at: p) {
+            if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
+                let kis = sheetView.animationView.selectedIs.sorted()
+                
+                let kls = kis.compactMap {
+                    let lines = sheetView.model.animation.keyframes[$0].draftPicture.lines
+                    return lines.isEmpty ?
+                    nil :
+                    IndexValue(value: Array(0 ..< lines.count), index: $0)
+                }
+                let kps = kis.compactMap {
+                    let planes = sheetView.model.animation.keyframes[$0].draftPicture.planes
+                    return planes.isEmpty ?
+                        nil :
+                    IndexValue(value: Array(0 ..< planes.count), index: $0)
+                }
+                if !kls.isEmpty || !kps.isEmpty {
+                    sheetView.newUndoGroup()
+                    if !kls.isEmpty {
+                        sheetView.removeDraftKeyLines(kls)
+                    }
+                    if !kps.isEmpty {
+                        sheetView.removeDraftKeyPlanes(kps)
+                    }
+                    isChanged = true
+                }
+            } else if let sheetView = rootView.sheetView(at: p) {
                 if sheetView.model.score.enabled {
                     let nis = (0 ..< sheetView.model.score.draftNotes.count).map { $0 }
                     if !nis.isEmpty {
@@ -1227,32 +1362,13 @@ final class DraftAction: Action {
                         isChanged = true
                     }
                 } else {
-                    if !sheetView.animationView.selectedIs.isEmpty {
+                    let draftPicture = sheetView.model.draftPicture
+                    if !draftPicture.isEmpty {
                         sheetView.newUndoGroup()
-                        let sfis = sheetView.animationView.selectedIs.sorted()
-                        sheetView.removeDraftKeyLines(sfis.compactMap {
-                            let lines = sheetView.model.animation.keyframes[$0].draftPicture.lines
-                            return lines.isEmpty ?
-                            nil :
-                            IndexValue(value: Array(0 ..< lines.count), index: $0)
-                        })
-                        sheetView.removeDraftKeyPlanes(sfis.compactMap {
-                            let planes = sheetView.model.animation.keyframes[$0].draftPicture.planes
-                            return planes.isEmpty ?
-                                nil :
-                            IndexValue(value: Array(0 ..< planes.count), index: $0)
-                        })
+                        sheetView.removeDraft()
+                        Pasteboard.shared.copiedObjects = [.picture(draftPicture)]
                         
                         isChanged = true
-                    } else {
-                        let object = PastableObject.picture(sheetView.model.draftPicture)
-                        if !sheetView.model.draftPicture.isEmpty {
-                            sheetView.newUndoGroup()
-                            sheetView.removeDraft()
-                            Pasteboard.shared.copiedObjects = [object]
-                            
-                            isChanged = true
-                        }
                     }
                 }
             }
@@ -1319,7 +1435,20 @@ final class FaceAction: Action {
         case .began:
             rootView.cursor = .arrow
             
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            var isChanged = false
+            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
+                ?? rootView.sheetViewWithSelectedSheetValue(at: p),
+               let rect = sheetView.selectedFrame {
+                
+                isChanged = sheetView.makeFaces(withClipping: rect,
+                                                selectedKeyframeIs: [], isOutClip: true)
+                rootView.updateSelectedFrame()
+            } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
+                let kis = sheetView.animationView.selectedIs.sorted()
+                isChanged = sheetView.makeFaces(withClipping: nil,
+                                                selectedKeyframeIs: kis, isOutClip: false)
+                rootView.updateSelectedFrame()
+            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let score = sheetView.scoreView.model
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
                 let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
@@ -1349,27 +1478,6 @@ final class FaceAction: Action {
                     sheetView.newUndoGroup()
                     sheetView.replace(nivs)
                 }
-                return
-            }
-            
-            var isChanged = false
-            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
-                ?? rootView.sheetViewWithSelectedSheetValue(at: p),
-               let rect = sheetView.selectedFrame {
-                
-                isChanged = sheetView.makeFaces(withClipping: rect,
-                                                selectedKeyframeIs: [], isOutClip: true)
-            } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
-                let kis = sheetView.animationView.selectedIs.sorted()
-                let (frame, isAll) = rootView.frame(at: p, with: sheetView)
-                if isAll {
-                    isChanged = sheetView.makeFaces(withClipping: nil,
-                                                    selectedKeyframeIs: kis, isOutClip: false)
-                } else {
-                    let f = sheetView.convertFromWorld(frame)
-                    isChanged = sheetView.makeFaces(withClipping: f,
-                                                    selectedKeyframeIs: kis, isOutClip: false)
-                }
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView {
@@ -1381,6 +1489,7 @@ final class FaceAction: Action {
                         isChanged = sheetView.makeFaces(withClipping: f,
                                                         selectedKeyframeIs: [], isOutClip: false)
                     }
+                    rootView.updateSelectedFrame()
                 } else if let sheetView = rootView.madeSheetView(at: p) {
                     isChanged = sheetView.makeFacesFromKeyframeIndex(withClipping: nil,
                                                                      isOutClip: false,
@@ -1438,6 +1547,7 @@ final class FaceAction: Action {
                     
                     sheetView.newUndoGroup()
                     sheetView.replace(nivs)
+                    rootView.updateSelectedFrame()
                     
                     isChanged = true
                 }
@@ -1449,6 +1559,7 @@ final class FaceAction: Action {
                 sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
                 let value = SheetValue(lines: [], planes: planes, texts: []) * t
                 Pasteboard.shared.copiedObjects = [.sheetValue(value)]
+                rootView.updateSelectedFrame()
                 
                 isChanged = true
             } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
@@ -1461,6 +1572,7 @@ final class FaceAction: Action {
                 if !vs.isEmpty {
                     sheetView.newUndoGroup()
                     sheetView.removeKeyPlanes(vs)
+                    rootView.updateSelectedFrame()
                     
                     isChanged = true
                 }
@@ -1473,6 +1585,7 @@ final class FaceAction: Action {
                         let f = sheetView.convertFromWorld(frame).inset(by: 1)
                         isChanged = sheetView.cutFaces(with: Path(f))
                     }
+                    rootView.updateSelectedFrame()
                 }
             }
             
@@ -1525,6 +1638,10 @@ final class AddTimeAction: InputKeyEventAction {
                                                   tempo: tempo)
                        
                        sheetView.newUndoGroup()
+                       if !sheetView.model.selection.isEmpty {
+                           sheetView.doSet(.empty)
+                           rootView.updateSelectedFrame()
+                       }
                        sheetView.replace(IndexValue(value: content, index: ci))
                        
                        sheetView.updatePlaying()
@@ -1542,6 +1659,10 @@ final class AddTimeAction: InputKeyEventAction {
                                                tempo: tempo)
                        
                        sheetView.newUndoGroup()
+                       if !sheetView.model.selection.isEmpty {
+                           sheetView.doSet(.empty)
+                           rootView.updateSelectedFrame()
+                       }
                        sheetView.replace([IndexValue(value: text, index: ti)])
                        
                        sheetView.updatePlaying()
@@ -1550,9 +1671,13 @@ final class AddTimeAction: InputKeyEventAction {
                    }
                } else if !sheetView.model.enabledAnimation {
                    if sheetView.model.score.enabled {
-                       rootView.cursor = .block
+                       rootView.cursor = .arrowWith(string: "Conflict with Score".localized)
                    } else {
                        sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                       if !sheetView.model.selection.isEmpty {
+                           sheetView.doSet(.empty)
+                           rootView.updateSelectedFrame()
+                       }
                        sheetView.set(beat: 0, at: 0)
                        var option = sheetView.model.animation.option
                        option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
@@ -1603,13 +1728,17 @@ final class AddScoreAction: InputKeyEventAction {
             
             if let sheetView = rootView.madeSheetView(at: p), !sheetView.model.score.enabled {
                 if sheetView.model.animation.enabled {
-                    rootView.cursor = .block
+                    rootView.cursor = .arrowWith(string: "Conflict with Timeline".localized)
                 } else {
                     let inP = sheetView.convertFromWorld(p)
                     let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
                     let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
                     
                     sheetView.newUndoGroup()
+                    if !sheetView.model.selection.isEmpty {
+                        sheetView.doSet(.empty)
+                        rootView.updateSelectedFrame()
+                    }
                     sheetView.set(option)
                     
                     rootAction.updateActionNode()

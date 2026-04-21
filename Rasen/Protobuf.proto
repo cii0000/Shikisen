@@ -352,6 +352,26 @@ enum PBPreviousNext {
     previousAndNext = 3;
 }
 
+message PBKeyframeSelection {
+    repeated int64 lineIs = 1;
+    repeated int64 planeIs = 2;
+}
+message PBPitSelection {
+    repeated int64 sprolIs = 1;
+}
+message PBNoteSelection {
+    map<int64, PBPitSelection> pitSelections = 1;
+}
+message PBTextSelection {
+    repeated PBIntRange ranges = 1;
+}
+message PBSheetSelection {
+    map<int64, PBKeyframeSelection> keyframeSelections = 1;
+    map<int64, PBNoteSelection> noteSelections = 2;
+    map<int64, PBTextSelection> textSelections = 3;
+    repeated int64 contentIs = 4;
+}
+
 message PBSheet {
     PBAnimation animation = 6;
     PBScore score = 10;
@@ -603,6 +623,7 @@ message PBSheetUndoItem {
         PBNoteIndexValueArray insertDraftNotes = 50;
         PBInt64Array removeDraftNotes = 51;
         PBSheetOption setSheetOption = 52;
+        PBSheetSelection setSelection = 53;
     }
 }
 message PBWorldUndoItem {

@@ -229,6 +229,7 @@ final class VersionAction: Action {
         } else if !selectingRootNode.children.isEmpty {
             selectingRootNode.children = []
         }
+        rootView.updateSelectedFrame()
     }
     
     func undo(with event: InputKeyEvent) {
@@ -256,7 +257,6 @@ final class VersionAction: Action {
             selectingRootNode.removeFromParent()
             rootNode.removeFromParent()
             
-            rootView.updateSelectedFrame()
             if let sheetView = sheetView {
                 rootView.updateFinding(from: sheetView)
             }

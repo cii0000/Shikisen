@@ -30,12 +30,22 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         self.binder = binder
         self.keyPath = keyPath
         
+        isSelected = binder[keyPath: keyPath].isSelected
+        
+        let uuColor = binder[keyPath: keyPath].uuColor
         node = Node(path: Path(binder[keyPath: keyPath]),
                     lineWidth: binder[keyPath: keyPath].size,
-                    lineType: .color(binder[keyPath: keyPath].uuColor.value))
+                    lineType: .color(isSelected && !isHiddenSelected ?
+                                     (uuColor == Line.defaultUUColor ?
+                                      .selected :
+                                          .linear(.selected, uuColor.value,
+                                                  t: uuColor.value.lightness / 100 * 0.5)) :
+                                      uuColor.value))
     }
     
     func updateWithModel() {
+        isSelected = binder[keyPath: keyPath].isSelected
+        
         updateColor()
         updatePath()
         node.lineWidth = model.size
@@ -43,6 +53,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
+            binder[keyPath: keyPath].isSelected = isSelected
             updateColor()
         }
     }
@@ -115,18 +126,23 @@ final class PlaneView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         self.binder = binder
         self.keyPath = keyPath
         
+        isSelected = binder[keyPath: keyPath].isSelected
+        
         node = Node(path: binder[keyPath: keyPath].path,
-                    fillType: .color(binder[keyPath: keyPath].uuColor.value))
+                    fillType: .color(isSelected && !isHiddenSelected ? .selected + binder[keyPath: keyPath].uuColor.value :  binder[keyPath: keyPath].uuColor.value))
         node.isCPUFillAntialias = false
     }
     
     func updateWithModel() {
+        isSelected = binder[keyPath: keyPath].isSelected
+        
         updateColor()
         updatePath()
     }
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
+            binder[keyPath: keyPath].isSelected = isSelected
             updateColor()
         }
     }
@@ -212,7 +228,12 @@ final class KeyframeView: BindableView, @unchecked Sendable {
     let draftLinesView: ArrayView<SheetLineView>
     let draftPlanesView: ArrayView<SheetPlaneView>
     
-    var isSelected = false
+    var isSelected = false {
+        didSet {
+            guard isSelected != oldValue else { return }
+            binder[keyPath: keyPath].isSelected = isSelected
+        }
+    }
     
     var selectedLineIs: [Int] {
         get {
@@ -267,6 +288,8 @@ final class KeyframeView: BindableView, @unchecked Sendable {
                                planesView.node, linesView.node])
         
         updateDraft()
+        
+        isSelected = binder[keyPath: keyPath].isSelected
     }
     
     func updateWithModel() {
@@ -276,6 +299,8 @@ final class KeyframeView: BindableView, @unchecked Sendable {
         draftPlanesView.updateWithModel()
         
         updateDraft()
+        
+        isSelected = binder[keyPath: keyPath].isSelected
     }
     func updateDraft() {
         draftLinesView.elementViews.forEach {
@@ -388,15 +413,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     
-    var selectedColor = Color.selected {
-        didSet {
-            timelineNode.children.forEach {
-                if $0.name == "selected" {
-                    $0.fillType = .color(selectedColor)
-                }
-            }
-        }
-    }
     var selectedIs: [Int] {
         get {
             elementViews.count.range.filter { elementViews[$0].isSelected }
@@ -877,9 +893,13 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + model.loopDurSec).rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            let lw = sec == 1 ? knobW : lw
-            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                               width: lw, height: rulerH)))
+            if sec == 1 {
+                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                                   width: knobW, height: rulerH)))
+            } else {
+                subBorderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                     width: lw, height: rulerH)))
+            }
         }
         
         let pnW = 14.0, pnH = 6.0, spnW = 2.5, spnH = 3.0, pnnH = Sheet.knobHeight,
@@ -1679,15 +1699,6 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
     }
     
-    var isSelectedKeyframes: Bool {
-        !animationView.selectedIs.isEmpty
-    }
-    func unselectKeyframes() {
-        if isSelectedKeyframes {
-            animationView.selectedIs = []
-        }
-    }
-    
     var selectedFrame: Rect? {
         var rect: Rect?
         keyframeView.selectedLineIs.forEach {
@@ -1710,8 +1721,24 @@ final class SheetView: BindableView, @unchecked Sendable {
         return rect?.outset(by: 5)
     }
     func updateSelectedColor(isMain: Bool) {
-        let selectedColor = isMain ? Color.selected : Color.diselected
-        animationView.selectedColor = selectedColor
+        animationView.timelineNode.children.forEach {
+            if $0.name == "selected" {
+                $0.fillType = .color(.selected)
+            }
+        }
+        animationView.elementViews.forEach {
+            $0.linesView.elementViews.forEach { if $0.isSelected { $0.updateColor() } }
+            $0.planesView.elementViews.forEach { if $0.isSelected { $0.updateColor() } }
+        }
+        textsView.elementViews.forEach {
+            $0.selectedNode.fillType = .color(.subSelected)
+            $0.selectedNode.lineType = .color(.selected)
+        }
+        scoreView.updateWithSelected(old: [:])
+        contentsView.elementViews.forEach {
+            $0.selectedNode.fillType = .color(.subSelected)
+            $0.selectedNode.lineType = .color(.selected)
+        }
     }
     func containsSelected(_ p: Point, scale: Double) -> Bool {
         containsSelectedNote(p, scale: scale) || containsSelectedSheetValue(p, scale: scale)
@@ -2738,10 +2765,12 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     var stopNotifications = [((SheetView) -> ())]()
     func stop() {
-        playingSecRange = nil
-        playingOtherTimelineIDs = []
-        isPlaying = false
-        stopNotifications.forEach { $0(self) }
+        if isPlaying {
+            playingSecRange = nil
+            playingOtherTimelineIDs = []
+            isPlaying = false
+            stopNotifications.forEach { $0(self) }
+        }
     }
     func updatePlaying() {
         if isPlaying {
@@ -4058,6 +4087,15 @@ final class SheetView: BindableView, @unchecked Sendable {
             if isMakeRect {
                 return (option.mainFrame, [])
             }
+            
+        case .setSelection(let selection):
+            stop()
+            
+           let rect = set(selection)
+            
+            if isMakeRect {
+                return (rect, [])
+            }
         }
         return (nil, [])
     }
@@ -4160,6 +4198,59 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     private func setNode(_ ituv: IndexValue<TextValue>) {
         textsView.elementViews[ituv.index].set(ituv.value)
+    }
+    func set(_ selection: SheetSelection) -> Rect? {
+        var rect: Rect?
+        var isChangedTimeline = false
+        animationView.elementViews.enumerated().forEach {
+            let nKeyframeSelection = selection.keyframeSelections[$0.offset]
+            
+            $0.element.linesView.elementViews.enumerated().forEach {
+                let nIsSelected = nKeyframeSelection?.lineIs.contains($0.offset) ?? false
+                if nIsSelected != $0.element.isSelected {
+                    $0.element.isSelected = nIsSelected
+                    rect += $0.element.node.transformedBounds
+                }
+            }
+            $0.element.planesView.elementViews.enumerated().forEach {
+                let nIsSelected = nKeyframeSelection?.planeIs.contains($0.offset) ?? false
+                if nIsSelected != $0.element.isSelected {
+                    $0.element.isSelected = nIsSelected
+                    rect += $0.element.node.transformedBounds
+                }
+            }
+            
+            let nIsSelected = nKeyframeSelection != nil
+            if nIsSelected != $0.element.isSelected {
+                $0.element.isSelected = nIsSelected
+                isChangedTimeline = true
+            }
+        }
+        if isChangedTimeline {
+            animationView.updateTimeline()
+        }
+        
+        scoreView.selectedNotePitSprolIs = selection.notePitSprolIs
+        
+        textsView.elementViews.enumerated().forEach {
+            let nTextSelection = selection.textSelections[$0.offset]
+            let text = $0.element.model
+            let nSelectedRanges = nTextSelection?.ranges.map { text.string.range(fromInt: $0) } ?? []
+            if nSelectedRanges != $0.element.selectedRanges {
+                $0.element.selectedRanges = nSelectedRanges
+                rect += $0.element.node.transformedBounds
+            }
+        }
+        
+        contentsView.elementViews.enumerated().forEach {
+            let nIsSelected = selection.contentIs.contains($0.offset)
+            if nIsSelected != $0.element.isSelected {
+                $0.element.isSelected = nIsSelected
+                rect += $0.element.node.transformedBounds
+            }
+        }
+        
+        return rect
     }
     
     private func changeColorsNode(_ colorValue: ColorValue) {
@@ -4975,6 +5066,18 @@ final class SheetView: BindableView, @unchecked Sendable {
         set(redoItem)
     }
     
+    func doSet(_ selection: SheetSelection) {
+        let undoItem = SheetUndoItem.setSelection(model.selection)
+        let redoItem = SheetUndoItem.setSelection(selection)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(old oldSelection: SheetSelection) {
+        let undoItem = SheetUndoItem.setSelection(oldSelection)
+        let redoItem = SheetUndoItem.setSelection(model.selection)
+        append(undo: undoItem, redo: redoItem)
+    }
+    
     @discardableResult
     func undo(to toTopIndex: Int) -> (rect: Rect?, nodes: [Node]) {
         var rect = Rect?.none, nodes = [Node]()
@@ -5762,6 +5865,12 @@ final class SheetView: BindableView, @unchecked Sendable {
             if oldOption != option {
                 history[result.version].values[result.valueIndex]
                     .saveUndoItemValue?.set(.setSheetOption(oldOption), type: reversedType)
+            }
+        case .setSelection(let selection):
+            updateFirstReverse()
+            
+            if selection != model.selection {
+                history.error(result)
             }
         }
         
@@ -6723,6 +6832,12 @@ final class SheetView: BindableView, @unchecked Sendable {
                 history[result.version].values[result.valueIndex]
                     .undoItemValue?.undoItem = .setSheetOption(oldOption)
             }
+        case .setSelection(let selection):
+            if model.checkConsistency(selection) {
+                history.setReverse(.setSelection(model.selection), with: result)
+            } else {
+                history.error(result)
+            }
         }
     }
     
@@ -6921,6 +7036,9 @@ final class SheetView: BindableView, @unchecked Sendable {
         func updateUndoGroup() {
             if !isUpdateUndoGroup {
                 newUndoGroup()
+                if !model.selection.isEmpty {
+                    doSet(.empty)
+                }
                 isUpdateUndoGroup = true
             }
         }
@@ -7175,156 +7293,6 @@ final class SheetView: BindableView, @unchecked Sendable {
         }
         
         return ssValue.isEmpty ? nil : ssValue
-    }
-    
-    func copy(with line: Line?, at p: Point, isRemove: Bool = false) {
-        if let line = line {
-            if let value = lassoErase(with: Lasso(line: line),
-                                      isRemove: isRemove) {
-                let t = Transform(translation: -convertFromWorld(p))
-                Pasteboard.shared.copiedObjects = [.sheetValue(value * t)]
-            } else {
-                Pasteboard.shared.copiedObjects = []
-            }
-        } else {
-            let ssv = SheetValue(lines: model.picture.lines,
-                                 planes: model.picture.planes,
-                                 texts: model.texts,
-                                 id: id,
-                                 rootKeyframeIndex: model.animation.rootIndex)
-            if !ssv.isEmpty {
-                if isRemove {
-                    newUndoGroup()
-                    if !model.picture.isEmpty {
-                        set(Picture())
-                    }
-                    if !model.texts.isEmpty {
-                        removeText(at: Array(0 ..< model.texts.count))
-                    }
-                }
-                let t = Transform(translation: -convertFromWorld(p))
-                Pasteboard.shared.copiedObjects = [.sheetValue(ssv * t)]
-            } else {
-                Pasteboard.shared.copiedObjects = []
-            }
-        }
-    }
-    func changeToDraft(withLineInexes lis: [Int], planeInexes pis: [Int]) {
-        if !lis.isEmpty {
-            let lines = model.picture.lines[lis]
-            removeLines(at: lis)
-            let li = model.draftPicture.lines.count
-            insertDraft(lines.enumerated().map {
-                IndexValue(value: $0.element, index: li + $0.offset)
-            })
-        }
-        if !pis.isEmpty {
-            let planes = model.picture.planes[pis]
-            removePlanes(at: pis)
-            let pi = model.draftPicture.planes.count
-            insertDraft(planes.enumerated().map {
-                IndexValue(value: $0.element, index: pi + $0.offset)
-            })
-        }
-    }
-    func changeToDraft(with line: Line?) -> Bool {
-        if let line = line {
-            if let value = lassoErase(with: Lasso(line: line),
-                                      isRemove: true, isEnableText: false) {
-                if !value.lines.isEmpty {
-                    let li = model.draftPicture.lines.count
-                    insertDraft(value.lines.enumerated().map {
-                        IndexValue(value: $0.element, index: li + $0.offset)
-                    })
-                }
-                if !value.planes.isEmpty {
-                    let pi = model.draftPicture.planes.count
-                    insertDraft(value.planes.enumerated().map {
-                        IndexValue(value: $0.element, index: pi + $0.offset)
-                    })
-                }
-                return true
-            }
-        } else {
-            if !animationView.selectedIs.isEmpty {
-                newUndoGroup()
-                let sfis = animationView.selectedIs.sorted()
-                
-                insertDraftKeyLines(sfis.compactMap {
-                    let lines = model.animation.keyframes[$0].picture.lines
-                    let oldLines = model.animation.keyframes[$0].draftPicture.lines
-                    let li = oldLines.count
-                    let value = lines.enumerated().map {
-                        IndexValue(value: $0.element,
-                                   index: li + $0.offset)
-                    }
-                    return lines.isEmpty ?
-                        nil :
-                        IndexValue(value: value, index: $0)
-                })
-                insertDraftKeyPlanes(sfis.compactMap {
-                    let planes = model.animation.keyframes[$0].picture.planes
-                    let oldPlanes = model.animation.keyframes[$0].draftPicture.planes
-                    let pi = oldPlanes.count
-                    let value = planes.enumerated().map {
-                        IndexValue(value: $0.element,
-                                   index: pi + $0.offset)
-                    }
-                    return planes.isEmpty ?
-                        nil :
-                        IndexValue(value: value, index: $0)
-                })
-                removeKeyLines(sfis.compactMap {
-                    let lines = model.animation.keyframes[$0].picture.lines
-                    return lines.isEmpty ?
-                        nil :
-                    IndexValue(value: Array(0 ..< lines.count), index: $0)
-                })
-                removeKeyPlanes(sfis.compactMap {
-                    let planes = model.animation.keyframes[$0].picture.planes
-                    return planes.isEmpty ?
-                        nil :
-                    IndexValue(value: Array(0 ..< planes.count), index: $0)
-                })
-                return true
-            }
-            
-            if !model.picture.isEmpty {
-                if model.draftPicture.isEmpty {
-                    newUndoGroup()
-                    
-                    changeToDraft()
-                } else {
-                    newUndoGroup()
-                    if !model.picture.lines.isEmpty {
-                        let li = model.draftPicture.lines.count
-                        insertDraft(model.picture.lines.enumerated().map {
-                            IndexValue(value: $0.element, index: li + $0.offset)
-                        })
-                    }
-                    if !model.picture.planes.isEmpty {
-                        let pi = model.draftPicture.planes.count
-                        insertDraft(model.picture.planes.enumerated().map {
-                            IndexValue(value: $0.element, index: pi + $0.offset)
-                        })
-                    }
-                    set(Picture())
-                }
-                return true
-            }
-        }
-        return false
-    }
-    
-    func changeToDraft(withNoteInexes nis: [Int]) {
-        if !nis.isEmpty {
-            let notes = model.score.notes[nis]
-            removeNote(at: nis)
-            let ni = model.score.draftNotes.count
-            insertDraft(notes.enumerated().map {
-                IndexValue(value: $0.element, index: ni + $0.offset)
-            })
-        }
     }
     
     @MainActor

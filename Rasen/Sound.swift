@@ -2025,6 +2025,47 @@ extension ScoreOption {
     }
 }
 
+struct PitSelection: Hashable, Codable {
+    var sprolIs = Set<Int>()
+}
+extension PitSelection {
+    var isEmpty: Bool {
+        sprolIs.isEmpty
+    }
+}
+extension PitSelection: Protobuf {
+    init(_ pb: PBPitSelection) throws {
+        sprolIs = .init(pb.sprolIs.map { .init($0) })
+    }
+    var pb: PBPitSelection {
+        .with {
+            $0.sprolIs = sprolIs.map { .init($0) }
+        }
+    }
+}
+struct NoteSelection: Hashable, Codable {
+    var pitSelections = [Int: PitSelection]()
+}
+extension NoteSelection {
+    var isEmpty: Bool {
+        pitSelections.isEmpty
+    }
+}
+extension NoteSelection: Protobuf {
+    init(_ pb: PBNoteSelection) throws {
+        pitSelections = pb.pitSelections.reduce(into: .init()) {
+            $0[.init($1.key)] = try? .init($1.value)
+        }
+    }
+    var pb: PBNoteSelection {
+        .with {
+            $0.pitSelections = pitSelections.reduce(into: .init()) {
+                $0[.init($1.key)] = $1.value.pb
+            }
+        }
+    }
+}
+
 struct Score: BeatRangeType {
     static let minPitch = Rational(0, 12), maxPitch = Rational(10 * 12)
     static let pitchRange = minPitch ..< maxPitch
@@ -2044,6 +2085,24 @@ struct Score: BeatRangeType {
     var enabled = false
     var isShownSpectrogram = false
     var id = UUID()
+    
+    var noteSelections = [Int: NoteSelection]()
+    var selectedNotePitSprolIs: [Int: [Int: Set<Int>]] {
+        get {
+            noteSelections.reduce(into: .init()) {
+                $0[$1.key] = $1.value.pitSelections.reduce(into: .init()) {
+                    $0[$1.key] = $1.value.sprolIs
+                }
+            }
+        }
+        set {
+            noteSelections = newValue.reduce(into: .init()) {
+                $0[$1.key] = .init(pitSelections: $1.value.reduce(into: .init()) {
+                    $0[$1.key] = .init(sprolIs: $1.value)
+                })
+            }
+        }
+    }
 }
 extension Score: Protobuf {
     init(_ pb: PBScore) throws {

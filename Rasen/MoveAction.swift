@@ -184,7 +184,7 @@ final class MoveSheetsAction: DragEventAction {
             rootView.isHiddenSelected = true
             
             let p = rootView.convertScreenToWorld(sp)
-            let vs = rootView.sheetFramePositions(at: p)
+            let (isSelected, vs) = rootView.sheetFramePositions(at: p)
             var csv = CopiedSheetsValue()
             for value in vs {
                 if let sid = rootView.sheetID(at: value.shp) {
@@ -201,6 +201,9 @@ final class MoveSheetsAction: DragEventAction {
                 rootView.close(from: shps)
                 isNewUndoGroup = true
                 rootView.newUndoGroup()
+                if !isSelected && !rootView.world.selectedSheetIDs.isEmpty {
+                    rootView.setSelectedSheet([])
+                }
                 rootView.removeSheets(at: shps)
             } else {
                 rootView.cursor = .arrowWith(string: "Empty".localized)

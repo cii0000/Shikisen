@@ -125,6 +125,7 @@ struct Line {
     var interID = UUID()
     var interType = InterType.none
     var uuColor = Line.defaultUUColor
+    var isSelected = false
 }
 extension Line.Control {
     func littleEndianToBigEndian() -> Line.Control {
@@ -166,6 +167,8 @@ extension Line: Protobuf {
         } else {
             uuColor = Line.defaultUUColor
         }
+        
+        
     }
     var pb: PBLine {
         .with {

@@ -838,6 +838,18 @@ extension History {
         }
     }
     
+    mutating func error(_ result: UndoResult) {
+        self[result.version].values[result.valueIndex].error()
+    }
+    mutating func setReverse(_ item: T, with result: UndoResult) {
+        switch result.type {
+        case .undo:
+            self[result.version].values[result.valueIndex].undoItemValue?.redoItem = item
+        case .redo:
+            self[result.version].values[result.valueIndex].undoItemValue?.undoItem = item
+        }
+    }
+    
     func allGroups(_ handler: ([Int], [UndoGroup<T>]) -> ()) {
         rootBranch.allGroups(handler)
     }

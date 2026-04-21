@@ -618,7 +618,7 @@ final class TextAction: InputTextEventAction {
     private var inputKeyTimer = OneshotTimer(), isInputtingKey = false
     private var captureString = "", captureOrigin: Point?,
                 captureSize: Double?, captureWidthCount: Double?,
-                captureOrigins = [Point](),
+                captureOrigins = [Point](), captureSheetSelection: SheetSelection?,
                 isFirstInputKey = false
     
     func begin(atScreen sp: Point) {
@@ -922,6 +922,7 @@ final class TextAction: InputTextEventAction {
         isCapturing = true
         if !inputKeyTimer.isWait {
             self.captureString = textView.model.string
+            self.captureSheetSelection = sheetView.model.selection
             self.captureOrigin = textView.model.origin
             self.captureSize = textView.model.size
             self.captureWidthCount = textView.model.widthCount
@@ -1050,6 +1051,11 @@ final class TextAction: InputTextEventAction {
             sheetView.newUndoGroup()
         }
         
+        let sheetSelection = sheetView.model.selection
+        if let captureSheetSelection, captureSheetSelection != sheetSelection {
+            sheetView.capture(old: captureSheetSelection)
+            self.captureSheetSelection = sheetSelection
+        }
         if let value = value {
             sheetView.capture(intRange: value.intRange,
                               subString: value.subString,
