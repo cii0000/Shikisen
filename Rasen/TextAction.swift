@@ -722,6 +722,7 @@ final class TextAction: InputTextEventAction {
                     }
                     if isNewUndoGroup {
                         sheetView.newUndoGroup()
+                        sheetView.unselect()
                     }
                     sheetView.replace(note, at: noteI)
                 }
@@ -761,12 +762,16 @@ final class TextAction: InputTextEventAction {
                     note.beatRange.end += .init(1, 2)
                 }
                 sheetView.newUndoGroup()
+                sheetView.unselect()
                 sheetView.replace([IndexValue(value: note, index: noteI)])
                 appendLyric(atPit: pitI + 1, atNote: noteI, isNewUndoGroup: false)
             } else if event.inputKeyType.isText {
                 sheetView.newUndoGroup()
+                sheetView.unselect()
                 sheetView.append(Note(beatRange: beat ..< beat + .init(1, 2), pitch: pitch, pits: [.init()]))
                 appendLyric(atPit: 0, atNote: scoreView.model.notes.count - 1, isNewUndoGroup: false)
+            } else {
+                rootView.cursor = .block
             }
             return
         }
@@ -822,6 +827,8 @@ final class TextAction: InputTextEventAction {
                 isMovedCursor = false
             } else if event.inputKeyType.isInputText {
                 appendEmptyText(event, at: inP, in: sheetView)
+            } else {
+                rootView.cursor = .block
             }
         }
     }
@@ -832,6 +839,7 @@ final class TextAction: InputTextEventAction {
                         size: rootView.sheetTextSize, origin: inP,
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
+        sheetView.unselect()
         sheetView.append(text)
         
         self.isFirstInputKey = true
@@ -858,6 +866,7 @@ final class TextAction: InputTextEventAction {
                         size: rootView.sheetTextSize, origin: inP,
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
+        sheetView.unselect()
         sheetView.append(text)
         
         self.isFirstInputKey = true
@@ -1060,7 +1069,11 @@ final class TextAction: InputTextEventAction {
             sheetView.newUndoGroup()
         }
         
-        let sheetSelection = sheetView.model.selection
+        var sheetSelection = sheetView.model.selection
+        sheetView.textsView.elementViews.enumerated().forEach {
+            sheetSelection.textSelections[$0.offset] = $0.element.selectedRanges.isEmpty ?
+            nil : .init(ranges: $0.element.selectedIntRanges)
+        }
         if let captureSheetSelection, captureSheetSelection != sheetSelection {
             sheetView.capture(old: captureSheetSelection)
             self.captureSheetSelection = sheetSelection
@@ -1118,7 +1131,7 @@ final class TextAction: InputTextEventAction {
         var removedText = textView.model
         removedText.string = String(removedText.string[range])
         removedText.origin += minP
-        let ssValue = SheetValue(texts: [removedText])
+        let ssValue = SheetValue(texts: [removedText], isSelected: false)
         
         let removeRange: Range<String.Index>
         if textView.typesetter.isFirst(at: range.lowerBound) && textView.typesetter.isLast(at: range.upperBound) {
@@ -1146,6 +1159,11 @@ final class TextAction: InputTextEventAction {
         textView.unmark()
         if let value = captureString.difference(to: textView.model.string) {
             sheetView.newUndoGroup()
+            var nSelection = sheetView.model.selection
+            sheetView.textsView.elementViews.enumerated().forEach {
+                nSelection.textSelections[$0.offset] = $0.element.selectedRanges.isEmpty ?
+                nil : .init(ranges: $0.element.selectedIntRanges)
+            }
             if captureSheetSelection != sheetView.model.selection {
                 sheetView.capture(old: captureSheetSelection)
             }

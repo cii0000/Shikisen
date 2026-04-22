@@ -42,15 +42,12 @@ final class GoPreviousAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.rootView.closeLookingUp()
+            rootAction.closeAllPanelsAndStop(at: p)
             
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
@@ -127,16 +124,13 @@ final class GoNextAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.rootView.closeLookingUp()
+            rootAction.closeAllPanelsAndStop(at: p)
             
             sheetView = rootView.sheetView(at: p)
         
@@ -244,15 +238,12 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.rootView.closeLookingUp()
+            rootAction.closeAllPanelsAndStop(at: p)
             
             beganSP = event.screenPoint
             beganEventTime = event.time
@@ -468,13 +459,13 @@ final class PlayAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            rootAction.rootView.closeLookingUp()
+            rootView.closeAllPanels(at: p)
             
             let shp = rootView.sheetPosition(at: p)
             if let sheetView = rootView.sheetView(at: shp) {
@@ -560,14 +551,13 @@ final class InsertAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 var isNewUndoGroup = true
@@ -596,8 +586,7 @@ final class InsertAction: InputKeyEventAction {
                     if isNewUndoGroup {
                         sheetView.newUndoGroup()
                     }
-                    sheetView.removeLines(at: [li])
-                    sheetView.insert([.init(value: line, index: li)])
+                    sheetView.replace(line, at: li)
                     
                     let rp = sheetView.convertToWorld(np)
                     
@@ -805,14 +794,13 @@ final class InterpolateAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let sheetP = sheetView.scoreView.convertFromWorld(p)
@@ -1746,14 +1734,13 @@ final class DisconnectAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let scoreView = sheetView.scoreView

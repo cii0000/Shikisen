@@ -382,6 +382,7 @@ message PBSheet {
     repeated PBBorder borders = 4;
     PBRect mainFrame = 12;
     PBUUColor backgroundUUColor = 5;
+    PBSheetSelection selection = 13;
 }
 
 message PBWorld {
@@ -496,6 +497,7 @@ message PBSheetValue {
     int64 rootKeyframeIndex = 6;
     repeated PBKeyframe keyframes = 7;
     int64 keyframeBeganIndex = 8;
+    bool isSelected = 10;
 }
 
 message PBInt64Array {
@@ -581,6 +583,8 @@ message PBSheetUndoItem {
         int64 removeLastPlanes = 5;
         PBLineIndexValueArray insertLines = 6;
         PBPlaneIndexValueArray insertPlanes = 7;
+        PBLineIndexValueArray replaceLines = 54;
+        PBPlaneIndexValueArray replacePlanes = 55;
         PBInt64Array removeLines = 8;
         PBInt64Array removePlanes = 9;
         PBPlaneValue setPlaneValue = 10;
@@ -592,6 +596,7 @@ message PBSheetUndoItem {
         PBInt64Array removeDraftPlanes = 16;
         PBPicture setDraftPicture = 17;
         PBTextIndexValueArray insertTexts = 18;
+        PBTextIndexValueArray replaceTexts = 56;
         PBInt64Array removeTexts = 19;
         PBTextValueIndexValue replaceString = 20;
         PBColorValue changedColors = 21;
@@ -669,6 +674,7 @@ message PBPlanesValue {
 message PBNotesValue {
     repeated PBNote notes = 1;
     PBRational deltaPitch = 2;
+    bool isSelected = 3;
 }
 message PBInterOptionsValue {
     repeated PBInterOption ids = 1;
@@ -687,7 +693,6 @@ message PBPastableObject {
         PBUUColor uuColor = 8;
         PBAnimation animation = 9;
         PBInterOptionsValue ids = 10;
-        PBScore score = 11;
         PBContent content = 22;
         PBImage image = 21;
         PBRationalRange beatRange = 12;

@@ -258,7 +258,6 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     var selectedNotePitSprolIs = [Int: [Int: Set<Int>]]() {
         didSet {
             guard selectedNotePitSprolIs != oldValue else { return }
-            binder[keyPath: keyPath].selectedNotePitSprolIs = selectedNotePitSprolIs
             updateWithSelected(old: oldValue)
         }
     }
@@ -408,8 +407,6 @@ extension ScoreView {
     }
     func updateNotes() {
         if model.enabled {
-            selectedNotePitSprolIs = [:]
-            
             let vs = model.notes.map { noteNode(from: $0) }
             let nodes = vs.map { $0.node }
             notesNode.children = nodes
@@ -418,8 +415,6 @@ extension ScoreView {
             reverbsNode.children = vs.map { $0.reverbNode }
             noteLines = vs.map { $0.noteLine }
         } else {
-            selectedNotePitSprolIs = [:]
-            
             notesNode.children = []
             chordResults = []
             tonesNode.children = []
@@ -578,23 +573,6 @@ extension ScoreView {
         scoreTrackItem?.insert(nivs, with: model)
     }
     func replace(_ nivs: [IndexValue<Note>]) {
-        var isUpdate = false
-        nivs.forEach {
-            let noteI = $0.index
-            let newValue = $0.value, oldValue = unupdateModel.notes[noteI]
-            if newValue.pits.count != oldValue.pits.count {
-                selectedNotePitSprolIs[noteI] = nil
-            } else {
-                if zip(newValue.pits, oldValue.pits).contains(where: { (newPit, oldPit) in
-                    newPit.tone.spectlope.sprols.count != oldPit.tone.spectlope.sprols.count
-                }) {
-                    selectedNotePitSprolIs[noteI] = newValue.pits.count.range.reduce(into: .init()) { $0[$1] = [] }
-                } else {
-                    isUpdate = true
-                }
-            }
-        }
-        
         unupdateModel.notes.replace(nivs)
         let vs = nivs.map { IndexValue(value: noteNode(from: $0.value), index: $0.index) }
         let noivs = vs.map { IndexValue(value: $0.value.node, index: $0.index) }
@@ -610,9 +588,7 @@ extension ScoreView {
         updateChord()
         scoreTrackItem?.replace(nivs, with: model)
         
-        if isUpdate {
-            updateWithSelected(old: selectedNotePitSprolIs)
-        }
+        updateWithSelected(old: selectedNotePitSprolIs)
     }
     func remove(at noteI: Int) {
         unupdateModel.notes.remove(at: noteI)
@@ -639,20 +615,6 @@ extension ScoreView {
             unupdateModel.notes[noteI]
         }
         set {
-            let oldValue = unupdateModel.notes[noteI]
-            var isUpdate = false
-            if newValue.pits.count != oldValue.pits.count {
-                selectedNotePitSprolIs[noteI] = nil
-            } else {
-                if zip(newValue.pits, oldValue.pits).contains(where: { (newPit, oldPit) in
-                    newPit.tone.spectlope.sprols.count != oldPit.tone.spectlope.sprols.count
-                }) {
-                    selectedNotePitSprolIs[noteI] = newValue.pits.count.range.reduce(into: .init()) { $0[$1] = [] }
-                } else {
-                    isUpdate = true
-                }
-            }
-            
             unupdateModel.notes[noteI] = newValue
             let (noteNode, toneNode, reverbNode, noteLine) = noteNode(from: newValue)
             notesNode.children[noteI] = noteNode
@@ -663,9 +625,7 @@ extension ScoreView {
             updateChord()
             scoreTrackItem?.replace([.init(value: newValue, index: noteI)], with: model)
             
-            if isUpdate {
-                updateWithSelected(old: selectedNotePitSprolIs)
-            }
+            updateWithSelected(old: selectedNotePitSprolIs)
         }
     }
     

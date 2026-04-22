@@ -36,7 +36,6 @@ extension UU: Protobuf where Value == Color {
 
 struct Plane {
     var topolygon = Topolygon(), uuColor = UU(Color())
-    var isSelected = false
 }
 extension Plane: Protobuf {
     init(_ pb: PBPlane) throws {

@@ -202,6 +202,7 @@ final class LineAction: Action {
             if rootAction.isPlaying(with: event) {
                 rootAction.stopPlaying(with: event)
             }
+            rootView.closeLookingUp()
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = noteSheetView, sheetView.model.score.enabled {
@@ -439,7 +440,9 @@ final class LineAction: Action {
                     return note
                 }
                 
-                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes, deltaPitch: pitch))]
+                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
+                                                                          deltaPitch: pitch,
+                                                                          isSelected: true))]
                 if isNewUndoGroupNote {
                     sheetView.newUndoGroup()
                 }
@@ -499,8 +502,12 @@ final class LineAction: Action {
         if isStopPlaying || rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
             isStopPlaying = true
+            
+            rootView.closeLookingUp()
             return
         }
+        rootView.closeLookingUp()
+        
         drawLine(with: event, isStraight: false)
     }
     func drawStraightLine(with event: DragEvent) {
@@ -1208,9 +1215,12 @@ final class LineAction: Action {
             if rootAction.isPlaying(with: event) {
                 rootAction.stopPlaying(with: event)
                 if !isScore {
+                    rootView.closeLookingUp()
                     return
                 }
             }
+            rootView.closeLookingUp()
+            
             if isEditingSheet {
                 updateClipBoundsAndIndexRange(at: p)
             }
@@ -1455,7 +1465,7 @@ final class LineAction: Action {
                 }
             }
         } else {
-            var value = SheetValue()
+            var value = SheetValue(isSelected: true)
             for shp in nearestShps {
                 let b = rootView.sheetFrame(with: shp) - centerOrigin
                 if lb.intersects(b),

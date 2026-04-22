@@ -160,6 +160,7 @@ struct SheetValue {
     var id = UUID(), rootKeyframeIndex = 0
     var keyframes = [Keyframe]()
     var keyframeBeganIndex = 0
+    var isSelected: Bool
 }
 extension SheetValue {
     var string: String? {
@@ -194,6 +195,7 @@ extension SheetValue: Protobuf {
         keyframes = try pb.keyframes.map { try Keyframe($0) }
         keyframeBeganIndex = Int(pb.keyframeBeganIndex)
             .clipped(min: 0, max: keyframes.count - 1)
+        isSelected = pb.isSelected
     }
     var pb: PBSheetValue {
         .with {
@@ -206,6 +208,7 @@ extension SheetValue: Protobuf {
             $0.rootKeyframeIndex = Int64(rootKeyframeIndex)
             $0.keyframes = keyframes.map { $0.pb }
             $0.keyframeBeganIndex = Int64(keyframeBeganIndex)
+            $0.isSelected = isSelected
         }
     }
 }
@@ -220,7 +223,8 @@ extension SheetValue: AppliableTransform {
                    id: lhs.id,
                    rootKeyframeIndex: lhs.rootKeyframeIndex,
                    keyframes: lhs.keyframes.map { $0 * rhs },
-                   keyframeBeganIndex: lhs.keyframeBeganIndex)
+                   keyframeBeganIndex: lhs.keyframeBeganIndex,
+                   isSelected: lhs.isSelected)
     }
 }
 extension SheetValue {
@@ -236,7 +240,8 @@ extension SheetValue {
                    id: lhs.id == rhs.id ? lhs.id : UUID(),
                    rootKeyframeIndex: lhs.rootKeyframeIndex,
                    keyframes: lhs.keyframes + rhs.keyframes,
-                   keyframeBeganIndex: lhs.keyframeBeganIndex)
+                   keyframeBeganIndex: lhs.keyframeBeganIndex,
+                   isSelected: lhs.isSelected)
     }
     static func += (lhs: inout SheetValue, rhs: SheetValue) {
         lhs.lines += rhs.lines
@@ -583,6 +588,8 @@ enum SheetUndoItem {
     case removeLastPlanes(count: Int)
     case insertLines(_ lineIndexValues: [IndexValue<Line>])
     case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case replaceLines(_ lineIndexValue: [IndexValue<Line>])
+    case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
     case removeLines(lineIndexes: [Int])
     case removePlanes(planeIndexes: [Int])
     case setPlaneValue(_ planeValue: PlaneValue)
@@ -594,6 +601,7 @@ enum SheetUndoItem {
     case removeDraftPlanes(planeIndexes: [Int])
     case setDraftPicture(_ picture: Picture)
     case insertTexts(_ textIndexValues: [IndexValue<Text>])
+    case replaceTexts(_ textIndexValue: [IndexValue<Text>])
     case removeTexts(textIndexes: [Int])
     case replaceString(_ textIndexValue: IndexValue<TextValue>)
     case changedColors(_ colorUndoValue: ColorValue)
@@ -637,6 +645,8 @@ extension SheetUndoItem: UndoItem {
         case .removeLastPlanes: .unreversible
         case .insertLines: .reversible
         case .insertPlanes: .reversible
+        case .replaceLines: .lazyReversible
+        case .replacePlanes: .lazyReversible
         case .removeLines: .unreversible
         case .removePlanes: .unreversible
         case .setPlaneValue: .lazyReversible
@@ -648,6 +658,7 @@ extension SheetUndoItem: UndoItem {
         case .removeDraftPlanes: .unreversible
         case .setDraftPicture: .lazyReversible
         case .insertTexts: .reversible
+        case .replaceTexts: .lazyReversible
         case .removeTexts: .unreversible
         case .replaceString: .lazyReversible
         case .changedColors: .lazyReversible
@@ -698,6 +709,10 @@ extension SheetUndoItem: UndoItem {
              .removeLines(lineIndexes: livs.map { $0.index })
         case .insertPlanes(let pivs):
              .removePlanes(planeIndexes: pivs.map { $0.index })
+        case .replaceLines:
+             self
+        case .replacePlanes:
+             self
         case .removeLines:
              nil
         case .removePlanes:
@@ -720,6 +735,8 @@ extension SheetUndoItem: UndoItem {
              self
         case .insertTexts(let tivs):
              .removeTexts(textIndexes: tivs.map { $0.index })
+        case .replaceTexts:
+             self
         case .removeTexts:
              nil
         case .replaceString(_):
@@ -817,6 +834,10 @@ extension SheetUndoItem: Protobuf {
             self = .insertLines(try [IndexValue<Line>](lineIndexValues))
         case .insertPlanes(let planeIndexValues):
             self = .insertPlanes(try [IndexValue<Plane>](planeIndexValues))
+        case .replaceLines(let lines):
+            self = .replaceLines(try [IndexValue<Line>](lines))
+        case .replacePlanes(let planes):
+            self = .replacePlanes(try [IndexValue<Plane>](planes))
         case .removeLines(let lineIndexes):
             self = .removeLines(lineIndexes: try [Int](lineIndexes))
         case .removePlanes(let planeIndexes):
@@ -839,6 +860,8 @@ extension SheetUndoItem: Protobuf {
             self = .setDraftPicture(try Picture(picture))
         case .insertTexts(let texts):
             self = .insertTexts(try [IndexValue<Text>](texts))
+        case .replaceTexts(let texts):
+            self = .replaceTexts(try [IndexValue<Text>](texts))
         case .removeTexts(let textIndexes):
             self = .removeTexts(textIndexes: try [Int](textIndexes))
         case .replaceString(let textValue):
@@ -922,6 +945,10 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .insertLines(lineIndexValues.pb)
             case .insertPlanes(let planeIndexValues):
                 $0.value = .insertPlanes(planeIndexValues.pb)
+            case .replaceLines(let livs):
+                $0.value = .replaceLines(livs.pb)
+            case .replacePlanes(let pivs):
+                $0.value = .replacePlanes(pivs.pb)
             case .removeLines(let lineIndexes):
                 $0.value = .removeLines(lineIndexes.pb)
             case .removePlanes(let planeIndexes):
@@ -944,6 +971,8 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .setDraftPicture(picture.pb)
             case .insertTexts(let texts):
                 $0.value = .insertTexts(texts.pb)
+            case .replaceTexts(let tivs):
+                $0.value = .replaceTexts(tivs.pb)
             case .removeTexts(let textIndexes):
                 $0.value = .removeTexts(textIndexes.pb)
             case .replaceString(let textValue):
@@ -1021,6 +1050,8 @@ extension SheetUndoItem: Codable {
         case removeLastPlanes = "4"
         case insertLines = "5"
         case insertPlanes = "6"
+        case replaceLines = "53"
+        case replacePlanes = "54"
         case removeLines = "7"
         case removePlanes = "8"
         case setPlaneValue = "9"
@@ -1032,6 +1063,7 @@ extension SheetUndoItem: Codable {
         case removeDraftPlanes = "15"
         case setDraftPicture = "16"
         case insertTexts = "17"
+        case replaceTexts = "55"
         case removeTexts = "18"
         case replaceString = "19"
         case changedColors = "20"
@@ -1083,6 +1115,10 @@ extension SheetUndoItem: Codable {
             self = .insertLines(try container.decode([IndexValue<Line>].self))
         case .insertPlanes:
             self = .insertPlanes(try container.decode([IndexValue<Plane>].self))
+        case .replaceLines:
+            self = .replaceLines(try container.decode([IndexValue<Line>].self))
+        case .replacePlanes:
+            self = .replacePlanes(try container.decode([IndexValue<Plane>].self))
         case .removeLines:
             self = .removeLines(lineIndexes: try container.decode([Int].self))
         case .removePlanes:
@@ -1105,6 +1141,8 @@ extension SheetUndoItem: Codable {
             self = .setDraftPicture(try container.decode(Picture.self))
         case .insertTexts:
             self = .insertTexts(try container.decode([IndexValue<Text>].self))
+        case .replaceTexts:
+            self = .replaceTexts(try container.decode([IndexValue<Text>].self))
         case .removeTexts:
             self = .removeTexts(textIndexes: try container.decode([Int].self))
         case .replaceString:
@@ -1195,6 +1233,12 @@ extension SheetUndoItem: Codable {
         case .insertPlanes(let planeIndexValues):
             try container.encode(CodingTypeKey.insertPlanes)
             try container.encode(planeIndexValues)
+        case .replaceLines(let vs):
+            try container.encode(CodingTypeKey.replaceLines)
+            try container.encode(vs)
+        case .replacePlanes(let vs):
+            try container.encode(CodingTypeKey.replacePlanes)
+            try container.encode(vs)
         case .removeLines(let lineIndexes):
             try container.encode(CodingTypeKey.removeLines)
             try container.encode(lineIndexes)
@@ -1228,6 +1272,9 @@ extension SheetUndoItem: Codable {
         case .insertTexts(let texts):
             try container.encode(CodingTypeKey.insertTexts)
             try container.encode(texts)
+        case .replaceTexts(let vs):
+            try container.encode(CodingTypeKey.replaceTexts)
+            try container.encode(vs)
         case .removeTexts(let textIndexes):
             try container.encode(CodingTypeKey.removeTexts)
             try container.encode(textIndexes)
@@ -1337,6 +1384,8 @@ extension SheetUndoItem: CustomStringConvertible {
         case .removeLastPlanes: "removeLastPlanes"
         case .insertLines: "insertLines"
         case .insertPlanes: "insertPlane"
+        case .replaceLines: "replaceLines"
+        case .replacePlanes: "replacePlanes"
         case .removeLines: "removeLines"
         case .removePlanes: "removePlanes"
         case .setPlaneValue: "setPlaneValue"
@@ -1348,6 +1397,7 @@ extension SheetUndoItem: CustomStringConvertible {
         case .removeDraftPlanes: "removeDraftPlanes"
         case .setDraftPicture: "setDraftPicture"
         case .insertTexts: "insertTexts"
+        case .replaceTexts: "replaceTexts"
         case .removeTexts: "removeTexts"
         case .replaceString: "replaceString"
         case .changedColors: "changedColors"
@@ -1515,28 +1565,6 @@ extension KeyframeOption: Protobuf {
 }
 extension KeyframeOption: Hashable, Codable {}
 
-struct KeyframeSelection: Hashable, Codable {
-    var lineIs = Set<Int>()
-    var planeIs = Set<Int>()
-}
-extension KeyframeSelection {
-    var isEmpty: Bool {
-        lineIs.isEmpty && planeIs.isEmpty
-    }
-}
-extension KeyframeSelection: Protobuf {
-    init(_ pb: PBKeyframeSelection) throws {
-        lineIs = .init(pb.lineIs.map { .init($0) })
-        planeIs = .init(pb.planeIs.map { .init($0) })
-    }
-    var pb: PBKeyframeSelection {
-        .with {
-            $0.lineIs = lineIs.map { .init($0) }
-            $0.planeIs = planeIs.map { .init($0) }
-        }
-    }
-}
-
 struct Keyframe: Picable {
     var picture = Picture() {
         didSet {
@@ -1548,7 +1576,6 @@ struct Keyframe: Picable {
     var beat = Rational()
     var previousPosition = Point(), nextPosition = Point()
     private(set) var isKey = true
-    var isSelected = false
     
     init(picture: Picture = Picture(), draftPicture: Picture = Picture(),
          beat: Rational = Keyframe.defaultDurBeat,
@@ -1576,16 +1603,6 @@ extension Keyframe {
     }
     var containsInterpolated: Bool {
         picture.lines.contains { $0.interType == .interpolated }
-    }
-    
-    var selection: KeyframeSelection? {
-        let lineIs = picture.lines.count.range.filter { picture.lines[$0].isSelected }
-        let planeIs = picture.planes.count.range.filter { picture.planes[$0].isSelected }
-        return if !lineIs.isEmpty || !planeIs.isEmpty || isSelected {
-            .init(lineIs: .init(lineIs), planeIs: .init(planeIs))
-        } else {
-            nil
-        }
     }
     
 //    var isKey: Bool {
@@ -2381,6 +2398,70 @@ extension TextSelection: Protobuf {
         }
     }
 }
+
+struct PitSelection: Hashable, Codable {
+    var sprolIs = Set<Int>()
+}
+extension PitSelection {
+    var isEmpty: Bool {
+        sprolIs.isEmpty
+    }
+}
+extension PitSelection: Protobuf {
+    init(_ pb: PBPitSelection) throws {
+        sprolIs = .init(pb.sprolIs.map { .init($0) })
+    }
+    var pb: PBPitSelection {
+        .with {
+            $0.sprolIs = sprolIs.map { .init($0) }
+        }
+    }
+}
+struct NoteSelection: Hashable, Codable {
+    var pitSelections = [Int: PitSelection]()
+}
+extension NoteSelection {
+    var isEmpty: Bool {
+        pitSelections.isEmpty
+    }
+}
+extension NoteSelection: Protobuf {
+    init(_ pb: PBNoteSelection) throws {
+        pitSelections = pb.pitSelections.reduce(into: .init()) {
+            $0[.init($1.key)] = try? .init($1.value)
+        }
+    }
+    var pb: PBNoteSelection {
+        .with {
+            $0.pitSelections = pitSelections.reduce(into: .init()) {
+                $0[.init($1.key)] = $1.value.pb
+            }
+        }
+    }
+}
+
+struct KeyframeSelection: Hashable, Codable {
+    var lineIs = Set<Int>()
+    var planeIs = Set<Int>()
+}
+extension KeyframeSelection {
+    var isEmpty: Bool {
+        lineIs.isEmpty && planeIs.isEmpty
+    }
+}
+extension KeyframeSelection: Protobuf {
+    init(_ pb: PBKeyframeSelection) throws {
+        lineIs = .init(pb.lineIs.map { .init($0) })
+        planeIs = .init(pb.planeIs.map { .init($0) })
+    }
+    var pb: PBKeyframeSelection {
+        .with {
+            $0.lineIs = lineIs.map { .init($0) }
+            $0.planeIs = planeIs.map { .init($0) }
+        }
+    }
+}
+
 struct SheetSelection: Hashable, Codable {
     static let empty = Self()
     
@@ -2393,6 +2474,11 @@ extension SheetSelection {
     var isEmpty: Bool {
         keyframeSelections.isEmpty && noteSelections.isEmpty
         && textSelections.isEmpty && contentIs.isEmpty
+    }
+    func isChangeSelectedFrame(old: SheetSelection) -> Bool {
+        keyframeSelections != old.keyframeSelections
+        || textSelections != old.textSelections
+        || contentIs != old.contentIs
     }
     var notePitSprolIs: [Int: [Int: Set<Int>]] {
         get {
@@ -2448,11 +2534,10 @@ struct Sheet {
     var borders = [Border]()
     var mainFrame = Sheet.defaultBounds
     var backgroundUUColor = Sheet.defalutBackgroundUUColor
+    var selection = SheetSelection.empty
 }
 extension Sheet: Protobuf {
     init(_ pb: PBSheet) throws {
-        
-        
         if let animation = try? Animation(pb.animation), !animation.isEmpty {
             self.animation = animation
         } else {
@@ -2470,6 +2555,10 @@ extension Sheet: Protobuf {
         self.mainFrame = mainFrame.isEmpty ? Sheet.defaultBounds : mainFrame
         backgroundUUColor = (try? UUColor(pb.backgroundUucolor))
             ?? Sheet.defalutBackgroundUUColor
+        selection = (try? .init(pb.selection)) ?? .empty
+        if !checkConsistency(selection) {
+            selection = .empty
+        }
     }
     var pb: PBSheet {
         .with {
@@ -2487,6 +2576,7 @@ extension Sheet: Protobuf {
                 $0.mainFrame = mainFrame.pb
             }
             $0.backgroundUucolor = backgroundUUColor.pb
+            $0.selection = selection.pb
         }
     }
 }
@@ -2526,20 +2616,6 @@ extension Sheet {
         picture.lines.isEmpty && draftPicture.lines.isEmpty
     }
     
-    var selection: SheetSelection {
-        .init(keyframeSelections: animation.keyframes.enumerated().reduce(into: .init()) {
-            if let selection = $1.element.selection {
-                $0[$1.offset] = selection
-            }
-        },
-              noteSelections: score.noteSelections,
-              textSelections: texts.enumerated().reduce(into: .init()) {
-            if !$1.element.selectedIntRanges.isEmpty {
-                $0[$1.offset] = .init(ranges: $1.element.selectedIntRanges)
-            }
-        },
-              contentIs: .init(contents.count.range.filter { contents[$0].isSelected }))
-    }
     func checkConsistency(_ selection: SheetSelection) -> Bool {
         if let maxKeyframeI = selection.keyframeSelections.keys.max() {
             if maxKeyframeI >= animation.keyframes.count {
@@ -2576,6 +2652,8 @@ extension Sheet {
                             }
                         }
                     }
+                } else {
+                    return false
                 }
             }
         }

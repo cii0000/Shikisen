@@ -1887,6 +1887,15 @@ struct PBSheet: @unchecked Sendable {
   /// Clears the value of `backgroundUucolor`. Subsequent reads from it will return its default value.
   mutating func clearBackgroundUucolor() {_uniqueStorage()._backgroundUucolor = nil}
 
+  var selection: PBSheetSelection {
+    get {return _storage._selection ?? PBSheetSelection()}
+    set {_uniqueStorage()._selection = newValue}
+  }
+  /// Returns true if `selection` has been explicitly set.
+  var hasSelection: Bool {return _storage._selection != nil}
+  /// Clears the value of `selection`. Subsequent reads from it will return its default value.
+  mutating func clearSelection() {_uniqueStorage()._selection = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -2451,6 +2460,8 @@ struct PBSheetValue: Sendable {
 
   var keyframeBeganIndex: Int64 = 0
 
+  var isSelected: Bool = false
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -2815,6 +2826,22 @@ struct PBSheetUndoItem: Sendable {
     set {value = .insertPlanes(newValue)}
   }
 
+  var replaceLines: PBLineIndexValueArray {
+    get {
+      if case .replaceLines(let v)? = value {return v}
+      return PBLineIndexValueArray()
+    }
+    set {value = .replaceLines(newValue)}
+  }
+
+  var replacePlanes: PBPlaneIndexValueArray {
+    get {
+      if case .replacePlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArray()
+    }
+    set {value = .replacePlanes(newValue)}
+  }
+
   var removeLines: PBInt64Array {
     get {
       if case .removeLines(let v)? = value {return v}
@@ -2901,6 +2928,14 @@ struct PBSheetUndoItem: Sendable {
       return PBTextIndexValueArray()
     }
     set {value = .insertTexts(newValue)}
+  }
+
+  var replaceTexts: PBTextIndexValueArray {
+    get {
+      if case .replaceTexts(let v)? = value {return v}
+      return PBTextIndexValueArray()
+    }
+    set {value = .replaceTexts(newValue)}
   }
 
   var removeTexts: PBInt64Array {
@@ -3169,6 +3204,8 @@ struct PBSheetUndoItem: Sendable {
     case removeLastPlanes(Int64)
     case insertLines(PBLineIndexValueArray)
     case insertPlanes(PBPlaneIndexValueArray)
+    case replaceLines(PBLineIndexValueArray)
+    case replacePlanes(PBPlaneIndexValueArray)
     case removeLines(PBInt64Array)
     case removePlanes(PBInt64Array)
     case setPlaneValue(PBPlaneValue)
@@ -3180,6 +3217,7 @@ struct PBSheetUndoItem: Sendable {
     case removeDraftPlanes(PBInt64Array)
     case setDraftPicture(PBPicture)
     case insertTexts(PBTextIndexValueArray)
+    case replaceTexts(PBTextIndexValueArray)
     case removeTexts(PBInt64Array)
     case replaceString(PBTextValueIndexValue)
     case changedColors(PBColorValue)
@@ -3425,6 +3463,8 @@ struct PBNotesValue: Sendable {
   /// Clears the value of `deltaPitch`. Subsequent reads from it will return its default value.
   mutating func clearDeltaPitch() {self._deltaPitch = nil}
 
+  var isSelected: Bool = false
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -3544,14 +3584,6 @@ struct PBPastableObject: Sendable {
     set {value = .ids(newValue)}
   }
 
-  var score: PBScore {
-    get {
-      if case .score(let v)? = value {return v}
-      return PBScore()
-    }
-    set {value = .score(newValue)}
-  }
-
   var content: PBContent {
     get {
       if case .content(let v)? = value {return v}
@@ -3645,7 +3677,6 @@ struct PBPastableObject: Sendable {
     case uuColor(PBUUColor)
     case animation(PBAnimation)
     case ids(PBInterOptionsValue)
-    case score(PBScore)
     case content(PBContent)
     case image(PBImage)
     case beatRange(PBRationalRange)
@@ -6560,6 +6591,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     4: .same(proto: "borders"),
     12: .same(proto: "mainFrame"),
     5: .same(proto: "backgroundUUColor"),
+    13: .same(proto: "selection"),
   ]
 
   fileprivate class _StorageClass {
@@ -6572,6 +6604,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     var _borders: [PBBorder] = []
     var _mainFrame: PBRect? = nil
     var _backgroundUucolor: PBUUColor? = nil
+    var _selection: PBSheetSelection? = nil
 
     #if swift(>=5.10)
       // This property is used as the initial default value for new instances of the type.
@@ -6595,6 +6628,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       _borders = source._borders
       _mainFrame = source._mainFrame
       _backgroundUucolor = source._backgroundUucolor
+      _selection = source._selection
     }
   }
 
@@ -6622,6 +6656,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._score) }()
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._contents) }()
         case 12: try { try decoder.decodeSingularMessageField(value: &_storage._mainFrame) }()
+        case 13: try { try decoder.decodeSingularMessageField(value: &_storage._selection) }()
         default: break
         }
       }
@@ -6661,6 +6696,9 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       try { if let v = _storage._mainFrame {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
       } }()
+      try { if let v = _storage._selection {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6679,6 +6717,7 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
         if _storage._borders != rhs_storage._borders {return false}
         if _storage._mainFrame != rhs_storage._mainFrame {return false}
         if _storage._backgroundUucolor != rhs_storage._backgroundUucolor {return false}
+        if _storage._selection != rhs_storage._selection {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -7660,6 +7699,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     6: .same(proto: "rootKeyframeIndex"),
     7: .same(proto: "keyframes"),
     8: .same(proto: "keyframeBeganIndex"),
+    10: .same(proto: "isSelected"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -7677,6 +7717,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.keyframes) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.keyframeBeganIndex) }()
       case 9: try { try decoder.decodeRepeatedMessageField(value: &self.contents) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.isSelected) }()
       default: break
       }
     }
@@ -7714,6 +7755,9 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     if !self.contents.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.contents, fieldNumber: 9)
     }
+    if self.isSelected != false {
+      try visitor.visitSingularBoolField(value: self.isSelected, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7727,6 +7771,7 @@ extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     if lhs.rootKeyframeIndex != rhs.rootKeyframeIndex {return false}
     if lhs.keyframes != rhs.keyframes {return false}
     if lhs.keyframeBeganIndex != rhs.keyframeBeganIndex {return false}
+    if lhs.isSelected != rhs.isSelected {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8506,6 +8551,8 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     5: .same(proto: "removeLastPlanes"),
     6: .same(proto: "insertLines"),
     7: .same(proto: "insertPlanes"),
+    54: .same(proto: "replaceLines"),
+    55: .same(proto: "replacePlanes"),
     8: .same(proto: "removeLines"),
     9: .same(proto: "removePlanes"),
     10: .same(proto: "setPlaneValue"),
@@ -8517,6 +8564,7 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     16: .same(proto: "removeDraftPlanes"),
     17: .same(proto: "setDraftPicture"),
     18: .same(proto: "insertTexts"),
+    56: .same(proto: "replaceTexts"),
     19: .same(proto: "removeTexts"),
     20: .same(proto: "replaceString"),
     21: .same(proto: "changedColors"),
@@ -9187,6 +9235,45 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
           self.value = .setSelection(v)
         }
       }()
+      case 54: try {
+        var v: PBLineIndexValueArray?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .replaceLines(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .replaceLines(v)
+        }
+      }()
+      case 55: try {
+        var v: PBPlaneIndexValueArray?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .replacePlanes(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .replacePlanes(v)
+        }
+      }()
+      case 56: try {
+        var v: PBTextIndexValueArray?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .replaceTexts(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .replaceTexts(v)
+        }
+      }()
       default: break
       }
     }
@@ -9397,6 +9484,18 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     case .setSelection?: try {
       guard case .setSelection(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 53)
+    }()
+    case .replaceLines?: try {
+      guard case .replaceLines(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 54)
+    }()
+    case .replacePlanes?: try {
+      guard case .replacePlanes(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 55)
+    }()
+    case .replaceTexts?: try {
+      guard case .replaceTexts(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 56)
     }()
     case nil: break
     }
@@ -9798,6 +9897,7 @@ extension PBNotesValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "notes"),
     2: .same(proto: "deltaPitch"),
+    3: .same(proto: "isSelected"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -9808,6 +9908,7 @@ extension PBNotesValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.notes) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._deltaPitch) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.isSelected) }()
       default: break
       }
     }
@@ -9824,12 +9925,16 @@ extension PBNotesValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     try { if let v = self._deltaPitch {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if self.isSelected != false {
+      try visitor.visitSingularBoolField(value: self.isSelected, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBNotesValue, rhs: PBNotesValue) -> Bool {
     if lhs.notes != rhs.notes {return false}
     if lhs._deltaPitch != rhs._deltaPitch {return false}
+    if lhs.isSelected != rhs.isSelected {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9896,7 +10001,6 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     8: .same(proto: "uuColor"),
     9: .same(proto: "animation"),
     10: .same(proto: "ids"),
-    11: .same(proto: "score"),
     22: .same(proto: "content"),
     21: .same(proto: "image"),
     12: .same(proto: "beatRange"),
@@ -10038,19 +10142,6 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.value = .ids(v)
-        }
-      }()
-      case 11: try {
-        var v: PBScore?
-        var hadOneofValue = false
-        if let current = self.value {
-          hadOneofValue = true
-          if case .score(let m) = current {v = m}
-        }
-        try decoder.decodeSingularMessageField(value: &v)
-        if let v = v {
-          if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.value = .score(v)
         }
       }()
       case 12: try {
@@ -10228,10 +10319,6 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     case .ids?: try {
       guard case .ids(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
-    }()
-    case .score?: try {
-      guard case .score(let v)? = self.value else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
     }()
     case .beatRange?: try {
       guard case .beatRange(let v)? = self.value else { preconditionFailure() }

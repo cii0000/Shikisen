@@ -407,16 +407,12 @@ final class IOAction: Action {
                                         content.origin.y += d
                                     }
                                     
-                                    content.isSelected = true
-                                    text.selectedIntRanges = [0 ..< text.string.count]
-                                    
                                     sheetView.newUndoGroup()
-                                    if !sheetView.model.selection.isEmpty {
-                                        sheetView.doSet(SheetSelection.empty)
-                                        self.rootView.updateSelectedFrame()
-                                    }
+                                    sheetView.unselect()
                                     sheetView.append(text)
                                     sheetView.append(content)
+                                    sheetView.doSet(.init(textSelections: [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])],
+                                                          contentIs: [sheetView.model.contents.count - 1]))
                                 }
                             }
                         }
@@ -451,16 +447,12 @@ final class IOAction: Action {
                             content.origin.y += d
                         }
                         
-                        content.isSelected = true
-                        text.selectedIntRanges = [0 ..< text.string.count]
-                        
                         sheetView.newUndoGroup()
-                        if !sheetView.model.selection.isEmpty {
-                            sheetView.doSet(SheetSelection.empty)
-                            rootView.updateSelectedFrame()
-                        }
+                        sheetView.unselect()
                         sheetView.append(text)
                         sheetView.append(content)
+                        sheetView.doSet(.init(textSelections: [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])],
+                                              contentIs: [sheetView.model.contents.count - 1]))
                     }
                 }
                 
@@ -558,6 +550,11 @@ final class IOAction: Action {
     func importFile(with event: InputKeyEvent) {
         switch event.phase {
         case .began:
+            if rootAction.isPlaying(with: event) {
+                rootAction.stopPlaying(with: event)
+            }
+            rootView.closeLookingUp()
+            
             rootView.cursor = .arrow
             
             let sp = rootView.screenPointFromMenu ?? event.screenPoint
@@ -595,6 +592,11 @@ final class IOAction: Action {
     func exportFile(with event: InputKeyEvent, _ type: ExportType) {
         switch event.phase {
         case .began:
+            if rootAction.isPlaying(with: event) {
+                rootAction.stopPlaying(with: event)
+            }
+            rootView.closeLookingUp()
+            
             rootView.cursor = .arrow
             
             let sp = rootView.screenPointFromMenu ?? event.screenPoint

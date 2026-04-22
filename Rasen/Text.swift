@@ -154,6 +154,9 @@ extension String {
     var allRange: Range<Index> {
         startIndex ..< endIndex
     }
+    var allIntRange: Range<Int> {
+        intRange(from: allRange)
+    }
     
     var toSuperscript: String {
         String(compactMap { $0.toSuperscript })
@@ -338,7 +341,6 @@ struct Text {
     var origin = Point()
     var locale = Locale.autoupdatingCurrent
     var timeOption: TextTimeOption?
-    var selectedIntRanges = [Range<Int>]()
 }
 extension Text {
     init(autoWidthCountWith string: String,
@@ -405,10 +407,6 @@ extension Text: AppliableTransform {
     }
 }
 extension Text {
-    var selectedRanges: [Range<String.Index>] {
-        get { selectedIntRanges.map { string.range(fromInt: $0) } }
-        set { selectedIntRanges = newValue.map { string.intRange(from: $0) } }
-    }
     var isEmpty: Bool {
         string.isEmpty
     }

@@ -62,7 +62,6 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
-            binder[keyPath: keyPath].isSelected = isSelected
             updateWithIsSelected()
         }
     }
@@ -98,8 +97,6 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
             volms = pcmTrackItem?.pcmBuffer.volms() ?? []
         }
         
-        isSelected = binder[keyPath: keyPath].isSelected
-        
         updateClippingNode()
         updateTimeline()
         
@@ -123,7 +120,6 @@ extension ContentView {
             updateSpectrogram()
         }
         
-        isSelected = binder[keyPath: keyPath].isSelected
         updateWithIsSelected()
     }
     func updateClippingNode() {

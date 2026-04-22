@@ -499,6 +499,9 @@ final class RootView: View, @unchecked Sendable {
                 sheetView.stopNotifications.append { [weak self] _ in
                     self?.showSelected()
                 }
+                sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+                    self?.updateSelectedFrame()
+                }
                 
                 makeThumbnailRecord(at: sheetID, with: sheetView)
                 syncSave()
@@ -1139,6 +1142,7 @@ final class RootView: View, @unchecked Sendable {
             func updateUndoGroup() {
                 if isNewUndoGroup {
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     isNewUndoGroup = false
                 }
             }
@@ -1221,6 +1225,9 @@ final class RootView: View, @unchecked Sendable {
                                 
                                 sheetView.stopNotifications.append { [weak self] _ in
                                     self?.showSelected()
+                                }
+                                sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+                                    self?.updateSelectedFrame()
                                 }
                                 
                                 if make(sheetView) {
@@ -1368,6 +1375,9 @@ final class RootView: View, @unchecked Sendable {
                                 
                                 sheetView.stopNotifications.append { [weak self] _ in
                                     self?.showSelected()
+                                }
+                                sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+                                    self?.updateSelectedFrame()
                                 }
                                 
                                 if make(sheetView) {
@@ -1529,7 +1539,7 @@ final class RootView: View, @unchecked Sendable {
         isShownLookingUp = true
         lookingUpString = string
     }
-    func closeLookingUpNode() {
+    private func closeLookingUpNode() {
         lookingUpBoundsNode = nil
         lookingUpNode.children = []
         lookingUpNode.path = Path()
@@ -1544,10 +1554,8 @@ final class RootView: View, @unchecked Sendable {
     
     func unselect(at p: Point) {
         if isEditingSheet {
-            if let sheetView = sheetView(at: p), !sheetView.model.selection.isEmpty {
-                sheetView.newUndoGroup()
-                sheetView.doSet(SheetSelection.empty)
-                updateSelectedFrame()
+            if let sheetView = sheetView(at: p) {
+                sheetView.unselectAndNewUndoGroupIfNeeded()
             }
         } else {
             if !world.selectedSheetIDs.isEmpty {
@@ -2334,6 +2342,9 @@ final class RootView: View, @unchecked Sendable {
                         }
                         
                         sheetView.stopNotifications.append { [weak self] _ in
+                            self?.showSelected()
+                        }
+                        sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
                             self?.updateSelectedFrame()
                         }
                     }
@@ -2398,6 +2409,9 @@ final class RootView: View, @unchecked Sendable {
         
         sheetView.stopNotifications.append { [weak self] _ in
             self?.showSelected()
+        }
+        sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+            self?.updateSelectedFrame()
         }
         
         sheetRecord.willwriteClosure = { [weak sheetView, weak sheetHistoryRecord, weak self] (record) in
@@ -2559,6 +2573,9 @@ final class RootView: View, @unchecked Sendable {
         
         sheetView.stopNotifications.append { [weak self] _ in
             self?.showSelected()
+        }
+        sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+            self?.updateSelectedFrame()
         }
         
         self.sheetView(at: shp)?.node.removeFromParent()

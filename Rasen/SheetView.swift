@@ -30,22 +30,12 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         self.binder = binder
         self.keyPath = keyPath
         
-        isSelected = binder[keyPath: keyPath].isSelected
-        
-        let uuColor = binder[keyPath: keyPath].uuColor
         node = Node(path: Path(binder[keyPath: keyPath]),
                     lineWidth: binder[keyPath: keyPath].size,
-                    lineType: .color(isSelected && !isHiddenSelected ?
-                                     (uuColor == Line.defaultUUColor ?
-                                      .selected :
-                                          .linear(.selected, uuColor.value,
-                                                  t: uuColor.value.lightness / 100 * 0.5)) :
-                                      uuColor.value))
+                    lineType: .color(binder[keyPath: keyPath].uuColor.value))
     }
     
     func updateWithModel() {
-        isSelected = binder[keyPath: keyPath].isSelected
-        
         updateColor()
         updatePath()
         node.lineWidth = model.size
@@ -53,7 +43,6 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
-            binder[keyPath: keyPath].isSelected = isSelected
             updateColor()
         }
     }
@@ -126,23 +115,18 @@ final class PlaneView<T: BinderProtocol>: BindableView, @unchecked Sendable {
         self.binder = binder
         self.keyPath = keyPath
         
-        isSelected = binder[keyPath: keyPath].isSelected
-        
         node = Node(path: binder[keyPath: keyPath].path,
-                    fillType: .color(isSelected && !isHiddenSelected ? .selected + binder[keyPath: keyPath].uuColor.value :  binder[keyPath: keyPath].uuColor.value))
+                    fillType: .color(binder[keyPath: keyPath].uuColor.value))
         node.isCPUFillAntialias = false
     }
     
     func updateWithModel() {
-        isSelected = binder[keyPath: keyPath].isSelected
-        
         updateColor()
         updatePath()
     }
     var isSelected = false {
         didSet {
             guard isSelected != oldValue else { return }
-            binder[keyPath: keyPath].isSelected = isSelected
             updateColor()
         }
     }
@@ -228,12 +212,7 @@ final class KeyframeView: BindableView, @unchecked Sendable {
     let draftLinesView: ArrayView<SheetLineView>
     let draftPlanesView: ArrayView<SheetPlaneView>
     
-    var isSelected = false {
-        didSet {
-            guard isSelected != oldValue else { return }
-            binder[keyPath: keyPath].isSelected = isSelected
-        }
-    }
+    var isSelected = false
     
     var selectedLineIs: [Int] {
         get {
@@ -288,8 +267,6 @@ final class KeyframeView: BindableView, @unchecked Sendable {
                                planesView.node, linesView.node])
         
         updateDraft()
-        
-        isSelected = binder[keyPath: keyPath].isSelected
     }
     
     func updateWithModel() {
@@ -299,8 +276,6 @@ final class KeyframeView: BindableView, @unchecked Sendable {
         draftPlanesView.updateWithModel()
         
         updateDraft()
-        
-        isSelected = binder[keyPath: keyPath].isSelected
     }
     func updateDraft() {
         draftLinesView.elementViews.forEach {
@@ -1544,6 +1519,8 @@ final class SheetView: BindableView, @unchecked Sendable {
         updateWithKeyframeIndex()
         updateTimeline()
         updateMainFrame()
+        
+        set(model.selection)
     }
     
     func cancelTasks() {
@@ -1786,7 +1763,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                 text.string.removeSubrange(range)
             }
             removedText.origin += minP
-            removedText.selectedIntRanges = [0 ..< removedText.string.count]
             return removedText
         }
         
@@ -1795,7 +1771,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                                  texts: texts,
                                  contents: selectedContentIs.map { sheet.contents[$0] },
                                  id: id, rootKeyframeIndex: model.animation.rootIndex,
-                                 keyframes: [], keyframeBeganIndex: 0)
+                                 keyframes: [], keyframeBeganIndex: 0, isSelected: true)
         return ssValue.isEmpty ? nil : ssValue
     }
     func containsSelectedSheetValue(_ p: Point, scale: Double) -> Bool {
@@ -3047,6 +3023,12 @@ final class SheetView: BindableView, @unchecked Sendable {
             doSet(SheetSelection.empty)
         }
     }
+    func unselectAndNewUndoGroupIfNeeded() {
+        if !model.selection.isEmpty {
+            newUndoGroup()
+            doSet(SheetSelection.empty)
+        }
+    }
     func unselect(isNewUndoGroup: inout Bool) {
         if !model.selection.isEmpty {
             if isNewUndoGroup {
@@ -3362,6 +3344,38 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
                 return (rect, [])
             }
+        case .replaceLines(let livs):
+            stop()
+            if isMakeRect {
+                var rect: Rect?
+                for liv in livs {
+                    binder[keyPath: keyPath].picture.lines[liv.index] = liv.value
+                    linesView.elementViews[liv.index].updateWithModel()
+                    rect += linesView.elementViews[liv.index].node.bounds
+                }
+                return (rect, [])
+            } else {
+                for liv in livs {
+                    binder[keyPath: keyPath].picture.lines[liv.index] = liv.value
+                    linesView.elementViews[liv.index].updateWithModel()
+                }
+            }
+        case .replacePlanes(let pivs):
+            stop()
+            if isMakeRect {
+                var rect: Rect?
+                for piv in pivs {
+                    binder[keyPath: keyPath].picture.planes[piv.index] = piv.value
+                    planesView.elementViews[piv.index].updateWithModel()
+                    rect += planesView.elementViews[piv.index].node.bounds
+                }
+                return (rect, [])
+            } else {
+                for piv in pivs {
+                    binder[keyPath: keyPath].picture.planes[piv.index] = piv.value
+                    planesView.elementViews[piv.index].updateWithModel()
+                }
+            }
         case .removeLines(let lineIndexes):
             stop()
             if isMakeRect {
@@ -3497,6 +3511,26 @@ final class SheetView: BindableView, @unchecked Sendable {
                     $0 += textsView.elementViews[$1.index].transformedBounds
                 }
                 return (rect, [])
+            }
+        case .replaceTexts(let tivs):
+            if isMakeRect {
+                var rect: Rect?
+                for tiv in tivs {
+                    binder[keyPath: keyPath].texts[tiv.index] = tiv.value
+                    textsView.elementViews[tiv.index].updateWithModel()
+                    rect += textsView.elementViews[tiv.index].node.transformedBounds
+                }
+                
+                tivs.forEach { textsView.elementViews[$0.index].updateClippingNode() }
+                
+                return (rect, [])
+            } else {
+                for tiv in tivs {
+                    binder[keyPath: keyPath].texts[tiv.index] = tiv.value
+                    textsView.elementViews[tiv.index].updateWithModel()
+                }
+                
+                tivs.forEach { textsView.elementViews[$0.index].updateClippingNode() }
             }
         case .removeTexts(let textIndexes):
             let isUpdateCaption = isPlaying ?
@@ -4224,7 +4258,13 @@ final class SheetView: BindableView, @unchecked Sendable {
     private func setNode(_ ituv: IndexValue<TextValue>) {
         textsView.elementViews[ituv.index].set(ituv.value)
     }
+    
+    var changeSelectedFrameNotifications = [((SheetView, SheetSelection) -> ())]()
+    @discardableResult
     func set(_ selection: SheetSelection) -> Rect? {
+        let oldSelection = binder[keyPath: keyPath].selection
+        binder[keyPath: keyPath].selection = selection
+        
         var rect: Rect?
         var isChangedTimeline = false
         animationView.elementViews.enumerated().forEach {
@@ -4273,6 +4313,11 @@ final class SheetView: BindableView, @unchecked Sendable {
                 $0.element.isSelected = nIsSelected
                 rect += $0.element.node.transformedBounds
             }
+        }
+        
+        if selection.isChangeSelectedFrame(old: oldSelection) {
+            updateSelectedFrame()
+            changeSelectedFrameNotifications.forEach { $0(self, selection) }
         }
         
         return rect
@@ -4403,6 +4448,69 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
+    func replace(_ line: Line, at i: Int) {
+        replace(IndexValue(value: line, index: i))
+    }
+    func replace(_ lineV: IndexValue<Line>) {
+        let undoItem = SheetUndoItem.replaceLines([IndexValue(value: model.picture.lines[lineV.index],
+                                                              index: lineV.index)])
+        let redoItem = SheetUndoItem.replaceLines([lineV])
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func replace(_ lineVs: [IndexValue<Line>]) {
+        let undoItem = SheetUndoItem.replaceLines(lineVs.map { .init(value: model.picture.lines[$0.index], index: $0.index) })
+        let redoItem = SheetUndoItem.replaceLines(lineVs)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(old oldLine: Line, at i: Int) {
+        capture(old: IndexValue(value: oldLine, index: i))
+    }
+    func capture(old oldLineV: IndexValue<Line>) {
+        let undoItem = SheetUndoItem.replaceLines([oldLineV])
+        let redoItem = SheetUndoItem.replaceLines([IndexValue(value: model.picture.lines[oldLineV.index],
+                                                              index: oldLineV.index)])
+        append(undo: undoItem, redo: redoItem)
+    }
+    func capture(old oldLineVs: [IndexValue<Line>]) {
+        let undoItem = SheetUndoItem.replaceLines(oldLineVs)
+        let redoItem = SheetUndoItem.replaceLines(oldLineVs.map { .init(value: model.picture.lines[$0.index], index: $0.index) })
+        append(undo: undoItem, redo: redoItem)
+    }
+    
+    func replace(_ plane: Plane, at i: Int) {
+        replace(IndexValue(value: plane, index: i))
+    }
+    func replace(_ planeV: IndexValue<Plane>) {
+        let undoItem = SheetUndoItem.replacePlanes([IndexValue(value: model.picture.planes[planeV.index],
+                                                              index: planeV.index)])
+        let redoItem = SheetUndoItem.replacePlanes([planeV])
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func replace(_ planeVs: [IndexValue<Plane>]) {
+        let undoItem = SheetUndoItem.replacePlanes(planeVs.map { .init(value: model.picture.planes[$0.index], index: $0.index) })
+        let redoItem = SheetUndoItem.replacePlanes(planeVs)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(old oldPlane: Plane, at i: Int) {
+        capture(old: IndexValue(value: oldPlane, index: i))
+    }
+    func capture(old oldPlaneV: IndexValue<Plane>) {
+        let undoItem = SheetUndoItem.replacePlanes([oldPlaneV])
+        let redoItem = SheetUndoItem.replacePlanes([IndexValue(value: model.picture.planes[oldPlaneV.index],
+                                                              index: oldPlaneV.index)])
+        append(undo: undoItem, redo: redoItem)
+    }
+    func capture(old oldPlaneVs: [IndexValue<Plane>]) {
+        let undoItem = SheetUndoItem.replacePlanes(oldPlaneVs)
+        let redoItem = SheetUndoItem.replacePlanes(oldPlaneVs.map { .init(value: model.picture.planes[$0.index], index: $0.index) })
+        append(undo: undoItem, redo: redoItem)
+    }
+    
     func removeLines(at lineIndexes: [Int]) {
         let livs = lineIndexes.map {
             IndexValue(value: model.picture.lines[$0], index: $0)
@@ -4421,12 +4529,14 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func set(_ picture: Picture) {
         let undoItem = SheetUndoItem.setPicture(model.picture)
         let redoItem = SheetUndoItem.setPicture(picture)
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func set(_ planeValue: PlaneValue) {
         var isArray = Array(repeating: false, count: model.picture.planes.count)
         for v in planeValue.moveIndexValues {
@@ -4444,6 +4554,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func insertDraft(_ livs: [IndexValue<Line>]) {
         let undoItem = SheetUndoItem.removeDraftLines(lineIndexes: livs.map { $0.index })
         let redoItem = SheetUndoItem.insertDraftLines(livs)
@@ -4474,6 +4585,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func setDraft(_ draftPicture: Picture) {
         let undoItem = SheetUndoItem.setDraftPicture(model.draftPicture)
         let redoItem = SheetUndoItem.setDraftPicture(draftPicture)
@@ -4492,6 +4604,7 @@ final class SheetView: BindableView, @unchecked Sendable {
     func removeDraft() {
         setDraft(Picture())
     }
+    
     func append(_ text: Text) {
         let undoItem = SheetUndoItem.removeTexts(textIndexes: [model.texts.count])
         let redoItem = SheetUndoItem.insertTexts([IndexValue(value: text,
@@ -4520,19 +4633,35 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
-    func replace(_ tivs: [IndexValue<Text>]) {
-        let ivs = tivs.map { $0.index }
-        let otivs = tivs
-            .map { IndexValue(value: model.texts[$0.index], index: $0.index) }
-        let undoItem0 = SheetUndoItem.insertTexts(otivs)
-        let redoItem0 = SheetUndoItem.removeTexts(textIndexes: ivs)
-        append(undo: undoItem0, redo: redoItem0)
-        
-        let undoItem1 = SheetUndoItem.removeTexts(textIndexes: ivs)
-        let redoItem1 = SheetUndoItem.insertTexts(tivs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        tivs.forEach { textsView.elementViews[$0.index].model = $0.value }
+    func replace(_ text: Text, at i: Int) {
+        replace(IndexValue(value: text, index: i))
+    }
+    func replace(_ textV: IndexValue<Text>) {
+        let undoItem = SheetUndoItem.replaceTexts([IndexValue(value: model.texts[textV.index],
+                                                              index: textV.index)])
+        let redoItem = SheetUndoItem.replaceTexts([textV])
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func replace(_ textVs: [IndexValue<Text>]) {
+        let undoItem = SheetUndoItem.replaceTexts(textVs.map { .init(value: model.texts[$0.index], index: $0.index) })
+        let redoItem = SheetUndoItem.replaceTexts(textVs)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(old oldText: Text, at i: Int) {
+        capture(old: IndexValue(value: oldText, index: i))
+    }
+    func capture(old oldTextV: IndexValue<Text>) {
+        let undoItem = SheetUndoItem.replaceTexts([oldTextV])
+        let redoItem = SheetUndoItem.replaceTexts([IndexValue(value: model.texts[oldTextV.index],
+                                                              index: oldTextV.index)])
+        append(undo: undoItem, redo: redoItem)
+    }
+    func capture(old oldTextVs: [IndexValue<Text>]) {
+        let undoItem = SheetUndoItem.replaceTexts(oldTextVs)
+        let redoItem = SheetUndoItem.replaceTexts(oldTextVs.map { .init(value: model.texts[$0.index], index: $0.index) })
+        append(undo: undoItem, redo: redoItem)
     }
     func removeText(at textIndexes: [Int]) {
         let tivs = textIndexes.map {
@@ -4552,6 +4681,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func capture(_ ituv: IndexValue<TextValue>,
                  old oituv: IndexValue<TextValue>) {
         let undoItem = SheetUndoItem.replaceString(oituv)
@@ -4577,6 +4707,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
+    
     func capture(_ colorUndoValue: ColorValue, oldColorValue: ColorValue) {
         let undoItem = SheetUndoItem.changedColors(oldColorValue)
         let redoItem = SheetUndoItem.changedColors(colorUndoValue)
@@ -4675,20 +4806,31 @@ final class SheetView: BindableView, @unchecked Sendable {
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
-    func capture(_ content: Content, old oldContent: Content, at i: Int) {
-        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: oldContent, index: i)])
-        let redoItem = SheetUndoItem.replaceContents([IndexValue(value: content, index: i)])
-        append(undo: undoItem, redo: redoItem)
-    }
     func replace(_ content: Content, at i: Int) {
         replace(IndexValue(value: content, index: i))
     }
-    func replace(_ contentValue: IndexValue<Content>) {
-        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: model.contents[contentValue.index],
-                                                                 index: contentValue.index)])
-        let redoItem = SheetUndoItem.replaceContents([contentValue])
+    func replace(_ contentV: IndexValue<Content>) {
+        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: model.contents[contentV.index],
+                                                                 index: contentV.index)])
+        let redoItem = SheetUndoItem.replaceContents([contentV])
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
+    }
+    func replace(_ contentVs: [IndexValue<Content>]) {
+        let undoItem = SheetUndoItem.replaceContents(contentVs.map { .init(value: model.contents[$0.index], index: $0.index) })
+        let redoItem = SheetUndoItem.replaceContents(contentVs)
+        append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    func capture(old oldContent: Content, at i: Int) {
+        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: oldContent, index: i)])
+        let redoItem = SheetUndoItem.replaceContents([IndexValue(value: model.contents[i], index: i)])
+        append(undo: undoItem, redo: redoItem)
+    }
+    func capture(old oldContentVs: [IndexValue<Content>]) {
+        let undoItem = SheetUndoItem.replaceContents(oldContentVs)
+        let redoItem = SheetUndoItem.replaceContents(oldContentVs.map { .init(value: model.contents[$0.index], index: $0.index) })
+        append(undo: undoItem, redo: redoItem)
     }
     func removeContent(at i: Int) {
         let undoItem = SheetUndoItem.insertContents([IndexValue(value: model.contents[i],
@@ -5029,61 +5171,6 @@ final class SheetView: BindableView, @unchecked Sendable {
         set(redoItem)
     }
     
-    func capture(_ text: Text, old oldText: Text, at i: Int) {
-        let undoItem1 = SheetUndoItem.insertTexts([IndexValue(value: oldText, index: i)])
-        let redoItem1 = SheetUndoItem.removeTexts(textIndexes: [i])
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeTexts(textIndexes: [i])
-        let redoItem0 = SheetUndoItem.insertTexts([IndexValue(value: text, index: i)])
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    
-    func captureLine(_ line: Line, old oldLine: Line, at i: Int) {
-        let undoItem1 = SheetUndoItem.insertLines([IndexValue(value: oldLine, index: i)])
-        let redoItem1 = SheetUndoItem.removeLines(lineIndexes: [i])
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeLines(lineIndexes: [i])
-        let redoItem0 = SheetUndoItem.insertLines([IndexValue(value: line, index: i)])
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    func captureLines(_ lines: [Line], old oldLines: [Line], at idxs: [Int]) {
-        let undoItem1 = SheetUndoItem.insertLines(zip(oldLines, idxs).map { .init(value: $0.0, index: $0.1) })
-        let redoItem1 = SheetUndoItem.removeLines(lineIndexes: idxs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeLines(lineIndexes: idxs)
-        let redoItem0 = SheetUndoItem.insertLines(zip(lines, idxs).map { .init(value: $0.0, index: $0.1) })
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    func capturePlanes(_ planes: [Plane], old oldPlanes: [Plane], at idxs: [Int]) {
-        let undoItem1 = SheetUndoItem.insertPlanes(zip(oldPlanes, idxs).map { .init(value: $0.0, index: $0.1) })
-        let redoItem1 = SheetUndoItem.removePlanes(planeIndexes: idxs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removePlanes(planeIndexes: idxs)
-        let redoItem0 = SheetUndoItem.insertPlanes(zip(planes, idxs).map { .init(value: $0.0, index: $0.1) })
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    func captureTexts(_ texts: [Text], old oldTexts: [Text], at idxs: [Int]) {
-        let undoItem1 = SheetUndoItem.insertTexts(zip(oldTexts, idxs).map { .init(value: $0.0, index: $0.1) })
-        let redoItem1 = SheetUndoItem.removeTexts(textIndexes: idxs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeTexts(textIndexes: idxs)
-        let redoItem0 = SheetUndoItem.insertTexts(zip(texts, idxs).map { .init(value: $0.0, index: $0.1) })
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    func captureContents(_ contents: [Content], old oldContents: [Content], at idxs: [Int]) {
-        let undoItem1 = SheetUndoItem.insertContents(zip(oldContents, idxs).map { .init(value: $0.0, index: $0.1) })
-        let redoItem1 = SheetUndoItem.removeContents(contentIndexes: idxs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeContents(contentIndexes: idxs)
-        let redoItem0 = SheetUndoItem.insertContents(zip(contents, idxs).map { .init(value: $0.0, index: $0.1) })
-        append(undo: undoItem0, redo: redoItem0)
-    }
     func setRootKeyframeIndex(rootKeyframeIndex: Int) {
         let undoItem = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: self.rootKeyframeIndex)
         let redoItem = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex)
@@ -5229,6 +5316,24 @@ final class SheetView: BindableView, @unchecked Sendable {
             } else {
                 history[result.version].values[result.valueIndex].error()
             }
+        case .replaceLines(let livs):
+            updateFirstReverse()
+            let lines = model.picture.lines
+            for liv in livs {
+                if liv.index >= lines.count || liv.value != lines[liv.index] {
+                    history.error(result)
+                    break
+                }
+            }
+        case .replacePlanes(let pivs):
+            updateFirstReverse()
+            let planes = model.picture.planes
+            for piv in pivs {
+                if piv.index >= planes.count || piv.value != planes[piv.index] {
+                    history.error(result)
+                    break
+                }
+            }
         case .removeLines(let lineIndexes):
             updateFirstReverse()
             let oldLIS = lineIndexes.filter { $0 < model.picture.lines.count + lineIndexes.count }.sorted()
@@ -5343,6 +5448,15 @@ final class SheetView: BindableView, @unchecked Sendable {
                 }
             } else {
                 history[result.version].values[result.valueIndex].error()
+            }
+        case .replaceTexts(let tivs):
+            updateFirstReverse()
+            let texts = model.texts
+            for tiv in tivs {
+                if tiv.index >= texts.count || tiv.value != texts[tiv.index] {
+                    history.error(result)
+                    break
+                }
             }
         case .removeTexts(let textIndexes):
             updateFirstReverse()
@@ -5857,18 +5971,10 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         case .replaceContents(let civs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             let contents = model.contents
             for civ in civs {
-                if civ.index >= contents.count {
-                    error()
-                    break
-                }
-                if civ.value != contents[civ.index] {
-                    error()
+                if civ.index >= contents.count || civ.value != contents[civ.index] {
+                    history.error(result)
                     break
                 }
             }
@@ -5956,6 +6062,24 @@ final class SheetView: BindableView, @unchecked Sendable {
                     = UndoItemValue(undoItem: .removePlanes(planeIndexes: pivs.map { $0.index }),
                                     redoItem: .insertPlanes(pivs),
                                     isReversed: isUndo)
+            }
+        case .replaceLines(let livs):
+            updateFirstReverse()
+            let lines = model.picture.lines
+            if livs.contains(where: { $0.index >= lines.count }) {
+                history.error(result)
+            } else {
+                let oldLIVs = livs.map { IndexValue(value: lines[$0.index], index: $0.index) }
+                history.setReverse(.replaceLines(oldLIVs), with: result)
+            }
+        case .replacePlanes(let pivs):
+            updateFirstReverse()
+            let planes = model.picture.planes
+            if pivs.contains(where: { $0.index >= planes.count }) {
+                history.error(result)
+            } else {
+                let oldPIVs = pivs.map { IndexValue(value: planes[$0.index], index: $0.index) }
+                history.setReverse(.replacePlanes(oldPIVs), with: result)
             }
         case .removeLines(var lineIndexes):
             updateFirstReverse()
@@ -6131,6 +6255,15 @@ final class SheetView: BindableView, @unchecked Sendable {
                     = UndoItemValue(undoItem: .removeTexts(textIndexes: tivs.map { $0.index }),
                                     redoItem: .insertTexts(tivs),
                                     isReversed: isUndo)
+            }
+        case .replaceTexts(let tivs):
+            updateFirstReverse()
+            let texts = model.texts
+            if tivs.contains(where: { $0.index >= texts.count }) {
+                history.error(result)
+            } else {
+                let oldTIVs = tivs.map { IndexValue(value: texts[$0.index], index: $0.index) }
+                history.setReverse(.replaceTexts(oldTIVs), with: result)
             }
         case .removeTexts(var textIndexes):
             updateFirstReverse()
@@ -6798,31 +6931,12 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         case .replaceContents(let civs):
             updateFirstReverse()
-            var isError = false
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-                isError = true
-            }
             let contents = model.contents
-            var oldCIVs = [IndexValue<Content>]()
-            for civ in civs {
-                if civ.index >= contents.count {
-                    error()
-                    break
-                }
-                oldCIVs.append(IndexValue(value: contents[civ.index],
-                                          index: civ.index))
-            }
-            if !isError {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .replaceContents(oldCIVs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .replaceContents(oldCIVs)
-                }
+            if civs.contains(where: { $0.index >= contents.count }) {
+                history.error(result)
+            } else {
+                let oldCIVs = civs.map { IndexValue(value: contents[$0.index], index: $0.index) }
+                history.setReverse(.replaceContents(oldCIVs), with: result)
             }
         case .removeContents(var contentIndexes):
             updateFirstReverse()
@@ -7068,7 +7182,8 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         
-        var ssValue = SheetValue(id: id, rootKeyframeIndex: model.animation.rootIndex)
+        var ssValue = SheetValue(id: id, rootKeyframeIndex: model.animation.rootIndex,
+                                 isSelected: true)
         
         let nPath = lasso.line.path(isClosed: true, isPolygon: false)
         
@@ -7268,7 +7383,6 @@ final class SheetView: BindableView, @unchecked Sendable {
                     text.string.removeSubrange(range)
                 }
                 removedText.origin += minP
-                removedText.selectedIntRanges = [0 ..< removedText.string.count]
                 
                 if isRemove {
                     if text.string.isEmpty {
@@ -7417,12 +7531,14 @@ final class SheetView: BindableView, @unchecked Sendable {
             if isNewUndoGroup {
                 newUndoGroup()
             }
+            unselect()
             append(planes)
             return true
         case .planeValue(let planeValue):
             if isNewUndoGroup {
                 newUndoGroup()
             }
+            unselect()
             set(planeValue)
             return true
         case .none:
@@ -7432,6 +7548,7 @@ final class SheetView: BindableView, @unchecked Sendable {
                 if isNewUndoGroup {
                     newUndoGroup()
                 }
+                unselect()
                 if !model.picture.planes.isEmpty {
                     removePlanes(at: .init(model.picture.planes.count.range))
                 }
@@ -7446,23 +7563,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
     }
-    func removeFilledFaces(with path: Path?, at p: Point) -> SheetValue? {
-        var removePlaneValues = Array(planesView.elementViews.enumerated())
-        if let path = path {
-            removePlaneValues = removePlaneValues.filter {
-                path.intersects($0.element.node.path)
-            }
-        }
-        if !removePlaneValues.isEmpty {
-            newUndoGroup()
-            let planes = removePlaneValues.map { $0.element.model }
-            let t = Transform(translation: -convertFromWorld(p))
-            removePlanes(at: removePlaneValues.map { $0.offset })
-            return SheetValue(lines: [], planes: planes, texts: []) * t
-        } else {
-            return nil
-        }
-    }
+    
     func cutFaces(with path: Path?) -> Bool {
         var removePlaneValues = Array(planesView.elementViews.enumerated())
         if let path = path {
@@ -7476,6 +7577,7 @@ final class SheetView: BindableView, @unchecked Sendable {
         
         if isRemoveBackground || !removePlaneValues.isEmpty {
             newUndoGroup()
+            unselect()
             if !removePlaneValues.isEmpty {
                 let planes = removePlaneValues.map { $0.element.model }
                 Pasteboard.shared.copiedObjects

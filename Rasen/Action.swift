@@ -76,14 +76,6 @@ final class RootAction: Action {
                                                         scale: rootView.screenToWorldScale)
         || sheetView.containsOtherTimeline(sheetP, scale: rootView.screenToWorldScale)
     }
-    func isPlaying(with event: any Event) -> Bool {
-        for (_, v) in rootView.sheetViewValues {
-            if v.sheetView?.isPlaying ?? false {
-                return true
-            }
-        }
-        return false
-    }
     
     var modifierKeys = ModifierKeys()
     
@@ -186,6 +178,8 @@ final class RootAction: Action {
         case .began:
             updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
+            stopInputKeyEvent()
+            stopDragEvent()
             let quasimode = Quasimode(modifier: modifierKeys, .subDrag)
             subDragEventAction = self.subDragAction(with: quasimode)
             subDragEventAction?.flow(with: event)
@@ -251,6 +245,7 @@ final class RootAction: Action {
             if quasimode != .selectTime {
                 stopInputKeyEvent()
             }
+            stopSubDragEvent()
             dragAction = self.dragAction(with: quasimode)
             dragAction?.flow(with: event)
             oldDragEvent = event
@@ -352,6 +347,7 @@ final class RootAction: Action {
                 textAction.moveEndInputKey()
             }
             stopDragEvent()
+            stopSubDragEvent()
             inputKeyAction = self.inputKeyAction(with: quasimode)
             inputKeyAction?.flow(with: event)
             oldInputKeyEvent = event
@@ -379,6 +375,15 @@ final class RootAction: Action {
             rootView.cursor = rootView.defaultCursor
         }
     }
+    
+    func isPlaying(with event: any Event) -> Bool {
+        for (_, v) in rootView.sheetViewValues {
+            if v.sheetView?.isPlaying ?? false {
+                return true
+            }
+        }
+        return false
+    }
     func stopPlaying(with event: any Event) {
         switch event.phase {
         case .began:
@@ -391,6 +396,42 @@ final class RootAction: Action {
             break
         case .ended:
             rootView.cursor = rootView.defaultCursor
+        }
+    }
+    
+    @discardableResult
+    func closeAllPanelsAndStop(at p: Point, enabledAlwaysSheet: Bool = true) -> Bool {
+        rootView.closeAllPanels(at: p)
+        var isStopCenter = false
+        let cSheetView = rootView.sheetView(at: p)
+        for (_, v) in rootView.sheetViewValues {
+            if let sheetView = v.sheetView, sheetView.isPlaying {
+                sheetView.stop()
+                if sheetView == cSheetView, rootView.isEditingSheet,
+                   !sheetView.model.score.enabled {
+                    if enabledAlwaysSheet {
+                        isStopCenter = true
+                    } else {
+                        let timelineP = sheetView.animationView.timelineNode
+                            .convertFromWorld(p)
+                        if !sheetView.animationView.containsTimeline(timelineP,
+                                                                     scale: rootView.screenToWorldScale)
+                            && !isEditingText(in: sheetView) {
+                            isStopCenter = true
+                        }
+                    }
+                }
+            }
+        }
+        return isStopCenter
+    }
+    func isEditingText(in sheetView: SheetView) -> Bool {
+        if let aTextView = textAction.editingTextView,
+           !aTextView.isHiddenSelectedRange,
+           sheetView.textsView.elementViews.firstIndex(of: aTextView) != nil {
+            true
+        } else {
+            false
         }
     }
     
@@ -450,6 +491,14 @@ final class RootAction: Action {
             self.inputKeyAction = nil
             oldInputKeyEvent = nil
             inputKeyAction.flow(with: event)
+        }
+    }
+    func stopSubDragEvent() {
+        if var event = oldSubDragEvent, let subDragEventAction {
+            event.phase = .ended
+            self.subDragEventAction = nil
+            oldSubDragEvent = nil
+            subDragEventAction.flow(with: event)
         }
     }
     func updateActionNode() {
@@ -688,6 +737,11 @@ final class SelectAction: Action {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
+            if rootAction.isPlaying(with: event) {
+                rootAction.stopPlaying(with: event)
+            }
+            rootView.closeLookingUp()
+            
             if let sheetView = rootView.sheetView(at: p),
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
                                                         scale: rootView.screenToWorldScale) {
@@ -743,9 +797,15 @@ final class SelectAction: Action {
                 guard textView.intersectsHalf(nRect),
                       let fi = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(firstP)),
                       let li = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(p)) else {
-                    if textView.selectedRanges != nRanges {
-                        textView.selectedRanges = nRanges
+                    let str = textView.model.string
+                    var nSelection = selection
+                    let nnRanges = nRanges.map { str.intRange(from: $0) }
+                    if nnRanges.isEmpty {
+                        nSelection.textSelections[ti] = nil
+                    } else {
+                        nSelection.textSelections[ti] = .init(ranges: nnRanges)
                     }
+                    _ = sheetView.set(selection)
                     return
                 }
                 let range = fi < li ? fi ..< li : li ..< fi
@@ -755,7 +815,17 @@ final class SelectAction: Action {
                 } else {
                     Range.union(range, in: &nRanges)
                 }
-                textView.selectedRanges = nRanges
+                let str = textView.model.string
+                var nSelection = selection
+                let nnRanges = nRanges.map { str.intRange(from: $0) }
+                if nnRanges.isEmpty {
+                    nSelection.textSelections[ti] = nil
+                } else {
+                    nSelection.textSelections[ti] = .init(ranges: nnRanges)
+                }
+                if sheetView.model.selection != nSelection {
+                    sheetView.set(nSelection)
+                }
             } else if rootView.isEditingSheet {
                 node.isHidden = false
                 
@@ -777,6 +847,8 @@ final class SelectAction: Action {
                         captureSelections[sheetView] = aSelection
                         selection = aSelection
                     }
+                    
+                    var nSelection = selection
                     
                     let sheetRect = sheetView.convertFromWorld(rect)
                     
@@ -821,13 +893,13 @@ final class SelectAction: Action {
                         
                         if isUnselect {
                             let oNotePitSprolIs = selection.notePitSprolIs
-                            sheetView.scoreView.selectedNotePitSprolIs
+                            nSelection.notePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
                                 v0.merging(v1) { w0, w1 in w0.subtracting(w1) }
                             }
                         } else {
                             let oNotePitSprolIs = selection.notePitSprolIs
-                            sheetView.scoreView.selectedNotePitSprolIs
+                            nSelection.notePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
                                 v0.merging(v1) { w0, w1 in w0.union(w1) }
                             }
@@ -840,23 +912,25 @@ final class SelectAction: Action {
                         $0.element.intersects(sheetRect) ? $0.offset : nil
                     }
                     let selectedLineIs
-                    = (isUnselect ? oSelectedLineIs.subtracting(nSelectedLineIs) :
-                        oSelectedLineIs.union(nSelectedLineIs)).sorted()
-                    sheetView.keyframeView.selectedLineIs = selectedLineIs
+                    = isUnselect ? oSelectedLineIs.subtracting(nSelectedLineIs) :
+                        oSelectedLineIs.union(nSelectedLineIs)
                     
                     let sheetRectPath = Path(sheetRect)
                     let oSelectedPlaneIs = selection.keyframeSelections[ki]?.planeIs ?? []
                     let nSelectedPlaneIs = sheetView.planesView.elementViews.enumerated().compactMap {
                         sheetRectPath.contains($0.element.node.path) ? $0.offset : nil
                     }
-                    let selectedPlaneIs = (isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
-                        oSelectedPlaneIs.union(nSelectedPlaneIs)).sorted()
-                    sheetView.keyframeView.selectedPlaneIs = selectedPlaneIs
+                    let selectedPlaneIs = isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
+                        oSelectedPlaneIs.union(nSelectedPlaneIs)
                     
                     let isSelectedKeyframe = !selectedLineIs.isEmpty || !selectedPlaneIs.isEmpty
-                    if isSelectedKeyframe != sheetView.keyframeView.isSelected {
-                        sheetView.keyframeView.isSelected = isSelectedKeyframe
-                        sheetView.updateTimeline()
+                    if isSelectedKeyframe {
+                        nSelection.keyframeSelections[ki] = .init(lineIs: selectedLineIs,
+                                                                  planeIs: selectedPlaneIs)
+                    } else if selection.keyframeSelections[ki] != nil {
+                        nSelection.keyframeSelections[ki] = .init()
+                    } else {
+                        nSelection.keyframeSelections[ki] = nil
                     }
                     
                     let oSelectedContentIs = selection.contentIs
@@ -864,9 +938,8 @@ final class SelectAction: Action {
                         if let b = contentView.transformedBounds,
                            sheetRectPath.intersects(b) { ci } else { nil }
                     }
-                    sheetView.selectedContentIs
-                    = (isUnselect ? oSelectedContentIs.subtracting(nSelectedContentIs) :
-                        oSelectedContentIs.union(nSelectedContentIs)).sorted()
+                    nSelection.contentIs = isUnselect ? oSelectedContentIs.subtracting(nSelectedContentIs) :
+                        oSelectedContentIs.union(nSelectedContentIs)
                     
                     for (ti, textView) in sheetView.textsView.elementViews.enumerated() {
                         let oRanges = selection.textSelections[ti]?.ranges ?? []
@@ -875,8 +948,12 @@ final class SelectAction: Action {
                         guard textView.intersectsHalf(nRect),
                               let fi = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(firstP)),
                               let li = textView.characterIndexWithOutOfBounds(for: textView.convertFromWorld(p)) else {
-                            if textView.selectedRanges != nRanges {
-                                textView.selectedRanges = nRanges
+                            let str = textView.model.string
+                            let nnRanges = nRanges.map { str.intRange(from: $0) }
+                            if nnRanges.isEmpty {
+                                nSelection.textSelections[ti] = nil
+                            } else {
+                                nSelection.textSelections[ti] = .init(ranges: nnRanges)
                             }
                             continue
                         }
@@ -887,10 +964,18 @@ final class SelectAction: Action {
                         } else {
                             Range.union(range, in: &nRanges)
                         }
-                        textView.selectedRanges = nRanges
+                        let str = textView.model.string
+                        let nnRanges = nRanges.map { str.intRange(from: $0) }
+                        if nnRanges.isEmpty {
+                            nSelection.textSelections[ti] = nil
+                        } else {
+                            nSelection.textSelections[ti] = .init(ranges: nnRanges)
+                        }
                     }
                     
-                    rootView.updateSelectedFrame()
+                    if sheetView.model.selection != nSelection {
+                        sheetView.set(nSelection)
+                    }
                 }
             } else {
                 let oSIDs = Set(firstSelectedSheetIDs)
@@ -938,8 +1023,7 @@ final class SelectKeyframeAction: Action {
     private var sheetView: SheetView?
     private var beganRootBeatPosition = Animation.RootBeatPosition(),
                 movedBeganRootBeatPosition = Animation.RootBeatPosition(),
-                beganSelectedRootBeat = Rational(0),
-                beganSelectedFrameIndexes = [Int](), firstSelection = SheetSelection()
+                beganSelectedRootBeat = Rational(0), firstSelection = SheetSelection()
     private var lastRootBeats = [(sec: Double, rootBeat: Rational)](capacity: 128)
     private var minLastSec = 1 / 12.0
     
@@ -949,19 +1033,27 @@ final class SelectKeyframeAction: Action {
     } ()
     
     private func updateSelected(fromRootBeeat nRootBeat: Rational,
-                                in animationView: AnimationView, isUnselect: Bool) {
-        var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
-        beganSelectedFrameIndexes.forEach { isSelects[$0] = true }
-        let beganRootIndex = animationView.model.nearestRootIndex(atRootBeat: beganSelectedRootBeat)
+                                in animationView: AnimationView, _ sheetView: SheetView,
+                                isUnselect: Bool) {
+        var nSelection = firstSelection
+        let beganRootIndex = animationView.model
+            .nearestRootIndex(atRootBeat: beganSelectedRootBeat)
         let ni = animationView.model.rootIndex(atRootBeat: nRootBeat)
         let range = beganRootIndex <= ni ? beganRootIndex ... ni : ni ... beganRootIndex
         for i in range {
             let ki = animationView.model.index(atRoot: i)
-            isSelects[ki] = !isUnselect
+            if !isUnselect {
+                if nSelection.keyframeSelections[ki] == nil {
+                    nSelection.keyframeSelections[ki] = .init()
+                }
+            } else {
+                nSelection.keyframeSelections[ki] = nil
+            }
         }
         
-        let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
-        animationView.selectedIs = fis
+        if sheetView.model.selection != nSelection {
+            sheetView.set(nSelection)
+        }
     }
     
     func select(with event: DragEvent, isUnselect: Bool) {
@@ -969,14 +1061,17 @@ final class SelectKeyframeAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            
+            if rootAction.isPlaying(with: event) {
+                rootAction.stopPlaying(with: event)
+            }
+            rootView.closeLookingUp()
+            
             if let sheetView = rootView.sheetView(at: p),
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
                                                         scale: rootView.screenToWorldScale) {
@@ -997,21 +1092,11 @@ final class SelectKeyframeAction: Action {
                 animationView.shownInterTypeKeyframeIndex = animationView.model.index
                 
                 movedBeganRootBeatPosition = sheetView.rootBeatPosition
-                beganSelectedFrameIndexes = animationView.selectedIs
                 beganSelectedRootBeat = nRootBeat
                 lastRootBeats.append((event.time, beganSelectedRootBeat))
-                var isSelects = [Bool](repeating: false, count: animationView.model.keyframes.count)
-                let beganRootIndex = animationView.model.nearestRootIndex(atRootBeat: beganSelectedRootBeat)
-                let ni = animationView.model.nearestRootIndex(atRootBeat: nRootBeat)
-                let range = beganRootIndex <= ni ? beganRootIndex ... ni : ni ... beganRootIndex
                 
-                for i in range {
-                    let ki = animationView.model.index(atRoot: i)
-                    isSelects[ki] = true
-                }
-                beganSelectedFrameIndexes.forEach { isSelects[$0] = true }
-                let fis = isSelects.enumerated().compactMap { $0.element ? $0.offset : nil }
-                animationView.selectedIs = fis
+                updateSelected(fromRootBeeat: nRootBeat, in: animationView, sheetView,
+                               isUnselect: isUnselect)
                 
                 self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
                                                   progress: sheetView.currentTimeProgress(),
@@ -1046,7 +1131,7 @@ final class SelectKeyframeAction: Action {
                         
                         animationView.shownInterTypeKeyframeIndex = animationView.model.index
                         
-                        updateSelected(fromRootBeeat: nRootBeat, in: animationView,
+                        updateSelected(fromRootBeeat: nRootBeat, in: animationView, sheetView,
                                        isUnselect: isUnselect)
                         
                         self.rootView.cursor = self.rootView.cursor(from: sheetView.currentKeyframeString(),
@@ -1065,7 +1150,7 @@ final class SelectKeyframeAction: Action {
                 for (sec, rootBeat) in lastRootBeats.reversed() {
                     if event.time - sec > minLastSec {
                         let animationView = sheetView.animationView
-                        updateSelected(fromRootBeeat: rootBeat, in: animationView,
+                        updateSelected(fromRootBeeat: rootBeat, in: animationView, sheetView,
                                        isUnselect: isUnselect)
                         break
                     }
@@ -1077,28 +1162,6 @@ final class SelectKeyframeAction: Action {
                 }
             }
             
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-}
-final class UnselectAllAction: InputKeyEventAction {
-    let rootAction: RootAction, rootView: RootView
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        switch event.phase {
-        case .began:
-            rootView.cursor = .arrow
-            
-            rootView.closeLookingUp()
-            rootView.unselect(at: rootView.convertScreenToWorld(event.screenPoint))
-        case .changed:
-            break
-        case .ended:
             rootView.cursor = rootView.defaultCursor
         }
     }
@@ -1147,14 +1210,13 @@ final class DraftAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
@@ -1163,6 +1225,7 @@ final class DraftAction: Action {
                 let pis = sheetView.keyframeView.selectedPlaneIs
                 if !lis.isEmpty || !pis.isEmpty {
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     if !lis.isEmpty {
                         let lines = sheetView.model.picture.lines[lis]
                         sheetView.removeLines(at: lis)
@@ -1225,6 +1288,7 @@ final class DraftAction: Action {
                     || !removeKLs.isEmpty || !removeKPs.isEmpty {
                     
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     if !insertKLs.isEmpty {
                         sheetView.insertDraftKeyLines(insertKLs)
                     }
@@ -1242,6 +1306,7 @@ final class DraftAction: Action {
                 let nis = sheetView.scoreView.selectedNotePitSprolIs.map { $0.key }.sorted()
                 if !nis.isEmpty {
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     let notes = sheetView.model.score.notes[nis]
                     sheetView.removeNote(at: nis)
                     let ni = sheetView.model.score.draftNotes.count
@@ -1257,6 +1322,7 @@ final class DraftAction: Action {
                         let nis = (0 ..< sheetView.model.score.notes.count).map { $0 }
                         if !nis.isEmpty {
                             sheetView.newUndoGroup()
+                            sheetView.unselect()
                             let notes = sheetView.model.score.notes[nis]
                             sheetView.removeNote(at: nis)
                             let ni = sheetView.model.score.draftNotes.count
@@ -1269,10 +1335,11 @@ final class DraftAction: Action {
                         if !sheetView.model.picture.isEmpty {
                             if sheetView.model.draftPicture.isEmpty {
                                 sheetView.newUndoGroup()
-                                
+                                sheetView.unselect()
                                 sheetView.changeToDraft()
                             } else {
                                 sheetView.newUndoGroup()
+                                sheetView.unselect()
                                 if !sheetView.model.picture.lines.isEmpty {
                                     let li = sheetView.model.draftPicture.lines.count
                                     sheetView.insertDraft(sheetView.model.picture.lines.enumerated().map {
@@ -1294,6 +1361,9 @@ final class DraftAction: Action {
                 }
             }
             if !isChanged {
+                if let sheetView = rootView.sheetView(at: p) {
+                    sheetView.unselectAndNewUndoGroupIfNeeded()
+                }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
             }
         case .changed:
@@ -1308,14 +1378,13 @@ final class DraftAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
@@ -1363,7 +1432,9 @@ final class DraftAction: Action {
                         sheetView.newUndoGroup()
                         sheetView.removeDraftNotes(at: nis)
                         
-                        Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes, deltaPitch: pitch))]//
+                        Pasteboard.shared.copiedObjects = [.notesValue(.init(notes: notes,
+                                                                             deltaPitch: pitch,
+                                                                             isSelected: false))]//
                         
                         isChanged = true
                     }
@@ -1432,14 +1503,13 @@ final class FaceAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
@@ -1517,14 +1587,13 @@ final class FaceAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
@@ -1552,6 +1621,7 @@ final class FaceAction: Action {
                     }
                     
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     sheetView.replace(nivs)
                     rootView.updateSelectedFrame()
                     
@@ -1562,8 +1632,9 @@ final class FaceAction: Action {
                 let planes = sheetView.keyframeView.selectedPlaneIs
                     .map { sheetView.model.picture.planes[$0] }
                 let t = Transform(translation: -sheetView.convertFromWorld(p))
+                sheetView.unselect()
                 sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
-                let value = SheetValue(lines: [], planes: planes, texts: []) * t
+                let value = SheetValue(lines: [], planes: planes, texts: [], isSelected: true) * t
                 Pasteboard.shared.copiedObjects = [.sheetValue(value)]
                 rootView.updateSelectedFrame()
                 
@@ -1577,6 +1648,7 @@ final class FaceAction: Action {
                 }
                 if !vs.isEmpty {
                     sheetView.newUndoGroup()
+                    sheetView.unselect()
                     sheetView.removeKeyPlanes(vs)
                     rootView.updateSelectedFrame()
                     
@@ -1596,6 +1668,9 @@ final class FaceAction: Action {
             }
             
             if !isChanged {
+                if let sheetView = rootView.sheetView(at: p) {
+                    sheetView.unselectAndNewUndoGroupIfNeeded()
+                }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
             }
         case .changed:
@@ -1621,14 +1696,13 @@ final class AddTimeAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
@@ -1644,10 +1718,7 @@ final class AddTimeAction: InputKeyEventAction {
                                                   tempo: tempo)
                        
                        sheetView.newUndoGroup()
-                       if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(SheetSelection.empty)
-                           rootView.updateSelectedFrame()
-                       }
+                       sheetView.unselect()
                        sheetView.replace(IndexValue(value: content, index: ci))
                        
                        sheetView.updatePlaying()
@@ -1665,25 +1736,21 @@ final class AddTimeAction: InputKeyEventAction {
                                                tempo: tempo)
                        
                        sheetView.newUndoGroup()
-                       if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(SheetSelection.empty)
-                           rootView.updateSelectedFrame()
-                       }
+                       sheetView.unselect()
                        sheetView.replace([IndexValue(value: text, index: ti)])
                        
                        sheetView.updatePlaying()
                    } else {
+                       sheetView.unselectAndNewUndoGroupIfNeeded()
                        rootView.cursor = .arrowWith(string: "Added".localized)
                    }
                } else if !sheetView.model.enabledAnimation {
                    if sheetView.model.score.enabled {
+                       sheetView.unselectAndNewUndoGroupIfNeeded()
                        rootView.cursor = .arrowWith(string: "Conflict with Score".localized)
                    } else {
                        sheetView.newUndoGroup(enabledKeyframeIndex: false)
-                       if !sheetView.model.selection.isEmpty {
-                           sheetView.doSet(SheetSelection.empty)
-                           rootView.updateSelectedFrame()
-                       }
+                       sheetView.unselect()
                        sheetView.set(beat: 0, at: 0)
                        var option = sheetView.model.animation.option
                        option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
@@ -1695,10 +1762,11 @@ final class AddTimeAction: InputKeyEventAction {
                        rootAction.updateActionNode()
                    }
                } else {
+                   sheetView.unselectAndNewUndoGroupIfNeeded()
                    rootView.cursor = .arrowWith(string: "Added".localized)
                }
             } else {
-                rootView.cursor = .arrowWith(string: "Added".localized)
+                rootView.cursor = .ban(string: "Error".localized)
             }
         case .changed:
             break
@@ -1723,34 +1791,36 @@ final class AddScoreAction: InputKeyEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
-            if let sheetView = rootView.madeSheetView(at: p), !sheetView.model.score.enabled {
-                if sheetView.model.animation.enabled {
-                    rootView.cursor = .arrowWith(string: "Conflict with Timeline".localized)
-                } else {
-                    let inP = sheetView.convertFromWorld(p)
-                    let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
-                    let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
-                    
-                    sheetView.newUndoGroup()
-                    if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(SheetSelection.empty)
-                        rootView.updateSelectedFrame()
+            if let sheetView = rootView.madeSheetView(at: p) {
+                if !sheetView.model.score.enabled {
+                    if sheetView.model.animation.enabled {
+                        sheetView.unselectAndNewUndoGroupIfNeeded()
+                        rootView.cursor = .arrowWith(string: "Conflict with Timeline".localized)
+                    } else {
+                        let inP = sheetView.convertFromWorld(p)
+                        let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
+                        let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
+                        
+                        sheetView.newUndoGroup()
+                        sheetView.unselect()
+                        sheetView.set(option)
+                        
+                        rootAction.updateActionNode()
                     }
-                    sheetView.set(option)
-                    
-                    rootAction.updateActionNode()
+                } else {
+                    sheetView.unselectAndNewUndoGroupIfNeeded()
+                    rootView.cursor = .arrowWith(string: "Added".localized)
                 }
             } else {
-                rootView.cursor = .arrowWith(string: "Added".localized)
+                rootView.cursor = .ban(string: "Error".localized)
             }
         case .changed:
             break

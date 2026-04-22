@@ -150,7 +150,6 @@ struct Content: Hashable, Codable {
         }
     }
     var id = UUID()
-    var isSelected = false
     
     init(directoryName: String = "", name: String = "",
          stereo: Stereo = .init(volm: 1, pan: 0),

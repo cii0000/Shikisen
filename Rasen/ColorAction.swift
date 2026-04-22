@@ -724,7 +724,7 @@ final class ColorAction: Action {
                         let content = sheetView.contentsView.elementViews[ci].model
                         if content != beganContent {
                             updateUndoGroup()
-                            sheetView.capture(content, old: beganContent, at: ci)
+                            sheetView.capture(old: beganContent, at: ci)
                         }
                     }
                 }
@@ -1147,7 +1147,7 @@ final class ColorAction: Action {
                         let content = sheetView.contentsView.elementViews[ci].model
                         if content != beganContent {
                             updateUndoGroup()
-                            sheetView.capture(content, old: beganContent, at: ci)
+                            sheetView.capture(old: beganContent, at: ci)
                         }
                     }
                 }
@@ -1436,7 +1436,7 @@ final class ColorAction: Action {
                         let content = sheetView.contentsView.elementViews[ci].model
                         if content != beganContent {
                             updateUndoGroup()
-                            sheetView.capture(content, old: beganContent, at: ci)
+                            sheetView.capture(old: beganContent, at: ci)
                         }
                     }
                 }

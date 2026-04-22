@@ -60,16 +60,19 @@ extension PlanesValue: Protobuf {
 struct NotesValue: Codable {
     var notes: [Note]
     var deltaPitch: Rational
+    var isSelected: Bool
 }
 extension NotesValue: Protobuf {
     init(_ pb: PBNotesValue) throws {
         notes = try pb.notes.map { try Note($0) }
         deltaPitch = (try? .init(pb.deltaPitch)) ?? 0
+        isSelected = pb.isSelected
     }
     var pb: PBNotesValue {
         .with {
             $0.notes = notes.map { $0.pb }
             $0.deltaPitch = deltaPitch.pb
+            $0.isSelected = isSelected
         }
     }
 }
@@ -105,7 +108,6 @@ enum PastableObject: Sendable {
     case uuColor(_ uuColor: UUColor)
     case animation(_ animation: Animation)
     case ids(_ ids: InteroptionsValue)
-    case score(_ score: Score)
     case content(_ content: Content)
     case image(_ image: Image)
     case beatRange(_ beatRange: Range<Rational>)
@@ -154,8 +156,6 @@ extension PastableObject {
              PastableObject.typeName(with: animation)
         case .ids(let ids):
              PastableObject.typeName(with: ids)
-        case .score(let score):
-             PastableObject.typeName(with: score)
         case .content(let content):
              PastableObject.typeName(with: content)
         case .image(let image):
@@ -205,8 +205,6 @@ extension PastableObject {
             self = .animation(try Animation(serializedData: data))
         case PastableObject.objectTypeName(with: InteroptionsValue.self):
             self = .ids(try InteroptionsValue(serializedData: data))
-        case PastableObject.objectTypeName(with: Score.self):
-            self = .score(try Score(serializedData: data))
         case PastableObject.objectTypeName(with: Content.self):
             self = .content(try Content(serializedData: data))
         case PastableObject.objectTypeName(with: Image.self):
@@ -253,8 +251,6 @@ extension PastableObject {
              try? animation.serializedData()
         case .ids(let ids):
              try? ids.serializedData()
-        case .score(let score):
-             try? score.serializedData()
         case .content(let content):
              try? content.serializedData()
         case .image(let image):
@@ -304,8 +300,6 @@ extension PastableObject: Protobuf {
             self = .animation(try Animation(animation))
         case .ids(let ids):
             self = .ids(try InteroptionsValue(ids))
-        case .score(let score):
-            self = .score(try Score(score))
         case .content(let content):
             self = .content(try Content(content))
         case .image(let image):
@@ -351,8 +345,6 @@ extension PastableObject: Protobuf {
                 $0.value = .animation(animation.pb)
             case .ids(let ids):
                 $0.value = .ids(ids.pb)
-            case .score(let score):
-                $0.value = .score(score.pb)
             case .content(let content):
                 $0.value = .content(content.pb)
             case .image(let image):
@@ -389,7 +381,6 @@ extension PastableObject: Codable {
         case uuColor = "7"
         case animation = "8"
         case ids = "9"
-        case score = "10"
         case content = "16"
         case image = "20"
         case beatRange = "11"
@@ -425,8 +416,6 @@ extension PastableObject: Codable {
             self = .animation(try container.decode(Animation.self))
         case .ids:
             self = .ids(try container.decode(InteroptionsValue.self))
-        case .score:
-            self = .score(try container.decode(Score.self))
         case .content:
             self = .content(try container.decode(Content.self))
         case .image:
@@ -482,9 +471,6 @@ extension PastableObject: Codable {
         case .ids(let ids):
             try container.encode(CodingTypeKey.ids)
             try container.encode(ids)
-        case .score(let score):
-            try container.encode(CodingTypeKey.score)
-            try container.encode(score)
         case .content(let content):
             try container.encode(CodingTypeKey.content)
             try container.encode(content)
@@ -585,7 +571,7 @@ final class PastableAction: Action {
     var snapLineNode = Node(fillType: .color(.subSelected))
     var selectingLineNode = Node(lineWidth: 1.5)
     var firstScale = 1.0, editingP = Point(), editingSP = Point()
-    var pasteObject = PastableObject.sheetValue(SheetValue())
+    var pasteObject = PastableObject.sheetValue(SheetValue(isSelected: false))
     var isEditingText = false
     
     func updateNode() {
@@ -699,7 +685,8 @@ final class PastableAction: Action {
             }
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
-                                                                          deltaPitch: pitch))]
+                                                                          deltaPitch: pitch,
+                                                                          isSelected: true))]
             }
             
             selectingLineNode.children = noteIs
@@ -823,7 +810,6 @@ final class PastableAction: Action {
                         
                         var text = textView.model
                         text.string = rootView.finding.string
-                        text.selectedRanges = []
                         let minP = textView.typesetter.characterPosition(at: range.lowerBound)
                         text.origin -= sheetView.convertFromWorld(p) - minP
                         Pasteboard.shared.copiedObjects = [.text(text),
@@ -860,7 +846,6 @@ final class PastableAction: Action {
             
             var text = textView.model
             text.origin -= sheetView.convertFromWorld(p)
-            text.selectedRanges = []
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.text(text),
                                                    .string(text.string)]
@@ -897,7 +882,8 @@ final class PastableAction: Action {
                                  planes: [], texts: [],
                                  origin: sheetView.convertFromWorld(p),
                                  id: sheetView.id,
-                                 rootKeyframeIndex: sheetView.model.animation.rootIndex) * t
+                                 rootKeyframeIndex: sheetView.model.animation.rootIndex,
+                                 isSelected: false) * t
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.sheetValue(ssv)]
             }
@@ -1087,7 +1073,9 @@ final class PastableAction: Action {
                 note.beatRange.start -= beat
                 
                 if isSendPasteboard {
-                    Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note], deltaPitch: pitch))]
+                    Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note],
+                                                                              deltaPitch: pitch,
+                                                                              isSelected: false))]
                 }
                 let lines = [scoreView.pointline(from: score.notes[noteI])]
                     .map { scoreView.convertToWorld($0) }
@@ -1169,7 +1157,8 @@ final class PastableAction: Action {
                         let sheetValue = SheetValue(planes: [planeView.model],
                                                     origin: inP,
                                           id: fco.sheetView.id,
-                                          rootKeyframeIndex: fco.sheetView.model.animation.rootIndex)
+                                                    rootKeyframeIndex: fco.sheetView.model.animation.rootIndex,
+                                                    isSelected: false)
                         Pasteboard.shared.copiedObjects =
                             [.uuColor(rootView.uuColor(at: p)),
                              .sheetValue(sheetValue)]
@@ -1316,7 +1305,8 @@ final class PastableAction: Action {
             }
             
             Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
-                                                                      deltaPitch: pitch))]
+                                                                      deltaPitch: pitch,
+                                                                      isSelected: true))]
             
             sheetView.newUndoGroup()
             sheetView.unselect()
@@ -1347,7 +1337,9 @@ final class PastableAction: Action {
             
             let lineIs = sheetView.keyframeView.selectedLineIs
             let planeIs = sheetView.keyframeView.selectedPlaneIs
-            let textIs = sheetView.selectedTextIs
+            let textRanges = sheetView.textsView.elementViews.enumerated().reversed()
+                .map { ($0.offset, $0.element.selectedRanges) }
+            let contentIs = sheetView.selectedContentIs
             
             sheetView.newUndoGroup()
             sheetView.unselect()
@@ -1358,48 +1350,45 @@ final class PastableAction: Action {
             if !planeIs.isEmpty {
                 sheetView.removePlanes(at: planeIs)
             }
-            if !textIs.isEmpty {
-                for (ti, textView) in sheetView.textsView.elementViews.enumerated().reversed() {
-                    let ranges = textView.selectedRanges
-                    guard !ranges.isEmpty else { continue }
-                    
-                    var minI = textView.model.string.endIndex
-                    for range in ranges {
-                        let i = range.lowerBound
-                        if i < minI {
-                            minI = i
-                        }
-                    }
-                    let oldText = textView.model
-                    var text = textView.model
-                    for range in ranges.reversed() {
-                        text.string.removeSubrange(range)
-                    }
-                    
-                    if text.string.isEmpty {
-                        sheetView.removeText(at: ti)
-                    } else {
-                        let os = oldText.string
-                        let range = os.intRange(from: os.startIndex ..< os.endIndex)
-                        
-                        let sb = sheetView.bounds.inset(by: Sheet.textPadding)
-                        let origin: Point?
-                        if let textFrame = text.frame, !sb.contains(textFrame) {
-                            let nFrame = sb.clipped(textFrame)
-                            origin = text.origin + nFrame.origin - textFrame.origin
-                        } else {
-                            origin = nil
-                        }
-                        
-                        let tuv = TextValue(string: text.string,
-                                            replacedRange: range,
-                                            origin: origin, size: nil,
-                                            widthCount: nil)
-                        sheetView.replace(IndexValue(value: tuv, index: ti))
+            for (ti, ranges) in textRanges {
+                let textView = sheetView.textsView.elementViews[ti]
+                guard !ranges.isEmpty else { continue }
+                
+                var minI = textView.model.string.endIndex
+                for range in ranges {
+                    let i = range.lowerBound
+                    if i < minI {
+                        minI = i
                     }
                 }
+                let oldText = textView.model
+                var text = textView.model
+                for range in ranges.reversed() {
+                    text.string.removeSubrange(range)
+                }
+                
+                if text.string.isEmpty {
+                    sheetView.removeText(at: ti)
+                } else {
+                    let os = oldText.string
+                    let range = os.intRange(from: os.startIndex ..< os.endIndex)
+                    
+                    let sb = sheetView.bounds.inset(by: Sheet.textPadding)
+                    let origin: Point?
+                    if let textFrame = text.frame, !sb.contains(textFrame) {
+                        let nFrame = sb.clipped(textFrame)
+                        origin = text.origin + nFrame.origin - textFrame.origin
+                    } else {
+                        origin = nil
+                    }
+                    
+                    let tuv = TextValue(string: text.string,
+                                        replacedRange: range,
+                                        origin: origin, size: nil,
+                                        widthCount: nil)
+                    sheetView.replace(IndexValue(value: tuv, index: ti))
+                }
             }
-            let contentIs = sheetView.selectedContentIs
             if !contentIs.isEmpty {
                 sheetView.removeContents(at: contentIs)
             }
@@ -1417,7 +1406,8 @@ final class PastableAction: Action {
                                  planes: [], texts: [],
                                  origin: sheetP,
                                  id: sheetView.id,
-                                 rootKeyframeIndex: sheetView.model.animation.rootIndex) * t
+                                 rootKeyframeIndex: sheetView.model.animation.rootIndex,
+                                 isSelected: false) * t
             Pasteboard.shared.copiedObjects = [.sheetValue(ssv)]
             
             if sheetView.model.enabledAnimation {
@@ -1457,7 +1447,6 @@ final class PastableAction: Action {
                     text.string = rootView.finding.string
                     let minP = textView.typesetter.characterPosition(at: range.lowerBound)
                     text.origin -= sheetView.convertFromWorld(p) - minP
-                    text.selectedRanges = []
                     Pasteboard.shared.copiedObjects = [.text(text),
                                                        .string(text.string)]
                 }
@@ -1479,7 +1468,6 @@ final class PastableAction: Action {
                         let nFrame = sb.clipped(textFrame)
                         text.origin += nFrame.origin - textFrame.origin
                     }
-                    text.selectedRanges = []
                     let border = Border(location: x,
                                         orientation: text.orientation.reversed())
                     Pasteboard.shared.copiedObjects = [.border(border)]
@@ -1492,7 +1480,6 @@ final class PastableAction: Action {
             
             var text = textView.model
             text.origin -= sheetView.convertFromWorld(p)
-            text.selectedRanges = []
             
             Pasteboard.shared.copiedObjects = [.text(text),
                                                .string(text.string)]
@@ -1513,7 +1500,6 @@ final class PastableAction: Action {
             
             var text = textView.model
             text.timeOption = nil
-            text.selectedRanges = []
             
             sheetView.newUndoGroup()
             sheetView.unselect()
@@ -1578,7 +1564,8 @@ final class PastableAction: Action {
                     nNote.beatRange.start -= beat
                     
                     Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [nNote],
-                                                                              deltaPitch: pitch))]
+                                                                              deltaPitch: pitch,
+                                                                              isSelected: false))]
                     
                     var pits = note.pits
                     pits.remove(at: pitI)
@@ -1598,7 +1585,9 @@ final class PastableAction: Action {
                     note.pitch -= pitch
                     note.beatRange.start -= beat
                     
-                    Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note], deltaPitch: pitch))]
+                    Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note],
+                                                                              deltaPitch: pitch,
+                                                                              isSelected: false))]
                     
                     sheetView.newUndoGroup()
                     sheetView.unselect()
@@ -1697,7 +1686,9 @@ final class PastableAction: Action {
                 note.pitch -= pitch
                 note.beatRange.start -= beat
                 
-                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note], deltaPitch: pitch))]
+                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: [note],
+                                                                          deltaPitch: pitch,
+                                                                          isSelected: false))]
                 
                 sheetView.newUndoGroup()
                 sheetView.unselect()
@@ -2273,7 +2264,7 @@ final class PastableAction: Action {
                 selectingLineNode.children[0].attitude = Attitude(position: p, scale: .init(square: scale))
             }
         }
-        func updateNotes(_ notes: [Note], deltaPitch: Rational) {
+        func updateNotes(_ notes: [Note], deltaPitch: Rational, isSelected: Bool) {
             if phase == .began {
                 beganSheetView = rootView.madeSheetView(at: shp)
             }
@@ -2290,7 +2281,10 @@ final class PastableAction: Action {
                 beganPitch = pitch
                 beganBeat = beat
                 
+                sheetView.hideSelected()
+                
                 sheetView.newUndoGroup()
+                sheetView.unselect()
                 if !sheetView.scoreView.model.enabled {
                     var option = sheetView.scoreView.option
                     option.enabled = true
@@ -2308,6 +2302,10 @@ final class PastableAction: Action {
                 
                 let notes = beganNotes.sorted(by: { $0.key < $1.key }).map { $0.value }
                 sheetView.append(notes)
+                if isSelected {
+                    sheetView.doSet(SheetSelection(noteSelections: beganNotes.keys.sorted()
+                        .reduce(into: .init()) { $0[$1] = .init(pitSelections: [0: .init()]) }))
+                }
                 
                 let octaveNode = scoreView.octaveNode(noteIs: Array(count ..< count + notes.count))
                 octaveNode.attitude.position = sheetView.convertToWorld(scoreView.node.attitude.position)
@@ -2435,8 +2433,6 @@ final class PastableAction: Action {
             break
         case .ids(let ids):
             updateIDs(ids.ids)
-        case .score:
-            break
         case .content(let content):
             if let image = content.image {
                 updateImage(image, imageFrame: content.imageFrame)
@@ -2450,7 +2446,8 @@ final class PastableAction: Action {
         case .normalizationRationalValue:
             break
         case .notesValue(let notesValue):
-            updateNotes(notesValue.notes, deltaPitch: notesValue.deltaPitch)
+            updateNotes(notesValue.notes, deltaPitch: notesValue.deltaPitch,
+                        isSelected: notesValue.isSelected)
         case .stereo:
             break
         case .tone:
@@ -2466,13 +2463,12 @@ final class PastableAction: Action {
         let shp = rootView.sheetPosition(at: p)
         
         var isRootNewUndoGroup = true
-        var isUpdateUndoGroupSet = Set<IntPoint>()
-        func updateUndoGroup(with nshp: IntPoint) {
-            if !isUpdateUndoGroupSet.contains(nshp),
-               let sheetView = rootView.sheetView(at: nshp) {
-                
+        var isUpdateUndoGroupSet = [SheetView: SheetSelection]()
+        func updateUndoGroup(with sheetView: SheetView) {
+            if isUpdateUndoGroupSet[sheetView] == nil {
                 sheetView.newUndoGroup()
-                isUpdateUndoGroupSet.insert(nshp)
+                sheetView.unselect()
+                isUpdateUndoGroupSet[sheetView] = .init()
             }
         }
         
@@ -2498,7 +2494,7 @@ final class PastableAction: Action {
             }
         }
         
-        func pasteLines(_ lines: [Line], at p: Point) {
+        func pasteLines(_ lines: [Line], isSelected: Bool, at p: Point) {
             let p = rootView.roundedPoint(from: p)
             let pt = firstTransform(at: p)
             let pLines: [Line] = lines.map { $0 * pt }
@@ -2536,14 +2532,25 @@ final class PastableAction: Action {
                             if isNew {
                                 isRootNewUndoGroup = false
                             }
-                            updateUndoGroup(with: nshp)
+                            updateUndoGroup(with: sheetView)
                             sheetView.append(nLines)
+                            if isSelected {
+                                let ki = sheetView.model.animation.index
+                                let li = sheetView.model.picture.lines.count - nLines.count
+                                if isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki] != nil {
+                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]?.lineIs
+                                        .formUnion(li ..< li + nLines.count)
+                                } else {
+                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]
+                                    = .init(lineIs: Set(li ..< li + nLines.count))
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        func pastePlanes(_ planes: [Plane], at p: Point) {
+        func pastePlanes(_ planes: [Plane], isSelected: Bool, at p: Point) {
             let p = rootView.roundedPoint(from: p)
             let pt = firstTransform(at: p)
             let pPlanes = planes.map { $0 * pt }
@@ -2576,14 +2583,25 @@ final class PastableAction: Action {
                             if isNew {
                                 isRootNewUndoGroup = false
                             }
-                            updateUndoGroup(with: nshp)
+                            updateUndoGroup(with: sheetView)
                             sheetView.append(nPlanes)
+                            if isSelected {
+                                let ki = sheetView.model.animation.index
+                                let pi = sheetView.model.picture.planes.count - nPlanes.count
+                                if isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki] != nil {
+                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]?.planeIs
+                                        .formUnion(pi ..< pi + nPlanes.count)
+                                } else {
+                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]
+                                    = .init(planeIs: Set(pi ..< pi + nPlanes.count))
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-        func pasteTexts(_ texts: [Text], at p: Point) {
+        func pasteTexts(_ texts: [Text], isSelected: Bool, at p: Point) {
             let p = rootView.roundedPoint(from: p)
             let pt = firstTransform(at: p)
             guard !texts.isEmpty else { return }
@@ -2619,12 +2637,15 @@ final class PastableAction: Action {
                     if isNew {
                         isRootNewUndoGroup = false
                     }
-                    updateUndoGroup(with: nshp)
+                    updateUndoGroup(with: sheetView)
                     sheetView.append([nText])
+                    if isSelected {
+                        isUpdateUndoGroupSet[sheetView]?.textSelections[sheetView.model.texts.count - 1] = .init(ranges: [text.string.allIntRange])
+                    }
                 }
             }
         }
-        func pasteText(_ text: Text) {
+        func pasteText(_ text: Text, isSelected: Bool) {
 //            let pt = firstTransform()
             let nshp = shp
             guard ((shp.x - 1) ... (shp.x + 1)).contains(nshp.x)
@@ -2668,7 +2689,7 @@ final class PastableAction: Action {
                                            replacedRange: rRange,
                                            origin: origin, size: size,
                                            widthCount: widthCount)
-                        updateUndoGroup(with: nshp)
+                        updateUndoGroup(with: sheetView)
                         sheetView.replace(IndexValue(value: tv, index: i))
                     }
                 }
@@ -2728,7 +2749,7 @@ final class PastableAction: Action {
                                                replacedRange: rRange,
                                                origin: origin, size: size,
                                                widthCount: widthCount)
-                            updateUndoGroup(with: nshp)
+                            updateUndoGroup(with: sheetView)
                             sheetView.replace(IndexValue(value: tv, index: i))
                             isAppend = true
                             break
@@ -2749,11 +2770,14 @@ final class PastableAction: Action {
                     text.origin += nFrame.origin - textFrame.origin
                 }
                 
-                updateUndoGroup(with: nshp)
+                updateUndoGroup(with: sheetView)
                 sheetView.append(text)
+                if isSelected {
+                    isUpdateUndoGroupSet[sheetView]?.textSelections = [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])]
+                }
             }
         }
-        func pasteContents(_ contents: [Content], at p: Point) {
+        func pasteContents(_ contents: [Content], isSelected: Bool, at p: Point) {
             let p = rootView.roundedPoint(from: p)
             let pt = firstTransform(at: p)
             guard !contents.isEmpty else { return }
@@ -2791,8 +2815,11 @@ final class PastableAction: Action {
                     if isNew {
                         isRootNewUndoGroup = false
                     }
-                    updateUndoGroup(with: nshp)
+                    updateUndoGroup(with: sheetView)
                     sheetView.append(content)
+                    if isSelected {
+                        isUpdateUndoGroupSet[sheetView]?.contentIs.insert(sheetView.model.contents.count - 1)
+                    }
                 }
             }
         }
@@ -2838,7 +2865,7 @@ final class PastableAction: Action {
             content.id = .init()
             
             
-            updateUndoGroup(with: shp)
+            updateUndoGroup(with: sheetView)
             sheetView.append(content)
         }
         
@@ -2935,12 +2962,19 @@ final class PastableAction: Action {
             } else {
                 if value.texts.count == 1
                     && value.lines.isEmpty && value.planes.isEmpty && value.contents.isEmpty {
-                    pasteText(value.texts[0])
+                    pasteText(value.texts[0], isSelected: value.isSelected)
                 } else {
-                    pasteLines(value.lines, at: np)
-                    pastePlanes(value.planes, at: np)
-                    pasteTexts(value.texts, at: np)
-                    pasteContents(value.contents, at: np)
+                    pasteLines(value.lines, isSelected: value.isSelected, at: np)
+                    pastePlanes(value.planes, isSelected: value.isSelected, at: np)
+                    pasteTexts(value.texts, isSelected: value.isSelected, at: np)
+                    pasteContents(value.contents, isSelected: value.isSelected, at: np)
+                }
+                if value.isSelected {
+                    for (sheetView, selection) in isUpdateUndoGroupSet {
+                        if selection != sheetView.model.selection {
+                            sheetView.doSet(selection)
+                        }
+                    }
                 }
             }
         case .planesValue(let planesValue):
@@ -2954,9 +2988,9 @@ final class PastableAction: Action {
             sheetView.append(planesValue.planes)
         case .string(let string):
             pasteText(Text(autoWidthCountWith: string,
-                           locale: TextInputContext.currentLocale))
+                           locale: TextInputContext.currentLocale), isSelected: false)
         case .text(let text):
-            pasteText(text)
+            pasteText(text, isSelected: false)
         case .border(let border):
             if let sheetView = rootView.sheetView(at: shp),
                let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
@@ -3104,6 +3138,10 @@ final class PastableAction: Action {
             sheetView.newUndoGroup()
             sheetView.insert(kivs)
             sheetView.rootKeyframeIndex = sheetView.model.animation.keyframes.count * count + ni
+            let selection = SheetSelection(keyframeSelections: kivs.reduce(into: .init()) { $0[$1.index] = .init() })
+            if selection != sheetView.model.selection {
+                sheetView.doSet(selection)
+            }
             rootAction.updateActionNode()
             rootView.updateSelectedFrame()
         case .ids(let idv):
@@ -3124,24 +3162,6 @@ final class PastableAction: Action {
                                                               index: lis[$0]) }
                 sheetView.newUndoGroup()
                 sheetView.set([IndexValue(value: idivs, index: sheetView.animationView.model.index)])
-            }
-        case .score(let score):
-            guard !score.notes.isEmpty, let sheetView = rootView.sheetView(at: shp) else { return }
-            
-            var ni = sheetView.model.score.notes.count
-            let nivs: [IndexValue<Note>] = score.notes.map {
-                let v = IndexValue(value: $0, index: ni)
-                ni += 1
-                return v
-            }
-            
-            sheetView.newUndoGroup()
-            sheetView.insert(nivs)
-            
-            var option = sheetView.scoreView.model.option
-            if !option.enabled {
-                option.enabled = true
-                sheetView.set(option)
             }
         case .content(let content):
             pasteContent(content)
@@ -3227,7 +3247,7 @@ final class PastableAction: Action {
                     }
                 }
             }
-        case .notesValue(_):
+        case .notesValue:
             octaveNode?.removeFromParent()
             octaveNode = nil
             
@@ -3248,6 +3268,8 @@ final class PastableAction: Action {
             if !noteIVs.isEmpty {
                 sheetView.capture(noteIVs, old: oldNoteIVs)
             }
+            
+            sheetView.showSelected()
         case .stereo(let stereo):
             guard let sheetView = rootView.sheetView(at: shp) else { return }
             if sheetView.model.score.enabled {
@@ -3355,6 +3377,7 @@ final class PastableAction: Action {
                     }
                     if !nivs.isEmpty {
                         sheetView.newUndoGroup()
+                        sheetView.unselect()
                         sheetView.replace(nivs)
                         
                         sheetView.updatePlaying()
@@ -3382,6 +3405,7 @@ final class PastableAction: Action {
                         
                         if note != oldNote {
                             sheetView.newUndoGroup()
+                            sheetView.unselect()
                             sheetView.replace(note, at: noteI)
                             
                             sheetView.updatePlaying()
@@ -3419,6 +3443,7 @@ final class PastableAction: Action {
                             }
                             if !nivs.isEmpty {
                                 sheetView.newUndoGroup()
+                                sheetView.unselect()
                                 sheetView.replace(nivs)
                                 
                                 sheetView.updatePlaying()
@@ -3438,6 +3463,7 @@ final class PastableAction: Action {
                             }
                             if isChanged {
                                 sheetView.newUndoGroup()
+                                sheetView.unselect()
                                 sheetView.replace(note, at: noteI)
                                 
                                 sheetView.updatePlaying()
@@ -3470,7 +3496,6 @@ final class PastableAction: Action {
         case .uuColor: true
         case .animation: true
         case .ids: true
-        case .score: true
         case .content: true
         case .image: true
         case .beatRange: false
@@ -3495,7 +3520,7 @@ final class PastableAction: Action {
             }
         }
         if rootView.containsLookingUp(at: p) {
-            rootView.closeLookingUpNode()
+            rootView.closeLookingUp()
             return
         }
         
@@ -3826,7 +3851,7 @@ final class PastableAction: Action {
             editingSP = sp
             editingP = rootView.convertScreenToWorld(sp)
             pasteObject = Pasteboard.shared.copiedObjects.first
-                ?? .sheetValue(SheetValue())
+            ?? .sheetValue(SheetValue(isSelected: false))
             selectingLineNode.fillType = .color(.subSelected)
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth

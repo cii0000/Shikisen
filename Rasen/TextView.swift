@@ -40,9 +40,12 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
     var selectedRanges = [Range<String.Index>]() {
         didSet {
             guard selectedRanges != oldValue else { return }
-            binder[keyPath: keyPath].selectedRanges = selectedRanges
             updateWithSelectedRanges()
         }
+    }
+    var selectedIntRanges: [Range<Int>] {
+        let str = model.string
+        return selectedRanges.map { str.intRange(from: $0) }
     }
     func updateWithSelectedRanges() {
         guard !selectedRanges.isEmpty else {
@@ -134,7 +137,6 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
         updateCursor()
         updateTimeline()
         
-        selectedRanges = binder[keyPath: keyPath].selectedRanges
         updateWithSelectedRanges()
     }
 }
@@ -144,7 +146,6 @@ extension TextView {
         updateLineWidth()
         updateTypesetter()
         
-        selectedRanges = binder[keyPath: keyPath].selectedRanges
         updateWithSelectedRanges()
     }
     func updateLineWidth() {

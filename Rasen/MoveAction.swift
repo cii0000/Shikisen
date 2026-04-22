@@ -173,17 +173,14 @@ final class MoveSheetsAction: DragEventAction {
     var csv = CopiedSheetsValue(), isNewUndoGroup = false
     func flow(with event: DragEvent) {
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootAction.closeAllPanelsAndStop(at: p)
             
             rootView.isHiddenSelected = true
             
-            let p = rootView.convertScreenToWorld(sp)
             let (isSelected, vs) = rootView.sheetFramePositions(at: p)
             var csv = CopiedSheetsValue()
             for value in vs {
@@ -343,16 +340,13 @@ final class MoveAnimationAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledAnimation {
                 beganSP = sp
@@ -694,10 +688,7 @@ final class MoveScoreAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let sheetP = sheetView.convertFromWorld(p)
@@ -1846,26 +1837,18 @@ final class MoveContentAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootView.cursor = Cursor.arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p),
                 let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                 scale: rootView.screenToWorldScale) {
                 self.sheetView = sheetView
-                if !sheetView.model.selection.isEmpty {
-                    sheetView.newUndoGroup()
-                    isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
-                    rootView.updateSelectedFrame()
-                }
                 
                 let sheetP = sheetView.convertFromWorld(p)
                 let contentView = sheetView.contentsView.elementViews[ci]
@@ -1990,7 +1973,7 @@ final class MoveContentAction: DragEventAction {
                         if isNewUndoGroup {
                             sheetView.newUndoGroup()
                         }
-                        sheetView.capture(contentView.model, old: beganContent, at: contentI)
+                        sheetView.capture(old: beganContent, at: contentI)
                     }
                     if type == .all || type == .startBeat || type == .endBeat {
                         sheetView.updatePlaying()
@@ -2027,11 +2010,13 @@ final class MoveTextAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p),
                let ci = sheetView.textIndex(at: sheetView.convertFromWorld(p),
@@ -2146,7 +2131,7 @@ final class MoveTextAction: DragEventAction {
                         if isNewUndoGroup {
                             sheetView.newUndoGroup()
                         }
-                        sheetView.capture(textView.model, old: beganText, at: textI)
+                        sheetView.capture(old: beganText, at: textI)
                     }
                     sheetView.updatePlaying()
                 }
@@ -2184,16 +2169,13 @@ final class MoveTempoAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
@@ -2293,7 +2275,7 @@ final class MoveTempoAction: DragEventAction {
                         let content = sheetView.contentsView.elementViews[ci].model
                         if content != beganContent {
                             updateUndoGroup()
-                            sheetView.capture(content, old: beganContent, at: ci)
+                            sheetView.capture(old: beganContent, at: ci)
                         }
                     }
                     for (ti, beganText) in beganTexts {
@@ -2301,7 +2283,7 @@ final class MoveTempoAction: DragEventAction {
                         let text = sheetView.textsView.elementViews[ti].model
                         if text != beganText {
                             updateUndoGroup()
-                            sheetView.capture(text, old: beganText, at: ti)
+                            sheetView.capture(old: beganText, at: ti)
                         }
                     }
                 }
@@ -2342,16 +2324,13 @@ final class MoveSheetAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             let shp = rootView.sheetPositionFromSelectedFrame(at: p)
             ?? rootView.sheetPosition(at: p)
@@ -2501,16 +2480,16 @@ final class MoveSheetAction: DragEventAction {
                 if isLines || isPlanes || isTexts || isContents {
                     sheetView.newUndoGroup()
                     if isLines {
-                        sheetView.captureLines(lines, old: oldLines, at: lineIs)
+                        sheetView.capture(old: zip(oldLines, lineIs).map { .init(value: $0.0, index: $0.1) })
                     }
                     if isPlanes {
-                        sheetView.capturePlanes(planes, old: oldPlanes, at: planeIs)
+                        sheetView.capture(old: zip(oldPlanes, planeIs).map { .init(value: $0.0, index: $0.1) })
                     }
                     if isTexts {
-                        sheetView.captureTexts(texts, old: oldTexts, at: textIs)
+                        sheetView.capture(old: zip(oldTexts, textIs).map { .init(value: $0.0, index: $0.1) })
                     }
                     if isContents {
-                        sheetView.captureContents(contents, old: oldContents, at: contentIs)
+                        sheetView.capture(old: zip(oldContents, contentIs).map { .init(value: $0.0, index: $0.1) })
                     }
                     if isLines {
                         let lis = lineIs.filter { !sheetView.model.picture.lines[$0].intersects(sheetView.bounds) }
@@ -2590,16 +2569,13 @@ final class MoveLineAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
 
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
@@ -2920,7 +2896,7 @@ final class MoveLineAction: DragEventAction {
                         if isNewUndoGroup {
                             sheetView.newUndoGroup()
                         }
-                        sheetView.captureLine(line, old: beganLine, at: lineIndex)
+                        sheetView.capture(old: beganLine, at: lineIndex)
                     }
                 }
             }
@@ -2969,11 +2945,13 @@ final class MoveBorderAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeAllPanelsAndStop(at: p)
             
             if let (border, i, sheetView, _) = rootView.border(at: p),
             let shp = rootView.sheetPosition(from: sheetView) {
@@ -3113,22 +3091,19 @@ final class MoveMainFrameAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
+        
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootView.closeAllPanels(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p),
                let shp = rootView.sheetPosition(from: sheetView) {
                 
                 self.sheetView = sheetView
-                if !sheetView.model.selection.isEmpty {
-                    sheetView.newUndoGroup()
-                    isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
-                    rootView.updateSelectedFrame()
-                }
+                sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
                 
                 let sheetP = sheetView.convertFromWorld(p)
                 beganSP = sp
@@ -3186,15 +3161,13 @@ final class MoveZAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
 
         let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-
         switch event.phase {
         case .began:
+            rootAction.closeAllPanelsAndStop(at: p)
+            
             var isChange = false
             if let sheetView = rootView.sheetView(at: p) {
                 let inP = sheetView.convertFromWorld(p)

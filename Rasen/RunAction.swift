@@ -74,11 +74,13 @@ final class RunAction: InputKeyEventAction {
     func flow(with event: InputKeyEvent) {
         let sp = event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
+        
         if rootAction.isPlaying(with: event) {
             rootView.closeAllPanels(at: p)
             rootAction.stopPlaying(with: event)
             return
         }
+        
         guard isEditingSheet else {
             switch event.phase {
             case .began:
