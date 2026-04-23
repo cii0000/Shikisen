@@ -104,6 +104,8 @@ final class LineAction: Action {
     }
     var lastSnapStraightTime = 0.0
     
+    var isUpdatedNewUndoGroupWorld = false
+    var isUpdatedNewUndoGroupSheetViews = Set<SheetView>()
     var firstPoint = Point()
     var centerOrigin = Point(), centerBounds = Rect(), clipBounds = Rect()
     var centerSHP = IntPoint(), nearestShps = [IntPoint]()
@@ -197,14 +199,12 @@ final class LineAction: Action {
             rootAction.keepOut(with: event)
             return
         }
+        
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
-            rootView.closeLookingUp()
+            rootAction.closeLookingUpAndStop(at: p)
             
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = noteSheetView, sheetView.model.score.enabled {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
@@ -282,7 +282,6 @@ final class LineAction: Action {
                 rootView.cursor = .circle(string: Pitch(value: pitch).displayString())
             }
         case .changed:
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = noteSheetView,
                 let nsBeat = noteStartBeat, let noteI {
                 
@@ -426,10 +425,6 @@ final class LineAction: Action {
                 lasso.intersects(scoreView.pointline(from: scoreView.model.notes[i])) ? i : nil
             }
             if !nis.isEmpty {
-                if rootAction.isPlaying(with: event) {
-                    rootAction.stopPlaying(with: event)
-                }
-                
                 let pitch = scoreView.pitch(atY: scoreP.y, interval: rootView.currentPitchInterval)
                 let score = scoreView.model
                 let beat = scoreView.beat(atX: scoreP.x, interval: rootView.currentBeatInterval)
@@ -484,11 +479,11 @@ final class LineAction: Action {
             return
         }
         
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         if isDrawNote {
             drawNote(with: event)
             return
         } else if event.phase == .began {
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = rootView.sheetView(at: p),
                sheetView.scoreView.containsMainFrame(sheetView.scoreView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale) {
@@ -502,11 +497,9 @@ final class LineAction: Action {
         if isStopPlaying || rootAction.isPlaying(with: event) {
             rootAction.stopPlaying(with: event)
             isStopPlaying = true
-            
-            rootView.closeLookingUp()
             return
         }
-        rootView.closeLookingUp()
+        rootView.closeAllPanels(at: p)
         
         drawLine(with: event, isStraight: false)
     }
@@ -516,11 +509,11 @@ final class LineAction: Action {
             return
         }
         
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         if isDrawNote {
             drawNote(with: event, isStraight: true)
             return
         } else if event.phase == .began {
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = rootView.sheetView(at: p),
                sheetView.scoreView.containsMainFrame(sheetView.scoreView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale) {
@@ -536,6 +529,8 @@ final class LineAction: Action {
             isStopPlaying = true
             return
         }
+        rootView.closeAllPanels(at: p)
+        
         drawLine(with: event, isStraight: true)
     }
     
@@ -1010,6 +1005,13 @@ final class LineAction: Action {
                                      at: rootView.accessoryNodeIndex)
             
             let sheetView = rootView.sheetView(at: centerSHP)
+            if let sheetView {
+                var isNewUndoGroup = true
+                sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                if !isNewUndoGroup {
+                    isUpdatedNewUndoGroupSheetViews.insert(sheetView)
+                }
+            }
             snapLines = sheetView?.model.picture.lines ?? []
             
             beganTime = event.time
@@ -1072,6 +1074,15 @@ final class LineAction: Action {
                                                       bufferVertexCounts: linePathBufferVertexCounts)
                             self.isSnapStraight = isSnapStraight
                             self.drawLineEventsCount = events.count
+                            
+                            if let sheetView = self.rootView.sheetView(at: tempLine.lastPoint + self.centerOrigin),
+                               !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                                var isNewUndoGroup = true
+                                sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                                if !isNewUndoGroup {
+                                    self.isUpdatedNewUndoGroupSheetViews.insert(sheetView)
+                                }
+                            }
                         }
                     }
                 }
@@ -1138,18 +1149,16 @@ final class LineAction: Action {
                     
                     let oldRootI = sheetView.model.animation.rootIndex
                     sheetView.rootKeyframeIndex = beganAnimationRootIndex
-                    sheetView.newUndoGroup()
-                    if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(SheetSelection.empty)
-                        rootView.updateSelectedFrame()
+                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                        sheetView.newUndoGroup()
+                        sheetView.unselect()
                     }
                     sheetView.append(tempLine)
                     sheetView.rootKeyframeIndex = oldRootI
                 } else {
-                    sheetView.newUndoGroup()
-                    if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(SheetSelection.empty)
-                        rootView.updateSelectedFrame()
+                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                        sheetView.newUndoGroup()
+                        sheetView.unselect()
                     }
                     sheetView.append(tempLine)
                 }
@@ -1174,10 +1183,9 @@ final class LineAction: Action {
                                 }
                             }
                             if !nLines.isEmpty {
-                                sheetView.newUndoGroup()
-                                if !sheetView.model.selection.isEmpty {
-                                    sheetView.doSet(SheetSelection.empty)
-                                    rootView.updateSelectedFrame()
+                                if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                                    sheetView.newUndoGroup()
+                                    sheetView.unselect()
                                 }
                                 sheetView.append(nLines)
                             }
@@ -1207,30 +1215,35 @@ final class LineAction: Action {
         case .began:
             rootView.cursor = rootView.defaultCursor
             
-            rootView.hideSelected()
-            
             let sheetView = rootView.sheetView(at: p)
             let isScore = sheetView?.model.score.enabled ?? false
             
             if rootAction.isPlaying(with: event) {
                 rootAction.stopPlaying(with: event)
-                if !isScore {
-                    rootView.closeLookingUp()
-                    return
-                }
+                if !isScore { return }
             }
             rootView.closeLookingUp()
             
             if isEditingSheet {
                 updateClipBoundsAndIndexRange(at: p)
-            }
-            
-            if let sheetView, isScore {
-                noteSheetView = sheetView
-                if !sheetView.model.selection.isEmpty {
-                    sheetView.newUndoGroup()
-                    isNewUndoGroupNote = false
-                    sheetView.doSet(SheetSelection.empty)
+                
+                if let sheetView {
+                    if isScore {
+                        noteSheetView = sheetView
+                        sheetView.unselect(isNewUndoGroup: &isNewUndoGroupNote)
+                    } else {
+                        var isNewUndoGroup = true
+                        sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                        if !isNewUndoGroup {
+                            isUpdatedNewUndoGroupSheetViews.insert(sheetView)
+                        }
+                    }
+                }
+            } else {
+                if !rootView.world.selectedSheetIDs.isEmpty {
+                    rootView.newUndoGroup()
+                    rootView.setSelectedSheet([])
+                    isUpdatedNewUndoGroupWorld = true
                 }
             }
             
@@ -1258,7 +1271,7 @@ final class LineAction: Action {
                 let rectNode = Node(lineWidth: lassoPathNodeLineWidth,
                                     lineType: lineType, fillType: fillType)
                 self.rectNode = rectNode
-                rootView.node.append(child: rectNode)
+                rootView.node.insert(child: rectNode, at: i)
             }
             
             drawLineEvents.append(.init(p: p - centerOrigin,
@@ -1308,6 +1321,16 @@ final class LineAction: Action {
                             }
                             
                             self.drawLineEventsCount = events.count
+                            
+                            if !isScore,
+                               let sheetView = self.rootView.sheetView(at: tempLine.lastPoint + self.centerOrigin),
+                               !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                                var isNewUndoGroup = true
+                                sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                                if !isNewUndoGroup {
+                                    self.isUpdatedNewUndoGroupSheetViews.insert(sheetView)
+                                }
+                            }
                         }
                     }
                 }
@@ -1377,6 +1400,7 @@ final class LineAction: Action {
             outlineLassoNode = nil
             rectNode?.removeFromParent()
             
+            isUpdatedNewUndoGroupSheetViews.forEach { rootView.updateFinding(from: $0) }
             rootView.updateFinding(at: p)
             
             rootView.updateSelectedFrame()
@@ -1453,6 +1477,7 @@ final class LineAction: Action {
                                                 isEnableLine: isEnableLine,
                                                 isEnablePlane: isEnablePlane,
                                                 isEnableText: isEnableText,
+                                                isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView),
                                                 distance: d) {
                 let np = sheetView.convertFromWorld(p)
                 let t = Transform(translation: -np)
@@ -1477,7 +1502,8 @@ final class LineAction: Action {
                                                isRemove: isRemove,
                                                isEnableLine: isEnableLine,
                                                isEnablePlane: isEnablePlane,
-                                               isEnableText: isEnableText) {
+                                               isEnableText: isEnableText,
+                                               isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView)) {
                         let t = Transform(translation: -sheetView.convertFromWorld(p))
                         value += aValue * t
                     }
@@ -1530,7 +1556,7 @@ final class LineAction: Action {
     }
     
     func updateWithCopySheet(at dp: Point, from values: [Value]) {
-        var csv = CopiedSheetsValue()
+        var csv = CopiedSheetsValue(isSelected: true)
         for value in values {
             if let sid = rootView.sheetID(at: value.shp) {
                 csv.sheetIDs[value.shp] = sid
@@ -1543,10 +1569,8 @@ final class LineAction: Action {
         let values = self.values(with: tempLine)
         updateWithCopySheet(at: p, from: values)
         if !values.isEmpty {
-            rootView.newUndoGroup()
-            if !rootView.world.selectedSheetIDs.isEmpty {
+            if !isUpdatedNewUndoGroupWorld {
                 rootView.newUndoGroup()
-                rootView.setSelectedSheet([])
             }
             rootView.removeSheets(at: values.map { $0.shp })
         }

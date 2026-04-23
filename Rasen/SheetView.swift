@@ -1521,6 +1521,15 @@ final class SheetView: BindableView, @unchecked Sendable {
         updateMainFrame()
         
         set(model.selection)
+        
+        for textView in textsView.elementViews {
+            textView.selectedRangesNotification = { [weak self] textView, ranges in
+                if let self, let ti = self.textsView.elementViews.firstIndex(of: textView) {
+                    self.binder[keyPath: self.keyPath].selection.textSelections[ti]
+                    = .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
+                }
+            }
+        }
     }
     
     func cancelTasks() {
@@ -4251,6 +4260,14 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     private func insertNode(_ tivs: [IndexValue<Text>]) {
         textsView.insert(tivs)
+        for tiv in tivs {
+            textsView.elementViews[tiv.index].selectedRangesNotification = { [weak self] textView, ranges in
+                if let self, let ti = self.textsView.elementViews.firstIndex(of: textView) {
+                    self.binder[keyPath: self.keyPath].selection.textSelections[ti]
+                    = .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
+                }
+            }
+        }
     }
     private func removeTextsNode(at textIndexes: [Int]) {
         textsView.remove(at: textIndexes)
@@ -7166,19 +7183,19 @@ final class SheetView: BindableView, @unchecked Sendable {
                     isEnableText: Bool = true,
                     isEnableContent: Bool = true,
                     isDraft: Bool = false,
-                    isUpdateUndoGroup: Bool = false,
+                    isUpdatedNewUndoGroup: Bool = false,
                     distance d: Double = 0) -> SheetValue? {
         guard let nlb = lasso.bounds else { return nil }
         guard node.bounds?.intersects(nlb) ?? false else { return nil }
         
-        var isUpdateUndoGroup = isUpdateUndoGroup
+        var isUpdatedNewUndoGroup = isUpdatedNewUndoGroup
         func updateUndoGroup() {
-            if !isUpdateUndoGroup {
+            if !isUpdatedNewUndoGroup {
                 newUndoGroup()
                 if !model.selection.isEmpty {
                     doSet(SheetSelection.empty)
                 }
-                isUpdateUndoGroup = true
+                isUpdatedNewUndoGroup = true
             }
         }
         

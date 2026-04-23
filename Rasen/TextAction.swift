@@ -711,9 +711,7 @@ final class TextAction: InputTextEventAction {
                     lyric += key
                 }
                 if lyric != note.pits[pitI].lyric {
-                    if rootAction.isPlaying(with: event) {
-                        rootAction.stopPlaying(with: event)
-                    }
+                    rootAction.closeLookingUpAndStop(at: p)
                     
                     if note.isRendableFromLyric {
                         note.replace(lyric: lyric, at: pitI, tempo: scoreView.model.tempo)
@@ -812,6 +810,9 @@ final class TextAction: InputTextEventAction {
         } else {
             let sp = event.screenPoint
             let p = rootView.convertScreenToWorld(sp)
+            
+            rootAction.closeLookingUpAndStop(at: p)
+            
             guard let sheetView = rootView.madeSheetView(at: p) else { return }
             let inP = sheetView.convertFromWorld(p)
             if let (textView, _, _, sri) = sheetView.textTuple(at: inP) {
@@ -1069,11 +1070,7 @@ final class TextAction: InputTextEventAction {
             sheetView.newUndoGroup()
         }
         
-        var sheetSelection = sheetView.model.selection
-        sheetView.textsView.elementViews.enumerated().forEach {
-            sheetSelection.textSelections[$0.offset] = $0.element.selectedRanges.isEmpty ?
-            nil : .init(ranges: $0.element.selectedIntRanges)
-        }
+        let sheetSelection = sheetView.model.selection
         if let captureSheetSelection, captureSheetSelection != sheetSelection {
             sheetView.capture(old: captureSheetSelection)
             self.captureSheetSelection = sheetSelection

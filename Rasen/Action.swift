@@ -389,6 +389,8 @@ final class RootAction: Action {
         case .began:
             rootView.cursor = .stop
             
+            rootView.closeLookingUp()
+            
             for (_, v) in rootView.sheetViewValues {
                 v.sheetView?.stop()
             }
@@ -401,17 +403,27 @@ final class RootAction: Action {
     
     @discardableResult
     func closeAllPanelsAndStop(at p: Point, enabledAlwaysSheet: Bool = true) -> Bool {
-        rootView.closeAllPanels(at: p)
-        var isStopCenter = false
-        let cSheetView = rootView.sheetView(at: p)
-        for (_, v) in rootView.sheetViewValues {
-            if let sheetView = v.sheetView, sheetView.isPlaying {
-                sheetView.stop()
-                if sheetView == cSheetView, rootView.isEditingSheet,
-                   !sheetView.model.score.enabled {
-                    if enabledAlwaysSheet {
-                        isStopCenter = true
-                    } else {
+        rootView.finding = .init()
+        return closeLookingUpAndStop(at: p, enabledAlwaysSheet: enabledAlwaysSheet)
+    }
+    @discardableResult
+    func closeLookingUpAndStop(at p: Point, enabledAlwaysSheet: Bool = true) -> Bool {
+        rootView.closeLookingUp()
+        if enabledAlwaysSheet {
+            for (_, v) in rootView.sheetViewValues {
+                if let sheetView = v.sheetView, sheetView.isPlaying {
+                    sheetView.stop()
+                }
+            }
+            return true
+        } else {
+            var isStopCenter = false
+            let cSheetView = rootView.sheetView(at: p)
+            for (_, v) in rootView.sheetViewValues {
+                if let sheetView = v.sheetView, sheetView.isPlaying {
+                    sheetView.stop()
+                    if sheetView == cSheetView, rootView.isEditingSheet,
+                       !sheetView.model.score.enabled {
                         let timelineP = sheetView.animationView.timelineNode
                             .convertFromWorld(p)
                         if !sheetView.animationView.containsTimeline(timelineP,
@@ -422,8 +434,8 @@ final class RootAction: Action {
                     }
                 }
             }
+            return isStopCenter
         }
-        return isStopCenter
     }
     func isEditingText(in sheetView: SheetView) -> Bool {
         if let aTextView = textAction.editingTextView,
@@ -737,11 +749,6 @@ final class SelectAction: Action {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
-            rootView.closeLookingUp()
-            
             if let sheetView = rootView.sheetView(at: p),
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
                                                         scale: rootView.screenToWorldScale) {
@@ -752,6 +759,7 @@ final class SelectAction: Action {
             }
             
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
             firstP = p
             
@@ -1066,11 +1074,7 @@ final class SelectKeyframeAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
-            rootView.closeLookingUp()
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p),
                sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
@@ -1216,7 +1220,7 @@ final class DraftAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
@@ -1384,7 +1388,7 @@ final class DraftAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
@@ -1509,7 +1513,7 @@ final class FaceAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
@@ -1593,7 +1597,7 @@ final class FaceAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
@@ -1702,7 +1706,7 @@ final class AddTimeAction: InputKeyEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
@@ -1797,7 +1801,7 @@ final class AddScoreAction: InputKeyEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 if !sheetView.model.score.enabled {

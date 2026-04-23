@@ -70,7 +70,7 @@ final class ColorAction: Action {
     }
     
     var colorOwners = [SheetColorOwner]()
-    var fp = Point()
+    var fsp = Point()
     var beganMainUUColor = UU(Color()), beganBackgroundUUColor = UU(Color())
     var editingMainUUColor = UU(Color())
     
@@ -341,19 +341,15 @@ final class ColorAction: Action {
         }
         
         let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootAction.closeLookingUpAndStop(at: p)
             
             whiteLightnessHeight = 200
-            
             beganSP = sp
             preEventTime = event.time
-            let p = rootView.convertScreenToWorld(sp)
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
                 rootView.hideSelected()
@@ -532,14 +528,14 @@ final class ColorAction: Action {
                 
                 let (minV, maxV) = scoreResult?.isStereo ?? false ? (Volm.minVolm, Volm.safeVolm) : (0, 1)
                 updateNode()
-                fp = event.screenPoint
+                fsp = event.screenPoint
                 isReversedLightness = true
                 let g = lightnessGradientWith(chroma: 0, hue: 0, isReversed: isReversedLightness)
                 lightnessNode.lineType = .gradient(g)
                 lightnessNode.path = Path([Pathline(lightnessPointsWith(splitCount: Int(maxLightnessHeight)))])
                 oldEditingLightness = beganVolm.clipped(min: minV, max: maxV, newMin: 0, newMax: 100)
                 editingLightness = oldEditingLightness
-                beganLightnessPosition = rootView.convertScreenToWorld(fp)
+                beganLightnessPosition = rootView.convertScreenToWorld(fsp)
                 isEditingLightness = true
             }
         case .changed:
@@ -766,16 +762,13 @@ final class ColorAction: Action {
         }
         
         let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootAction.closeLookingUpAndStop(at: p)
             
             beganSP = sp
-            let p = rootView.convertScreenToWorld(sp)
             beganWorldP = p
             preEventTime = event.time
             if let sheetView = rootView.sheetView(at: p) {
@@ -1166,17 +1159,14 @@ final class ColorAction: Action {
         }
         
         let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
+            rootAction.closeLookingUpAndStop(at: p)
             
             beganSP = sp
             preEventTime = event.time
-            let p = rootView.convertScreenToWorld(sp)
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
                 rootView.hideSelected()
@@ -1314,23 +1304,22 @@ final class ColorAction: Action {
                 
                 let (minV, maxV) = (0.0, 1.0)
                 updateNode()
-                fp = event.screenPoint
+                fsp = event.screenPoint
                 isReversedLightness = true
                 let g = lightnessGradientWith(chroma: 0, hue: 0, isReversed: isReversedLightness)
                 lightnessNode.lineType = .gradient(g)
                 lightnessNode.path = Path([Pathline(lightnessPointsWith(splitCount: Int(maxLightnessHeight)))])
                 oldEditingLightness = beganVolm.clipped(min: minV, max: maxV, newMin: 0, newMax: 100)
                 editingLightness = oldEditingLightness
-                beganLightnessPosition = rootView.convertScreenToWorld(fp)
+                beganLightnessPosition = rootView.convertScreenToWorld(fsp)
                 isEditingLightness = true
             }
         case .changed:
             guard let sheetView, event.time - preEventTime >= 1 / 60 else { return }
             preEventTime = event.time
             
-            let wp = rootView.convertScreenToWorld(event.screenPoint)
-            let p = lightnessNode.convertFromWorld(wp)
-            let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
+            let lightnessP = lightnessNode.convertFromWorld(p)
+            let t = (lightnessP.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let volm = Double.linear(0, 1, t: t)
             let volmScale = beganVolm == 0 ? 0 : volm / beganVolm
             func newVolm(from otherVolm: Double, _ volmRange: ClosedRange<Double>) -> Double {
@@ -1453,16 +1442,14 @@ final class ColorAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         if isChangeVolm {
             changeVolm(with: event)
             return
         }
+        let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         if event.phase == .began {
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = rootView.sheetView(at: p) {
                 if sheetView.model.score.enabled {
                     isChangeVolm = true
@@ -1481,24 +1468,24 @@ final class ColorAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
             updateNode()
             updateOwners(with: event)
-            fp = event.screenPoint
+            fsp = sp
             let g = lightnessGradientWith(chroma: beganMainUUColor.value.chroma,
                                           hue: beganMainUUColor.value.hue)
             lightnessNode.lineType = .gradient(g)
             lightnessNode.path = Path([Pathline(lightnessPointsWith(splitCount: Int(maxLightnessHeight)))])
             oldEditingLightness = beganMainUUColor.value.lightness
             editingLightness = oldEditingLightness
-            beganLightnessPosition = rootView.convertScreenToWorld(fp)
+            beganLightnessPosition = p
             editingMainUUColor = beganMainUUColor
             isEditingLightness = true
         case .changed:
-            let wp = rootView.convertScreenToWorld(event.screenPoint)
-            let p = lightnessNode.convertFromWorld(wp)
+            let lightnessP = lightnessNode.convertFromWorld(p)
             if isEditableMaxLightness {
-                let r = abs(p.y - whiteLightnessHeight)
+                let r = abs(lightnessP.y - whiteLightnessHeight)
                 if r < snappableDistance * rootView.screenToWorldScale {
                     if let lastTintSnapTime = lastTintSnapTime {
                         if event.time - lastTintSnapTime > 1 {
@@ -1517,7 +1504,7 @@ final class ColorAction: Action {
             } else {
                 isSnappedLightness = false
             }
-            let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
+            let t = (lightnessP.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let lightness = isSnappedLightness ? Color.whiteLightness :
                 Double.linear(Color.minLightness,
                               maxLightness,
@@ -1529,7 +1516,7 @@ final class ColorAction: Action {
                 uuColor.value.opacity = 1
             }
             if isEditableOpacity {
-                uuColor.value.opacity = opacity(atX: p.x)
+                uuColor.value.opacity = opacity(atX: lightnessP.x)
             }
             editingMainUUColor = uuColor
             
@@ -1649,16 +1636,14 @@ final class ColorAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         if isChangePan {
             changePan(with: event)
             return
         }
+        let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         if event.phase == .began {
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
                 if sheetView.model.score.enabled {
@@ -1677,26 +1662,26 @@ final class ColorAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
             updateNode()
             updateOwners(with: event)
             if isDrawPoints {
                 updateTintPointNodes(with: event)
             }
-            fp = event.screenPoint
+            fsp = sp
             tintLightness = beganMainUUColor.value.lightness
             oldEditingTintPosition = PolarPoint(beganMainUUColor.value.chroma,
                                               beganMainUUColor.value.hue).rectangular
             editingTintPosition = oldEditingTintPosition
-            beganTintPosition = rootView.convertScreenToWorld(fp)
+            beganTintPosition = p
             editingMainUUColor = beganMainUUColor
             isEditingTint = true
         case .changed:
-            let wp = rootView.convertScreenToWorld(event.screenPoint)
-            let p = tintNode.convertFromWorld(wp)
+            let lightnessP = tintNode.convertFromWorld(p)
             let fTintP = Point()
-            let r = fTintP.distance(p)
-            let theta = fTintP.angle(p)
+            let r = fTintP.distance(lightnessP)
+            let theta = fTintP.angle(lightnessP)
             var uuColor = beganMainUUColor
             if r < snappableDistance * rootView.screenToWorldScale {
                 if let lastTintSnapTime = lastTintSnapTime {
@@ -1760,16 +1745,14 @@ final class ColorAction: Action {
             rootAction.keepOut(with: event)
             return
         }
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         
         if isChangeVolm {
             changeEvenVolm(with: event)
             return
         }
+        let sp = event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         if event.phase == .began {
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             if let sheetView = rootView.sheetView(at: p) {
                 if sheetView.model.score.enabled {
                     isChangeVolm = true
@@ -1788,22 +1771,22 @@ final class ColorAction: Action {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
             isEditableOpacity = true
             updateNode()
             updateOwners(with: event)
-            fp = event.screenPoint
+            fsp = sp
             lightnessNode.lineType = .gradient(opacityGradientWith(color: beganMainUUColor.value))
             lightnessNode.path = Path([Pathline(opacityPointsWith())])
             oldEditingLightness = beganMainUUColor.value.opacity
             editingLightness = oldEditingLightness
-            beganLightnessPosition = rootView.convertScreenToWorld(fp)
+            beganLightnessPosition = p
             editingMainUUColor = beganMainUUColor
             isEditingLightness = true
         case .changed:
-            let wp = rootView.convertScreenToWorld(event.screenPoint)
-            let p = lightnessNode.convertFromWorld(wp)
-            let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
+            let lightnessP = lightnessNode.convertFromWorld(p)
+            let t = (lightnessP.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let opacity = Double.linear(0, 1, t: t)
             
             var uuColor = beganMainUUColor

@@ -1837,6 +1837,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
         menuAction = StartExportAction(rootAction)
         menuAction?.flow(with: event)
+        
         menu.delegate = self
         menu.allowsContextMenuPlugIns = false
         menu.addItem(SubNSMenuItem(title: "Import...".localized, closure: { [weak self] in
@@ -1924,9 +1925,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }))
         
         rootAction.stopAllEvents()
-        if rootAction.isPlaying(with: event) {
-            rootAction.stopPlaying(with: event)
-        }
         NSMenu.popUpContextMenu(menu, with: nsEvent, for: self)
     }
     func menuDidClose(_ menu: NSMenu) {

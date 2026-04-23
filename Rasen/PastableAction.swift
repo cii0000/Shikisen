@@ -2463,12 +2463,12 @@ final class PastableAction: Action {
         let shp = rootView.sheetPosition(at: p)
         
         var isRootNewUndoGroup = true
-        var isUpdateUndoGroupSet = [SheetView: SheetSelection]()
+        var updatedNewUndoGroupDic = [SheetView: SheetSelection]()
         func updateUndoGroup(with sheetView: SheetView) {
-            if isUpdateUndoGroupSet[sheetView] == nil {
+            if updatedNewUndoGroupDic[sheetView] == nil {
                 sheetView.newUndoGroup()
                 sheetView.unselect()
-                isUpdateUndoGroupSet[sheetView] = .init()
+                updatedNewUndoGroupDic[sheetView] = .init()
             }
         }
         
@@ -2537,11 +2537,11 @@ final class PastableAction: Action {
                             if isSelected {
                                 let ki = sheetView.model.animation.index
                                 let li = sheetView.model.picture.lines.count - nLines.count
-                                if isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki] != nil {
-                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]?.lineIs
+                                if updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki] != nil {
+                                    updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki]?.lineIs
                                         .formUnion(li ..< li + nLines.count)
                                 } else {
-                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]
+                                    updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki]
                                     = .init(lineIs: Set(li ..< li + nLines.count))
                                 }
                             }
@@ -2588,11 +2588,11 @@ final class PastableAction: Action {
                             if isSelected {
                                 let ki = sheetView.model.animation.index
                                 let pi = sheetView.model.picture.planes.count - nPlanes.count
-                                if isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki] != nil {
-                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]?.planeIs
+                                if updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki] != nil {
+                                    updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki]?.planeIs
                                         .formUnion(pi ..< pi + nPlanes.count)
                                 } else {
-                                    isUpdateUndoGroupSet[sheetView]?.keyframeSelections[ki]
+                                    updatedNewUndoGroupDic[sheetView]?.keyframeSelections[ki]
                                     = .init(planeIs: Set(pi ..< pi + nPlanes.count))
                                 }
                             }
@@ -2640,7 +2640,7 @@ final class PastableAction: Action {
                     updateUndoGroup(with: sheetView)
                     sheetView.append([nText])
                     if isSelected {
-                        isUpdateUndoGroupSet[sheetView]?.textSelections[sheetView.model.texts.count - 1] = .init(ranges: [text.string.allIntRange])
+                        updatedNewUndoGroupDic[sheetView]?.textSelections[sheetView.model.texts.count - 1] = .init(ranges: [text.string.allIntRange])
                     }
                 }
             }
@@ -2773,7 +2773,7 @@ final class PastableAction: Action {
                 updateUndoGroup(with: sheetView)
                 sheetView.append(text)
                 if isSelected {
-                    isUpdateUndoGroupSet[sheetView]?.textSelections = [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])]
+                    updatedNewUndoGroupDic[sheetView]?.textSelections = [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])]
                 }
             }
         }
@@ -2818,7 +2818,7 @@ final class PastableAction: Action {
                     updateUndoGroup(with: sheetView)
                     sheetView.append(content)
                     if isSelected {
-                        isUpdateUndoGroupSet[sheetView]?.contentIs.insert(sheetView.model.contents.count - 1)
+                        updatedNewUndoGroupDic[sheetView]?.contentIs.insert(sheetView.model.contents.count - 1)
                     }
                 }
             }
@@ -2970,7 +2970,7 @@ final class PastableAction: Action {
                     pasteContents(value.contents, isSelected: value.isSelected, at: np)
                 }
                 if value.isSelected {
-                    for (sheetView, selection) in isUpdateUndoGroupSet {
+                    for (sheetView, selection) in updatedNewUndoGroupDic {
                         if selection != sheetView.model.selection {
                             sheetView.doSet(selection)
                         }
@@ -3510,27 +3510,28 @@ final class PastableAction: Action {
     }
     
     func cut(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
-        for runAction in rootAction.runActions {
-            if runAction.containsCalculating(p) {
-                Pasteboard.shared.copiedObjects = [.string(runAction.calculatingString)]
-                runAction.cancel()
-                return
-            }
-        }
-        if rootView.containsLookingUp(at: p) {
-            rootView.closeLookingUp()
-            return
-        }
-        
         guard isEditingSheet else {
             cutSheet(with: event)
             return
         }
+        
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            
+            for runAction in rootAction.runActions {
+                if runAction.containsCalculating(p) {
+                    Pasteboard.shared.copiedObjects = [.string(runAction.calculatingString)]
+                    runAction.cancel()
+                    return
+                }
+            }
+            if rootView.containsLookingUp(at: p) {
+                rootView.closeLookingUp()
+                return
+            }
             
             type = .cut
             editingSP = sp

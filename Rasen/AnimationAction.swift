@@ -47,7 +47,7 @@ final class GoPreviousAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
@@ -130,7 +130,7 @@ final class GoNextAction: InputKeyEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             sheetView = rootView.sheetView(at: p)
         
@@ -243,7 +243,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             beganSP = event.screenPoint
             beganEventTime = event.time
@@ -557,7 +557,7 @@ final class InsertAction: InputKeyEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
                 var isNewUndoGroup = true
@@ -800,7 +800,7 @@ final class InterpolateAction: InputKeyEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let sheetP = sheetView.scoreView.convertFromWorld(p)
@@ -1740,7 +1740,7 @@ final class DisconnectAction: InputKeyEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let scoreView = sheetView.scoreView

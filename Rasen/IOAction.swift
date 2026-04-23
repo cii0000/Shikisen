@@ -548,16 +548,13 @@ final class IOAction: Action {
         }
     }
     func importFile(with event: InputKeyEvent) {
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
-            rootView.closeLookingUp()
-            
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
-            let sp = rootView.screenPointFromMenu ?? event.screenPoint
             beginImportFile(at: sp)
         case .changed:
             break
@@ -590,17 +587,14 @@ final class IOAction: Action {
     }
     
     func exportFile(with event: InputKeyEvent, _ type: ExportType) {
+        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-            }
-            rootView.closeLookingUp()
-            
             rootView.cursor = .arrow
+            rootAction.closeLookingUpAndStop(at: p)
             
-            let sp = rootView.screenPointFromMenu ?? event.screenPoint
-            fp = rootView.convertScreenToWorld(sp)
+            fp = p
             if rootView.containsSelectedSheetPositions(fp) {
                 let fshp = rootView.sheetPosition(at: fp)
                 let vs = rootView.world.selectedSheetPositions.map {

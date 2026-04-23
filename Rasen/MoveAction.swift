@@ -177,7 +177,7 @@ final class MoveSheetsAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             rootView.isHiddenSelected = true
             
@@ -203,9 +203,9 @@ final class MoveSheetsAction: DragEventAction {
                 }
                 rootView.removeSheets(at: shps)
             } else {
-                isNewUndoGroup = true
-                rootView.newUndoGroup()
                 if !isSelected && !rootView.world.selectedSheetIDs.isEmpty {
+                    isNewUndoGroup = true
+                    rootView.newUndoGroup()
                     rootView.setSelectedSheet([])
                 }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
@@ -346,7 +346,7 @@ final class MoveAnimationAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledAnimation {
                 beganSP = sp
@@ -688,7 +688,7 @@ final class MoveScoreAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let sheetP = sheetView.convertFromWorld(p)
@@ -1843,7 +1843,7 @@ final class MoveContentAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p),
                 let ci = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
@@ -2016,7 +2016,7 @@ final class MoveTextAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p),
                let ci = sheetView.textIndex(at: sheetView.convertFromWorld(p),
@@ -2076,6 +2076,8 @@ final class MoveTextAction: DragEventAction {
                     timeOption?.beatRange.start = beat
                     textView.set(timeOption, origin: Point(sheetView.animationView.x(atBeat: beat) + tw, np.y))
                     rootView.updateSelectedFrame()
+                    
+                    rootView.updateFinding(from: sheetView)
                 case .startBeat:
                     if var timeOption = text.timeOption {
                         let np = beganText.origin + sheetP - beganInP
@@ -2091,6 +2093,8 @@ final class MoveTextAction: DragEventAction {
                             textView.set(timeOption, origin: .init(sheetView.animationView
                                 .x(atBeat: timeOption.beatRange.start) + tw, text.origin.y))
                             rootView.updateSelectedFrame()
+                            
+                            rootView.updateFinding(from: sheetView)
                         }
                     }
                 case .endBeat:
@@ -2117,6 +2121,8 @@ final class MoveTextAction: DragEventAction {
                         text.origin += nFrame.origin - textFrame.origin
                     }
                     textView.origin = text.origin
+                    
+                    rootView.updateFinding(from: sheetView)
                     
                     rootView.updateSelectedFrame()
                 }
@@ -2175,7 +2181,7 @@ final class MoveTempoAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
@@ -2330,7 +2336,7 @@ final class MoveSheetAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             let shp = rootView.sheetPositionFromSelectedFrame(at: p)
             ?? rootView.sheetPosition(at: p)
@@ -2441,6 +2447,9 @@ final class MoveSheetAction: DragEventAction {
                 }
                 for (ti, oldText) in zip(textIs, oldTexts) {
                     sheetView.textsView.elementViews[ti].model = oldText * transform
+                }
+                if !textIs.isEmpty {
+                    rootView.updateFinding(from: sheetView)
                 }
                 for (ci, oldContent) in zip(contentIs, oldContents) {
                     sheetView.contentsView.elementViews[ci].model = oldContent * transform
@@ -2575,7 +2584,7 @@ final class MoveLineAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p) {
                 self.sheetView = sheetView
@@ -2951,7 +2960,7 @@ final class MoveBorderAction: DragEventAction {
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             if let (border, i, sheetView, _) = rootView.border(at: p),
             let shp = rootView.sheetPosition(from: sheetView) {
@@ -3166,7 +3175,7 @@ final class MoveZAction: DragEventAction {
         let p = rootView.convertScreenToWorld(sp)
         switch event.phase {
         case .began:
-            rootAction.closeAllPanelsAndStop(at: p)
+            rootAction.closeLookingUpAndStop(at: p)
             
             var isChange = false
             if let sheetView = rootView.sheetView(at: p) {

@@ -30,17 +30,11 @@ final class StopAction: InputKeyEventAction {
     }
     
     func flow(with event: InputKeyEvent) {
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
-            
-            let p = rootView.convertScreenToWorld(event.screenPoint)
-            rootView.closeAllPanels(at: p)
-            
-            if rootAction.isPlaying(with: event) {
-                rootAction.stopPlaying(with: event)
-                return
-            }
+            rootAction.closeAllPanelsAndStop(at: p)
         case .changed: break
         case .ended:
             rootView.cursor = rootView.defaultCursor
@@ -65,6 +59,8 @@ final class RunAction: InputKeyEventAction {
     private var task: Task<(o: O, id: ID?), Never>?
     private var firstErrorNode: Node?
     
+    private var isStopPlaying = false
+    
     init(_ rootAction: RootAction) {
         self.rootAction = rootAction
         rootView = rootAction.rootView
@@ -72,41 +68,23 @@ final class RunAction: InputKeyEventAction {
     }
     
     func flow(with event: InputKeyEvent) {
+        if isStopPlaying || rootAction.isPlaying(with: event) {
+            rootAction.stopPlaying(with: event)
+            isStopPlaying = true
+            return
+        }
+        
         let sp = event.screenPoint
         let p = rootView.convertScreenToWorld(sp)
-        
-        if rootAction.isPlaying(with: event) {
-            rootView.closeAllPanels(at: p)
-            rootAction.stopPlaying(with: event)
-            return
-        }
-        
-        guard isEditingSheet else {
-            switch event.phase {
-            case .began:
-                rootView.cursor = .arrow
-                
-                rootView.unselect(at: p)
-                rootView.closeAllPanels(at: p)
-            case .changed:
-                break
-            case .ended:
-                rootView.cursor = rootView.defaultCursor
-            }
-            return
-        }
-        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
+            rootView.closeAllPanels(at: p)
             
-            defer {
-                rootView.unselect(at: p)
-                rootView.closeAllPanels(at: p)
-            }
+            rootView.unselect(at: p)
             
             let shp = rootView.sheetPosition(at: p)
-            guard let sheetView = rootView.sheetView(at: shp) else { break }
+            guard isEditingSheet, let sheetView = rootView.sheetView(at: shp) else { break }
             let inP = sheetView.convertFromWorld(p)
             if let (textView, ti, _, _) = sheetView.textTuple(at: inP) {
                 let text = textView.model

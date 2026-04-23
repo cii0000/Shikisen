@@ -37,10 +37,12 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
             selectedNode.isHidden = isHiddenSelected
         }
     }
+    var selectedRangesNotification: ((TextView, [Range<String.Index>]) -> ())?
     var selectedRanges = [Range<String.Index>]() {
         didSet {
             guard selectedRanges != oldValue else { return }
             updateWithSelectedRanges()
+            selectedRangesNotification?(self, selectedRanges)
         }
     }
     var selectedIntRanges: [Range<Int>] {
