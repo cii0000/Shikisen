@@ -4173,7 +4173,7 @@ struct Cursor {
     static func circle(size s: Double = circleDefaultSize,
                        scale: Double = 1,
                        progress: Double? = nil, progressWidth: Double = 40.0,
-                       string: String = "",
+                       string: String = "", fontSize: Double = Font.defaultSize,
                        lightColor: Color = .content,
                        lightOutlineColor: Color = .background,
                        darkColor: Color = .background,
@@ -4185,7 +4185,7 @@ struct Cursor {
         
         let tPath: Path?, tSize: Size
         if !string.isEmpty {
-            let text = Text(string: string, size: Font.defaultSize)
+            let text = Text(string: string, size: fontSize)
             let tb = text.frame ?? Rect()
             tSize = tb.size + Size(width: 0, height: 3)
             tPath = text.typesetter.path()
@@ -4249,7 +4249,7 @@ struct Cursor {
     static func rotate(size s: Double = circleDefaultSize,
                        scale: Double = 1,
                        progress: Double? = nil, progressWidth: Double = 40.0,
-                       string: String = "",
+                       string: String = "", fontSize: Double = Font.defaultSize,
                        rotation angle: Double,
                        rotationLength l: Double = 5,
                        lightColor: Color = .content,
@@ -4263,7 +4263,7 @@ struct Cursor {
         
         let tPath: Path?, tSize: Size
         if !string.isEmpty {
-            let text = Text(string: string, size: Font.defaultSize)
+            let text = Text(string: string, size: fontSize)
             let tb = text.frame ?? Rect()
             tSize = tb.size + Size(width: 0, height: 3)
             tPath = text.typesetter.path()
@@ -4332,7 +4332,7 @@ struct Cursor {
                       hotSpot: hotSpot)
     }
     static func arrowWith(size s: Double = 12,
-                          string: String = "",
+                          string: String = "", fontSize: Double = Font.defaultSize,
                           lightColor: Color = .content,
                           lightOutlineColor: Color = .background,
                           darkColor: Color = .background,
@@ -4350,7 +4350,7 @@ struct Cursor {
         
         let tPath: Path?, tSize: Size
         if !string.isEmpty {
-            let text = Text(string: string, size: Font.defaultSize, widthCount: .infinity)
+            let text = Text(string: string, size: fontSize, widthCount: .infinity)
             let tb = text.frame ?? Rect()
             tSize = tb.size + Size(width: 0, height: 3)
             tPath = text.typesetter.path()

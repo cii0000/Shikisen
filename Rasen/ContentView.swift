@@ -522,8 +522,8 @@ extension ContentView {
                 contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
                                                    width: knobW, height: rulerH)))
             } else {
-                subBorderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                                     width: lw, height: rulerH)))
+                borderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                  width: lw, height: rulerH)))
             }
         }
         

@@ -872,8 +872,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                 contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
                                                    width: knobW, height: rulerH)))
             } else {
-                subBorderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                                     width: lw, height: rulerH)))
+                borderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                  width: lw, height: rulerH)))
             }
         }
         
@@ -1629,7 +1629,7 @@ final class SheetView: BindableView, @unchecked Sendable {
     }
     private func updateMainFrame() {
         let f = mainFrame
-        let lw = 6.0, hlw = 2.0, tlw = 1.0
+        let lw = 4.0, hlw = 2.0, tlw = 1.0
         if f == Sheet.defaultBounds {
             if !mainFrameNode.children.isEmpty {
                 mainFrameNode.children = []

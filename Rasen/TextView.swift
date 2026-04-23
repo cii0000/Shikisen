@@ -295,9 +295,13 @@ extension TextView {
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            let lw = sec == 1 ? knobW : lw
-            contentPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                               width: lw, height: rulerH)))
+            if sec == 1 {
+                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                                   width: knobW, height: rulerH)))
+            } else {
+                borderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
+                                                  width: lw, height: rulerH)))
+            }
         }
         
         var nodes = [Node]()

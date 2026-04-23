@@ -3413,9 +3413,11 @@ final class RootView: View, @unchecked Sendable {
             .arrowWith(string: string)
         } else if pov.rotation != 0 {
             .rotate(progress: progress, progressWidth: progressWidth, string: string,
+                    fontSize: progress == 0 ? Font.largeSize : Font.defaultSize,
                     rotation: -pov.rotation + .pi / 2)
         } else {
-            .circle(progress: progress, progressWidth: progressWidth, string: string)
+            .circle(progress: progress, progressWidth: progressWidth, string: string,
+                    fontSize: progress == 0 ? Font.largeSize : Font.defaultSize)
         }
     }
 }
