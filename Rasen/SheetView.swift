@@ -291,6 +291,23 @@ final class KeyframeView: BindableView, @unchecked Sendable {
 }
 
 extension TimelineView {
+    static func beatLineWidth(atBeat cBeat: Rational,
+                          beatR0: Rational = .init(1, 2),
+                          beatR1: Rational = EditGrid.beatInterval,
+                          beatR2: Rational = EditGrid.secondBeatInterval,
+                          beat0:Rational = 1) -> Double {
+        return if cBeat % beat0 == 0 {
+            0.5
+        } else if cBeat % beatR0 == 0 {
+            0.25
+        } else if cBeat % beatR1 == 0 {
+            0.125
+        } else if cBeat % beatR2 == 0 {
+            0.0625
+        } else {
+            0.03125
+        }
+    }
     func makeBeatPathlines(in beatRange: Range<Rational>,
                            sy: Double, ey: Double, subBorderBeats: Set<Rational> = [],
                            enabledBeatExtension: Bool = true,
@@ -300,25 +317,10 @@ extension TimelineView {
                            borderPathlines: inout [Pathline]) {
         let roundedSBeat = beatRange.start.rounded(.down)
         let deltaBeat = Rational(1, 128)
-        let beatR0 = Rational(1, 2)
-        let beatR1 = EditGrid.beatInterval
-        let beatR2 = EditGrid.secondBeatInterval
-        let beat0 = Rational(1)
         var cBeat = roundedSBeat
         while cBeat <= beatRange.end {
             if cBeat >= beatRange.start {
-                let lw: Double = if cBeat % beat0 == 0 {
-                    0.5
-                } else if cBeat % beatR0 == 0 {
-                    0.25
-                } else if cBeat % beatR1 == 0 {
-                    0.125
-                } else if cBeat % beatR2 == 0 {
-                    0.0625
-                } else {
-                    0.03125
-                }
-                
+                let lw = Self.beatLineWidth(atBeat: cBeat)
                 let beatX = x(atBeat: cBeat)
                 
                 let dlh = enabledBeatExtension && lw == 0.5 ? 3.0 : 0.0
@@ -868,13 +870,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + model.loopDurSec).rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            if sec == 1 {
-                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
-                                                   width: knobW, height: rulerH)))
-            } else {
-                borderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                                  width: lw, height: rulerH)))
-            }
+            contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                               width: knobW, height: rulerH)))
         }
         
         let pnW = 14.0, pnH = 6.0, spnW = 2.5, spnH = 3.0, pnnH = Sheet.knobHeight,
@@ -1412,15 +1409,28 @@ final class AnimationView: TimelineView, @unchecked Sendable {
 typealias SheetBinder = RecordBinder<Sheet>
 typealias SheetHistory = History<SheetUndoItem>
 
-final class SheetView: BindableView, @unchecked Sendable {
+final class SheetView: View, @unchecked Sendable {
     typealias Model = Sheet
     typealias Binder = SheetBinder
+    typealias BinderKeyPath = ReferenceWritableKeyPath<Binder, Model>
     let binder: Binder
     var keyPath: BinderKeyPath
     
     weak var selectedTextView: SheetTextView?
     
-    var history = SheetHistory()
+    var model: Model {
+        get { binder.value }
+        set {
+            binder.value = newValue
+            updateWithModel()
+        }
+    }
+    var unupdateModel: Model {
+        get { binder.value }
+        set { binder.value = newValue }
+    }
+    
+    var history = SheetHistory() { didSet { binder.record.isWillwrite = true } }
     var id = UUID()
     
     let node: Node
@@ -1489,9 +1499,10 @@ final class SheetView: BindableView, @unchecked Sendable {
                                                              lineType: .color(.selected))])
     }
     
-    init(binder: Binder, keyPath: BinderKeyPath) {
+    init(binder: Binder, keyPath: BinderKeyPath, history: SheetHistory) {
         self.binder = binder
         self.keyPath = keyPath
+        self.history = history
         
         animationView = AnimationView(binder: binder,
                                       keyPath: keyPath.appending(path: \Model.animation))
@@ -1520,12 +1531,12 @@ final class SheetView: BindableView, @unchecked Sendable {
         updateTimeline()
         updateMainFrame()
         
-        set(model.selection)
+        updateNode(from: model.selection, old: nil)
         
         for textView in textsView.elementViews {
             textView.selectedRangesNotification = { [weak self] textView, ranges in
                 if let self, let ti = self.textsView.elementViews.firstIndex(of: textView) {
-                    self.binder[keyPath: self.keyPath].selection.textSelections[ti]
+                    self.unupdateModel.selection.textSelections[ti]
                     = .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
                 }
             }
@@ -4159,7 +4170,9 @@ final class SheetView: BindableView, @unchecked Sendable {
         case .setSelection(let selection):
             stop()
             
-           let rect = set(selection)
+            let oldSelection = model.selection
+            binder[keyPath: keyPath].selection = selection
+            let rect = updateNode(from: selection, old: oldSelection)
             
             if isMakeRect {
                 return (rect, [])
@@ -4276,12 +4289,17 @@ final class SheetView: BindableView, @unchecked Sendable {
         textsView.elementViews[ituv.index].set(ituv.value)
     }
     
+    var selection: SheetSelection {
+        get { model.selection }
+        set {
+            let oldSelection = selection
+            binder[keyPath: keyPath].selection = newValue
+            updateNode(from: newValue, old: oldSelection)
+        }
+    }
     var changeSelectedFrameNotifications = [((SheetView, SheetSelection) -> ())]()
     @discardableResult
-    func set(_ selection: SheetSelection) -> Rect? {
-        let oldSelection = binder[keyPath: keyPath].selection
-        binder[keyPath: keyPath].selection = selection
-        
+    func updateNode(from selection: SheetSelection, old oldSelection: SheetSelection?) -> Rect? {
         var rect: Rect?
         var isChangedTimeline = false
         animationView.elementViews.enumerated().forEach {
@@ -4332,7 +4350,7 @@ final class SheetView: BindableView, @unchecked Sendable {
             }
         }
         
-        if selection.isChangeSelectedFrame(old: oldSelection) {
+        if oldSelection == nil || selection.isChangeSelectedFrame(old: oldSelection!) {
             updateSelectedFrame()
             changeSelectedFrameNotifications.forEach { $0(self, selection) }
         }

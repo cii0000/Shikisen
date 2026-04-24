@@ -82,7 +82,7 @@ final class VersionAction: Action {
     var yNodes = [Node]()
     let rootNode = Node()
     let selectingOutlineRootNode = Node(lineWidth: 3,
-                                        lineType: .color(.background))
+                                        lineType: .color(.undoOutline))
     let selectingRootNode = Node(lineWidth: 1, lineType: .color(.selected))
     let outOfBoundsOutlineNode = Node(lineWidth: 3,
                                       lineType: .color(.background))
@@ -212,17 +212,10 @@ final class VersionAction: Action {
                 outOfBoundsOutlineNode.path = Path()
                 outOfBoundsNode.path = Path()
             }
-            let nf = frame * rootView.worldToScreenTransform
-            if !rootView.isEditingSheet || (nf.width < 6 && nf.height < 6) {
-                let s = 1 / rootView.worldToScreenScale
-                let path = Path(frame.outset(by: 4 * s),
-                                cornerRadius: 3 * s)
-                selectingOutlineRootNode.path = path
-                selectingRootNode.path = path
-            } else {
-                selectingOutlineRootNode.path = Path()
-                selectingRootNode.path = Path()
-            }
+            let s = 1 / rootView.worldToScreenScale
+            let path = Path(frame.outset(by: 4 * s), cornerRadius: 3 * s)
+            selectingOutlineRootNode.path = path
+            selectingRootNode.path = path
         }
         if !nodes.isEmpty {
             selectingRootNode.children = nodes

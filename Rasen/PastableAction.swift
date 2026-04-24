@@ -773,24 +773,20 @@ final class PastableAction: Action {
             }
             
             var frames = [Rect]()
-            if sheetView.animationView.tempo == tempo,
-               let frame = sheetView.animationView.tempoFrame() {
-                frames.append(frame)
+            if sheetView.animationView.model.enabled, sheetView.animationView.tempo == tempo {
+                frames += sheetView.animationView.tempoFrames()
             }
-            if sheetView.scoreView.tempo == tempo,
-               let frame = sheetView.scoreView.tempoFrame() {
-                frames.append(frame)
+            if sheetView.scoreView.model.enabled, sheetView.scoreView.tempo == tempo {
+                frames += sheetView.scoreView.tempoFrames()
             }
             for textView in sheetView.textsView.elementViews {
-                if textView.tempo == tempo,
-                   let frame = textView.tempoFrame() {
-                    frames.append(frame)
+                if textView.model.timeOption != nil, textView.tempo == tempo {
+                    frames += textView.tempoFrames()
                 }
             }
             for contentView in sheetView.contentsView.elementViews {
-                if contentView.tempo == tempo,
-                   let frame = contentView.tempoFrame() {
-                    frames.append(frame)
+                if contentView.model.timeOption != nil, contentView.tempo == tempo {
+                    frames += contentView.tempoFrames()
                 }
             }
             
@@ -1096,21 +1092,21 @@ final class PastableAction: Action {
                 case .keyBeat(let keyBeatI):
                     Pasteboard.shared.copiedObjects = [.border(.init(.vertical))]
                     
+                    let scale = rootView.screenToWorldScale
                     let keyBeat = scoreView.model.keyBeats[keyBeatI]
-                    selectingLineNode.fillType = .color(.subSelected)
-                    selectingLineNode.lineType = .color(.selected)
-                    selectingLineNode.lineWidth = rootView.worldLineWidth
-                    let edge = scoreView.convertToWorld(scoreView.keyBeatEdge(fromBeat: keyBeat))
-                    selectingLineNode.path = Path([Pathline([edge.p0, edge.p1])])
+                    let rects = [scoreView.convertToWorld(scoreView.keyBeatRect(fromBeat: keyBeat).outsetBy(dx: 0.5, dy: 0)),
+                                 scoreView.convertToWorld(scoreView.keyBeatKnobRect(fromBeat: keyBeat)).outset(by: 2 * scale)]
+                    selectingLineNode.children = rects.map { .init(path: .init($0),
+                                                                   fillType: .color(.selected)) }
                     return true
                 case .scale(_, let pitch):
                     Pasteboard.shared.copiedObjects = [.border(.init(.horizontal))]
                     
-                    selectingLineNode.fillType = .color(.subSelected)
-                    selectingLineNode.lineType = .color(.selected)
-                    selectingLineNode.lineWidth = rootView.worldLineWidth
-                    let edge = scoreView.convertToWorld(scoreView.scaleEdge(fromPitch: pitch))
-                    selectingLineNode.path = Path([Pathline([edge.p0, edge.p1])])
+                    let scale = rootView.screenToWorldScale
+                    let rects = [scoreView.convertToWorld(scoreView.scaleRect(fromPitch: pitch)),
+                                 scoreView.convertToWorld(scoreView.scaleKnobRect(fromPitch: pitch)).outset(by: 2 * scale)]
+                    selectingLineNode.children = rects.map { .init(path: .init($0),
+                                                                   fillType: .color(.selected)) }
                     return true
                 }
             }
@@ -2085,30 +2081,39 @@ final class PastableAction: Action {
             } else if let sheetView,
                         sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale) {
-                let scoreP = sheetView.scoreView.convertFromWorld(p)
-                let edges: [Edge]
+                let scoreView = sheetView.scoreView
+                let scoreP = scoreView.convertFromWorld(p)
                 switch oldBorder.orientation {
                 case .horizontal:
-                    let pitch = sheetView.scoreView.pitch(atY: scoreP.y,
-                                                          interval: rootView.currentPitchInterval)
-                    edges = sheetView.scoreView.scaleEdges(fromUnison: pitch.mod(12))
+                    let pitch = scoreView.pitch(atY: scoreP.y,
+                                                interval: rootView.currentPitchInterval)
                     rootView.cursor = .arrowWith(string: Pitch(value: pitch).displayString())
-                    selectingLineNode.lineWidth = pitch.isInteger ? 0.5 : 0.25
+                    
+                    snapLineNode.children = []
+                    
+                    let rects = scoreView.scaleRects(fromUnison: pitch.mod(12)).map { scoreView.convertToWorld($0) }
+                    let knobRect = scoreView.convertToWorld(scoreView.scaleKnobRect(fromPitch: pitch))
+                    selectingLineNode.children = [.init(path: .init(rects.map { .init($0) }),
+                                                        fillType: .color(.subBorder)),
+                                                  .init(path: .init(knobRect),
+                                                        fillType: .color(.content))]
                 case .vertical:
-                    let beat = sheetView.scoreView.beat(atX: scoreP.x,
-                                                        interval: rootView.currentBeatInterval)
-                    let sy = sheetView.scoreView.y(fromPitch: Score.minPitch)
-                    let ey = sheetView.scoreView.y(fromPitch: Score.maxPitch)
-                    let x = sheetView.scoreView.x(atBeat: beat)
-                    edges = [Edge(.init(x, sy), .init(x, ey))]
-                    isSnapped = beat.isInteger
+                    let keyBeat = scoreView.beat(atX: scoreP.x,
+                                                 interval: rootView.currentBeatInterval)
+                    isSnapped = keyBeat.isInteger
                     if !snapLineNode.children.isEmpty {
                         rootView.cursor = .arrow
                     }
-                    selectingLineNode.lineWidth = 0.5
+                    snapLineNode.children = []
+                    
+                    let rect = scoreView.convertToWorld(scoreView.keyBeatRect(fromBeat: keyBeat))
+                    let knobRect = scoreView.convertToWorld(scoreView.keyBeatKnobRect(fromBeat: keyBeat))
+                    selectingLineNode.children = [.init(path: .init(rect),
+                                                        fillType: .color(.subBorder)),
+                                                  .init(path: .init(knobRect),
+                                                        fillType: .color(.content))]
                 }
-                snapLineNode.children = []
-                selectingLineNode.path = Path(edges.map { Pathline(sheetView.scoreView.convertToWorld($0)) })
+                
                 return
             }
             
@@ -2160,38 +2165,11 @@ final class PastableAction: Action {
                                                          Point(np.x, sheetFrame.maxY)])])
                 nBorder.location = np.x - sheetFrame.minX
             }
-            if let sheetView {
-                let borders = sheetView.model.borders + [nBorder]
-                if borders.count == 4 && borders.reduce(0, { $0 + ($1.orientation == .horizontal ? 1 : 0) }) == 2 {
-                    var xs = [Double](), ys = [Double]()
-                    func append(border: Border) {
-                        if border.orientation == .horizontal {
-                            ys.append(border.location)
-                        } else {
-                            xs.append(border.location)
-                        }
-                    }
-                    borders.forEach { append(border: $0) }
-                    let nxs = xs.sorted(), nys = ys.sorted()
-                    let width = nxs[1] - nxs[0], height = nys[1] - nys[0]
-                    let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                    let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-                    rootView.cursor = rootView.cursor(from: "\(nString0):\(nString1) (\(LookUpAction.sizeString(from: .init(width: width, height: height))))")
-                } else {
-                    let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                    let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-                    rootView.cursor = switch nBorder.orientation {
-                    case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
-                    case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
-                    }
-                }
-            } else {
-                let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-                rootView.cursor = switch nBorder.orientation {
-                case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
-                case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
-                }
+            let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
+            let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
+            rootView.cursor = switch nBorder.orientation {
+            case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
+            case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
             }
         }
         func updateIDs(_ ids: [InterOption]) {

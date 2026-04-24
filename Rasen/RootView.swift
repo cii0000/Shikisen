@@ -185,12 +185,8 @@ final class RootView: View, @unchecked Sendable {
         autosavingTimer.cancel()
     }
     
-    var world = World() {
-        didSet {
-            model.worldRecord.isWillwrite = true
-        }
-    }
-    var history = WorldHistory()
+    var world = World() { didSet { model.worldRecord.isWillwrite = true } }
+    var history = WorldHistory() { didSet { model.worldHistoryRecord.isWillwrite = true } }
     
     func updateWithWorld() {
         for (shp, _) in world.sheetIDs {
@@ -487,8 +483,8 @@ final class RootView: View, @unchecked Sendable {
                       let shp = sheetPosition(at: sheetID) else { return }
                 let sheetBinder = RecordBinder(value: sheet,
                                                record: record)
-                let sheetView = SheetView(binder: sheetBinder,
-                                          keyPath: \SheetBinder.value)
+                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                          history: .init())
                 let frame = self.sheetFrame(with: shp)
                 sheetView.bounds = Rect(size: frame.size)
                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -1215,10 +1211,12 @@ final class RootView: View, @unchecked Sendable {
                             } else if let sid = self.sheetID(at: shp),
                                       let sheetRecorder = self.model.sheetRecorders[sid] {
                                 let record = sheetRecorder.sheetRecord
+                                let historyRecord = sheetRecorder.sheetHistoryRecord
                                 guard let sheet = record.decodedValue else { return }
                                 
                                 let sheetBinder = RecordBinder(value: sheet, record: record)
-                                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+                                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                                          history: historyRecord.decodedValue ?? .init())
                                 let frame = self.sheetFrame(with: shp)
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -1365,10 +1363,13 @@ final class RootView: View, @unchecked Sendable {
                             } else if let sid = self.sheetID(at: shp),
                                       let sheetRecorder = self.model.sheetRecorders[sid] {
                                 let record = sheetRecorder.sheetRecord
+                                let historyRecord = sheetRecorder.sheetHistoryRecord
                                 guard let sheet = record.decodedValue else { return }
                                 
                                 let sheetBinder = RecordBinder(value: sheet, record: record)
-                                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+                                let sheetView = SheetView(binder: sheetBinder,
+                                                          keyPath: \SheetBinder.value,
+                                                          history: historyRecord.decodedValue ?? .init())
                                 let frame = self.sheetFrame(with: shp)
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -2196,13 +2197,14 @@ final class RootView: View, @unchecked Sendable {
             if let sheetViewValue = sheetViewValues[shp] {
                 sheetViewValue.task?.cancel()
                 
-                if let sheetView = sheetViewValue.sheetView {
-                    sheetView.node.updateCache()
-                }
                 if let sheetView = sheetViewValue.sheetView,
                    let sheetRecorder = model.sheetRecorders[sheetViewValue.sheetID],
                    sheetRecorder.sheetRecord.isWillwrite {
+                    print(savingItem != nil, sheetViewValue.sheetID)
                     
+                    if let sheetView = sheetViewValue.sheetView {
+                        sheetView.node.updateCache()
+                    }
                     if savingItem != nil {
                         savingFuncs.append { [sid = sheetViewValue.sheetID,
                                               model = sheetView.model, um = sheetView.history,
@@ -2240,8 +2242,6 @@ final class RootView: View, @unchecked Sendable {
                 updateFindingNodes(at: shp)
                 
                 self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
-                
-                updateSelectedFrame()
             }
         case .sheet:
             if sheetViewValues.contains(where: { $0.value.sheetID == sid }) { return }
@@ -2271,13 +2271,11 @@ final class RootView: View, @unchecked Sendable {
                     try Task.checkCancellation()
                     
                     let sheetBinder = RecordBinder(value: sheet, record: sheetRecord)
-                    let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+                    let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                              history: history ?? .init())
                     try Task.checkCancellation()
                     sheetView.screenToWorldScale = screenToWorldScale
                     sheetView.id = sid
-                    if let history {
-                        sheetView.history = history
-                    }
                     sheetView.bounds = Rect(size: frame.size)
                     sheetView.node.attitude.position = frame.origin
                     try Task.checkCancellation()
@@ -2394,12 +2392,10 @@ final class RootView: View, @unchecked Sendable {
         
         guard let sheet = sheetRecord.decodedValue else { return nil }
         let sheetBinder = RecordBinder(value: sheet, record: sheetRecord)
-        let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+        let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                  history: sheetHistoryRecord.decodedValue ?? .init())
         sheetView.screenToWorldScale = screenToWorldScale
         sheetView.id = sid
-        if let history = sheetHistoryRecord.decodedValue {
-            sheetView.history = history
-        }
         let frame = sheetFrame(with: shp)
         sheetView.bounds = Rect(size: frame.size)
         sheetView.node.attitude.position = frame.origin
@@ -2542,12 +2538,10 @@ final class RootView: View, @unchecked Sendable {
         let sheetHistoryRecord = sheetRecorder.sheetHistoryRecord
         
         let sheetBinder = RecordBinder(value: sheet, record: sheetRecord)
-        let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value)
+        let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                  history: history ?? .init())
         sheetView.screenToWorldScale = screenToWorldScale
         sheetView.id = sid
-        if let history = history {
-            sheetView.history = history
-        }
         let frame = sheetFrame(with: shp)
         sheetView.bounds = Rect(size: frame.size)
         sheetView.node.attitude.position = frame.origin

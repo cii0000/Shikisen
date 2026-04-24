@@ -3034,29 +3034,11 @@ final class MoveBorderAction: DragEventAction {
                 }
                 borderView.model = nBorder
                 
-                let borders = sheetView.model.borders
-                if borders.count == 4 && borders.reduce(0, { $0 + ($1.orientation == .horizontal ? 1 : 0) }) == 2 {
-                    var xs = [Double](), ys = [Double]()
-                    func append(border: Border) {
-                        if border.orientation == .horizontal {
-                            ys.append(border.location)
-                        } else {
-                            xs.append(border.location)
-                        }
-                    }
-                    borders.forEach { append(border: $0) }
-                    let nxs = xs.sorted(), nys = ys.sorted()
-                    let width = nxs[1] - nxs[0], height = nys[1] - nys[0]
-                    let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                    let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-                    rootView.cursor = rootView.cursor(from: "\(nString0):\(nString1) (\(LookUpAction.sizeString(from: .init(width: width, height: height))))")
-                } else {
-                    let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                    let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-                    rootView.cursor = switch nBorder.orientation {
-                    case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
-                    case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
-                    }
+                let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
+                let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
+                rootView.cursor = switch nBorder.orientation {
+                case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
+                case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
                 }
             }
         case .ended:

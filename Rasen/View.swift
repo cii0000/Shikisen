@@ -30,6 +30,20 @@ protocol View: ObjectHashable {
     var model: Model { get set }
     var node: Node { get }
 }
+extension View {
+    func convertFromWorld<T: AppliableTransform>(_ value: T) -> T {
+        node.convertFromWorld(value)
+    }
+    func convertToWorld<T: AppliableTransform>(_ value: T) -> T {
+        node.convertToWorld(value)
+    }
+    func convert<T: AppliableTransform>(_ value: T, from fromNode: Node) -> T {
+        node.convert(value, from: fromNode)
+    }
+    func convert<T: AppliableTransform>(_ value: T, to toNode: Node) -> T {
+        node.convert(value, to: toNode)
+    }
+}
 
 protocol BinderProtocol: AnyObject {
     associatedtype Value
@@ -90,19 +104,6 @@ extension BindableView {
     var unupdateModel: Model {
         get { binder[keyPath: keyPath] }
         set { binder[keyPath: keyPath] = newValue }
-    }
-    
-    func convertFromWorld<T: AppliableTransform>(_ value: T) -> T {
-        node.convertFromWorld(value)
-    }
-    func convertToWorld<T: AppliableTransform>(_ value: T) -> T {
-        node.convertToWorld(value)
-    }
-    func convert<T: AppliableTransform>(_ value: T, from fromNode: Node) -> T {
-        node.convert(value, from: fromNode)
-    }
-    func convert<T: AppliableTransform>(_ value: T, to toNode: Node) -> T {
-        node.convert(value, to: toNode)
     }
 }
 

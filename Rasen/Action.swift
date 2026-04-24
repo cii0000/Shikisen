@@ -813,7 +813,7 @@ final class SelectAction: Action {
                     } else {
                         nSelection.textSelections[ti] = .init(ranges: nnRanges)
                     }
-                    _ = sheetView.set(selection)
+                    sheetView.selection = selection
                     return
                 }
                 let range = fi < li ? fi ..< li : li ..< fi
@@ -832,7 +832,7 @@ final class SelectAction: Action {
                     nSelection.textSelections[ti] = .init(ranges: nnRanges)
                 }
                 if sheetView.model.selection != nSelection {
-                    sheetView.set(nSelection)
+                    sheetView.selection = nSelection
                 }
             } else if rootView.isEditingSheet {
                 node.isHidden = false
@@ -842,7 +842,7 @@ final class SelectAction: Action {
                     guard rootView.sheetFrame(with: v.key).intersects(rect) else {
                         if let selection = captureSelections[sheetView],
                            sheetView.model.selection != selection {
-                            _ = sheetView.set(selection)
+                            sheetView.selection = selection
                         }
                         continue
                     }
@@ -982,7 +982,7 @@ final class SelectAction: Action {
                     }
                     
                     if sheetView.model.selection != nSelection {
-                        sheetView.set(nSelection)
+                        sheetView.selection = nSelection
                     }
                 }
             } else {
@@ -1060,7 +1060,7 @@ final class SelectKeyframeAction: Action {
         }
         
         if sheetView.model.selection != nSelection {
-            sheetView.set(nSelection)
+            sheetView.selection = nSelection
         }
     }
     

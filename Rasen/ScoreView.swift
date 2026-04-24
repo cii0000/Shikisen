@@ -92,18 +92,30 @@ extension TimelineView {
         sec(atX: x, interval: Rational(1, frameRate))
     }
     
-    func tempoFrame() -> Rect? {
-        guard let beatRange, model.secRange(fromBeat: beatRange).contains(1) else { return nil }
-        let secX = x(atSec: Rational(1)) + origin.x
-        let sy = timelineCenterY - Sheet.timelineHalfHeight - Sheet.rulerHeight / 2 + origin.y
-        return Rect(Point(secX, sy), dx: 5, dy: 5)
+    func tempoFrames() -> [Rect] {
+        guard let beatRange else { return [] }
+        let knobW = Sheet.knobWidth, rulerH = Sheet.rulerHeight
+        let secRange = model.secRange(fromBeat: beatRange)
+        let sy = timelineCenterY - Sheet.timelineHalfHeight - rulerH / 2 + origin.y
+        var rects = [Rect]()
+        for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
+            let sec = Rational(sec)
+            let secX = x(atSec: sec) + origin.x
+            rects.append(Rect(x: secX - knobW / 2, y: sy - rulerH / 2,
+                              width: knobW, height: rulerH).outset(by: 1))
+        }
+        return rects
     }
     func containsTempo(_ p: Point, scale: Double) -> Bool {
-        guard let beatRange, model.secRange(fromBeat: beatRange).contains(1) else { return false }
-        let secX = x(atSec: Rational(1)) + origin.x
+        guard let beatRange else { return false }
+        let secRange = model.secRange(fromBeat: beatRange)
         let sy = timelineCenterY - Sheet.timelineHalfHeight - Sheet.rulerHeight / 2 + origin.y
-        if Point(secX, sy).distance(p) < 5 * scale {
-            return true
+        for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
+            let sec = Rational(sec)
+            let secX = x(atSec: sec) + origin.x
+            if Point(secX, sy).distance(p) < 8 * scale {
+                return true
+            }
         }
         return false
     }
@@ -216,6 +228,18 @@ final class ScoreView: TimelineView, @unchecked Sendable {
     }
     var transformedMainFrame: Rect {
         mainFrame * node.localTransform
+    }
+    var scaleFrame: Rect {
+        let score = model
+        let sBeat = max(score.beatRange.start, -10000)
+        let sx = x(atBeat: sBeat)
+        let sy = y(fromPitch: Score.pitchRange.start)
+        let ey = y(fromPitch: Score.pitchRange.end)
+        return .init(x: sx - Sheet.textPadding.width, y: sy,
+                     width: Sheet.textPadding.width, height: ey - sy)
+    }
+    var transformedScaleFrame: Rect {
+        scaleFrame * node.localTransform
     }
     
     var otherNotes = [Note]() {
@@ -675,9 +699,11 @@ extension ScoreView {
                           secondEditBorderPathlines: &secondEditBorderPathlines,
                           borderPathlines: &borderPathlines)
         
-        makeBeatPathlines(in: score.allBeatRange, 
-                          sy: self.y(fromPitch: pitchRange.start),
-                          ey: self.y(fromPitch: pitchRange.end),
+        let pitchMinY = self.y(fromPitch: pitchRange.start)
+        let pitchMaxY = self.y(fromPitch: pitchRange.end)
+        makeBeatPathlines(in: score.allBeatRange,
+                          sy: pitchMinY,
+                          ey: pitchMaxY,
                           subBorderBeats: Set(score.keyBeats),
                           enabledBeatExtension: false,
                           subBorderPathlines: &subBorderPathlines,
@@ -687,25 +713,38 @@ extension ScoreView {
         
         let scaleSet = Set(score.scales.map { $0.mod(12) })
         
+        contentPathlines.append(.init(Rect(x: sx - Sheet.textPadding.width / 2 - 0.125, y: pitchMinY,
+                                           width: 0.25, height: pitchMaxY - pitchMinY)))
+        
+        let scaleW = 4.0, scaleCW = 8.0
         let roundedSPitch = pitchRange.start.rounded(.down)
         let deltaPitch = Rational(1, 16)
         let pitchR1 = EditGrid.pitchInterval
         var cPitch = roundedSPitch
         while cPitch <= pitchRange.end {
             if cPitch >= pitchRange.start {
-                let plw: Double = if cPitch % pitchR1 == 0 {
-                    scaleSet.contains(cPitch.mod(12)) ? 0.5 : 0.25
-                } else {
-                    0.03125
-                }
                 let py = self.y(fromPitch: cPitch)
+                let plw: Double
+                if cPitch % pitchR1 == 0 {
+                    plw = scaleSet.contains(cPitch.mod(12)) ? 0.5 : 0.25
+                } else {
+                    plw = 0.03125
+                }
                 let rect = Rect(x: sx, y: py - plw / 2, width: ex - sx, height: plw)
+                let scaleRect = Rect(x: sx - Sheet.textPadding.width / 2 - scaleW / 2, y: py - plw / 2,
+                                     width: scaleW, height: plw)
                 if plw == 0.03125 {
-                    fullEditBorderPathlines.append(Pathline(rect))
+                    fullEditBorderPathlines.append(.init(rect))
+                    fullEditBorderPathlines.append(.init(scaleRect))
                 } else if plw == 0.5 {
                     subBorderPathlines.append(.init(rect))
+                    contentPathlines.append(.init(Rect(x: sx - Sheet.textPadding.width / 2 - scaleW / 2, y: py - lw / 2,
+                                                       width: scaleW, height: lw)))
                 } else {
-                    borderPathlines.append(Pathline(rect))
+                    borderPathlines.append(.init(rect))
+                    borderPathlines.append(.init(cPitch.mod(12) == 0 ?
+                                                    Rect(x: sx - Sheet.textPadding.width / 2 - scaleCW / 2, y: py - plw * 2 / 2, width: scaleCW, height: plw * 2) :
+                                                scaleRect))
                 }
             }
             cPitch += deltaPitch
@@ -721,6 +760,7 @@ extension ScoreView {
                     let py = self.y(fromPitch: pitch)
                     let rect = Rect(x: sx, y: py - plw / 2, width: ex - sx, height: plw)
                     subBorderPathlines.append(.init(rect))
+                    contentPathlines.append(.init(Rect(x: sx - Sheet.textPadding.width / 2 - scaleW / 2, y: py - lw * 0.5 / 2, width: scaleW, height: lw * 0.5)))
                     pitch += 12
                 }
             }
@@ -756,13 +796,8 @@ extension ScoreView {
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + score.loopDurSec).rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec)
-            if sec == 1 {
-                contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
-                                                   width: knobW, height: rulerH)))
-            } else {
-                borderPathlines.append(.init(Rect(x: secX - lw / 2, y: sy - rulerH,
-                                                  width: lw, height: rulerH)))
-            }
+            contentPathlines.append(.init(Rect(x: secX - knobW / 2, y: sy - rulerH,
+                                               width: knobW, height: rulerH)))
         }
         
         let sprH = Sheet.timelineMargin
@@ -991,32 +1026,49 @@ extension ScoreView {
         return nodes
     }
     
-    func keyBeatEdge(fromBeat beat: Rational) -> Edge {
+    func keyBeatRect(fromBeat beat: Rational) -> Rect {
         let x = x(atBeat: beat)
         let pitchRange = Score.pitchRange
         let sy = y(fromPitch: pitchRange.start)
         let ey = y(fromPitch: pitchRange.end)
-        return .init(.init(x, sy), .init(x, ey))
+        let lw = ScoreView.beatLineWidth(atBeat: beat)
+        return .init(x: x - lw / 2, y: sy, width: lw, height: ey - sy)
     }
-    func scaleEdge(fromPitch pitch: Rational) -> Edge {
+    func keyBeatKnobRect(fromBeat beat: Rational) -> Rect {
+        let nx = x(atBeat: beat)
+        let knobW = Sheet.knobWidth, knobH = Sheet.knobHeight
+        let nKnobW = beat % EditGrid.beatInterval == 0 ? knobW : knobW / 2
+        return Rect(x: nx - nKnobW / 2, y: timelineCenterY - knobH / 2,
+                    width: nKnobW, height: knobH)
+    }
+    func scaleRect(fromPitch pitch: Rational) -> Rect {
         let sx = x(atBeat: model.beatRange.start)
         let ex = x(atBeat: model.beatRange.end)
         let y = y(fromPitch: pitch)
-        return .init(.init(sx, y), .init(ex, y))
+        let lw = pitch.isInteger ? 0.5 : 0.25
+        return .init(x: sx, y: y - lw / 2, width: ex - sx, height: lw)
     }
-    func scaleEdges(fromUnison unison: Rational) -> [Edge] {
+    func scaleRects(fromUnison unison: Rational) -> [Rect] {
         let pitchRange = Score.pitchRange
         let sx = x(atBeat: model.beatRange.start)
         let ex = x(atBeat: model.beatRange.end)
         
-        var edges = [Edge](), pitch = unison
+        var rects = [Rect](), pitch = unison
         while pitch < pitchRange.start { pitch += 12 }
         while pitchRange.contains(pitch) {
             let y = y(fromPitch: pitch)
-            edges.append(.init(.init(sx, y), .init(ex, y)))
+            let lw = pitch.isInteger ? 0.5 : 0.25
+            rects.append(.init(x: sx, y: y - lw / 2, width: ex - sx, height: lw))
             pitch += 12
         }
-        return edges
+        return rects
+    }
+    func scaleKnobRect(fromPitch pitch: Rational) -> Rect {
+        let lw = pitch.isInteger ? 1.0 : 0.5, scaleW = 4.0
+        let sx = x(atBeat: model.beatRange.start)
+        let py = self.y(fromPitch: pitch)
+        return Rect(x: sx - Sheet.textPadding.width / 2 - scaleW / 2, y: py - lw / 2,
+                    width: scaleW, height: lw)
     }
     func scaleNode(mainPitch: Rational,
                    mainColor: Color = .subInterpolated, _ color: Color = .subBorder) -> Node {
@@ -1942,10 +1994,14 @@ extension ScoreView {
         && (containsTimeline(p, scale: scale)
             || containsIsShownSpectrogram(p, scale: scale)
             || containsMainFrame(p, scale: scale)
+            || containsScaleFrame(p, scale: scale)
             || containsNote(p, scale: scale, enabledTone: true))
     }
     func containsMainFrame(_ p: Point, scale: Double) -> Bool {
         model.enabled && mainFrame.outset(by: 10 * scale).contains(p)
+    }
+    func containsScaleFrame(_ p: Point, scale: Double) -> Bool {
+        model.enabled && scaleFrame.outset(by: 10 * scale).contains(p)
     }
     func containsTimeline(_ p : Point, scale: Double) -> Bool {
         model.enabled && timelineFrame.outsetBy(dx: 5 * scale, dy: 3 * scale).contains(p)
@@ -2289,36 +2345,40 @@ extension ScoreView {
             return .keyBeat(beatI: keyBeatI)
         }
         
-        guard containsMainFrame(p, scale: scale) else { return nil }
+        let containsMainFrame = containsMainFrame(p, scale: scale)
         let maxD = Sheet.knobEditDistance * scale
         let maxDSq = maxD * maxD
         let score = model
         
         var result: OptionHitResult?, minDSq = Double.infinity
-        for (ki, keyBeat) in score.keyBeats.enumerated() {
-            let x = x(atBeat: keyBeat)
-            let dSq = p.x.distanceSquared(x)
-            if dSq < minDSq && dSq < maxDSq {
-                minDSq = dSq
-                result = .keyBeat(beatI: ki)
-            }
-        }
-        if result != nil {
-            return result
-        }
-        
-        let pitchRange = Score.pitchRange
-        for (si, scale) in score.scales.enumerated() {
-            var pitch = scale.mod(12)
-            while pitch < pitchRange.start { pitch += 12 }
-            while pitchRange.contains(pitch) {
-                let y = y(fromPitch: pitch)
-                let dSq = p.y.distanceSquared(y)
+        if containsMainFrame {
+            for (ki, keyBeat) in score.keyBeats.enumerated() {
+                let x = x(atBeat: keyBeat)
+                let dSq = p.x.distanceSquared(x)
                 if dSq < minDSq && dSq < maxDSq {
                     minDSq = dSq
-                    result = .scale(scaleI: si, pitch: pitch)
+                    result = .keyBeat(beatI: ki)
                 }
-                pitch += 12
+            }
+            if result != nil {
+                return result
+            }
+        }
+        
+        if containsMainFrame || containsScaleFrame(p, scale: scale) {
+            let pitchRange = Score.pitchRange
+            for (si, scale) in score.scales.enumerated() {
+                var pitch = scale.mod(12)
+                while pitch < pitchRange.start { pitch += 12 }
+                while pitchRange.contains(pitch) {
+                    let y = y(fromPitch: pitch)
+                    let dSq = p.y.distanceSquared(y)
+                    if dSq < minDSq && dSq < maxDSq {
+                        minDSq = dSq
+                        result = .scale(scaleI: si, pitch: pitch)
+                    }
+                    pitch += 12
+                }
             }
         }
         return result

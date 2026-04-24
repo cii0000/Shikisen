@@ -479,6 +479,12 @@ struct TouchEvent: Event {
     var fingers: [Int: Finger], deviceSize: Size
 }
 extension TouchEvent {
+    var positions: [Int: Point] {
+        fingers.reduce(into: .init()) {
+            $0[$1.key] = .init($1.value.normalizedPosition.x * deviceSize.width,
+                               $1.value.normalizedPosition.y * deviceSize.height)
+        }
+    }
     var isAllBegan: Bool {
         fingers.allSatisfy({ $0.value.phase == .began })
     }

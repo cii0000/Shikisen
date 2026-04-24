@@ -1774,6 +1774,39 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                     rootAction.drag(with: beganDragEvent)
                     rootAction.drag(with: endedDragEvent)
                 } else {
+                    
+//                    //test
+//                    if let oldTouchEvent, nsEvent.subtype == .touch,
+//                       nsEvent.timestamp - oldTouchEvent.time < 0.1,
+//                       oldTouchEvent.fingers.count == 1 {
+//                        
+//                        let p = oldTouchEvent.positions.first!.value
+//                        print(p)
+//                        if p.distance(.init(130, 70)) < 30 {
+//                            let oldM = rootAction.modifierKeys
+//                            rootAction.modifierKeys = .command
+//                            var bEvent = inputKeyEventWith(beganDragEvent, .began)
+//                            bEvent.inputKeyType = .z
+//                            var eEvent = inputKeyEventWith(beganDragEvent, .ended)
+//                            eEvent.inputKeyType = .z
+//                            rootAction.inputKey(with: bEvent)
+//                            Sleep.start()
+//                            rootAction.inputKey(with: eEvent)
+//                            rootAction.modifierKeys = oldM
+//                        } else if p.distance(.init(170, 185)) < 30 {
+//                            let oldM = rootAction.modifierKeys
+//                            rootAction.modifierKeys = [.command, .shift]
+//                            var bEvent = inputKeyEventWith(beganDragEvent, .began)
+//                            bEvent.inputKeyType = .z
+//                            var eEvent = inputKeyEventWith(beganDragEvent, .ended)
+//                            eEvent.inputKeyType = .z
+//                            rootAction.inputKey(with: bEvent)
+//                            Sleep.start()
+//                            rootAction.inputKey(with: eEvent)
+//                            rootAction.modifierKeys = oldM
+//                        }
+//                    }
+                    
                     rootAction.inputKey(with: inputKeyEventWith(beganDragEvent, .began))
                     Sleep.start()
                     rootAction.inputKey(with: inputKeyEventWith(beganDragEvent, .ended))
@@ -2077,6 +2110,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     enum  SnapScrollType {
         case none, x, y
     }
+    var oldTouchEvent: TouchEvent?
     var snapScrollType = SnapScrollType.none
     var lastMagnification = 0.0, preMagnification = 0.0
     var lastRotationQuantity = 0.0
@@ -2090,12 +2124,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     private var pinchTimeValue = 0.0
     private var pinchTimer: (any DispatchSourceTimer)?
     
-    func touchPoints(with event: TouchEvent) -> [Int: Point] {
-        event.fingers.reduce(into: .init()) {
-            $0[$1.key] = .init($1.value.normalizedPosition.x * event.deviceSize.width,
-                               $1.value.normalizedPosition.y * event.deviceSize.height)
-        }
-    }
     static func finger(with touch: NSTouch) -> TouchEvent.Finger {
         let phase: Phase = if touch.phase.contains(.began) {
             .began
@@ -2150,8 +2178,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             isTouchedSubDrag = true
         }
         
-        let ps = touchPoints(with: event)
+        let ps = event.positions
         oldTouchPoints = ps
+        oldTouchEvent = event
         
         touchedIDs.removeAll { ps[$0] == nil }
         for id in ps.keys {
@@ -2217,7 +2246,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     func touchesMoved(with event: TouchEvent) {
         guard isEnabledCustomTrackpad else { return }
         
-        let ps = touchPoints(with: event)
+        let ps = event.positions
         
         if isTouchedSubDrag || isSubDrag {
             isTouchedSubDrag = true
@@ -2511,9 +2540,12 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         
         oldTouchPoints = ps
         oldTouchTime = event.time
+        oldTouchEvent = event
     }
     func touchesEnded(with event: TouchEvent) {
         guard isEnabledCustomTrackpad else { return }
+        
+        oldTouchEvent = event
         
         if isTouchedSubDrag || isSubDrag {
             endPinch(with: event, enabledMomentum: false)
