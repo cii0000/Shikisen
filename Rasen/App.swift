@@ -316,8 +316,8 @@ final class SubNSApplication: NSApplication {
         editMenu.addItem(withTitle: "Fill All".localized,
                          action: #selector(SubMTKView.fillAll(_:)),
                          keyEquivalent: "b", modifierFlags: [.command])
-        editMenu.addItem(withTitle: "Cut Colors".localized,
-                         action: #selector(SubMTKView.cutColors(_:)),
+        editMenu.addItem(withTitle: "Cut Colors All".localized,
+                         action: #selector(SubMTKView.cutColorsAll(_:)),
                          keyEquivalent: "b", modifierFlags: [.command, .shift])
         self.editMenu = editMenu
         let editMenuItem = NSMenuItem(title: editString,
@@ -628,6 +628,23 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         let h = b.midY - (actionNode.bounds?.midY ?? 0)
         actionNode.attitude.position = Point(w, h)
         return actionNode
+    }
+    private func updateActionNodePosition(in actionNode: Node) {
+        if let b = actionNode.bounds {
+            let sb = rootView.screenBounds
+            if sb.height < b.maxY, b.maxY > 0 {
+                let scale = sb.height / b.maxY
+                let x = sb.maxX - b.maxX * scale
+                let y = 0.0
+                actionNode.attitude.scale = .init(square: scale)
+                actionNode.attitude.position = Point(x, y)
+            } else {
+                let x = sb.maxX - b.maxX
+                let y = sb.midY - b.midY
+                actionNode.attitude.scale = .init(square: 1)
+                actionNode.attitude.position = Point(x, y)
+            }
+        }
     }
     private func updateActionList() {
         if isHiddenActionList {
@@ -954,7 +971,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             return isEnableMenuCommand && rootView.isEditingSheet
                 && rootView.editableFromMenu
                 && !(rootView.lastEditedSheetViewFromMenu?.model.picture.lines.isEmpty ?? true)
-        case #selector(SubMTKView.cutColors(_:)):
+        case #selector(SubMTKView.cutColorsAll(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
                 && rootView.editableFromMenu
                 && !(rootView.lastEditedSheetViewFromMenu?.model.picture.planes.isEmpty ?? true)
@@ -1410,9 +1427,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         action.flow(with: inputKeyEventWith(.ended))
         rootView.isFromMenu = false
     }
-    @objc func cutColors(_ sender: Any) {
+    @objc func cutColorsAll(_ sender: Any) {
         rootView.isFromMenu = true
-        let action = CutColorsAction(rootAction)
+        let action = CutColorsAllAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
@@ -1460,14 +1477,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         rootView.drawableSize = size.my
         
         if !isHiddenActionList {
-            func update(_ node: Node) {
-                let b = rootView.screenBounds
-                let w = b.maxX - (node.bounds?.maxX ?? 0)
-                let h = b.midY - (node.bounds?.midY ?? 0)
-                node.attitude.position = Point(w, h)
-            }
             if let actionNode {
-                update(actionNode)
+                updateActionNodePosition(in: actionNode)
             }
         }
         if isShownTrackpadAlternative {

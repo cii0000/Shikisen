@@ -1487,6 +1487,7 @@ final class SheetView: View, @unchecked Sendable {
         }
         let scale = screenToWorldScale
         let rect = convertToWorld(selectedFrame)
+        let cp = rect.centerPoint
         let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
                          rect.midXMinYPoint, rect.midXMaxYPoint,
                          rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
@@ -1494,7 +1495,20 @@ final class SheetView: View, @unchecked Sendable {
                  attitude: .init(position: $0, scale: .init(square: scale)),
                  path: Path(circleRadius: 3),
                  fillType: .color(.selected))
+        } + [rect.minXMinYPoint.mid(rect.midXMinYPoint),
+             rect.midXMinYPoint.mid(rect.maxXMinYPoint),
+             rect.maxXMinYPoint.mid(rect.maxXMidYPoint),
+             rect.maxXMidYPoint.mid(rect.maxXMaxYPoint),
+             rect.maxXMaxYPoint.mid(rect.midXMaxYPoint),
+             rect.midXMaxYPoint.mid(rect.minXMaxYPoint),
+             rect.minXMaxYPoint.mid(rect.minXMidYPoint),
+             rect.minXMidYPoint.mid(rect.minXMinYPoint)].map {
+            Node(name: "knob",
+                 attitude: .init(position: $0, scale: .init(square: scale), rotation: cp.angle($0)),
+                 path: Path(Rect(x: -2.5, y: -0.75, width: 5, height: 1.5)),
+                 fillType: .color(.selected))
         }
+        
         selectedFrameNode = Node(children: knobNodes + [Node(path: .init(rect),
                                                              lineWidth: scale,
                                                              lineType: .color(.selected))])
@@ -7607,7 +7621,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     
-    func cutColors(with path: Path?) -> Bool {
+    func cutColorsAll(with path: Path?) -> Bool {
         var removePlaneValues = Array(planesView.elementViews.enumerated())
         if let path = path {
             removePlaneValues = removePlaneValues.filter {

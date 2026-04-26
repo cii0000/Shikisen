@@ -399,7 +399,7 @@ extension Gesture {
     static let cutDraft = Self(modifier: [.shift, .command], .d)
     
     static let fillAll = Self(modifier: [.command], .b)
-    static let cutColors = Self(modifier: [.shift, .command], .b)
+    static let cutColorsAll = Self(modifier: [.shift, .command], .b)
     
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
@@ -553,7 +553,7 @@ extension ActionList {
          .init(name: "Cut Draft".localized, .cutDraft)],
         
         [.init(name: "Fill All".localized, .fillAll),
-         .init(name: "Cut Colors".localized, .cutColors)],
+         .init(name: "Cut Colors All".localized, .cutColorsAll)],
         
         [.init(name: "Interpolate".localized, .interpolate),
          .init(name: "Disconnect".localized, .disconnect)],

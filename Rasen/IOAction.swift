@@ -641,7 +641,12 @@ final class IOAction: Action {
                 selectingLineNode.lineType = .color(.selected)
                 if !type.isDocument {
                     let (_, _, frame, _) = rootView.sheetViewAndFrame(at: fp)
-                    selectingLineNode.path = Path(frame)
+                    if frame.bounds != Sheet.defaultBounds,
+                       let pathline = Rect(p, distance: 0).minLine(frame) {
+                        selectingLineNode.path = Path([.init(frame), pathline])
+                    } else {
+                        selectingLineNode.path = Path(frame)
+                    }
                 } else {
                     let frame = rootView.sheetFrame(with: rootView.sheetPosition(at: fp))
                     selectingLineNode.path = Path(frame)

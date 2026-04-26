@@ -303,7 +303,7 @@ final class RootAction: Action {
         case .changeToDraft: ChangeToDraftAction(self)
         case .cutDraft: CutDraftAction(self)
         case .fillAll: FillAllAction(self)
-        case .cutColors: CutColorsAction(self)
+        case .cutColorsAll: CutColorsAllAction(self)
         case .interpolate: InterpolateAction(self)
         case .disconnect: DisconnectAction(self)
         case .changeToSuperscript: ChangeToSuperscriptAction(self)
@@ -1478,7 +1478,7 @@ final class FillAllAction: InputKeyEventAction {
         action.updateNode()
     }
 }
-final class CutColorsAction: InputKeyEventAction {
+final class CutColorsAllAction: InputKeyEventAction {
     let action: FillAction
     
     init(_ rootAction: RootAction) {
@@ -1486,7 +1486,7 @@ final class CutColorsAction: InputKeyEventAction {
     }
     
     func flow(with event: InputKeyEvent) {
-        action.cutColors(with: event)
+        action.cutColorsAll(with: event)
     }
     func updateNode() {
         action.updateNode()
@@ -1501,6 +1501,11 @@ final class FillAction: Action {
         rootView = rootAction.rootView
         isEditingSheet = rootView.isEditingSheet
     }
+    
+    func updateNode() {
+        node.lineWidth = rootView.screenToWorldScale
+    }
+    let node = Node(lineWidth: 1, lineType: .color(.selected))
     
     func fillAll(with event: InputKeyEvent) {
         guard isEditingSheet else {
@@ -1560,6 +1565,13 @@ final class FillAction: Action {
                 }
             } else {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
+                if !isAll {
+                    if let pathline = Rect(p, distance: 0).minLine(frame) {
+                        node.path = .init([pathline])
+                        node.lineWidth = rootView.screenToWorldScale
+                        rootView.node.append(child: node)
+                    }
+                }
                 if let sheetView {
                     if isAll {
                         isChanged = sheetView.fillAll(withClipping: nil,
@@ -1583,10 +1595,11 @@ final class FillAction: Action {
         case .changed:
             break
         case .ended:
+            node.removeFromParent()
             rootView.cursor = rootView.defaultCursor
         }
     }
-    func cutColors(with event: InputKeyEvent) {
+    func cutColorsAll(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return
@@ -1662,10 +1675,10 @@ final class FillAction: Action {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView = sheetView {
                     if isAll {
-                        isChanged = sheetView.cutColors(with: nil)
+                        isChanged = sheetView.cutColorsAll(with: nil)
                     } else {
                         let f = sheetView.convertFromWorld(frame).inset(by: 1)
-                        isChanged = sheetView.cutColors(with: Path(f))
+                        isChanged = sheetView.cutColorsAll(with: Path(f))
                     }
                     rootView.updateSelectedFrame()
                 }

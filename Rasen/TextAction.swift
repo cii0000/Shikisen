@@ -60,7 +60,7 @@ final class FindAction: InputKeyEventAction {
             } else {
                 let topOwner = sheetView.sheetColorOwner(at: inP, scale: rootView.screenToWorldScale).value
                 let uuColor = topOwner.uuColor
-                if uuColor != Sheet.defalutBackgroundUUColor {
+                if uuColor != Sheet.defalutBackgroundUUColor && uuColor.value.opacity != 0 {
                     let string = uuColor.id.uuidString
                     rootView.finding = Finding(worldPosition: p, string: string)
                     isFind = true
@@ -169,7 +169,9 @@ final class LookUpAction: InputKeyEventAction {
         } else if let (_, _, _, _) = rootView.border(at: p) {
             rootView.show("Border".localized, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
-                  let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p), scale: 1 / rootView.worldToScreenScale)?.lineView {
+                  let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
+                                                     enabledPlane: true,
+                                                     scale: 1 / rootView.worldToScreenScale)?.lineView {
             rootView.show((lineView.model.controls.count == 2 ? "Straight Line".localized : "Line".localized) + "\n\t\("Length".localized):  \(lineView.model.length().string(digitsCount: 4))", at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, _, i, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
@@ -303,9 +305,7 @@ final class LookUpAction: InputKeyEventAction {
             let rgba = plane.uuColor.value.rgba
             rootView.show("Color".localized + "\n\t\("Area".localized):  \(plane.topolygon.area.string(digitsCount: 4))\n\tsRGB: \(rgba.r) \(rgba.g) \(rgba.b)", at: p)
         } else if let sheetView = rootView.sheetView(at: p) {
-            let bounds = sheetView.model.boundsTuple(at: sheetView.convertFromWorld(p),
-                                                     in: rootView.sheetFrame(with: rootView.sheetPosition(at: p)).bounds).bounds.integral
-            
+            let b = rootView.sheetFrame(with: rootView.sheetPosition(at: p)).bounds
             var sampless = rootView.currentSampless(at: rootView.sheetPosition(at: p))
             if !sampless.isEmpty {
                 let peakDb = PCMBuffer.peakDb(sampless: sampless)
@@ -317,17 +317,18 @@ final class LookUpAction: InputKeyEventAction {
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb.string(digitsCount: 2)) dB"
                               + "\n\t\("True Peak".localized): \(truePeakDb.string(digitsCount: 2)) dBTP"
-                              + (mainSize != bounds.size ? "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" : "")
+                              + "\n\t\("Size".localized): \(Self.sizeString(from: b.size))"
                               + (mainSize != nil ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""),
                               at: p)
             } else {
                 let mainSize = sheetView.mainFrame.bounds.size != Sheet.defaultBounds.size ? sheetView.mainFrame.size : nil
                 rootView.show("Background".localized
-                              + (mainSize != bounds.size ? "\n\t\("Size".localized): \(Self.sizeString(from: bounds.size))" : "")
+                              + "\n\t\("Size".localized): \(Self.sizeString(from: b.size))"
                               + (mainSize != nil ? "\n\t\("Main Size".localized): \(LookUpAction.sizeString(from: mainSize!))" : ""), at: p)
             }
         } else {
-            rootView.show("Background".localized, at: p)
+            rootView.show("Background".localized
+                          + "\n\t\("Size".localized): \(Self.sizeString(from: Sheet.defaultBounds.size))", at: p)
         }
     }
     

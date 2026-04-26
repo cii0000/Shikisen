@@ -2767,6 +2767,7 @@ extension Sheet {
     func boundsTuple(at p: Point,
                      in bounds: Rect) -> (bounds: Rect, isAll: Bool) {
         guard !borders.isEmpty || mainFrame != Sheet.defaultBounds else { return (bounds, true) }
+        guard !borders.isEmpty else { return (mainFrame, false) }
         var aabb = AABB(bounds)
         
         let mainBorders = mainFrame != Sheet.defaultBounds ?

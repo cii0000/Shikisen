@@ -2342,8 +2342,9 @@ final class MoveSheetAction: DragEventAction {
             ?? rootView.sheetPosition(at: p)
             if let sheetView = rootView.sheetView(at: shp) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.containsSelectedFrame(sheetP,
-                                                   scale: rootView.screenToWorldScale)
+                let containsSelectedFrame = sheetView.containsSelectedFrame(sheetP,
+                                                                            scale: rootView.screenToWorldScale)
+                if containsSelectedFrame
                     || sheetView.containsSelectedSheetValue(sheetP,
                                                             scale: rootView.screenToWorldScale) {
                     lineIs = sheetView.keyframeView.selectedLineIs
@@ -2359,15 +2360,13 @@ final class MoveSheetAction: DragEventAction {
                     self.sheetView = sheetView
                     sheetView.hideSelected()
                     
-                    if let rect = sheetView.selectedFrame {
+                    if containsSelectedFrame, let rect = sheetView.selectedFrame {
                         typeRect = sheetView.convertToWorld(rect)
                         let rect = rootView.convertWorldToScreen(typeRect)
                         var minDSq = Double.infinity
-                        let maxDSq = Sheet.moveKnobEditDistance.squared
-                        let eMaxDSq = (Sheet.moveKnobEditDistance / 2).squared
                         func update(_ rp: Point, _ type: MoveType) {
                             let dSq = rp.distanceSquared(sp)
-                            if dSq < maxDSq && dSq < minDSq {
+                            if dSq < minDSq {
                                 self.type = type
                                 minDSq = dSq
                             }
@@ -2380,16 +2379,21 @@ final class MoveSheetAction: DragEventAction {
                         update(rect.midXMinYPoint, .scaleBottom)
                         update(rect.maxXMidYPoint, .scaleRight)
                         update(rect.midXMaxYPoint, .scaleTop)
+                        update(rect.minXMinYPoint.mid(rect.midXMinYPoint), .rotate)
+                        update(rect.midXMinYPoint.mid(rect.maxXMinYPoint), .rotate)
+                        update(rect.maxXMinYPoint.mid(rect.maxXMidYPoint), .rotate)
+                        update(rect.maxXMidYPoint.mid(rect.maxXMaxYPoint), .rotate)
+                        update(rect.maxXMaxYPoint.mid(rect.midXMaxYPoint), .rotate)
+                        update(rect.midXMaxYPoint.mid(rect.minXMaxYPoint), .rotate)
+                        update(rect.minXMaxYPoint.mid(rect.minXMidYPoint), .rotate)
+                        update(rect.minXMidYPoint.mid(rect.minXMinYPoint), .rotate)
                         
-                        let dSq = rect.edges.minValue({ $0.distanceSquared(from: sp) })!
-                        if type == .move, dSq < eMaxDSq && dSq < minDSq {
-                            type = .rotate
+                        if type == .rotate {
                             node.lineType = .color(.selected)
                             node.lineWidth = rootView.worldLineWidth
                             node.path = .init(circleRadius: p.distance(typeRect.centerPoint),
                                               position: typeRect.centerPoint)
                             rootView.node.append(child: node)
-                            minDSq = dSq
                         }
                     }
                 }

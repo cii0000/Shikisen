@@ -1832,7 +1832,7 @@ extension ScoreView {
         
         var tonePanelNodes = [Node]()
         let boxPath = Path(toneFrames.map { Pathline($0) })
-        tonePanelNodes.append(.init(path: boxPath, fillType: .color(.background)))
+        tonePanelNodes.append(.init(name: "toneFrame", path: boxPath, fillType: .color(.background)))
         tonePanelNodes += spectlopeTonePanelNodes
         if !spectlopeFqLinePathlines.isEmpty {
             tonePanelNodes.append(.init(path: Path(spectlopeFqLinePathlines),
@@ -2536,7 +2536,8 @@ extension ScoreView {
     }
     
     func intersectsNote(_ otherRect: Rect, at noteI: Int) -> Bool {
-        guard let b = mainLineBounds(at: noteI) else { return false }
+        guard notesNode.children[noteI].path.intersects(otherRect),
+              let b = mainLineBounds(at: noteI) else { return false }
         guard b.intersects(otherRect) else {
             return false
         }
@@ -2761,23 +2762,23 @@ extension ScoreView {
         return minPitI
     }
     func noteIInTone(at p: Point) -> Int? {
-        for (i, note) in model.notes.enumerated() {
-            if toneFrames(from: note).contains(where: { $0.frame.contains(p) }) {
-                return i
+        notesNode.children.firstIndex {
+            $0.children.contains {
+                $0.name == "toneFrame" ? $0.contains(p) : false
             }
         }
-        return nil
     }
     func containsTone(at p: Point) -> Bool {
-        for note in model.notes {
-            if toneFrames(from: note).contains(where: { $0.frame.contains(p) }) {
-                return true
+        notesNode.children.contains {
+            $0.children.contains {
+                $0.name == "toneFrame" ? $0.contains(p) : false
             }
         }
-        return false
     }
     func containsTone(at p: Point, at noteI: Int) -> Bool {
-        toneFrames(at: noteI).contains(where: { $0.frame.contains(p) })
+        notesNode.children[noteI].children.contains {
+            $0.name == "toneFrame" ? $0.contains(p) : false
+        }
     }
     func toneFrames(from note: Note) -> [(pitIs: [Int], frame: Rect)] {
         guard note.beatRange.length > 0 && !note.isOneOvertone && !note.isDefaultTone else {

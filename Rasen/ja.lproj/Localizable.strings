@@ -57,10 +57,10 @@
 "Find" = "検索";
 
 "Change to Draft" = "下書き化";
-"Cut Draft" = "下書きカット";
+"Cut Draft" = "下書きをカット";
 
 "Fill All" = "塗りつくす";
-"Cut Colors" = "配色カット";
+"Cut Colors All" = "すべての色をカット";
 
 "Add Time" = "時間を追加";
 "Add Score" = "楽譜を追加";
