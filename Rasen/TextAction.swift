@@ -47,6 +47,16 @@ final class FindAction: InputKeyEventAction {
                     rootView.finding = Finding(worldPosition: p, string: string)
                     isFind = true
                 }
+            } else if let tempo = sheetView.tempo(at: inP, scale: rootView.screenToWorldScale) {
+                let str = "\(tempo) bpm"
+                rootView.finding = Finding(worldPosition: p, string: str)
+                isFind = true
+            } else if let mainFrame = rootView.mainFrame(at: p)?.mainFrame {
+                if mainFrame != Sheet.defaultBounds {
+                    let str = "((\(mainFrame.minX), \(mainFrame.minY)) (\(mainFrame.size.width)x\(mainFrame.size.height))"
+                    rootView.finding = Finding(worldPosition: p, string: str)
+                    isFind = true
+                }
             } else {
                 let topOwner = sheetView.sheetColorOwner(at: inP, scale: rootView.screenToWorldScale).value
                 let uuColor = topOwner.uuColor
@@ -160,7 +170,7 @@ final class LookUpAction: InputKeyEventAction {
             rootView.show("Border".localized, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p), scale: 1 / rootView.worldToScreenScale)?.lineView {
-            rootView.show("Line".localized + "\n\t\("Length".localized):  \(lineView.model.length().string(digitsCount: 4))", at: p)
+            rootView.show((lineView.model.controls.count == 2 ? "Straight Line".localized : "Line".localized) + "\n\t\("Length".localized):  \(lineView.model.length().string(digitsCount: 4))", at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, _, i, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
             
@@ -189,15 +199,26 @@ final class LookUpAction: InputKeyEventAction {
                                                scale: rootView.screenToWorldScale) {
             let scoreView = sheetView.scoreView
             let scoreP = scoreView.convertFromWorld(p)
-            if scoreView.containsTimeline(scoreP, scale: rootView.screenToWorldScale) {
+            if let ki = scoreView.keyBeatIndex(at: scoreP, scale: rootView.screenToWorldScale) {
+                let beatStr = sheetView.timeString(fromBeat: scoreView.model.keyBeats[ki])
+                rootView.show("Keyframe".localized
+                              + "\n\t\("Beat".localized): \(beatStr)",
+                              at: p)
+            } else if scoreView.containsTimeline(scoreP, scale: rootView.screenToWorldScale)
+                || scoreView.containsIsShownSpectrogram(scoreP, scale: rootView.screenToWorldScale) {
                 scoreView.scoreTrackItem?.updateNotewaveDic()
                 let lufs = scoreView.scoreTrackItem?.lufs
                 let peakDb = scoreView.scoreTrackItem?.peakDb
                 let truePeakDb = scoreView.scoreTrackItem?.truePeakDb
+                let tempoStr = Sheet.tempoNameFromStandardFrameRate(withTempo: scoreView.model.tempo)
+                let startBeatStr = sheetView.timeString(fromBeat: scoreView.model.beatRange.start)
+                let endBeatStr = sheetView.timeString(fromBeat: scoreView.model.endLoopDurBeat)
                 rootView.show("Score".localized
                               + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
                               + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB"
-                              + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP",
+                              + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP"
+                              + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                              + "\n\t\("Tempo".localized): \(tempoStr)",
                               at: p)
             } else {
                 let pitchInterval = rootView.currentPitchInterval
@@ -213,6 +234,25 @@ final class LookUpAction: InputKeyEventAction {
                                               frameRate: Rational(Keyframe.defaultFrameRate)) + " beat"
                 rootView.show(fqStr, at: p)
             }
+        } else if let sheetView = rootView.sheetView(at: p),
+                   sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
+                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                                 scale: rootView.screenToWorldScale) {
+            let beatStr = sheetView.timeString(fromBeat: sheetView.model.animation.keyframes[ki].beat)
+            rootView.show("Keyframe".localized
+                          + "\n\t\("Beat".localized): \(beatStr)",
+                          at: p)
+        } else if let sheetView = rootView.sheetView(at: p),
+                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                           scale: rootView.screenToWorldScale) {
+            let animation = sheetView.animationView.model
+            let tempoStr = Sheet.tempoNameFromStandardFrameRate(withTempo: animation.tempo)
+            let startBeatStr = sheetView.timeString(fromBeat: animation.beatRange.start)
+            let endBeatStr = sheetView.timeString(fromBeat: animation.endLoopDurBeat)
+            rootView.show("Timeline".localized
+                          + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                          + "\n\t\("Tempo".localized): \(tempoStr)",
+                          at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (node, contentView) = sheetView.spectrogramNode(at: sheetView.convertFromWorld(p)) {
             let pitch = contentView.spectrogramPitch(atY: node.convertFromWorld(p).y)!
@@ -234,18 +274,34 @@ final class LookUpAction: InputKeyEventAction {
             let lufs = contentView.pcmTrackItem?.lufs
             let peakDb = contentView.pcmTrackItem?.peakDb
             let truePeakDb = contentView.pcmTrackItem?.truePeakDb
-            let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
-            rootView.show(content.type.displayName
-                          + "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
-                          + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB"
-                          + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP"
-                          + "\n\t\("File Size".localized): \(string)",
-                          at: p)
+            let fileSizeStr = IOResult.fileSizeNameFrom(fileSize: fileSize)
+            var str = content.type.displayName
+            if content.type.isAudio {
+                str += "\n\t\("Loudness".localized): \(lufs?.string(digitsCount: 2) ?? "N/A") LUFS"
+                + "\n\t\("Sample Peak".localized): \(peakDb?.string(digitsCount: 2) ?? "N/A") dB"
+                + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP"
+            }
+            if content.type != .sound, !content.size.isEmpty {
+                str += "\n\t\("Size".localized): \(Self.sizeString(from: content.size))"
+            }
+            if let size = content.image?.size, !size.isEmpty {
+                str += "\n\t\("Image Size".localized): \(Self.sizeString(from: size))"
+            }
+            if let timeOption = content.timeOption {
+                let tempoStr = Sheet.tempoNameFromStandardFrameRate(withTempo: timeOption.tempo)
+                let startBeatStr = sheetView.timeString(fromBeat: timeOption.beatRange.start)
+                let endBeatStr = sheetView.timeString(fromBeat: timeOption.beatRange.end)
+                str +=  "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                + "\n\t\("Tempo".localized): \(tempoStr)"
+            }
+            str += "\n\t\("File Size".localized): \(fileSizeStr)"
+            rootView.show(str, at: p)
         } else if !rootView.isDefaultUUColor(at: p),
                   let sheetView = rootView.sheetView(at: p),
-                  let plane = sheetView.plane(at: sheetView.convertFromWorld(p)) {
+                  let plane = sheetView.plane(at: sheetView.convertFromWorld(p)),
+                  plane.uuColor.value.opacity != 0 {
             let rgba = plane.uuColor.value.rgba
-            rootView.show("Face".localized + "\n\t\("Area".localized):  \(plane.topolygon.area.string(digitsCount: 4))\n\tsRGB: \(rgba.r) \(rgba.g) \(rgba.b)", at: p)
+            rootView.show("Color".localized + "\n\t\("Area".localized):  \(plane.topolygon.area.string(digitsCount: 4))\n\tsRGB: \(rgba.r) \(rgba.g) \(rgba.b)", at: p)
         } else if let sheetView = rootView.sheetView(at: p) {
             let bounds = sheetView.model.boundsTuple(at: sheetView.convertFromWorld(p),
                                                      in: rootView.sheetFrame(with: rootView.sheetPosition(at: p)).bounds).bounds.integral
@@ -280,19 +336,18 @@ final class LookUpAction: InputKeyEventAction {
                         in textView: SheetTextView, in sheetView: SheetView) {
         let np = textView.characterPosition(at: range.lowerBound)
         if let nstr = TextDictionary.string(from: string) {
-            show(string: nstr, fromSize: textView.model.size,
+            show(string: nstr,
                  rects: textView.transformedRects(with: range),
                  at: np, in: textView, in: sheetView)
         } else {
-            show(string: "?", fromSize: textView.model.size,
+            show(string: "?",
                  rects: textView.transformedRects(with: range),
                  at: np, in: textView, in: sheetView)
         }
     }
-    func show(string: String, fromSize: Double, rects: [Rect], at p: Point,
+    func show(string: String, rects: [Rect], at p: Point,
               in textView: SheetTextView, in sheetView: SheetView) {
         rootView.show(string,
-                      fromSize: fromSize,
                       rects: rects.map { sheetView.convertToWorld($0) },
                       textView.model.orientation)
     }
@@ -378,7 +433,11 @@ final class TextOrientationAction: Action {
             rootView.cursor = .arrow
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
-            guard let sheetView = rootView.sheetView(at: p) else { return }
+            guard let sheetView = rootView.madeSheetView(at: p) else { return }
+            if sheetView.model.score.enabled {
+                rootAction.keepOut(with: event)
+                return
+            }
             
             if sheetView.containsSelectedText(sheetView.convertFromWorld(p),
                                               scale: rootView.screenToWorldScale) {

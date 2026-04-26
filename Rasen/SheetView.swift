@@ -614,7 +614,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let sx = x(atBeat: sBeat)
         let ey = Sheet.timelineHalfHeight
         let pnW = 14.0, pnnH = 12.0, spnW = 3.0, pnY = ey + 12
-        return Rect(x: sx, y: pnY - pnnH / 2, width: pnW * 6 + spnW, height: pnnH)
+        return Rect(x: sx, y: pnY - pnnH / 2, width: pnW * 3 + spnW, height: pnnH)
     }
     var paddingPreviousNextFrame: Rect {
         previousNextFrame.outset(by: Sheet.timelinePadding)
@@ -1076,16 +1076,17 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         return if let minI { (minI, minD) } else { nil }
     }
-    func keyframeIndex(at inP: Point, isEnabledCount: Bool = false) -> Int? {
+    func keyframeIndex(at inP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
         guard abs(inP.y) < Sheet.timelineHalfHeight * 15 / 16 else { return nil }
         let animation = model
         let count = animation.keyframes.count
+        let maxD = Sheet.keyframeEditDistance * scale
         var minD = Double.infinity, minI: Int?
         let beatRange = animation.beatRange
         for (i, keyframe) in animation.keyframes.enumerated() {
             let x = x(atBeat: keyframe.beat + beatRange.start)
             let d = abs(inP.x - x)
-            if d < minD {
+            if d < minD && d < maxD {
                 minD = d
                 minI = i
             }
@@ -1093,7 +1094,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         if isEnabledCount {
             let x = x(atBeat: beatRange.end)
             let d = abs(inP.x - x)
-            if d < minD {
+            if d < minD && d < maxD {
                 minD = d
                 minI = count
             }
@@ -1383,7 +1384,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             minResult = .endBeat
         }
         
-        let md = Sheet.knobEditDistance * 2 * scale
+        let md = Sheet.keyframeEditDistance * scale
         if let (minI, d) = slidableKeyframeIndex(at: p, maxDistance: md) {
             if enabledStartBeat ? minI != 0 : true, d < minD {
                 minD = d
@@ -1640,12 +1641,12 @@ final class SheetView: View, @unchecked Sendable {
     }
     private func updateMainFrame() {
         let f = mainFrame
-        let lw = 4.0, hlw = 2.0, tlw = 1.0
         if f == Sheet.defaultBounds {
             if !mainFrameNode.children.isEmpty {
                 mainFrameNode.children = []
             }
         } else if isPlaying {
+            let lw = Sheet.mainFrameLineWidth
             let b = bounds
             let bf = f.outset(by: lw)
             let bNode = Node(path: .init([.init(Rect(x: bf.minX, y: bf.maxY,
@@ -1668,42 +1669,46 @@ final class SheetView: View, @unchecked Sendable {
                             fillType: .color(.mainFrame))
             mainFrameNode.children = [bNode, node]
         } else {
-            let node = Node(path: .init([.init(Rect(x: f.minX, y: f.maxY,
-                                                    width: f.width, height: lw)),
-                                         .init(Rect(x: f.maxX, y: f.minY - lw,
-                                                    width: lw, height: f.height + lw * 2)),
-                                         .init(Rect(x: f.minX, y: f.minY - lw,
-                                                    width: f.width, height: lw)),
-                                         .init(Rect(x: f.minX - lw, y: f.minY - lw,
-                                                    width: lw, height: f.height + lw * 2))]),
-                            fillType: .color(.mainFrame))
-            let tNode = Node(path: .init([.init(Rect(x: f.minX + f.width / 3 - tlw / 2,
-                                                     y: f.maxY + lw - hlw,
-                                                     width: tlw, height: hlw)),
-                                          .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
-                                                     y: f.maxY + lw - hlw,
-                                                     width: tlw, height: hlw)),
-                                          .init(Rect(x: f.minX + f.width / 3 - tlw / 2,
-                                                     y: f.minY - lw,
-                                                     width: tlw, height: hlw)),
-                                          .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
-                                                     y: f.minY - lw,
-                                                     width: tlw, height: hlw)),
-                                          .init(Rect(x: f.minX - lw,
-                                                     y: f.minY + f.height / 3 - tlw / 2,
-                                                     width: hlw, height: tlw)),
-                                          .init(Rect(x: f.minX - lw,
-                                                     y: f.minY + f.height * 2 / 3 - tlw / 2,
-                                                     width: hlw, height: tlw)),
-                                          .init(Rect(x: f.maxX + lw - hlw,
-                                                     y: f.minY + f.height / 3 - tlw / 2,
-                                                     width: hlw, height: tlw)),
-                                          .init(Rect(x: f.maxX + lw - hlw,
-                                                     y: f.minY + f.height * 2 / 3 - tlw / 2,
-                                                     width: hlw, height: tlw))]),
-                             fillType: .color(.subBorder))
-            mainFrameNode.children = [node, tNode]
+            mainFrameNode.children = Self.mainFrameNodes(fromMainFrame: f)
         }
+    }
+    static func mainFrameNodes(fromMainFrame f: Rect) -> [Node] {
+        let lw = Sheet.mainFrameLineWidth, hlw = lw / 2, tlw = hlw / 2
+        let node = Node(path: .init([.init(Rect(x: f.minX, y: f.maxY,
+                                                width: f.width, height: lw)),
+                                     .init(Rect(x: f.maxX, y: f.minY - lw,
+                                                width: lw, height: f.height + lw * 2)),
+                                     .init(Rect(x: f.minX, y: f.minY - lw,
+                                                width: f.width, height: lw)),
+                                     .init(Rect(x: f.minX - lw, y: f.minY - lw,
+                                                width: lw, height: f.height + lw * 2))]),
+                        fillType: .color(.mainFrame))
+        let tNode = Node(path: .init([.init(Rect(x: f.minX + f.width / 3 - tlw / 2,
+                                                 y: f.maxY + lw - hlw,
+                                                 width: tlw, height: hlw)),
+                                      .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
+                                                 y: f.maxY + lw - hlw,
+                                                 width: tlw, height: hlw)),
+                                      .init(Rect(x: f.minX + f.width / 3 - tlw / 2,
+                                                 y: f.minY - lw,
+                                                 width: tlw, height: hlw)),
+                                      .init(Rect(x: f.minX + f.width * 2 / 3 - tlw / 2,
+                                                 y: f.minY - lw,
+                                                 width: tlw, height: hlw)),
+                                      .init(Rect(x: f.minX - lw,
+                                                 y: f.minY + f.height / 3 - tlw / 2,
+                                                 width: hlw, height: tlw)),
+                                      .init(Rect(x: f.minX - lw,
+                                                 y: f.minY + f.height * 2 / 3 - tlw / 2,
+                                                 width: hlw, height: tlw)),
+                                      .init(Rect(x: f.maxX + lw - hlw,
+                                                 y: f.minY + f.height / 3 - tlw / 2,
+                                                 width: hlw, height: tlw)),
+                                      .init(Rect(x: f.maxX + lw - hlw,
+                                                 y: f.minY + f.height * 2 / 3 - tlw / 2,
+                                                 width: hlw, height: tlw))]),
+                         fillType: .color(.subBorder))
+        return [node, tNode]
     }
     
     var selectedFrame: Rect? {
@@ -1858,8 +1863,8 @@ final class SheetView: View, @unchecked Sendable {
         if animationView.containsTimeline(animationView.timelineNode.convert(p, from: node),
                                           scale: scale),
            let ki = animationView
-            .keyframeIndex(at: animationView.timelineNode.convert(p, from: node)) {
-            
+            .keyframeIndex(at: animationView.timelineNode.convert(p, from: node),
+                           scale: scale) {
             animationView.selectedIs.contains(ki)
         } else {
             false
@@ -1927,6 +1932,9 @@ final class SheetView: View, @unchecked Sendable {
     }
     func timeString(fromBeat beat: Rational) -> String {
         Animation.timeString(fromTime: beat, frameRate: Rational(frameRate))
+    }
+    func timeString(fromSec sec: Rational) -> String {
+        Animation.timeString(fromTime: sec, frameRate: Rational(60))
     }
     func currentTimeString() -> String {
         Animation.timeString(fromTime: model.animation.localBeat,
@@ -2060,8 +2068,8 @@ final class SheetView: View, @unchecked Sendable {
         animationView.slidableKeyframeIndex(at: inP,
                                             maxDistance: maxDistance)?.i
     }
-    func keyframeIndex(at inP: Point, isEnabledCount: Bool = false) -> Int? {
-        animationView.keyframeIndex(at: inP, isEnabledCount: isEnabledCount)
+    func keyframeIndex(at inP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
+        animationView.keyframeIndex(at: inP, scale: scale, isEnabledCount: isEnabledCount)
     }
     
     var rootKeyframeIndex: Int {
@@ -7471,10 +7479,10 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     @MainActor
-    func makeFaces(withClipping cb: Rect?,
+    func fillAll(withClipping cb: Rect?,
                    selectedKeyframeIs: [Int], isOutClip: Bool) -> Bool {
         if selectedKeyframeIs.isEmpty {
-            return makeFacesFromKeyframeIndex(withClipping: cb, isOutClip: isOutClip)
+            return fillAllFromKeyframeIndex(withClipping: cb, isOutClip: isOutClip)
         }
         
         let b = bounds, borders = model.borders
@@ -7510,7 +7518,7 @@ final class SheetView: View, @unchecked Sendable {
                 for (j, i) in selectedKeyframeIs.enumerated() {
                     autoreleasepool {
                         self.setRootKeyframeIndex(rootKeyframeIndex: i)
-                        _ = self.makeFacesFromKeyframeIndex(withClipping: cb,
+                        _ = self.fillAllFromKeyframeIndex(withClipping: cb,
                                                             topolygons: nPolyss[j],
                                                             isOutClip: isOutClip,
                                                             isNewUndoGroup: false)
@@ -7522,18 +7530,18 @@ final class SheetView: View, @unchecked Sendable {
         progressPanel.cancelHandler = { task.cancel() }
         return true
     }
-    func makeFacesFromKeyframeIndex(withClipping cb: Rect?, isOutClip: Bool,
+    func fillAllFromKeyframeIndex(withClipping cb: Rect?, isOutClip: Bool,
                                     isNewUndoGroup: Bool = true) -> Bool {
         let topolygons = model.picture.makePolygons(in: bounds,
                                                     clippingBounds: cb,
                                                     borders: model.borders,
                                                     isOutClip: isOutClip)
-        return makeFacesFromKeyframeIndex(withClipping: cb,
+        return fillAllFromKeyframeIndex(withClipping: cb,
                                           topolygons: topolygons,
                                           isOutClip: isOutClip,
                                           isNewUndoGroup: isNewUndoGroup)
     }
-    func makeFacesFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
+    func fillAllFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
                                     isOutClip: Bool,
                                     isNewUndoGroup: Bool = true) -> Bool {
         func enabledPlanes(at otherKI: Int) -> [Plane]? {
@@ -7599,7 +7607,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     
-    func cutFaces(with path: Path?) -> Bool {
+    func cutColors(with path: Path?) -> Bool {
         var removePlaneValues = Array(planesView.elementViews.enumerated())
         if let path = path {
             removePlaneValues = removePlaneValues.filter {

@@ -243,6 +243,9 @@ extension Double {
         "\(Int(self))" :
         String(format: "%.\(digitsCount)f", self)
     }
+    var shortString: String {
+        string(digitsCount: 2, enabledZeroInteger: false)
+    }
     
     func interval(scale: Double) -> Double {
         if scale == 0 {

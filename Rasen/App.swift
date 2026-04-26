@@ -313,11 +313,11 @@ final class SubNSApplication: NSApplication {
                          action: #selector(SubMTKView.cutDraft(_:)),
                          keyEquivalent: "d", modifierFlags: [.command, .shift])
         editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Make Faces".localized,
-                         action: #selector(SubMTKView.makeFaces(_:)),
+        editMenu.addItem(withTitle: "Fill All".localized,
+                         action: #selector(SubMTKView.fillAll(_:)),
                          keyEquivalent: "b", modifierFlags: [.command])
-        editMenu.addItem(withTitle: "Cut Faces".localized,
-                         action: #selector(SubMTKView.cutFaces(_:)),
+        editMenu.addItem(withTitle: "Cut Colors".localized,
+                         action: #selector(SubMTKView.cutColors(_:)),
                          keyEquivalent: "b", modifierFlags: [.command, .shift])
         self.editMenu = editMenu
         let editMenuItem = NSMenuItem(title: editString,
@@ -950,11 +950,11 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             return isEnableMenuCommand && rootView.isEditingSheet
                 && rootView.editableFromMenu
                 && !(rootView.lastEditedSheetViewFromMenu?.model.draftPicture.isEmpty ?? true)
-        case #selector(SubMTKView.makeFaces(_:)):
+        case #selector(SubMTKView.fillAll(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
                 && rootView.editableFromMenu
                 && !(rootView.lastEditedSheetViewFromMenu?.model.picture.lines.isEmpty ?? true)
-        case #selector(SubMTKView.cutFaces(_:)):
+        case #selector(SubMTKView.cutColors(_:)):
             return isEnableMenuCommand && rootView.isEditingSheet
                 && rootView.editableFromMenu
                 && !(rootView.lastEditedSheetViewFromMenu?.model.picture.planes.isEmpty ?? true)
@@ -1402,17 +1402,17 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         action.flow(with: inputKeyEventWith(.ended))
         rootView.isFromMenu = false
     }
-    @objc func makeFaces(_ sender: Any) {
+    @objc func fillAll(_ sender: Any) {
         rootView.isFromMenu = true
-        let action = MakeFacesAction(rootAction)
+        let action = FillAllAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
         rootView.isFromMenu = false
     }
-    @objc func cutFaces(_ sender: Any) {
+    @objc func cutColors(_ sender: Any) {
         rootView.isFromMenu = true
-        let action = CutFacesAction(rootAction)
+        let action = CutColorsAction(rootAction)
         action.flow(with: inputKeyEventWith(.began))
         Sleep.start()
         action.flow(with: inputKeyEventWith(.ended))
@@ -2770,19 +2770,19 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     
-    private enum TouchGesture {
+    private enum PinchOrRotateType {
         case none, pinch, rotate
     }
-    private var blockGesture = TouchGesture.none
+    private var blockPinchOrRotateType = PinchOrRotateType.none
     override func magnify(with nsEvent: NSEvent) {
         guard !isEnabledCustomTrackpad else { return }
         
         if nsEvent.phase.contains(.began) {
-            blockGesture = .pinch
+            blockPinchOrRotateType = .pinch
             pinchVs = []
             rootAction.pinch(with: pinchEventWith(nsEvent, .began))
         } else if nsEvent.phase.contains(.ended) {
-            blockGesture = .none
+            blockPinchOrRotateType = .none
             rootAction.pinch(with: pinchEventWith(nsEvent, .ended))
             pinchVs = []
         } else if nsEvent.phase.contains(.changed) {
@@ -2799,7 +2799,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         guard !isEnabledCustomTrackpad else { return }
         
         if nsEvent.phase.contains(.began) {
-            if blockGesture != .pinch {
+            if blockPinchOrRotateType != .pinch {
                 isBlockedRotation = false
                 isFirstStoppedRotation = true
                 rotatedValue = nsEvent.rotation

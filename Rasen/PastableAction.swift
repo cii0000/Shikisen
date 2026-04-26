@@ -603,7 +603,8 @@ final class PastableAction: Action {
     func updateWithCopy(for p: Point, isSendPasteboard: Bool) -> Bool {
         if let sheetView = rootView.sheetView(at: p),
            sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
-           let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p)) {
+           let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                          scale: rootView.screenToWorldScale) {
             
             let animationView = sheetView.animationView
             
@@ -753,15 +754,14 @@ final class PastableAction: Action {
             
             return true
         } else if rootView.containsLookingUp(at: p),
-                  !rootView.lookingUpString.isEmpty {
+                  !rootView.lookingUpString.isEmpty,
+                    let path = rootView.lookingUpBoundsNode?.path {
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
             }
-            
-            let lw = Line.defaultLineWidth * 2 / rootView.worldToScreenScale
             selectingLineNode.children =
-            [Node(path: rootView.lookingUpBoundsNode?.path ?? Path(),
-                  lineWidth: lw,
+            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
+                  lineWidth: Line.defaultLineWidth * 1.5,
                   lineType: .color(.selected),
                   fillType: .color(.subSelected))]
             return true
@@ -1110,18 +1110,6 @@ final class PastableAction: Action {
                     return true
                 }
             }
-        } else if let (mainFrame, sheetView) = rootView.mainFrame(at: p) {
-            if isSendPasteboard {
-                Pasteboard.shared.copiedObjects = [.rect(mainFrame)]
-            }
-            selectingLineNode.lineType = .color(.selected)
-            selectingLineNode.lineWidth = 6 * 1.5
-            if let sheetView {
-                selectingLineNode.path = Path([Pathline(sheetView.convertToWorld(mainFrame.outset(by: 3)))])
-            } else {
-                selectingLineNode.path = Path([Pathline(mainFrame.outset(by: 3))])
-            }
-            return true
         } else if let (sBorder, edge) = rootView.worldBorder(at: p) {
             if isSendPasteboard {
                 Pasteboard.shared.copiedObjects = [.border(sBorder)]
@@ -1139,6 +1127,18 @@ final class PastableAction: Action {
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth
             selectingLineNode.path = Path([Pathline([edge.p0, edge.p1])])
+            return true
+        } else if let (mainFrame, sheetView) = rootView.mainFrame(at: p) {
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.rect(mainFrame)]
+            }
+            selectingLineNode.lineType = .color(.selected)
+            selectingLineNode.lineWidth = Sheet.mainFrameLineWidth * 1.5
+            if let sheetView {
+                selectingLineNode.path = Path([Pathline(sheetView.convertToWorld(mainFrame.outset(by: 3)))])
+            } else {
+                selectingLineNode.path = Path([Pathline(mainFrame.outset(by: 3))])
+            }
             return true
         } else if !rootView.isDefaultUUColor(at: p) {
             let colorOwners = rootView.readColorOwners(at: p)
@@ -1201,7 +1201,8 @@ final class PastableAction: Action {
             return true
         } else if let sheetView = rootView.sheetView(at: p),
            sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
-           let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p)) {
+                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                                 scale: rootView.screenToWorldScale) {
             
             let animationView = sheetView.animationView
             
@@ -2154,23 +2155,20 @@ final class PastableAction: Action {
                                                oldBorder: oldBorder)
             isSnapped = bnp.isSnapped
             let np = bnp.point + sheetFrame.origin
-            var nBorder = oldBorder
-            switch oldBorder.orientation {
+            let cp = sheetFrame.bounds.centerPoint
+            let (nx, ny) = switch oldBorder.orientation {
             case .horizontal:
-                selectingLineNode.path = Path([Pathline([Point(sheetFrame.minX, np.y),
-                                                         Point(sheetFrame.maxX, np.y)])])
-                nBorder.location = np.y - sheetFrame.minY
+                (sheetFrame.width / 2, np.y - sheetFrame.minY - cp.y)
             case .vertical:
-                selectingLineNode.path = Path([Pathline([Point(np.x, sheetFrame.minY),
-                                                         Point(np.x, sheetFrame.maxY)])])
-                nBorder.location = np.x - sheetFrame.minX
+                (np.x - sheetFrame.minX - cp.x, sheetFrame.height / 2)
             }
-            let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-            let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
-            rootView.cursor = switch nBorder.orientation {
-            case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
-            case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
-            }
+            let mainFrame = Rect(cp,
+                                 dx: abs(nx).rounded().clipped(min: 1, max: sheetFrame.width / 2),
+                                 dy: abs(ny).rounded().clipped(min: 1, max: sheetFrame.height / 2))
+            selectingLineNode.children = SheetView.mainFrameNodes(fromMainFrame: mainFrame + sheetFrame.origin)
+            
+            let width = mainFrame.width, height = mainFrame.height
+            rootView.cursor = rootView.cursor(from: "\(LookUpAction.sizeString(from: .init(width: width, height: height)))", isArrow: true)
         }
         func updateIDs(_ ids: [InterOption]) {
             guard let sheetView else { return }
@@ -3031,13 +3029,28 @@ final class PastableAction: Action {
                 }
                 return
             } else if let sheetView = rootView.madeSheetView(at: shp) {
-                let sb = rootView.sheetFrame(with: shp)
-                let inP = sheetView.convertFromWorld(p)
-                let np = Sheet.borderSnappedPoint(inP, with: sb,
-                                                  distance: 3 / rootView.worldToScreenScale,
-                                                  oldBorder: border).point
-                sheetView.newUndoGroup()
-                sheetView.append(Border(position: np, border: border))
+                let sheetFrame = rootView.sheetFrame(with: shp)
+                let inP = p - sheetFrame.origin
+                let bnp = Sheet.borderSnappedPoint(inP, with: sheetFrame,
+                                                   distance: 3 / rootView.worldToScreenScale,
+                                                   oldBorder: border)
+                let np = bnp.point + sheetFrame.origin
+                let cp = sheetFrame.bounds.centerPoint
+                let (nx, ny) = switch border.orientation {
+                case .horizontal:
+                    (sheetFrame.width / 2, np.y - sheetFrame.minY - cp.y)
+                case .vertical:
+                    (np.x - sheetFrame.minX - cp.x, sheetFrame.height / 2)
+                }
+                let mainFrame = Rect(cp,
+                                     dx: abs(nx).rounded().clipped(min: 1, max: sheetFrame.width / 2),
+                                     dy: abs(ny).rounded().clipped(min: 1, max: sheetFrame.height / 2))
+                var option = sheetView.model.option
+                if option.mainFrame != mainFrame {
+                    option.mainFrame = mainFrame
+                    sheetView.newUndoGroup()
+                    sheetView.set(option)
+                }
             }
         case .uuColor(let uuColor):
             guard event == nil ? false : (event!.time - beganTime > enableUUColorTime) else { return }

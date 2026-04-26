@@ -1441,95 +1441,87 @@ final class RootView: View, @unchecked Sendable {
     private(set) var lookingUpNode = Node(), lookingUpBoundsNode: Node?,
                      lookingUpString = ""
     func show(_ string: String, at origin: Point) {
-        show(string,
-             fromSize: isEditingSheet ? Font.defaultSize : 400,
-             rects: [Rect(origin: origin)],
-             .horizontal,
-             clipRatio: isEditingSheet ? 1 : nil)
+        show(string, rects: [Rect(origin: origin)], .horizontal, fontSize: Font.defaultSize)
     }
-    func show(_ string: String, fromSize: Double, toSize: Double = 8,
-              rects: [Rect], _ orientation: Orientation,
-              clipRatio: Double? = 1,
-              padding: Double = 3,
-              textPadding: Double = 3,
-              cornerRadius: Double = 4) {
+    func show(_ string: String, rects: [Rect], _ orientation: Orientation,
+              fontSize: Double = Font.smallSize,
+              margin: Double = 3, padding: Double = 5,
+              textPadding: Double = 3, cornerRadius: Double = 4) {
         closeLookingUpNode()
         guard !rects.isEmpty else {
             lookingUpString = ""
             return
         }
-        let ratio = clipRatio != nil ?
-        min(fromSize / Font.defaultSize, clipRatio!) :
-        fromSize / Font.defaultSize
-        let origin: Point
-        let pd = (padding + 3.75 + textPadding + toSize / 2 + 1) * ratio
-        let lpd = padding * ratio
+        let pd = margin + 3.75 + textPadding + fontSize / 2 + 1
+        let lpd = margin
         var backNodes = [Node](), lineNodes = [Node]()
         func backNode(from path: Path) -> Node {
             return Node(path: path,
-                        lineWidth: 1 * ratio,
+                        lineWidth: 1,
                         lineType: .color(.subBorder),
                         fillType: .color(.transparentDisabled))
         }
         func lineNode(from path: Path) -> Node {
             return Node(path: path,
-                        lineWidth: 1 * ratio,
+                        lineWidth: 1,
                         lineType: .color(.subBorder),
                         fillType: .color(.transparentDisabled))
         }
-        if rects.count == 1 && rects[0].size.isEmpty {
-            let fOrigin = rects[0].origin
-            origin = fOrigin + Point(0, -pd)
-            backNodes = [Node(path: Path(circleRadius: 3 * ratio,
-                                         position: fOrigin),
-                              lineWidth: 1 * ratio,
+        let origin = rects.count == 1 && rects[0].size.isEmpty ? rects[0].origin : nil
+        let textOrigin: Point
+        if let origin {
+            lookingUpNode.attitude = .init(position: origin,
+                                           scale: .init(square: screenToWorldScale))
+            textOrigin = Point(0, -pd)
+            backNodes = [Node(path: Path(circleRadius: 4),
+                              lineWidth: 1,
                               lineType: .color(.subBorder),
                               fillType: .color(.transparentDisabled))]
-            lineNodes = [Node(path: Path(circleRadius: 1 * ratio,
-                                         position: fOrigin),
+            lineNodes = [Node(path: Path(circleRadius: 1.5),
                               fillType: .color(.content))]
         } else {
+            lookingUpNode.attitude = .init()
             switch orientation {
             case .horizontal:
-                origin = rects[0].minXMinYPoint + Point(0, -pd)
+                textOrigin = rects[0].minXMinYPoint + Point(0, -pd)
                 backNodes = rects.map {
                     let rect = Rect(Edge($0.minXMinYPoint + Point(0, -lpd),
                                          $0.maxXMinYPoint + Point(0, -lpd)))
-                    return backNode(from: Path(rect.inset(by: -2 * ratio),
-                                               cornerRadius: 1 * ratio))
+                    return backNode(from: Path(rect.inset(by: -2),
+                                               cornerRadius: 1))
                 }
                 lineNodes = rects.map {
                     Node(path: Path(Edge($0.minXMinYPoint + Point(0, -lpd),
                                          $0.maxXMinYPoint + Point(0, -lpd))),
-                         lineWidth: 1 * ratio, lineType: .color(.content))
+                         lineWidth: 1, lineType: .color(.content))
                 }
             case .vertical:
-                origin = rects[0].minXMaxYPoint + Point(-pd, 0)
+                textOrigin = rects[0].minXMaxYPoint + Point(-pd, 0)
                 backNodes = rects.map {
                     let rect = Rect(Edge($0.minXMaxYPoint + Point(-lpd, 0),
                                          $0.minXMinYPoint + Point(-lpd, 0)))
-                    return backNode(from: Path(rect.inset(by: -2 * ratio),
-                                               cornerRadius: 1 * ratio))
+                    return backNode(from: Path(rect.inset(by: -2),
+                                               cornerRadius: 1))
                 }
                 lineNodes = rects.map {
                     Node(path: Path(Edge($0.minXMaxYPoint + Point(-lpd, 0),
                                          $0.minXMinYPoint + Point(-lpd, 0))),
-                         lineWidth: 1 * ratio, lineType: .color(.content))
+                         lineWidth: 1, lineType: .color(.content))
                 }
             }
         }
         let text = Text(string: string, orientation: orientation,
-                        size: toSize * ratio, widthCount: 30, origin: origin)
+                        size: fontSize, widthCount: 30, origin: textOrigin)
         var typobute = text.typobute
         typobute.clippedMaxTypelineWidth = text.size * 30
         let typesetter = Typesetter(string: text.string, typobute: typobute)
         guard let b = typesetter.typoBounds?
-            .outset(by: (toSize / 2 + 1) * ratio) else { return }
+            .outset(by: padding) else { return }
         let textNode = Node(attitude: Attitude(position: text.origin),
                             path: typesetter.path(), fillType: .color(.content))
         let boundsNode = Node(path: Path(b + text.origin,
-                                         cornerRadius: cornerRadius * ratio),
-                              lineWidth: 1 * ratio,
+                                         cornerRadius: cornerRadius),
+                              lineWidth: 1,
                               lineType: .color(.subBorder),
                               fillType: .color(.transparentDisabled))
         lookingUpNode.children = backNodes + lineNodes + [boundsNode, textNode]
@@ -2200,7 +2192,6 @@ final class RootView: View, @unchecked Sendable {
                 if let sheetView = sheetViewValue.sheetView,
                    let sheetRecorder = model.sheetRecorders[sheetViewValue.sheetID],
                    sheetRecorder.sheetRecord.isWillwrite {
-                    print(savingItem != nil, sheetViewValue.sheetID)
                     
                     if let sheetView = sheetViewValue.sheetView {
                         sheetView.node.updateCache()
@@ -2862,7 +2853,7 @@ final class RootView: View, @unchecked Sendable {
     }
     
     func worldBorder(at p: Point) -> (border: Border, edge: Edge)? {
-        let d = 5 * screenToWorldScale
+        let d = 10 * screenToWorldScale
         let shp = sheetPosition(at: p)
         let b = sheetFrame(with: shp)
         let topEdge = b.topEdge
@@ -2884,24 +2875,31 @@ final class RootView: View, @unchecked Sendable {
         return nil
     }
     func mainFrame(at p: Point) -> (mainFrame: Rect, sheetView: SheetView?)? {
+        guard isEditingSheet else { return nil }
         let d = 10 * screenToWorldScale
         let shp = sheetPosition(at: p)
+        let dSq = d * d
         guard let sheetView = sheetView(at: shp) else {
-            let nb = sheetFrame(with: shp)
-            return nb.minXMinYPoint.distance(p) < d || nb.minXMaxYPoint.distance(p) < d
-            || nb.maxXMinYPoint.distance(p) < d || nb.maxXMaxYPoint.distance(p) < d ?
-            (nb, nil) : nil
+            let mainFrame = sheetFrame(with: shp)
+            let nb = mainFrame.outset(by: Sheet.mainFrameLineWidth / 2)
+            return nb.topEdge.distanceSquared(from: p) < dSq
+            || nb.rightEdge.distanceSquared(from: p) < dSq
+            || nb.leftEdge.distanceSquared(from: p) < dSq
+            || nb.bottomEdge.distanceSquared(from: p) < dSq ?
+            (mainFrame, nil) : nil
         }
         let sheetP = sheetView.convertFromWorld(p)
         let nb = sheetView.mainFrame != Sheet.defaultBounds ?
-        sheetView.mainFrame.intersection(sheetView.bounds) ?? sheetView.bounds : sheetView.bounds
-        return nb.minXMinYPoint.distance(sheetP) < d || nb.minXMaxYPoint.distance(sheetP) < d
-        || nb.maxXMinYPoint.distance(sheetP) < d || nb.maxXMaxYPoint.distance(sheetP) < d ?
+        sheetView.mainFrame.intersection(sheetView.bounds)?.outset(by: Sheet.mainFrameLineWidth / 2) ?? sheetView.bounds : sheetView.bounds
+        return nb.topEdge.distanceSquared(from: sheetP) < dSq
+        || nb.rightEdge.distanceSquared(from: sheetP) < dSq
+        || nb.leftEdge.distanceSquared(from: sheetP) < dSq
+        || nb.bottomEdge.distanceSquared(from: sheetP) < dSq ?
         (sheetView.mainFrame, sheetView) : nil
     }
     func border(at p: Point) -> (border: Border, index: Int,
                                  sheetView: SheetView, edge: Edge)? {
-        let d = 5 * screenToWorldScale
+        let d = 10 * screenToWorldScale
         let shp = sheetPosition(at: p)
         guard let sheetView = sheetView(at: shp) else { return nil }
         let b = sheetFrame(with: shp)

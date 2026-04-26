@@ -165,8 +165,8 @@ final class RootAction: Action {
     
     func strongDrag(with event: DragEvent) {}
     
-    private func subDragAction(with quasimode: Quasimode) -> (any DragEventAction)? {
-        switch quasimode {
+    private func subDragAction(with gesture: Gesture) -> (any DragEventAction)? {
+        switch gesture {
         case .selectByRange: SelectByRangeAction(self)
         case .unselectByRange: UnselectByRangeAction(self)
         default: nil
@@ -180,8 +180,8 @@ final class RootAction: Action {
             stopInputTextEvent()
             stopInputKeyEvent()
             stopDragEvent()
-            let quasimode = Quasimode(modifier: modifierKeys, .subDrag)
-            subDragEventAction = self.subDragAction(with: quasimode)
+            let gesture = Gesture(modifier: modifierKeys, .subDrag)
+            subDragEventAction = self.subDragAction(with: gesture)
             subDragEventAction?.flow(with: event)
             oldSubDragEvent = event
             rootView.textCursorNode.isHidden = true
@@ -219,15 +219,15 @@ final class RootAction: Action {
         }
     }
     
-    private func dragAction(with quasimode: Quasimode) -> (any DragEventAction)? {
-        switch quasimode {
+    private func dragAction(with gesture: Gesture) -> (any DragEventAction)? {
+        switch gesture {
         case .drawLine: DrawLineAction(self)
         case .drawStraightLine: DrawStraightLineAction(self)
         case .lassoCut: LassoCutAction(self)
         case .selectByRange: SelectByRangeAction(self)
         case .unselectByRange: UnselectByRangeAction(self)
-        case .changeLightness: ChangeLightnessAction(self)
-        case .changeTint: ChangeTintAction(self)
+        case .adjustBrightness: AdjustBrightnessAction(self)
+        case .adjustTint: AdjustTintAction(self)
         case .selectVersion: SelectVersionAction(self)
         case .move: MoveAction(self)
 //        case .moveZ: MoveZAction(self)
@@ -241,12 +241,12 @@ final class RootAction: Action {
         case .began:
             updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
-            let quasimode = Quasimode(modifier: modifierKeys, .drag)
-            if quasimode != .selectTime {
+            let gesture = Gesture(modifier: modifierKeys, .drag)
+            if gesture != .selectTime {
                 stopInputKeyEvent()
             }
             stopSubDragEvent()
-            dragAction = self.dragAction(with: quasimode)
+            dragAction = self.dragAction(with: gesture)
             dragAction?.flow(with: event)
             oldDragEvent = event
             rootView.textCursorNode.isHidden = true
@@ -291,8 +291,8 @@ final class RootAction: Action {
         }
     }
     
-    private func inputKeyAction(with quasimode: Quasimode) -> (any InputKeyEventAction)? {
-        switch quasimode {
+    private func inputKeyAction(with gesture: Gesture) -> (any InputKeyEventAction)? {
+        switch gesture {
         case .undo: UndoAction(self)
         case .redo: RedoAction(self)
         case .cut: CutAction(self)
@@ -302,8 +302,8 @@ final class RootAction: Action {
         case .find: FindAction(self)
         case .changeToDraft: ChangeToDraftAction(self)
         case .cutDraft: CutDraftAction(self)
-        case .makeFaces: MakeFacesAction(self)
-        case .cutFaces: CutFacesAction(self)
+        case .fillAll: FillAllAction(self)
+        case .cutColors: CutColorsAction(self)
         case .interpolate: InterpolateAction(self)
         case .disconnect: DisconnectAction(self)
         case .changeToSuperscript: ChangeToSuperscriptAction(self)
@@ -330,25 +330,25 @@ final class RootAction: Action {
         case .began:
             updateLastEditedSheetPosition(from: event)
             guard inputKeyAction == nil else { return }
-            let quasimode = Quasimode(modifier: modifierKeys,
+            let gesture = Gesture(modifier: modifierKeys,
                                       event.inputKeyType)
             if rootView.editingTextView != nil
-                && quasimode != .changeToSuperscript
-                && quasimode != .changeToSubscript
-                && quasimode != .changeToHorizontalText
-                && quasimode != .changeToVerticalText
-                && quasimode != .cut
-                && quasimode != .paste
-                && quasimode != .changeABC && quasimode != .changeAIU {
+                && gesture != .changeToSuperscript
+                && gesture != .changeToSubscript
+                && gesture != .changeToHorizontalText
+                && gesture != .changeToVerticalText
+                && gesture != .cut
+                && gesture != .paste
+                && gesture != .changeABC && gesture != .changeAIU {
                 
-                stopInputTextEvent(isEndEdit: quasimode != .undo && quasimode != .redo)
+                stopInputTextEvent(isEndEdit: gesture != .undo && gesture != .redo)
             }
-            if quasimode == .runOrClose {
+            if gesture == .runOrClose {
                 textAction.moveEndInputKey()
             }
             stopDragEvent()
             stopSubDragEvent()
-            inputKeyAction = self.inputKeyAction(with: quasimode)
+            inputKeyAction = self.inputKeyAction(with: gesture)
             inputKeyAction?.flow(with: event)
             oldInputKeyEvent = event
         case .changed:
@@ -1464,35 +1464,35 @@ final class DraftAction: Action {
     }
 }
 
-final class MakeFacesAction: InputKeyEventAction {
-    let action: FaceAction
+final class FillAllAction: InputKeyEventAction {
+    let action: FillAction
     
     init(_ rootAction: RootAction) {
-        action = FaceAction(rootAction)
+        action = FillAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
-        action.makeFaces(with: event)
+        action.fillAll(with: event)
     }
     func updateNode() {
         action.updateNode()
     }
 }
-final class CutFacesAction: InputKeyEventAction {
-    let action: FaceAction
+final class CutColorsAction: InputKeyEventAction {
+    let action: FillAction
     
     init(_ rootAction: RootAction) {
-        action = FaceAction(rootAction)
+        action = FillAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
-        action.cutFaces(with: event)
+        action.cutColors(with: event)
     }
     func updateNode() {
         action.updateNode()
     }
 }
-final class FaceAction: Action {
+final class FillAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -1502,7 +1502,7 @@ final class FaceAction: Action {
         isEditingSheet = rootView.isEditingSheet
     }
     
-    func makeFaces(with event: InputKeyEvent) {
+    func fillAll(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return
@@ -1520,12 +1520,12 @@ final class FaceAction: Action {
                 ?? rootView.sheetViewWithSelectedSheetValue(at: p),
                let rect = sheetView.selectedFrame {
                 
-                isChanged = sheetView.makeFaces(withClipping: rect,
+                isChanged = sheetView.fillAll(withClipping: rect,
                                                 selectedKeyframeIs: [], isOutClip: true)
                 rootView.updateSelectedFrame()
             } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
                 let kis = sheetView.animationView.selectedIs.sorted()
-                isChanged = sheetView.makeFaces(withClipping: nil,
+                isChanged = sheetView.fillAll(withClipping: nil,
                                                 selectedKeyframeIs: kis, isOutClip: false)
                 rootView.updateSelectedFrame()
             } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
@@ -1562,16 +1562,16 @@ final class FaceAction: Action {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView {
                     if isAll {
-                        isChanged = sheetView.makeFaces(withClipping: nil,
+                        isChanged = sheetView.fillAll(withClipping: nil,
                                                         selectedKeyframeIs: [], isOutClip: false)
                     } else {
                         let f = sheetView.convertFromWorld(frame)
-                        isChanged = sheetView.makeFaces(withClipping: f,
+                        isChanged = sheetView.fillAll(withClipping: f,
                                                         selectedKeyframeIs: [], isOutClip: false)
                     }
                     rootView.updateSelectedFrame()
                 } else if let sheetView = rootView.madeSheetView(at: p) {
-                    isChanged = sheetView.makeFacesFromKeyframeIndex(withClipping: nil,
+                    isChanged = sheetView.fillAllFromKeyframeIndex(withClipping: nil,
                                                                      isOutClip: false,
                                                                      isNewUndoGroup: true)
                 }
@@ -1586,7 +1586,7 @@ final class FaceAction: Action {
             rootView.cursor = rootView.defaultCursor
         }
     }
-    func cutFaces(with event: InputKeyEvent) {
+    func cutColors(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return
@@ -1662,10 +1662,10 @@ final class FaceAction: Action {
                 let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
                 if let sheetView = sheetView {
                     if isAll {
-                        isChanged = sheetView.cutFaces(with: nil)
+                        isChanged = sheetView.cutColors(with: nil)
                     } else {
                         let f = sheetView.convertFromWorld(frame).inset(by: 1)
-                        isChanged = sheetView.cutFaces(with: Path(f))
+                        isChanged = sheetView.cutColors(with: Path(f))
                     }
                     rootView.updateSelectedFrame()
                 }

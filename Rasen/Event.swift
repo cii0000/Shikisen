@@ -320,7 +320,7 @@ extension ModifierKeys {
         }
     }
 }
-struct Quasimode {
+struct Gesture {
     var modifierKeys: ModifierKeys
     var type: EventType
     var inputKeyType: InputKeyType?
@@ -335,8 +335,8 @@ struct Quasimode {
         self.inputKeyType = inputKeyType
     }
 }
-extension Quasimode: Hashable {}
-extension Quasimode {
+extension Gesture: Hashable {}
+extension Gesture {
     var displayString: String {
         let mt = modifierKeys.displayString
         return mt.isEmpty ? inputDisplayString : mt + " " + inputDisplayString
@@ -348,15 +348,15 @@ extension Quasimode {
         inputKeyType?.name ?? type.name
     }
 }
-extension Quasimode {
+extension Gesture {
     static let drawLine = Self(.drag)
     static let drawStraightLine = Self(modifier: [.shift], .drag)
     
     static let lassoCut = Self(modifier: [.command], .drag)
     static let selectVersion = Self(modifier: [.shift, .command], .drag)
     
-    static let changeLightness = Self(modifier: [.option], .drag)
-    static let changeTint = Self(modifier: [.shift, .option], .drag)
+    static let adjustBrightness = Self(modifier: [.option], .drag)
+    static let adjustTint = Self(modifier: [.shift, .option], .drag)
     
     static let move = Self(modifier: [.control], .drag)
     static let moveZ = Self(modifier: [.shift, .control], .drag)
@@ -398,8 +398,8 @@ extension Quasimode {
     static let changeToDraft = Self(modifier: [.command], .d)
     static let cutDraft = Self(modifier: [.shift, .command], .d)
     
-    static let makeFaces = Self(modifier: [.command], .b)
-    static let cutFaces = Self(modifier: [.shift, .command], .b)
+    static let fillAll = Self(modifier: [.command], .b)
+    static let cutColors = Self(modifier: [.shift, .command], .b)
     
     static let interpolate = Self(modifier: [.command], .s)
     static let disconnect = Self(modifier: [.shift, .command], .s)
@@ -494,11 +494,11 @@ extension TouchEvent {
 }
 
 struct ActionItem {
-    var name: String, quasimode: Quasimode
+    var name: String, gesture: Gesture
     
-    init(name: String, _ quasimode: Quasimode) {
+    init(name: String, _ gesture: Gesture) {
         self.name = name
-        self.quasimode = quasimode
+        self.gesture = gesture
     }
 }
 struct ActionList {
@@ -520,8 +520,8 @@ extension ActionList {
         [.init(name: "Lasso Cut".localized, .lassoCut),
          .init(name: "Select Version".localized, .selectVersion)],
         
-        [.init(name: "Change Lightness".localized, .changeLightness),
-         .init(name: "Change Tint".localized, .changeTint)],
+        [.init(name: "Adjust Brightness".localized, .adjustBrightness),
+         .init(name: "Adjust Tint".localized, .adjustTint)],
         
         [.init(name: "Move".localized, .move)],
         
@@ -552,8 +552,8 @@ extension ActionList {
         [.init(name: "Change to Draft".localized, .changeToDraft),
          .init(name: "Cut Draft".localized, .cutDraft)],
         
-        [.init(name: "Make Faces".localized, .makeFaces),
-         .init(name: "Cut Faces".localized, .cutFaces)],
+        [.init(name: "Fill All".localized, .fillAll),
+         .init(name: "Cut Colors".localized, .cutColors)],
         
         [.init(name: "Interpolate".localized, .interpolate),
          .init(name: "Disconnect".localized, .disconnect)],
@@ -582,7 +582,7 @@ extension ActionList {
             return (b.integral.size, Node(path: Path(nb), fillType: .texture(texture)))
         }
         
-        var quasimodeNodes = [Node]()
+        var gestureNodes = [Node]()
         var borderNodes = [(height: Double, node: Node)]()
         var children = [Node]()
         
@@ -593,11 +593,11 @@ extension ActionList {
                 let color = Color.content
                 guard let (nts, nNode) = textNode(with: action.name, color: color),
                       let (its, iNode)
-                        = textNode(with: action.quasimode.inputDisplayString, color: color) else { continue }
+                        = textNode(with: action.gesture.inputDisplayString, color: color) else { continue }
                 nNode.attitude.position = Point((margin + imagePadding).rounded(), h + fontSize / 2 - imagePadding)
                 iNode.attitude.position = Point(-its.width + imagePadding, h + fontSize / 2 - imagePadding)
                 let qw: Double, qNode: Node
-                if let (mts, mNode) = textNode(with: action.quasimode.modifierDisplayString, color: color) {
+                if let (mts, mNode) = textNode(with: action.gesture.modifierDisplayString, color: color) {
                     qw = (its.width + padding + mts.width).rounded()
                     mNode.attitude.position = Point(-qw + imagePadding, h + fontSize / 2 - imagePadding)
                     qNode = Node(children: [iNode, mNode])
@@ -606,7 +606,7 @@ extension ActionList {
                     qNode = Node(children: [iNode])
                 }
                 w = max(w, nts.width + qw + margin * 2)
-                quasimodeNodes.append(qNode)
+                gestureNodes.append(qNode)
                 children.append(nNode)
                 children.append(qNode)
                 h += fontSize + padding
@@ -626,7 +626,7 @@ extension ActionList {
         
         w += margin * 2
         
-        for node in quasimodeNodes {
+        for node in gestureNodes {
             node.attitude.position.x = (w - margin).rounded()
         }
         for (height, node) in borderNodes {

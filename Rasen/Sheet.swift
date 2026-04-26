@@ -2590,8 +2590,10 @@ extension Sheet {
     static let beatWidth = 43.0, secPadding = 16.0
     static let timelineHalfHeight = 12.0
     static let knobWidth = 2.0, knobHeight = 12.0, rulerHeight = 4.0
+    static let mainFrameLineWidth = 4.0
     static let knobEditDistance = 20.0
     static let noteEditDistance = 50.0
+    static let keyframeEditDistance = 80.0
     static let moveKnobEditDistance = 8.0
     static let timelineY = 18.0
     static let pitchHeight = 5.375
@@ -2730,7 +2732,7 @@ extension Sheet {
                 if !fpbName.isEmpty {
                     fpbName += " / "
                 }
-                fpbName += "\(fpb) fpb, \(fps)fps"
+                fpbName += "\(fpb) fpb, \(fps) fps"
             }
         }
         append(fps: 24)
@@ -2853,10 +2855,25 @@ extension Sheet {
             .sorted(by: { $0.origin.y == $1.origin.y ? $0.origin.x < $1.origin.x : $0.origin.y > $1.origin.y })
             .map { $0.string }
         var str = ""
-        for nstr in strings {
-            str += nstr
-            str += "\n\n\n\n"
+        str += "((\(mainFrame.minX.shortString), \(mainFrame.minY.shortString)) (\(mainFrame.size.width.shortString) x \(mainFrame.size.height.shortString)))"
+        str += "\n\n\n"
+        var tempos = Set<Rational>()
+        if animation.enabled { tempos.insert(animation.tempo) }
+        if score.enabled { tempos.insert(score.tempo) }
+        texts.forEach {
+            if let tempo = $0.timeOption?.tempo { tempos.insert(tempo) }
         }
+        contents.forEach {
+            if let tempo = $0.timeOption?.tempo { tempos.insert(tempo) }
+        }
+        for tempo in tempos {
+            str += "\(tempo) bpm, \(Self.tempoNameFromStandardFrameRate(withTempo: tempo))\n"
+        }
+        str += "\n\n\n"
+        if score.enabled {
+            score.scales.forEach { str += "\($0) " }
+        }
+        str += "\n\n\n"
         var ids = Set<UUID>()
         for plane in picture.planes {
             ids.insert(plane.uuColor.id)
@@ -2866,7 +2883,12 @@ extension Sheet {
         }
         for id in ids {
             str += id.uuidString
-            str += "\n\n\n\n"
+            str += "\n"
+        }
+        str += "\n\n\n"
+        for nstr in strings {
+            str += nstr
+            str += "\n\n\n"
         }
         return str
     }
@@ -3062,17 +3084,11 @@ extension Sheet {
                                          with sb: Rect) -> [Double] {
         switch orientation {
         case .horizontal:
-             [(1 * sb.height / 4).rounded(),
-              (1 * sb.height / 3).rounded(),
-              (2 * sb.height / 4).rounded(),
-              (2 * sb.height / 3).rounded(),
-              (3 * sb.height / 4).rounded()].sorted()
+            [((sb.height - sb.width / 2.0.squareRoot()) / 2).rounded(),
+             (sb.height - (sb.height - sb.width / 2.0.squareRoot()) / 2).rounded()].sorted()
         case .vertical:
-             [(1 * sb.width / 4).rounded(),
-              (1 * sb.width / 3).rounded(),
-              (2 * sb.width / 4).rounded(),
-              (2 * sb.width / 3).rounded(),
-              (3 * sb.width / 4).rounded()].sorted()
+            [((sb.width - sb.height / 2.0.squareRoot()) / 2).rounded(),
+             (sb.width - (sb.width - sb.height / 2.0.squareRoot()) / 2).rounded()].sorted()
         }
     }
     static func borderSnappedPoint(_ p: Point, with sb: Rect, distance d: Double,

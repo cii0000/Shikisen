@@ -17,7 +17,7 @@
 
 import struct Foundation.UUID
 
-final class ChangeLightnessAction: DragEventAction {
+final class AdjustBrightnessAction: DragEventAction {
     let action: ColorAction
     
     init(_ rootAction: RootAction) {
@@ -25,13 +25,13 @@ final class ChangeLightnessAction: DragEventAction {
     }
     
     func flow(with event: DragEvent) {
-        action.changeLightness(with: event)
+        action.adjustBrightness(with: event)
     }
     func updateNode() {
         action.updateNode()
     }
 }
-final class ChangeTintAction: DragEventAction {
+final class AdjustTintAction: DragEventAction {
     let action: ColorAction
     
     init(_ rootAction: RootAction) {
@@ -39,7 +39,7 @@ final class ChangeTintAction: DragEventAction {
     }
     
     func flow(with event: DragEvent) {
-        action.changeTint(with: event)
+        action.adjustTint(with: event)
     }
     func updateNode() {
         action.updateNode()
@@ -1437,7 +1437,7 @@ final class ColorAction: Action {
         }
     }
     
-    func changeLightness(with event: DragEvent) {
+    func adjustBrightness(with event: DragEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return
@@ -1631,7 +1631,7 @@ final class ColorAction: Action {
         tintOutlineNode.path = path
     }
     var lastTintSnapTime: Double?, dr = 0.0
-    func changeTint(with event: DragEvent) {
+    func adjustTint(with event: DragEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
             return

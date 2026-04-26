@@ -3070,11 +3070,11 @@ final class MoveMainFrameAction: DragEventAction {
     }
     
     enum MoveType {
-        case minXminY, maxXminY, minXmaxY, maxXMaxY
+        case corner, top, left, right, bottom
     }
     
-    private var sheetView: SheetView?, beganOption: SheetOption?, type = MoveType.minXmaxY
-    private var beganSP = Point(), beganInP = Point(), shp = IntPoint()
+    private var sheetView: SheetView?, beganOption = SheetOption(), type = MoveType.corner
+    private var beganSP = Point(), beganSheetP = Point()
     private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
@@ -3090,40 +3090,79 @@ final class MoveMainFrameAction: DragEventAction {
             rootView.cursor = .arrow
             rootView.closeAllPanels(at: p)
             
-            if let sheetView = rootView.madeSheetView(at: p),
-               let shp = rootView.sheetPosition(from: sheetView) {
-                
+            if let sheetView = rootView.madeSheetView(at: p) {
                 self.sheetView = sheetView
                 sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
                 
                 let sheetP = sheetView.convertFromWorld(p)
                 beganSP = sp
-                beganInP = sheetP
-                self.sheetView = sheetView
+                beganSheetP = sheetP
                 beganOption = sheetView.model.option
                 
-                self.shp = shp
+                var minDSq = Double.infinity
+                let nb = sheetView.mainFrame != Sheet.defaultBounds ?
+                sheetView.mainFrame.intersection(sheetView.bounds)?.outset(by: 2) ?? sheetView.bounds : sheetView.bounds
+                let topDSq = nb.topEdge.distanceSquared(from: sheetP)
+                if topDSq < minDSq {
+                    type = .top
+                    minDSq = topDSq
+                }
+                let rightDSq = nb.rightEdge.distanceSquared(from: sheetP)
+                if rightDSq < minDSq {
+                    type = .right
+                    minDSq =  rightDSq
+                }
+                let leftDSq = nb.leftEdge.distanceSquared(from: sheetP)
+                if leftDSq < minDSq {
+                    type = .left
+                    minDSq = leftDSq
+                }
+                let bottomDSq = nb.bottomEdge.distanceSquared(from: sheetP)
+                if bottomDSq < minDSq {
+                    type = .bottom
+                    minDSq = bottomDSq
+                }
+                let maxDSq = (10 * rootView.screenToWorldScale).squared
+                if nb.minXMinYPoint.distanceSquared(sheetP) < maxDSq
+                    || nb.minXMaxYPoint.distanceSquared(sheetP) < maxDSq
+                    || nb.maxXMinYPoint.distanceSquared(sheetP) < maxDSq
+                    || nb.maxXMaxYPoint.distanceSquared(sheetP) < maxDSq {
+                    type = .corner
+                }
             }
         case .changed:
             if let sheetView {
+                let oldFrame = sheetView.mainFrame, db = Sheet.defaultBounds
                 let sheetP = sheetView.convertFromWorld(p), cp = sheetView.bounds.centerPoint
-                let rect = Rect(cp,
-                                dx: min(abs(sheetP.x - cp.x).rounded(), Sheet.defaultBounds.width / 2),
-                                dy: min(abs(sheetP.y - cp.y).rounded(), Sheet.defaultBounds.height / 2))
+                let dp = beganSheetP - beganOption.mainFrame.centerPoint
+                let nx = (sheetP.x - beganSheetP.x) * dp.x.signValue + beganOption.mainFrame.width / 2
+                let ny = (sheetP.y - beganSheetP.y) * dp.y.signValue + beganOption.mainFrame.height / 2
+                let rect = switch type {
+                case .corner:
+                    Rect(cp,
+                         dx: abs(nx).rounded().clipped(min: 1, max: db.width / 2),
+                         dy: abs(ny).rounded().clipped(min: 1, max: db.height / 2))
+                case .top, .bottom:
+                    Rect(cp,
+                         dx: oldFrame.width / 2,
+                         dy: abs(ny).rounded().clipped(min: 1, max: db.height / 2))
+                case .left, .right:
+                    Rect(cp,
+                         dx: abs(nx).rounded().clipped(min: 1, max: db.width / 2),
+                         dy: oldFrame.height / 2)
+                }
                 sheetView.mainFrame = rect
                 
                 let width = rect.width, height = rect.height
-                rootView.cursor = rootView.cursor(from: "\(LookUpAction.sizeString(from: .init(width: width, height: height)))")
+                rootView.cursor = rootView.cursor(from: "\(LookUpAction.sizeString(from: .init(width: width, height: height)))", isArrow: true)
             }
         case .ended:
             if let sheetView {
-                if let beganOption {
-                    if sheetView.model.option != beganOption {
-                        if isNewUndoGroup {
-                            sheetView.newUndoGroup()
-                        }
-                        sheetView.capture(sheetView.model.option, old: beganOption)
+                if sheetView.model.option != beganOption {
+                    if isNewUndoGroup {
+                        sheetView.newUndoGroup()
                     }
+                    sheetView.capture(sheetView.model.option, old: beganOption)
                 }
             }
             

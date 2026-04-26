@@ -487,7 +487,7 @@ final class IOAction: Action {
             Task { @MainActor in
                 let result = await rootView.node
                     .show(message: message,
-                          infomation: "This operation can be undone when in root mode, but the data will remain until the root history is cleared.".localized,
+                          infomation: "This operation can be undone when the root is displayed, but the data will remain in the root history until the root history is cleared.".localized,
                           okTitle: "Import".localized,
                           isSaftyCheck: nSHPs.count > 100 || length > 20*1024*1024)
                 switch result {
