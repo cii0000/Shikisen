@@ -535,9 +535,9 @@ final class IOAction: Action {
             if !nSIDs.isEmpty {
                 rootView.append(nSIDs)
             }
-            let nSelectedSheetIDs = Array(nSIDs.values)
-            if nSelectedSheetIDs != rootView.world.selectedSheetIDs {
-                rootView.setSelectedSheet(nSelectedSheetIDs)
+            let nSelection = WorldSelection(sheetIDs: Array(nSIDs.values))
+            if nSelection != rootView.world.selection {
+                rootView.doSet(nSelection)
             }
             if !resetSIDs.isEmpty {
                 rootView.moveSheetsToUpperRightCorner(with: Array(resetSIDs),
@@ -583,6 +583,9 @@ final class IOAction: Action {
              sound, linearPCM, document, documentWithHistory, caption
         var isDocument: Bool {
             self == .document || self == .documentWithHistory
+        }
+        var is4K: Bool {
+            self == .image4K || self == .movie4K
         }
     }
     
@@ -828,7 +831,9 @@ final class IOAction: Action {
             switch type {
             case .image:
                 if renderings.count == 1, let node = renderings[0].renderableMainSheetNode() {
-                    let nSize = size * 4
+                    let nSize = size.width > size.height ?
+                    size.snapped(height: 1080).rounded(.down) :
+                    size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
                     let image = node.renderedAntialiasFillImage(in: renderings[0].bounds, to: nSize, colorSpace)
                     return image?.data(.png)?.count ?? 0
                 } else {
@@ -879,10 +884,11 @@ final class IOAction: Action {
         case .document: "Export as Document".localized
         case .documentWithHistory: "Export as Document with History".localized
         }
+        let name = name(from: nvs.map { $0.shp }) + (type.is4K ? "_4k" : "")
         
         Task { @MainActor in
             let result = await URL.export(message: message,
-                                          name: name(from: nvs.map { $0.shp }),
+                                          name: name,
                                           fileType: fType,
                                           fileSizeHandler: fileSize)
             switch result {
@@ -891,7 +897,9 @@ final class IOAction: Action {
                 
                 switch type {
                 case .image:
-                    let nSize = size * 4
+                    let nSize = size.width > size.height ?
+                    size.snapped(height: 1080).rounded(.down) :
+                    size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
                     exportImage(from: renderings, is4K: false, colorSpace,
                                 size: nSize, at: ioResult)
                 case .image4K:
@@ -903,7 +911,7 @@ final class IOAction: Action {
                 case .pdf:
                     exportPDF(from: renderings, size: size, at: ioResult)
                 case .gif:
-                    let nSize = size.snapped(max: Size(width: 800, height: 1200)).rounded(.down)
+                    let nSize = size.snapped(max: Size(width: 800, height: 800)).rounded(.down)
                     exportGIF(from: renderings, colorSpace, size: nSize, at: ioResult)
                 case .movie:
                     let nSize = size.width > size.height ?

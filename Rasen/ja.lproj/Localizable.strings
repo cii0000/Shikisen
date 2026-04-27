@@ -40,9 +40,9 @@
 "Unselect by Range" = "範囲解除";
 
 "Run" = "実行";
-"Run / Close" = "実行 / 閉じる";
+"Run / Close" = "実行／閉じる";
 
-"Open Menu" = "メニューを開く";
+"Import / Export" = "読み込む／書き出す";
 "Look Up" = "調べる";
 "Input Character" = "文字入力";
 
@@ -74,11 +74,14 @@
 "Change to Vertical Text" = "縦書き化";
 "Change to Horizontal Text" = "横書き化";
 
+"Empty Action" = "アクションなし";
+
 "No Update" = "更新なし";
 "Making Faces" = "面を作成中";
 "Stopping Task" = "タスクを停止中";
 
 "Under development" = "開発中";
+"The time selection of the score is under development" = "楽譜の時間選択は開発中";
 
 "Added" = "追加済み";
 "Conflict with Score" = "楽譜があるため追加できません";

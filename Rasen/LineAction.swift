@@ -1240,9 +1240,9 @@ final class LineAction: Action {
                     }
                 }
             } else {
-                if !rootView.world.selectedSheetIDs.isEmpty {
+                if !rootView.world.selection.isEmpty {
                     rootView.newUndoGroup()
-                    rootView.setSelectedSheet([])
+                    rootView.doSet(WorldSelection.empty)
                     isUpdatedNewUndoGroupWorld = true
                 }
             }

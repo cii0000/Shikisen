@@ -791,7 +791,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                           width: niKnobW, height: nKnobH - bottomD - topD))
             if iSet.contains(i) {
                 selectedPathlines.append(pathline)
-            } else if let fpb, !(Rational(fpb) * beat).isInteger {
+            } else if fpb == nil || !(Rational(fpb!) * beat).isInteger {
                 warningPathlines.append(pathline)
             } else {
                 contentPathlines.append(pathline)
@@ -802,7 +802,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let eKnobMinY = centerY - knobH / 2 - 1
         let lkb = Rect(x: kx - nKnobW / 2, y: eKnobMinY,
                        width: nKnobW, height: knobH + 2)
-        if let fpb, !(Rational(fpb) * eBeat).isInteger {
+        if fpb == nil || !(Rational(fpb!) * eBeat).isInteger {
             warningPathlines.append(.init(lkb))
         } else {
             contentPathlines.append(.init(lkb))
@@ -945,7 +945,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
         if !warningPathlines.isEmpty {
             nodes.append(Node(path: Path(warningPathlines),
-                              fillType: .color(.warning)))
+                              fillType: .color(.keyframeWarning)))
         }
         if !selectedPathlines.isEmpty {
             nodes.append(Node(name: "selected",
@@ -1049,7 +1049,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                               maxDistance: maxDistance)
     }
     func slidableKeyframeIndex(at inP: Point, maxDistance: Double) -> (i: Int, distance: Double)? {
-        guard abs(inP.y) < Sheet.timelineHalfHeight * 15 / 16 else { return nil }
+        guard abs(inP.y) < Sheet.timelineHalfHeight else { return nil }
         let animation = model
         let beatRange = animation.beatRange
         
@@ -1077,7 +1077,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         return if let minI { (minI, minD) } else { nil }
     }
     func keyframeIndex(at inP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
-        guard abs(inP.y) < Sheet.timelineHalfHeight * 15 / 16 else { return nil }
+        guard abs(inP.y) < Sheet.timelineHalfHeight else { return nil }
         let animation = model
         let count = animation.keyframes.count
         let maxD = Sheet.keyframeEditDistance * scale
@@ -1488,7 +1488,7 @@ final class SheetView: View, @unchecked Sendable {
         let scale = screenToWorldScale
         let rect = convertToWorld(selectedFrame)
         let cp = rect.centerPoint
-        let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+        var knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
                          rect.midXMinYPoint, rect.midXMaxYPoint,
                          rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
             Node(name: "knob",
@@ -1507,6 +1507,13 @@ final class SheetView: View, @unchecked Sendable {
                  attitude: .init(position: $0, scale: .init(square: scale), rotation: cp.angle($0)),
                  path: Path(Rect(x: -2.5, y: -0.75, width: 5, height: 1.5)),
                  fillType: .color(.selected))
+        }
+        if let p = model.selection.lastPosition {
+            let ps = rect.minPoints(at: convertToWorld(p))
+            if !ps.isEmpty {
+                knobNodes.append(.init(path: .init(ps),
+                                       lineWidth: scale, lineType: .color(.selected)))
+            }
         }
         
         selectedFrameNode = Node(children: knobNodes + [Node(path: .init(rect),
@@ -1833,14 +1840,24 @@ final class SheetView: View, @unchecked Sendable {
         var minDSq = Double.infinity
         frame.allPoints.forEach {
             let dSq = $0.distanceSquared(p)
-            if dSq < maxDSq {
+            if dSq < minDSq && dSq < maxDSq {
                 minDSq = dSq
             }
         }
         frame.edges.forEach {
             let dSq = $0.distanceSquared(from: p)
-            if dSq < maxEDSq {
+            if dSq < minDSq && dSq < maxEDSq {
                 minDSq = dSq
+            }
+        }
+        if let lp = model.selection.lastPosition {
+            let ps = frame.minPoints(at: lp)
+            let edges = Edge.edges(from: ps)
+            for edge in edges {
+                let dSq = edge.distanceSquared(from: p)
+                if dSq < minDSq && dSq < maxDSq {
+                    minDSq = dSq
+                }
             }
         }
         return minDSq
@@ -7124,7 +7141,7 @@ final class SheetView: View, @unchecked Sendable {
                 let (dSq, pressure) = line.minDistanceSquaredAndPressure(at: p)
                 let nd = smallScale != nil ?
                 (line.size / 2 * pressure + ds) / smallScale! :
-                line.size / 2 * pressure + ds * 5
+                line.size / 2 * pressure + ds * 8
                 let ldSq = nd * nd
                 if dSq < minDSq && dSq < ldSq {
                     minDSq = dSq

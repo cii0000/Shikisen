@@ -212,10 +212,17 @@ final class VersionAction: Action {
                 outOfBoundsOutlineNode.path = Path()
                 outOfBoundsNode.path = Path()
             }
-            let s = 1 / rootView.worldToScreenScale
-            let path = Path(frame.outset(by: 4 * s), cornerRadius: 3 * s)
-            selectingOutlineRootNode.path = path
-            selectingRootNode.path = path
+            let nf = frame * rootView.worldToScreenTransform
+            if !rootView.isEditingSheet || (nf.width < 6 && nf.height < 6) {
+                let s = 1 / rootView.worldToScreenScale
+                let path = Path(frame.outset(by: 4 * s),
+                                cornerRadius: 3 * s)
+                selectingOutlineRootNode.path = path
+                selectingRootNode.path = path
+            } else {
+                selectingOutlineRootNode.path = Path()
+                selectingRootNode.path = Path()
+            }
         }
         if !nodes.isEmpty {
             selectingRootNode.children = nodes

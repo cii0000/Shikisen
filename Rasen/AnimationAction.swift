@@ -37,6 +37,8 @@ final class GoPreviousAction: InputKeyEventAction {
         return sheetView.contentsView.elementViews[contentIndex]
     }
     
+    private var scoreView: ScoreView?
+    
     func flow(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
@@ -51,6 +53,13 @@ final class GoPreviousAction: InputKeyEventAction {
             
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
+                if sheetView.model.score.enabled {
+                    scoreView = sheetView.scoreView
+                    rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
+                    Feedback.beep()
+                    return
+                }
+                
                 if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                              scale: rootView.screenToWorldScale),
                    sheetView.contentsView.elementViews[contentIndex].model.type == .movie {
@@ -71,6 +80,9 @@ final class GoPreviousAction: InputKeyEventAction {
                                               ?? sheetView?.currentKeyframeString()
                                               ?? Animation.timeString(fromTime: 0, frameRate: 0))
         case .changed:
+            if scoreView != nil {
+                return
+            }
             if event.isRepeat, let sheetView {
                 if let contentView {
                     contentView.movePreviousInterKeyframe()
@@ -119,6 +131,8 @@ final class GoNextAction: InputKeyEventAction {
         return sheetView.contentsView.elementViews[contentIndex]
     }
     
+    private var scoreView: ScoreView?
+    
     func flow(with event: InputKeyEvent) {
         guard isEditingSheet else {
             rootAction.keepOut(with: event)
@@ -135,6 +149,12 @@ final class GoNextAction: InputKeyEventAction {
             sheetView = rootView.sheetView(at: p)
         
             if let sheetView {
+                if sheetView.model.score.enabled {
+                    scoreView = sheetView.scoreView
+                    rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
+                    return
+                }
+                
                 if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                              scale: rootView.screenToWorldScale),
                    sheetView.contentsView.elementViews[contentIndex].model.type == .movie {
@@ -155,6 +175,9 @@ final class GoNextAction: InputKeyEventAction {
                                               ?? sheetView?.currentKeyframeString()
                                               ?? Animation.timeString(fromTime: 0, frameRate: 0))
         case .changed:
+            if scoreView != nil {
+                return
+            }
             if event.isRepeat, let sheetView {
                 if let contentView {
                     contentView.moveNextInterKeyframe()
@@ -225,6 +248,8 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
         return text.frame?.width ?? 40
     } ()
     
+    private var scoreView: ScoreView?
+    
     func flow(with event: DragEvent) {
         if event.phase == .began {
             preSP = event.screenPoint
@@ -250,6 +275,12 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
             preEventTime = nil
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
+                if sheetView.model.score.enabled {
+                    scoreView = sheetView.scoreView
+                    rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
+                    return
+                }
+                
                 if let contentIndex = sheetView.contentIndex(at: sheetView.convertFromWorld(p),
                                                              scale: rootView.screenToWorldScale),
                    sheetView.contentsView.elementViews[contentIndex].model.type == .movie {
@@ -277,6 +308,9 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
             rootView.updateFromAroundWithTimeline(at: rootView.sheetPosition(at: p))
             sheetView?.setupTimeNodes()
         case .changed:
+            if scoreView != nil {
+                return
+            }
             if let sheetView {
                 if let contentView {
                     allDX += event.scrollDeltaPoint.x * correction
@@ -855,67 +889,70 @@ final class InterpolateAction: InputKeyEventAction {
                     rootView.cursor = .arrowWith(string: "Empty".localized)
                 }
                 return
+            } else if let sheetView = rootView.sheetView(at: p) {
+                let animationView = sheetView.animationView
+                let timelineP = animationView.timelineNode.convertFromWorld(p)
+                if animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale),
+                   let i = animationView.slidableKeyframeIndex(at: timelineP,
+                                                               maxDistance: rootView.worldKnobEditDistance)?.i,
+                   animationView.selectedIs.contains(i) {
+                    
+                    let kis = animationView.selectedIs
+                    let beat = animationView.model.localBeat
+                    let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
+                    
+                    let oneBeat = Rational(1, animationView.frameRate)
+                    
+                    var nj = 0
+                    let idvs = kis.compactMap {
+                        let keyframe = animationView.model.keyframes[$0]
+                        let idivs: [IndexValue<InterOption>] = keyframe.picture.lines.enumerated().compactMap {
+                            let option = $0.element.interOption
+                            return if option.interType == .interpolated {
+                                .init(value: option.with(.key), index: $0.offset)
+                            } else {
+                                nil
+                            }
+                        }
+                        return idivs.isEmpty ? nil : IndexValue(value: idivs, index: $0)
+                    }
+                    var isNewUndoGroup = true
+                    if !idvs.isEmpty {
+                        if isNewUndoGroup {
+                            sheetView.newUndoGroup()
+                            isNewUndoGroup = false
+                        }
+                        sheetView.set(idvs)
+                    }
+                    
+                    for j in kis {
+                        let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
+                        if durBeat >= oneBeat {
+                            if isNewUndoGroup {
+                                sheetView.newUndoGroup()
+                                isNewUndoGroup = false
+                            }
+                            
+                            let nBeat = animationView.model.keyframes[j + nj].beat
+                            let count = Int(durBeat / oneBeat) - 1
+                            sheetView.insert((0 ..< count).map { k in
+                                IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
+                                           index: k + j + nj + 1)
+                            })
+                            nj += count
+                        }
+                    }
+                    
+                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
+                    rootAction.updateActionNode()
+                    rootView.updateSelectedFrame()
+                    
+                    if !isNewUndoGroup {
+                        rootView.cursor = .arrowWith(string: "Empty".localized)
+                    }
+                    return
+                }
             }
-//            else if let sheetView = rootView.sheetView(at: p) {
-//                let sheetP = sheetView.convertFromWorld(p)
-//                let animationView = sheetView.animationView
-//                let timelineP = animationView.timelineNode.convertFromWorld(p)
-//                if animationView.containsTimeline(timelineP, scale: rootView.screenToWorldScale),
-//                   let i = animationView.slidableKeyframeIndex(at: timelineP,
-//                                                               maxDistance: rootView.worldKnobEditDistance)?.i,
-//                   animationView.selectedIs.contains(i) {
-//                    
-//                    let kis = animationView.selectedIs
-//                    let beat = animationView.model.localBeat
-//                    let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
-//                    
-//                    let oneBeat = Rational(1, animationView.frameRate)
-//                    
-//                    var nj = 0
-//                    let idvs = kis.compactMap {
-//                        let keyframe = animationView.model.keyframes[$0]
-//                        let idivs: [IndexValue<InterOption>] = keyframe.picture.lines.enumerated().compactMap {
-//                            let option = $0.element.interOption
-//                            return if option.interType == .interpolated {
-//                                .init(value: option.with(.key), index: $0.offset)
-//                            } else {
-//                                nil
-//                            }
-//                        }
-//                        return idivs.isEmpty ? nil : IndexValue(value: idivs, index: $0)
-//                    }
-//                    if !idvs.isEmpty {
-//                        if isNewUndoGroup {
-//                            sheetView.newUndoGroup()
-//                            isNewUndoGroup = false
-//                        }
-//                        sheetView.set(idvs)
-//                    }
-//                    
-//                    for j in kis {
-//                        let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
-//                        if durBeat >= oneBeat {
-//                            if isNewUndoGroup {
-//                                sheetView.newUndoGroup()
-//                                isNewUndoGroup = false
-//                            }
-//                            
-//                            let nBeat = animationView.model.keyframes[j + nj].beat
-//                            let count = Int(durBeat / oneBeat) - 1
-//                            sheetView.insert((0 ..< count).map { k in
-//                                IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
-//                                           index: k + j + nj + 1)
-//                            })
-//                            nj += count
-//                        }
-//                    }
-//                    
-//                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
-//                    rootAction.updateActionNode()
-//                    rootView.updateSelectedFrame()
-//                    return
-//                }
-//            }
             
             let cos = Pasteboard.shared.copiedObjects
             for co in cos {
@@ -1144,6 +1181,7 @@ final class InterpolateAction: InputKeyEventAction {
                 oldLines = []
             default:
                 rootView.cursor = .ban(string: "There is no line on the pasteboard".localized)
+                Feedback.beep()
                 return
             }
             

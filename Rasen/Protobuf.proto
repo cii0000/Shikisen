@@ -370,6 +370,9 @@ message PBSheetSelection {
     map<int64, PBNoteSelection> noteSelections = 2;
     map<int64, PBTextSelection> textSelections = 3;
     repeated int64 contentIs = 4;
+    oneof lastPositionOptional {
+        PBPoint lastPosition = 5;
+    }
 }
 
 message PBSheet {
@@ -385,9 +388,16 @@ message PBSheet {
     PBSheetSelection selection = 13;
 }
 
+message PBWorldSelection {
+    PBUUIDArray sheetIDs = 1;
+    oneof lastPositionOptional {
+        PBPoint lastPosition = 2;
+    }
+}
+
 message PBWorld {
     PBIntPointStringDic sheetPositions = 1;
-    PBUUIDArray selectedSheetIDs = 2;
+    PBWorldSelection selection = 2;
 }
 
 enum PBRectCorner {
@@ -635,7 +645,7 @@ message PBWorldUndoItem {
     oneof value {
         PBStringIntPointDic insertSheets = 1;
         PBIntPointArray removeSheets = 2;
-        PBUUIDArray setSelectedSheetIDs = 3;
+        PBWorldSelection setSelection = 4;
     }
 }
 

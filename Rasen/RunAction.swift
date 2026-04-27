@@ -19,29 +19,6 @@ import Dispatch
 import struct Foundation.UUID
 import struct Foundation.URL
 
-final class StopAction: InputKeyEventAction {
-    let rootAction: RootAction, rootView: RootView
-    let isEditingSheet: Bool
-    
-    init(_ rootAction: RootAction) {
-        self.rootAction = rootAction
-        rootView = rootAction.rootView
-        isEditingSheet = rootView.isEditingSheet
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        let p = rootView.convertScreenToWorld(event.screenPoint)
-        switch event.phase {
-        case .began:
-            rootView.cursor = .arrow
-            rootAction.closeAllPanelsAndStop(at: p)
-        case .changed: break
-        case .ended:
-            rootView.cursor = rootView.defaultCursor
-        }
-    }
-}
-
 final class RunAction: InputKeyEventAction {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool

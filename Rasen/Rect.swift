@@ -643,6 +643,24 @@ extension Rect {
             }
         }
     }
+    
+    func minPoints(at p: Point) -> [Point] {
+        guard let lrtb = lrtb(at: p) else { return [] }
+        switch lrtb {
+        case .left:
+            let np = leftEdge.nearestPoint(from: p)
+            return p.y > maxY || p.y < minY ? [np, .init(p.x, np.y), p] : [np, p]
+        case .right:
+            let np = rightEdge.nearestPoint(from: p)
+            return p.y > maxY || p.y < minY ? [np, .init(p.x, np.y), p] : [np, p]
+        case .top:
+            let np = topEdge.nearestPoint(from: p)
+            return p.x > maxX || p.x < minX ? [np, .init(np.x, p.y), p] : [np, p]
+        case .bottom:
+            let np = bottomEdge.nearestPoint(from: p)
+            return p.x > maxX || p.x < minX ? [np, .init(np.x, p.y), p] : [np, p]
+        }
+    }
 }
 extension Rect: AppliableTransform {
     static func * (lhs: Rect, rhs: Transform) -> Rect {

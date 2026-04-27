@@ -124,14 +124,14 @@ extension Road {
 enum WorldUndoItem {
     case insertSheets(_ sids: [IntPoint: UUID])
     case removeSheets(_ shps: [IntPoint])
-    case setSelectedSheetIDs(_ ids: [UUID])
+    case setSelection(_ selection: WorldSelection)
 }
 extension WorldUndoItem: UndoItem {
     var type: UndoItemType {
         switch self {
         case .insertSheets: .reversible
         case .removeSheets: .unreversible
-        case .setSelectedSheetIDs: .lazyReversible
+        case .setSelection: .lazyReversible
         }
     }
     func reversed() -> Self? {
@@ -140,7 +140,7 @@ extension WorldUndoItem: UndoItem {
             .removeSheets(shps.map { $0.key })
         case .removeSheets:
             nil
-        case .setSelectedSheetIDs:
+        case .setSelection:
             self
         }
     }
@@ -155,8 +155,8 @@ extension WorldUndoItem: Protobuf {
             self = .insertSheets(try [IntPoint: UUID](sids))
         case .removeSheets(let shps):
             self = .removeSheets(try [IntPoint](shps))
-        case .setSelectedSheetIds(let sids):
-            self = .setSelectedSheetIDs(try .init(sids))
+        case .setSelection(let selection):
+            self = .setSelection(try .init(selection))
         }
     }
     var pb: PBWorldUndoItem {
@@ -166,8 +166,8 @@ extension WorldUndoItem: Protobuf {
                 $0.value = .insertSheets(sids.pb)
             case .removeSheets(let shps):
                 $0.value = .removeSheets(shps.pb)
-            case .setSelectedSheetIDs(let sids):
-                $0.value = .setSelectedSheetIds(sids.pb)
+            case .setSelection(let selection):
+                $0.value = .setSelection(selection.pb)
             }
         }
     }
@@ -176,7 +176,7 @@ extension WorldUndoItem: Codable {
     private enum CodingTypeKey: String, Codable {
         case insertSheets = "0"
         case removeSheets = "1"
-        case setSelectedSheetIDs = "2"
+        case setSelection = "2"
     }
     init(from decoder: any Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -186,8 +186,8 @@ extension WorldUndoItem: Codable {
             self = .insertSheets(try container.decode([IntPoint: UUID].self))
         case .removeSheets:
             self = .removeSheets(try container.decode([IntPoint].self))
-        case .setSelectedSheetIDs:
-            self = .setSelectedSheetIDs(try container.decode([UUID].self))
+        case .setSelection:
+            self = .setSelection(try container.decode(WorldSelection.self))
         }
     }
     func encode(to encoder: any Encoder) throws {
@@ -199,9 +199,9 @@ extension WorldUndoItem: Codable {
         case .removeSheets(let shps):
             try container.encode(CodingTypeKey.removeSheets)
             try container.encode(shps)
-        case .setSelectedSheetIDs(let sids):
-            try container.encode(CodingTypeKey.setSelectedSheetIDs)
-            try container.encode(sids)
+        case .setSelection(let selection):
+            try container.encode(CodingTypeKey.setSelection)
+            try container.encode(selection)
         }
     }
 }
@@ -248,22 +248,54 @@ extension Dictionary where Key == IntPoint, Value == UUID {
     }
 }
 
+struct WorldSelection: Hashable, Codable {
+    static let empty = Self()
+    
+    var sheetIDs = [UUID]()
+    var lastPosition: Point?
+}
+extension WorldSelection: Protobuf {
+    init(_ pb: PBWorldSelection) throws {
+        self.sheetIDs = (try? .init(pb.sheetIds)) ?? []
+        self.lastPosition = if case .lastPosition(let lastPosition)? = pb.lastPositionOptional {
+            try? .init(lastPosition)
+        } else {
+            nil
+        }
+    }
+    var pb: PBWorldSelection {
+        .with {
+            $0.sheetIds = sheetIDs.pb
+            $0.lastPositionOptional = if let lastPosition {
+                .lastPosition(lastPosition.pb)
+            } else {
+                nil
+            }
+        }
+    }
+}
+extension WorldSelection {
+    var isEmpty: Bool {
+        sheetIDs.isEmpty
+    }
+}
+
 struct World {
     var sheetIDs = [IntPoint: UUID]()
     var sheetPositions = [UUID: IntPoint]()
-    var selectedSheetIDs = [UUID]()
+    var selection = WorldSelection.empty
 }
 extension World: Protobuf {
     init(_ pb: PBWorld) throws {
         let shps = try [UUID: IntPoint](pb.sheetPositions)
         self.sheetIDs = World.sheetIDs(with: shps)
         self.sheetPositions = shps
-        self.selectedSheetIDs = (try? .init(pb.selectedSheetIds)) ?? []
+        selection = (try? .init(pb.selection)) ?? .empty
     }
     var pb: PBWorld {
         .with {
             $0.sheetPositions = sheetPositions.pb
-            $0.selectedSheetIds = selectedSheetIDs.pb
+            $0.selection = selection.pb
         }
     }
 }
@@ -274,7 +306,7 @@ extension World {
     }
     
     var selectedSheetPositions: [IntPoint] {
-        selectedSheetIDs.compactMap { sheetPositions[$0] }
+        selection.sheetIDs.compactMap { sheetPositions[$0] }
     }
     
     static func sheetIDs(with shps: [UUID: IntPoint]) -> [IntPoint: UUID] {

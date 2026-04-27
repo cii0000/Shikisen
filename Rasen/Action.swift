@@ -291,7 +291,7 @@ final class RootAction: Action {
         }
     }
     
-    private func inputKeyAction(with gesture: Gesture) -> (any InputKeyEventAction)? {
+    private func inputKeyAction(with gesture: Gesture) -> (any InputKeyEventAction) {
         switch gesture {
         case .undo: UndoAction(self)
         case .redo: RedoAction(self)
@@ -317,10 +317,9 @@ final class RootAction: Action {
         case .keyPlay: PlayAction(self)
         case .goPrevious: GoPreviousAction(self)
         case .goNext: GoNextAction(self)
-        case .stop: StopAction(self)
         case .changeABC: ChangeLanguageAction(self)
         case .changeAIU: ChangeLanguageAction(self)
-        default: nil
+        default: EmptyKeyAction(self)
         }
     }
     private(set) var oldInputKeyEvent: InputKeyEvent?
@@ -519,6 +518,26 @@ final class RootAction: Action {
         swipeAction?.updateNode()
         dragAction?.updateNode()
         inputKeyAction?.updateNode()
+    }
+}
+
+final class EmptyKeyAction: InputKeyEventAction {
+    let rootAction: RootAction, rootView: RootView
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        switch event.phase {
+        case .began:
+            rootView.cursor = .ban(string: "Empty Action".localized)
+            Feedback.beep()
+        case .changed: break
+        case .ended:
+            rootView.cursor = rootView.defaultCursor
+        }
     }
 }
 
@@ -740,7 +759,7 @@ final class SelectAction: Action {
     
     private var firstP = Point(), selectKeyframeAction: SelectKeyframeAction?,
                 captureSelections = [SheetView: SheetSelection](),
-                firstSelectedSheetIDs = [UUID](),
+                beganWorldSelection: WorldSelection?,
                 firstSheetView: SheetView?, firstTextI: Int?, firstTextRect: Rect?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
@@ -764,7 +783,7 @@ final class SelectAction: Action {
             firstP = p
             
             if !isEditingSheet {
-                firstSelectedSheetIDs = rootView.world.selectedSheetIDs
+                beganWorldSelection = rootView.world.selection
             } else if let sheetView = rootView.sheetView(at: p) {
                 captureSelections[sheetView] = sheetView.model.selection
                 
@@ -981,17 +1000,20 @@ final class SelectAction: Action {
                         }
                     }
                     
+//                    nSelection.lastPosition = sheetView.convertFromWorld(p)
+                    
                     if sheetView.model.selection != nSelection {
                         sheetView.selection = nSelection
                     }
                 }
-            } else {
-                let oSIDs = Set(firstSelectedSheetIDs)
+            } else if let beganWorldSelection {
+                let oSIDs = Set(beganWorldSelection.sheetIDs)
                 let nSIDs = rootView.world.sheetIDs.filter {
                     rect.intersects(rootView.sheetFrame(with: $0.key))
                 }.map { $0.value }
-                rootView.world.selectedSheetIDs
+                rootView.world.selection.sheetIDs
                 = (isUnselect ? oSIDs.subtracting(nSIDs) : oSIDs.union(nSIDs)).sorted()
+//                rootView.world.selection.lastPosition = p
                 rootView.updateSelected()
             }
             
@@ -1003,9 +1025,9 @@ final class SelectAction: Action {
             
             node.removeFromParent()
             
-            if firstSelectedSheetIDs != rootView.world.selectedSheetIDs {
+            if let beganWorldSelection, beganWorldSelection != rootView.world.selection {
                 rootView.newUndoGroup()
-                rootView.capture(rootView.world.selectedSheetIDs, old: firstSelectedSheetIDs)
+                rootView.capture(old: beganWorldSelection)
             }
             for (sheetView, oldSelection) in captureSelections {
                 if oldSelection != sheetView.model.selection {
@@ -1784,6 +1806,7 @@ final class AddTimeAction: InputKeyEventAction {
                }
             } else {
                 rootView.cursor = .ban(string: "Error".localized)
+                Feedback.beep()
             }
         case .changed:
             break
@@ -1838,6 +1861,7 @@ final class AddScoreAction: InputKeyEventAction {
                 }
             } else {
                 rootView.cursor = .ban(string: "Error".localized)
+                Feedback.beep()
             }
         case .changed:
             break

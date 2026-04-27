@@ -2469,6 +2469,7 @@ struct SheetSelection: Hashable, Codable {
     var noteSelections = [Int: NoteSelection]()
     var textSelections = [Int: TextSelection]()
     var contentIs = Set<Int>()
+    var lastPosition: Point?
 }
 extension SheetSelection {
     var isEmpty: Bool {
@@ -2479,6 +2480,7 @@ extension SheetSelection {
         keyframeSelections != old.keyframeSelections
         || textSelections != old.textSelections
         || contentIs != old.contentIs
+        || lastPosition != old.lastPosition
     }
     var notePitSprolIs: [Int: [Int: Set<Int>]] {
         get {
@@ -2509,6 +2511,11 @@ extension SheetSelection: Protobuf {
             $0[.init($1.key)] = try? .init($1.value)
         }
         contentIs = .init(pb.contentIs.map { .init($0) })
+        self.lastPosition = if case .lastPosition(let lastPosition)? = pb.lastPositionOptional {
+            try? .init(lastPosition)
+        } else {
+            nil
+        }
     }
     var pb: PBSheetSelection {
         .with {
@@ -2522,6 +2529,11 @@ extension SheetSelection: Protobuf {
                 $0[.init($1.key)] = $1.value.pb
             }
             $0.contentIs = contentIs.map { .init($0) }
+            $0.lastPositionOptional = if let lastPosition {
+                .lastPosition(lastPosition.pb)
+            } else {
+                nil
+            }
         }
     }
 }
@@ -2595,6 +2607,7 @@ extension Sheet {
     static let noteEditDistance = 50.0
     static let keyframeEditDistance = 80.0
     static let moveKnobEditDistance = 8.0
+    static let lastPositionEditDistance = 60.0
     static let timelineY = 18.0
     static let pitchHeight = 5.375
     static let noteHeight = 1.75
@@ -2724,34 +2737,36 @@ extension Sheet {
                    + (1 ... 96).map { tempo(fps: 48, k: $0) }
                    + (1 ... 100).map { tempo(fps: 50, k: $0) }
                    + (1 ... 120).map { tempo(fps: 60, k: $0) }).sorted()
+            .filter { fpb(fromTempo: $0) != nil }
     }
     static func tempoNameFromStandardFrameRate(withTempo tempo: Rational) -> String {
-        var fpbName = ""
-        func append(fps: Int) {
-            if let fpb = fpb(fromTempo: tempo, fps: fps) {
-                if !fpbName.isEmpty {
-                    fpbName += " / "
-                }
-                fpbName += "\(fpb) fpb, \(fps) fps"
-            }
+        let fpbName = if let fpb = fpb(fromTempo: tempo) {
+            fpb % 3 != 0 ? " (\(fpb) fpb)" : " (\(fpb / 3) * 3 fpb)"
+        } else {
+            ""
         }
-        append(fps: 24)
-        append(fps: 25)
-        append(fps: 30)
-        append(fps: 48)
-        append(fps: 50)
-        append(fps: 60)
-        return Double(tempo).string(digitsCount: 2) + " bpm"
-        + (fpbName.isEmpty ? "" : " (\(fpbName))")
+        return Double(tempo).string(digitsCount: 2) + " bpm" + fpbName
     }
-    static func fpb(fromTempo tempo: Rational, fps: Int) -> Int? {
+    static func fpbPrime(fromTempo tempo: Rational, fps: Int) -> (two: Int, three: Int) {
         let v = Rational(60 * fps) / tempo
-        return v.isInteger ? v.integralPart : nil
+        guard v.isInteger else { return (0, 0) }
+        var i = v.integralPart, two = 0, three = 0
+        for _ in 7.range {
+            if i % 2 != 0 { break }
+            i /= 2
+            two += 1
+        }
+        if i % 3 == 0 {
+            three += 1
+        }
+        return (two, three)
     }
     static func fpb(fromTempo tempo: Rational) -> Int? {
-        fpb(fromTempo: tempo, fps: 48)
-        ?? fpb(fromTempo: tempo, fps: 50)
-        ?? fpb(fromTempo: tempo, fps: 60)
+        let fpb48 = fpbPrime(fromTempo: tempo, fps: 48)
+        let fpb50 = fpbPrime(fromTempo: tempo, fps: 50)
+        let fpb60 = fpbPrime(fromTempo: tempo, fps: 60)
+        let (two, three) = [fpb48, fpb50, fpb60].max { $0.two < $1.two }!
+        return two == 0 ? nil : 2 ** two * 3 ** three
     }
     
     var mainLineUUColor: UUColor? {

@@ -238,7 +238,7 @@ final class RootView: View, @unchecked Sendable {
                 updateMap()
                 updateGrid(with: screenToWorldTransform, in: screenBounds)
                 updateWithCursorPosition()
-                if !world.selectedSheetIDs.isEmpty {
+                if !world.selection.isEmpty {
                     updateSelected()
                 }
                 return rect
@@ -264,16 +264,17 @@ final class RootView: View, @unchecked Sendable {
                 updateMap()
                 updateGrid(with: screenToWorldTransform, in: screenBounds)
                 updateWithCursorPosition()
-                if !world.selectedSheetIDs.isEmpty {
+                if !world.selection.isEmpty {
                     updateSelected()
                 }
                 
                 return rect
-            case .setSelectedSheetIDs(let sids):
-                let rect = Set(sids + world.selectedSheetIDs).reduce(into: Rect?.none) {
+            case .setSelection(let selection):
+                let rect = Set(selection.sheetIDs + world.selection.sheetIDs)
+                    .reduce(into: Rect?.none) {
                     $0 += sheetFrame(at: $1)
                 }
-                world.selectedSheetIDs = sids
+                world.selection = selection
                 updateSelected()
                 
                 return rect
@@ -310,11 +311,12 @@ final class RootView: View, @unchecked Sendable {
                 
                 return rect
                 
-            case .setSelectedSheetIDs(let sids):
-                let rect = Set(sids + world.selectedSheetIDs).reduce(into: Rect?.none) {
+            case .setSelection(let selection):
+                let rect = Set(selection.sheetIDs + world.selection.sheetIDs)
+                    .reduce(into: Rect?.none) {
                     $0 += sheetFrame(at: $1)
                 }
-                world.selectedSheetIDs = sids
+                world.selection = selection
                 
                 return rect
             }
@@ -337,15 +339,15 @@ final class RootView: View, @unchecked Sendable {
         set(redoItem)
     }
     
-    func setSelectedSheet(_ sids: [UUID]) {
-        let undoItem = WorldUndoItem.setSelectedSheetIDs(world.selectedSheetIDs)
-        let redoItem = WorldUndoItem.setSelectedSheetIDs(sids)
+    func doSet(_ selection: WorldSelection) {
+        let undoItem = WorldUndoItem.setSelection(world.selection)
+        let redoItem = WorldUndoItem.setSelection(selection)
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
-    func capture(_  sids: [UUID], old oldSIDs: [UUID]) {
-        let undoItem = WorldUndoItem.setSelectedSheetIDs(oldSIDs)
-        let redoItem = WorldUndoItem.setSelectedSheetIDs(sids)
+    func capture(old oldSelection: WorldSelection) {
+        let undoItem = WorldUndoItem.setSelection(oldSelection)
+        let redoItem = WorldUndoItem.setSelection(world.selection)
         append(undo: undoItem, redo: redoItem)
     }
     
@@ -395,10 +397,10 @@ final class RootView: View, @unchecked Sendable {
                 }
             }
         case .removeSheets: break
-        case .setSelectedSheetIDs(let selectedSIDs):
-            if world.selectedSheetIDs != selectedSIDs {
+        case .setSelection(let selection):
+            if world.selection != selection {
                 history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setSelectedSheetIDs(world.selectedSheetIDs),
+                    .saveUndoItemValue?.set(.setSelection(world.selection),
                                             type: reversedType)
             }
         }
@@ -406,14 +408,14 @@ final class RootView: View, @unchecked Sendable {
         switch isUndo ? uiv.undoItem : uiv.redoItem {
         case .insertSheets(_): break
         case .removeSheets(_): break
-        case .setSelectedSheetIDs:
+        case .setSelection:
             switch result.type {
             case .undo:
                 history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setSelectedSheetIDs(world.selectedSheetIDs)
+                    .undoItemValue?.redoItem = .setSelection(world.selection)
             case .redo:
                 history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setSelectedSheetIDs(world.selectedSheetIDs)
+                    .undoItemValue?.undoItem = .setSelection(world.selection)
             }
         }
     }
@@ -815,7 +817,7 @@ final class RootView: View, @unchecked Sendable {
     }
     
     var selectedBounds: Rect? {
-        world.selectedSheetIDs.reduce(into: Rect?.none) { $0 += sheetFrame(at: $1) }
+        world.selection.sheetIDs.reduce(into: Rect?.none) { $0 += sheetFrame(at: $1) }
     }
     func updateSelectedFrame() {
         let nodes: [Node] = sheetViewValues.compactMap {
@@ -1551,9 +1553,9 @@ final class RootView: View, @unchecked Sendable {
                 sheetView.unselectAndNewUndoGroupIfNeeded()
             }
         } else {
-            if !world.selectedSheetIDs.isEmpty {
+            if !world.selection.isEmpty {
                 newUndoGroup()
-                setSelectedSheet([])
+                doSet(WorldSelection.empty)
             }
         }
     }
@@ -1994,7 +1996,7 @@ final class RootView: View, @unchecked Sendable {
             return false
         } else {
             let maxDSq = (Sheet.knobEditDistance * screenToWorldScale).squared
-            if world.selectedSheetIDs.contains(where: {
+            if world.selection.sheetIDs.contains(where: {
                 if let f = sheetFrame(at: $0) {
                     f.distanceSquared(p) < maxDSq
                 } else {

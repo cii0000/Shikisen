@@ -198,15 +198,15 @@ final class MoveSheetsAction: DragEventAction {
                 rootView.close(from: shps)
                 isNewUndoGroup = true
                 rootView.newUndoGroup()
-                if !isSelected && !rootView.world.selectedSheetIDs.isEmpty {
-                    rootView.setSelectedSheet([])
+                if !isSelected && !rootView.world.selection.isEmpty {
+                    rootView.doSet(WorldSelection.empty)
                 }
                 rootView.removeSheets(at: shps)
             } else {
-                if !isSelected && !rootView.world.selectedSheetIDs.isEmpty {
+                if !isSelected && !rootView.world.selection.isEmpty {
                     isNewUndoGroup = true
                     rootView.newUndoGroup()
-                    rootView.setSelectedSheet([])
+                    rootView.doSet(WorldSelection.empty)
                 }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
             }
@@ -2803,7 +2803,8 @@ final class MoveLineAction: DragEventAction {
                         var lines = sheetView.keyframeView.linesView.model
                         lines.remove(at: lineIndex)
                         
-                        let np = sheetView.convertFromWorld(p)
+                        let np = beganLine.controls[fol1].point
+                        + sheetView.convertFromWorld(p) - beganSheetP
                         
                         var nLine = beganLine
                         nLine.controls[fol1].point = np
@@ -2868,7 +2869,7 @@ final class MoveLineAction: DragEventAction {
                         if isSnapStraight {
                             if abs(nsd.x) > 0 {
                                 nLine.controls[fol1].point.x = nLine.controls[fol0].point.x
-                            } else {
+                            } else if abs(nsd.y) > 0 {
                                 nLine.controls[fol1].point.y = nLine.controls[fol0].point.y
                             }
                         } else {

@@ -1714,6 +1714,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         } else {
             rootAction.inputKey(with: inputKeyEventWith(nsEvent, key, isRepeat: nsEvent.isARepeat, phase))
         }
+        if key == .escape {
+            super.keyDown(with: nsEvent)
+        }
     }
     override func keyUp(with nsEvent: NSEvent) {
         guard let key = nsEvent.key else { return }
@@ -4732,6 +4735,9 @@ extension InputTextEvent {
 struct Feedback {
     static func performAlignment() {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+    static func beep() {
+        NSSound.beep()
     }
 }
 

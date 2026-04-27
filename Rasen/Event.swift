@@ -366,7 +366,7 @@ extension Gesture {
     static let goPrevious = Self(modifier: [.control], .z)
     static let goNext = Self(modifier: [.control], .x)
     static let play = Self(.fourFingersTap)
-    static let keyPlay = Self(modifier: [.control], .a)
+    static let keyPlay = Self(modifier: [.control], .c)
     
     static let zoom = Self(.pinch)
     static let keyZoom = Self(modifier: [.control, .option, .command], .drag)
@@ -383,7 +383,6 @@ extension Gesture {
     static let lookUp = Self(.threeFingersTap)
     static let keyLookUp = Self(modifier: [.control, .command], .d)
     static let inputCharacter = Self(.keyInput)
-    static let stop = Self(.escape)
     
     static let undo = Self(modifier: [.command], .z)
     static let redo = Self(modifier: [.shift, .command], .z)
@@ -535,7 +534,7 @@ extension ActionList {
         [.init(name: "Select by Range".localized, .selectByRange),
          .init(name: "Unselect by Range".localized, .unselectByRange)],
         
-        [.init(name: "Open Menu".localized, .openMenu),
+        [.init(name: "Import / Export".localized, .openMenu),
          .init(name: "Look Up".localized, .lookUp),
          .init(name: "Input Character".localized, .inputCharacter)],
         

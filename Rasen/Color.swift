@@ -167,6 +167,7 @@ extension Color {
     static let subInterpolated = Color(white: 0.75, opacity: 0.25)
     static let warning = Color(red: 1, green: 0.5, blue: 0)
     static let loudnessWarning = Color(red: 1.0, green: 0, blue: 0)
+    static let keyframeWarning = Color(red: 0.5, green: 0.25, blue: 0)
     static let justFit = Color(red: 0.5, green: 0.5, blue: 0)
     static let captionOutline = Color(lightness: 15)
     

@@ -3738,7 +3738,7 @@ final class PastableAction: Action {
                 }
             }
             if !removeIndexes.isEmpty || !nIndexes.isEmpty {
-                let nSelectedSheetIs = nIndexes.values.sorted()
+                let nSelection = WorldSelection(sheetIDs: nIndexes.values.sorted())
                 
                 rootView.history.newUndoGroup()
                 if !removeIndexes.isEmpty {
@@ -3747,8 +3747,8 @@ final class PastableAction: Action {
                 if !nIndexes.isEmpty {
                     rootView.append(nIndexes)
                 }
-                if csv.isSelected, nSelectedSheetIs != rootView.world.selectedSheetIDs {
-                    rootView.setSelectedSheet(nSelectedSheetIs)
+                if csv.isSelected, nSelection != rootView.world.selection {
+                    rootView.doSet(nSelection)
                 }
                 rootView.updateNode()
             }
@@ -3775,8 +3775,8 @@ final class PastableAction: Action {
                 rootView.cursorPoint = sp
                 rootView.close(from: shps)
                 rootView.newUndoGroup()
-                if !rootView.world.selectedSheetIDs.isEmpty {
-                    rootView.setSelectedSheet([])
+                if !rootView.world.selection.isEmpty {
+                    rootView.doSet(WorldSelection.empty)
                 }
                 rootView.removeSheets(at: shps)
             }

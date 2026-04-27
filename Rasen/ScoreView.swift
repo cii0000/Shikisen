@@ -113,7 +113,8 @@ extension TimelineView {
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
             let sec = Rational(sec)
             let secX = x(atSec: sec) + origin.x
-            if Point(secX, sy).distance(p) < 8 * scale {
+            if abs(p.x - secX) < Sheet.keyframeEditDistance * scale
+                && abs(p.y - sy) < Sheet.rulerHeight / 2 + 2 * scale {
                 return true
             }
         }
@@ -2018,7 +2019,7 @@ extension ScoreView {
     
     func keyBeatIndex(at p: Point, scale: Double) -> Int? {
         guard containsTimeline(p, scale: scale) else { return nil }
-        let maxD = Sheet.knobEditDistance * scale
+        let maxD = Sheet.keyframeEditDistance * scale
         let maxDS = maxD * maxD
         var minDS = Double.infinity, minI: Int?
         let score = model

@@ -139,7 +139,7 @@ final class LookUpAction: InputKeyEventAction {
         if !rootView.isEditingSheet {
             let shp = rootView.sheetPosition(at: p)
             if rootView.containsSelectedSheetPositions(p) {
-                let sheetCount = rootView.world.selectedSheetIDs.count
+                let sheetCount = rootView.world.selectedSheetPositions.count
                 rootView.show("Sheet".localized
                               + "\n\t\("Count".localized): \(sheetCount)",
                               at: p)

@@ -1813,7 +1813,22 @@ struct PBSheetSelection: Sendable {
 
   var contentIs: [Int64] = []
 
+  var lastPositionOptional: PBSheetSelection.OneOf_LastPositionOptional? = nil
+
+  var lastPosition: PBPoint {
+    get {
+      if case .lastPosition(let v)? = lastPositionOptional {return v}
+      return PBPoint()
+    }
+    set {lastPositionOptional = .lastPosition(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  enum OneOf_LastPositionOptional: Equatable, Sendable {
+    case lastPosition(PBPoint)
+
+  }
 
   init() {}
 }
@@ -1908,6 +1923,42 @@ struct PBSheet: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+struct PBWorldSelection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var sheetIds: PBUUIDArray {
+    get {_sheetIds ?? PBUUIDArray()}
+    set {_sheetIds = newValue}
+  }
+  /// Returns true if `sheetIds` has been explicitly set.
+  var hasSheetIds: Bool {self._sheetIds != nil}
+  /// Clears the value of `sheetIds`. Subsequent reads from it will return its default value.
+  mutating func clearSheetIds() {self._sheetIds = nil}
+
+  var lastPositionOptional: PBWorldSelection.OneOf_LastPositionOptional? = nil
+
+  var lastPosition: PBPoint {
+    get {
+      if case .lastPosition(let v)? = lastPositionOptional {return v}
+      return PBPoint()
+    }
+    set {lastPositionOptional = .lastPosition(newValue)}
+  }
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  enum OneOf_LastPositionOptional: Equatable, Sendable {
+    case lastPosition(PBPoint)
+
+  }
+
+  init() {}
+
+  fileprivate var _sheetIds: PBUUIDArray? = nil
+}
+
 struct PBWorld: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1922,21 +1973,21 @@ struct PBWorld: Sendable {
   /// Clears the value of `sheetPositions`. Subsequent reads from it will return its default value.
   mutating func clearSheetPositions() {self._sheetPositions = nil}
 
-  var selectedSheetIds: PBUUIDArray {
-    get {_selectedSheetIds ?? PBUUIDArray()}
-    set {_selectedSheetIds = newValue}
+  var selection: PBWorldSelection {
+    get {_selection ?? PBWorldSelection()}
+    set {_selection = newValue}
   }
-  /// Returns true if `selectedSheetIds` has been explicitly set.
-  var hasSelectedSheetIds: Bool {self._selectedSheetIds != nil}
-  /// Clears the value of `selectedSheetIds`. Subsequent reads from it will return its default value.
-  mutating func clearSelectedSheetIds() {self._selectedSheetIds = nil}
+  /// Returns true if `selection` has been explicitly set.
+  var hasSelection: Bool {self._selection != nil}
+  /// Clears the value of `selection`. Subsequent reads from it will return its default value.
+  mutating func clearSelection() {self._selection = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _sheetPositions: PBIntPointStringDic? = nil
-  fileprivate var _selectedSheetIds: PBUUIDArray? = nil
+  fileprivate var _selection: PBWorldSelection? = nil
 }
 
 struct PBCornerRectValue: Sendable {
@@ -3284,12 +3335,12 @@ struct PBWorldUndoItem: Sendable {
     set {value = .removeSheets(newValue)}
   }
 
-  var setSelectedSheetIds: PBUUIDArray {
+  var setSelection: PBWorldSelection {
     get {
-      if case .setSelectedSheetIds(let v)? = value {return v}
-      return PBUUIDArray()
+      if case .setSelection(let v)? = value {return v}
+      return PBWorldSelection()
     }
-    set {value = .setSelectedSheetIds(newValue)}
+    set {value = .setSelection(newValue)}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -3297,7 +3348,7 @@ struct PBWorldUndoItem: Sendable {
   enum OneOf_Value: Equatable, Sendable {
     case insertSheets(PBStringIntPointDic)
     case removeSheets(PBIntPointArray)
-    case setSelectedSheetIds(PBUUIDArray)
+    case setSelection(PBWorldSelection)
 
   }
 
@@ -6268,7 +6319,7 @@ extension PBTextSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
 
 extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheetSelection"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframeSelections\0\u{1}noteSelections\0\u{1}textSelections\0\u{1}contentIs\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframeSelections\0\u{1}noteSelections\0\u{1}textSelections\0\u{1}contentIs\0\u{1}lastPosition\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6280,12 +6331,29 @@ extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBNoteSelection>.self, value: &self.noteSelections) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBTextSelection>.self, value: &self.textSelections) }()
       case 4: try { try decoder.decodeRepeatedInt64Field(value: &self.contentIs) }()
+      case 5: try {
+        var v: PBPoint?
+        var hadOneofValue = false
+        if let current = self.lastPositionOptional {
+          hadOneofValue = true
+          if case .lastPosition(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.lastPositionOptional = .lastPosition(v)
+        }
+      }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.keyframeSelections.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufInt64,PBKeyframeSelection>.self, value: self.keyframeSelections, fieldNumber: 1)
     }
@@ -6298,6 +6366,9 @@ extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     if !self.contentIs.isEmpty {
       try visitor.visitPackedInt64Field(value: self.contentIs, fieldNumber: 4)
     }
+    try { if case .lastPosition(let v)? = self.lastPositionOptional {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6306,6 +6377,7 @@ extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     if lhs.noteSelections != rhs.noteSelections {return false}
     if lhs.textSelections != rhs.textSelections {return false}
     if lhs.contentIs != rhs.contentIs {return false}
+    if lhs.lastPositionOptional != rhs.lastPositionOptional {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6444,9 +6516,60 @@ extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
   }
 }
 
+extension PBWorldSelection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBWorldSelection"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sheetIDs\0\u{1}lastPosition\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._sheetIds) }()
+      case 2: try {
+        var v: PBPoint?
+        var hadOneofValue = false
+        if let current = self.lastPositionOptional {
+          hadOneofValue = true
+          if case .lastPosition(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.lastPositionOptional = .lastPosition(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._sheetIds {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if case .lastPosition(let v)? = self.lastPositionOptional {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBWorldSelection, rhs: PBWorldSelection) -> Bool {
+    if lhs._sheetIds != rhs._sheetIds {return false}
+    if lhs.lastPositionOptional != rhs.lastPositionOptional {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBWorld"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sheetPositions\0\u{1}selectedSheetIDs\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sheetPositions\0\u{1}selection\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6455,7 +6578,7 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._sheetPositions) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._selectedSheetIds) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._selection) }()
       default: break
       }
     }
@@ -6469,7 +6592,7 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
     try { if let v = self._sheetPositions {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    try { if let v = self._selectedSheetIds {
+    try { if let v = self._selection {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
@@ -6477,7 +6600,7 @@ extension PBWorld: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
 
   static func ==(lhs: PBWorld, rhs: PBWorld) -> Bool {
     if lhs._sheetPositions != rhs._sheetPositions {return false}
-    if lhs._selectedSheetIds != rhs._selectedSheetIds {return false}
+    if lhs._selection != rhs._selection {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9039,7 +9162,7 @@ extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
 
 extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBWorldUndoItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}insertSheets\0\u{1}removeSheets\0\u{1}setSelectedSheetIDs\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}insertSheets\0\u{1}removeSheets\0\u{2}\u{2}setSelection\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9073,17 +9196,17 @@ extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
           self.value = .removeSheets(v)
         }
       }()
-      case 3: try {
-        var v: PBUUIDArray?
+      case 4: try {
+        var v: PBWorldSelection?
         var hadOneofValue = false
         if let current = self.value {
           hadOneofValue = true
-          if case .setSelectedSheetIds(let m) = current {v = m}
+          if case .setSelection(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.value = .setSelectedSheetIds(v)
+          self.value = .setSelection(v)
         }
       }()
       default: break
@@ -9105,9 +9228,9 @@ extension PBWorldUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
       guard case .removeSheets(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
-    case .setSelectedSheetIds?: try {
-      guard case .setSelectedSheetIds(let v)? = self.value else { preconditionFailure() }
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    case .setSelection?: try {
+      guard case .setSelection(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     }()
     case nil: break
     }
