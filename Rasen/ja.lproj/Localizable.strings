@@ -107,11 +107,13 @@
 "Area" = "面積";
 "Timeline" = "タイムライン";
 "Keyframe" = "キーフレーム";
+"Keyframes" = "複数キーフレーム";
 "Beat Range" = "ビート範囲";
 "Beat" = "ビート";
 "Score" = "楽譜";
 "Tempo" = "テンポ";
 "Sheet" = "シート";
+"Sheets" = "複数シート";
 "Root" = "全体";
 "Size" = "サイズ";
 "Image Size" = "画像サイズ";
@@ -137,6 +139,7 @@
 "Wave" = "波";
 "Voice" = "声";
 "Note" = "音符";
+"Notes" = "複数音符";
 
 "Frequency" = "周波数";
 
@@ -211,6 +214,7 @@
 "%1$@ Document" = "%1$@書類";
 "%1$@ Document with History" = "%1$@履歴付き書類";
 "File Size" = "ファイルサイズ";
+"All File Size" = "合計ファイルサイズ";
 "Calculating Size" = "サイズを計算中";
 "Exporting Images" = "画像を書き出し中";
 "Exporting 4K Images" = "4K画像を書き出し中";
@@ -262,6 +266,7 @@
 
 "About %@" = "%@について";
 "%@ Data" = "%@データ";
+
 "Clear Root History..." = "全体履歴を消去...";
 "Replace..." = "置き換える...";
 "Export..." = "書き出す...";
@@ -273,6 +278,7 @@
 "Quit %@" = "%@を終了";
 "File" = "ファイル";
 "Edit" = "編集";
+"Clear History..." = "履歴を消去...";
 "Action" = "アクション";
 "Shown Action List" = "アクション一覧を表示";
 "Hidden Action List" = "アクション一覧を非表示";

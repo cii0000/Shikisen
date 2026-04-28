@@ -1145,13 +1145,13 @@ final class PastableAction: Action {
             if let fco = colorOwners.first {
                 var mainPlanePath: Path?
                 if isSendPasteboard {
-                    let inP = fco.sheetView.convertFromWorld(p)
-                    if let pi = fco.sheetView.planesView.firstIndex(at: inP) {
+                    let sheetP = fco.sheetView.convertFromWorld(p)
+                    if let pi = fco.sheetView.planesView.firstIndex(at: sheetP) {
                         let planeView = fco.sheetView.planesView.elementViews[pi]
                         mainPlanePath = planeView.node.path
                         
                         let sheetValue = SheetValue(planes: [planeView.model],
-                                                    origin: inP,
+                                                    origin: sheetP,
                                           id: fco.sheetView.id,
                                                     rootKeyframeIndex: fco.sheetView.model.animation.rootIndex,
                                                     isSelected: false)
@@ -1164,8 +1164,8 @@ final class PastableAction: Action {
                     }
                 }
                 
-                let inP = fco.sheetView.convertFromWorld(p)
-                let ids: [UUID] = if let pi = fco.sheetView.planesView.firstIndex(at: inP) {
+                let sheetP = fco.sheetView.convertFromWorld(p)
+                let ids: [UUID] = if let pi = fco.sheetView.planesView.firstIndex(at: sheetP) {
                     [fco.sheetView.planesView.elementViews[pi].model.uuColor.id]
                 } else {
                     []
@@ -1929,7 +1929,7 @@ final class PastableAction: Action {
             }
         }
         func updateWithText(_ text: Text) {
-            let inP = p - sheetFrame.origin
+            let sheetP = p - sheetFrame.origin
             var isAppend = false
             
             var textView: SheetTextView?, sri: String.Index?
@@ -1940,7 +1940,7 @@ final class PastableAction: Action {
                     textView = aTextView
                     sri = asri
                 }
-            } else if let (aTextView, _, _, asri) = sheetView?.textTuple(at: inP) {
+            } else if let (aTextView, _, _, asri) = sheetView?.textTuple(at: sheetP) {
                 textView = aTextView
                 sri = asri
             }
@@ -2149,8 +2149,8 @@ final class PastableAction: Action {
                 Node(path: $0, fillType: .color(.subSelected))
             }
             
-            let inP = p - sheetFrame.origin
-            let bnp = Sheet.borderSnappedPoint(inP, with: sheetFrame,
+            let sheetP = p - sheetFrame.origin
+            let bnp = Sheet.borderSnappedPoint(sheetP, with: sheetFrame,
                                                distance: 3 / rootView.worldToScreenScale,
                                                oldBorder: oldBorder)
             isSnapped = bnp.isSnapped
@@ -3030,8 +3030,8 @@ final class PastableAction: Action {
                 return
             } else if let sheetView = rootView.madeSheetView(at: shp) {
                 let sheetFrame = rootView.sheetFrame(with: shp)
-                let inP = p - sheetFrame.origin
-                let bnp = Sheet.borderSnappedPoint(inP, with: sheetFrame,
+                let sheetP = p - sheetFrame.origin
+                let bnp = Sheet.borderSnappedPoint(sheetP, with: sheetFrame,
                                                    distance: 3 / rootView.worldToScreenScale,
                                                    oldBorder: border)
                 let np = bnp.point + sheetFrame.origin
@@ -3506,8 +3506,7 @@ final class PastableAction: Action {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -3525,8 +3524,8 @@ final class PastableAction: Action {
             }
             
             type = .cut
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = p
             cut(at: editingP)
             
             rootView.updateSelectedFrame()
@@ -3547,15 +3546,15 @@ final class PastableAction: Action {
             copySheet(with: event)
             return
         }
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
+        
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
             type = .copy
             firstScale = rootView.worldToScreenScale
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
             updateWithCopy(for: editingP, isSendPasteboard: true)
             rootView.node.append(child: selectingLineNode)
         case .changed:
@@ -3574,7 +3573,6 @@ final class PastableAction: Action {
         }
         guard !isEditingText else { return }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             if let textView = rootAction.textAction.editingTextView,
@@ -3623,35 +3621,35 @@ final class PastableAction: Action {
             firstScale = rootView.worldToScreenScale
             firstRotation = rootView.pov.rotation
             textScale = firstScale
-            editingSP = sp
+            editingSP = event.screenPoint
             beganTime = event.time
-            editingP = rootView.convertScreenToWorld(sp)
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
             guard let o = Pasteboard.shared.copiedObjects.first else { return }
             pasteObject = o
             if isMovePasteObject {
                 selectingLineNode.lineWidth = rootView.worldLineWidth
                 snapLineNode.lineWidth = selectingLineNode.lineWidth
-                updateWithPaste(at: editingP, atScreen: sp,
+                updateWithPaste(at: editingP, atScreen: event.screenPoint,
                                 event.phase, event)
                 rootView.node.append(child: snapLineNode)
                 rootView.node.append(child: selectingLineNode)
             } else {
-                paste(at: editingP, atScreen: sp, event: event)
+                paste(at: editingP, atScreen: event.screenPoint, event: event)
             }
         case .changed:
             if isMovePasteObject {
-                editingSP = sp
-                editingP = rootView.convertScreenToWorld(sp)
-                updateWithPaste(at: editingP, atScreen: sp,
+                editingSP = event.screenPoint
+                editingP = rootView.convertScreenToWorld(event.screenPoint)
+                updateWithPaste(at: editingP, atScreen: event.screenPoint,
                                 event.phase, event)
             }
         case .ended:
             notePlayer?.stop()
             
             if isMovePasteObject {
-                editingSP = sp
-                editingP = rootView.convertScreenToWorld(sp)
-                paste(at: editingP, atScreen: sp, event: event)
+                editingSP = event.screenPoint
+                editingP = rootView.convertScreenToWorld(event.screenPoint)
+                paste(at: editingP, atScreen: event.screenPoint, event: event)
                 snapLineNode.removeFromParent()
                 selectingLineNode.removeFromParent()
             }
@@ -3759,20 +3757,19 @@ final class PastableAction: Action {
     }
     
     func cutSheet(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
             type = .cut
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
-            let p = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
+            let p = rootView.convertScreenToWorld(event.screenPoint)
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             updateWithCopySheet(at: p, isSelected: isSelected, from: values)
             if !values.isEmpty {
                 let shps = values.map { $0.shp }
-                rootView.cursorPoint = sp
+                rootView.cursorPoint = event.screenPoint
                 rootView.close(from: shps)
                 rootView.newUndoGroup()
                 if !rootView.world.selection.isEmpty {
@@ -3790,19 +3787,18 @@ final class PastableAction: Action {
     }
     
     func copySheet(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
             type = .copy
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
             selectingLineNode.fillType = .color(.subSelected)
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth * 2
             
-            let p = rootView.convertScreenToWorld(sp)
+            let p = rootView.convertScreenToWorld(event.screenPoint)
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             let roads = rootView.roads(fromMap: Set(values.map { $0.shp }))
             let roadPath = Path(roads.compactMap {
@@ -3832,7 +3828,6 @@ final class PastableAction: Action {
     }
     var pasteSheetNode = Node()
     func pasteSheet(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -3840,8 +3835,8 @@ final class PastableAction: Action {
             
             type = .paste
             firstScale = rootView.worldToScreenScale
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
             pasteObject = Pasteboard.shared.copiedObjects.first
             ?? .sheetValue(SheetValue(isSelected: false))
             selectingLineNode.fillType = .color(.subSelected)
@@ -3851,11 +3846,11 @@ final class PastableAction: Action {
             rootView.node.append(child: selectingLineNode)
             rootView.node.append(child: pasteSheetNode)
             
-            updateWithPasteSheet(at: sp, phase: event.phase)
+            updateWithPasteSheet(at: event.screenPoint, phase: event.phase)
         case .changed:
-            updateWithPasteSheet(at: sp, phase: event.phase)
+            updateWithPasteSheet(at: event.screenPoint, phase: event.phase)
         case .ended:
-            pasteSheet(at: sp)
+            pasteSheet(at: event.screenPoint)
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
             
@@ -3883,20 +3878,19 @@ final class CutLinePointAction: InputKeyEventAction {
         guard isEditingSheet else {
             return
         }
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
-            let p = rootView.convertScreenToWorld(sp)
+            let p = rootView.convertScreenToWorld(event.screenPoint)
             var isCut = false
             if isEditingSheet,
                let sheetView = rootView.madeSheetView(at: p) {
-                let inP = sheetView.convertFromWorld(p)
+                let sheetP = sheetView.convertFromWorld(p)
                 
-                if let (lineView, li) = sheetView.lineTuple(at: inP,
+                if let (lineView, li) = sheetView.lineTuple(at: sheetP,
                                                             scale: rootView.screenToWorldScale),
-                   let pi = lineView.model.mainPointSequence.nearestIndex(at: inP) {
+                   let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
                     
                     var line = lineView.model
                     line.controls.remove(at: pi)
@@ -3963,14 +3957,13 @@ final class CopyLineColorAction: InputKeyEventAction {
         guard isEditingSheet else {
             return
         }
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
             firstScale = rootView.worldToScreenScale
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = rootView.convertScreenToWorld(event.screenPoint)
             updateWithCopy(for: editingP, isSendPasteboard: true)
             rootView.node.append(child: selectingLineNode)
         case .changed:

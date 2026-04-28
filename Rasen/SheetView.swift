@@ -1048,15 +1048,15 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         slidableKeyframeIndex(at: Point(x(atBeat: model.localBeat(atRootBeat: atRootBeat)), 0),
                               maxDistance: maxDistance)
     }
-    func slidableKeyframeIndex(at inP: Point, maxDistance: Double) -> (i: Int, distance: Double)? {
-        guard abs(inP.y) < Sheet.timelineHalfHeight else { return nil }
+    func slidableKeyframeIndex(at timelineP: Point, maxDistance: Double) -> (i: Int, distance: Double)? {
+        guard abs(timelineP.y) < Sheet.timelineHalfHeight else { return nil }
         let animation = model
         let beatRange = animation.beatRange
         
         var minD = maxDistance, minI: Int?
         for (i, keyframe) in animation.keyframes.enumerated() {
             let x = x(atBeat: keyframe.beat + beatRange.start)
-            let d = abs(inP.x - x)
+            let d = abs(timelineP.x - x)
             if d < minD {
                 minD = d
                 minI = i
@@ -1076,8 +1076,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         return if let minI { (minI, minD) } else { nil }
     }
-    func keyframeIndex(at inP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
-        guard abs(inP.y) < Sheet.timelineHalfHeight else { return nil }
+    func keyframeIndex(at timelineP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
+        guard abs(timelineP.y) < Sheet.timelineHalfHeight else { return nil }
         let animation = model
         let count = animation.keyframes.count
         let maxD = Sheet.keyframeEditDistance * scale
@@ -1085,7 +1085,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let beatRange = animation.beatRange
         for (i, keyframe) in animation.keyframes.enumerated() {
             let x = x(atBeat: keyframe.beat + beatRange.start)
-            let d = abs(inP.x - x)
+            let d = abs(timelineP.x - x)
             if d < minD && d < maxD {
                 minD = d
                 minI = i
@@ -1093,7 +1093,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
         if isEnabledCount {
             let x = x(atBeat: beatRange.end)
-            let d = abs(inP.x - x)
+            let d = abs(timelineP.x - x)
             if d < minD && d < maxD {
                 minD = d
                 minI = count
@@ -2094,13 +2094,13 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     
-    func slidableKeyframeIndex(at inP: Point,
+    func slidableKeyframeIndex(at timelineP: Point,
                                maxDistance: Double) -> Int? {
-        animationView.slidableKeyframeIndex(at: inP,
+        animationView.slidableKeyframeIndex(at: timelineP,
                                             maxDistance: maxDistance)?.i
     }
-    func keyframeIndex(at inP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
-        animationView.keyframeIndex(at: inP, scale: scale, isEnabledCount: isEnabledCount)
+    func keyframeIndex(at timelineP: Point, scale: Double, isEnabledCount: Bool = false) -> Int? {
+        animationView.keyframeIndex(at: timelineP, scale: scale, isEnabledCount: isEnabledCount)
     }
     
     var rootKeyframeIndex: Int {
@@ -2856,16 +2856,6 @@ final class SheetView: View, @unchecked Sendable {
             }
         } else {
             animationView.captionNode.children = playingCaptionNodes
-        }
-    }
-    
-    func note(at inP: Point, scale: Double) -> Note? {
-        guard scoreView.model.enabled else { return nil }
-        let scoreP = scoreView.convert(inP, from: node)
-        return if let ni = scoreView.noteIndex(at: scoreP, scale: scale) {
-            scoreView.model.notes[ni]
-        } else {
-            nil
         }
     }
     
@@ -7065,9 +7055,9 @@ final class SheetView: View, @unchecked Sendable {
         var minD = Double.infinity
         for (ti, textView) in textsView.elementViews.enumerated() {
             if textView.transformedBounds?.contains(p) ?? false {
-                let inP = textView.convert(p, from: node)
-                if let i = textView.characterIndex(for: inP),
-                   let cr = textView.characterRatio(for: inP) {
+                let textP = textView.convert(p, from: node)
+                if let i = textView.characterIndex(for: textP),
+                   let cr = textView.characterRatio(for: textP) {
                     
                     let sri = cr > 0.5 ?
                         textView.typesetter.index(after: i) : i

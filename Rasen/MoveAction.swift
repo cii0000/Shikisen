@@ -60,8 +60,7 @@ final class MoveAction: DragEventAction {
     func flow(with event: DragEvent) {
         switch event.phase {
         case .began:
-            let sp = rootView.screenPointFromMenu ?? event.screenPoint
-            let p = rootView.convertScreenToWorld(sp)
+            let p = rootView.convertScreenToWorld(event.screenPoint)
             
             if !rootView.isEditingSheet {
                 type = .sheets(MoveSheetsAction(rootAction))
@@ -172,8 +171,7 @@ final class MoveSheetsAction: DragEventAction {
     var editingSP = Point(), editingP = Point()
     var csv = CopiedSheetsValue(), isNewUndoGroup = false
     func flow(with event: DragEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -194,7 +192,7 @@ final class MoveSheetsAction: DragEventAction {
             self.csv = csv
             if !vs.isEmpty {
                 let shps = vs.map { $0.shp }
-                rootView.cursorPoint = sp
+                rootView.cursorPoint = event.screenPoint
                 rootView.close(from: shps)
                 isNewUndoGroup = true
                 rootView.newUndoGroup()
@@ -212,8 +210,8 @@ final class MoveSheetsAction: DragEventAction {
             }
             
             firstScale = rootView.worldToScreenScale
-            editingSP = sp
-            editingP = rootView.convertScreenToWorld(sp)
+            editingSP = event.screenPoint
+            editingP = p
             selectingLineNode.fillType = .color(.subSelected)
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth
@@ -233,13 +231,13 @@ final class MoveSheetsAction: DragEventAction {
             }
             rootView.node.append(child: pasteSheetNode)
             
-            updateWithPasteSheet(at: sp, phase: event.phase)
+            updateWithPasteSheet(at: event.screenPoint, phase: event.phase)
         case .changed:
-            updateWithPasteSheet(at: sp, phase: event.phase)
+            updateWithPasteSheet(at: event.screenPoint, phase: event.phase)
         case .ended:
             rootView.isHiddenSelected = false
             
-            pasteSheet(at: sp)
+            pasteSheet(at: event.screenPoint)
             selectingLineNode.removeFromParent()
             pasteSheetNode.removeFromParent()
             
@@ -341,15 +339,14 @@ final class MoveAnimationAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledAnimation {
-                beganSP = sp
+                beganSP = event.screenPoint
                 self.sheetView = sheetView
                 sheetView.hideSelected()
                 
@@ -683,8 +680,7 @@ final class MoveScoreAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -695,7 +691,7 @@ final class MoveScoreAction: DragEventAction {
                 let scoreView = sheetView.scoreView
                 let score = scoreView.model
                 
-                beganSP = sp
+                beganSP = event.screenPoint
                 beganSheetP = sheetP
                 self.sheetView = sheetView
                 sheetView.hideSelected()
@@ -1838,8 +1834,7 @@ final class MoveContentAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1855,7 +1850,7 @@ final class MoveContentAction: DragEventAction {
                 let content = contentView.model
                 let contentP = contentView.convertFromWorld(p)
                 
-                beganSP = sp
+                beganSP = event.screenPoint
                 beganInP = sheetP
                 
                 beganContent = content
@@ -2011,8 +2006,7 @@ final class MoveTextAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -2033,7 +2027,7 @@ final class MoveTextAction: DragEventAction {
                 let textView = sheetView.textsView.elementViews[ci]
                 let text = textView.model
                 
-                beganSP = sp
+                beganSP = event.screenPoint
                 beganInP = sheetP
                 
                 beganText = text
@@ -2176,8 +2170,7 @@ final class MoveTempoAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -2192,10 +2185,10 @@ final class MoveTempoAction: DragEventAction {
                     rootView.updateSelectedFrame()
                 }
                 
-                let inP = sheetView.convertFromWorld(p)
-                beganSP = sp
-                beganSheetP = inP
-                if let tempo = sheetView.tempo(at: inP, scale: rootView.screenToWorldScale) {
+                let sheetP = sheetView.convertFromWorld(p)
+                beganSP = event.screenPoint
+                beganSheetP = sheetP
+                if let tempo = sheetView.tempo(at: sheetP, scale: rootView.screenToWorldScale) {
                     beganTempo = tempo
                     oldTempo = beganTempo
                     
@@ -2231,7 +2224,7 @@ final class MoveTempoAction: DragEventAction {
             }
         case .changed:
             if let sheetView = sheetView {
-                let di = Int((sp.x - beganSP.x) / editableTempoInterval)
+                let di = Int((event.screenPoint.x - beganSP.x) / editableTempoInterval)
                 let tempo = tempos[(beganTempoI + di).clipped(min: 0, max: tempos.count - 1)]
                 if tempo != oldTempo {
                     beganContents.forEach {
@@ -2331,8 +2324,7 @@ final class MoveSheetAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -2365,7 +2357,7 @@ final class MoveSheetAction: DragEventAction {
                         let rect = rootView.convertWorldToScreen(typeRect)
                         var minDSq = Double.infinity
                         func update(_ rp: Point, _ type: MoveType) {
-                            let dSq = rp.distanceSquared(sp)
+                            let dSq = rp.distanceSquared(event.screenPoint)
                             if dSq < minDSq {
                                 self.type = type
                                 minDSq = dSq
@@ -2583,8 +2575,7 @@ final class MoveLineAction: DragEventAction {
             return
         }
 
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -2653,7 +2644,7 @@ final class MoveLineAction: DragEventAction {
                             isSnapStraight = line.firstPoint.x == line.lastPoint.x
                             || line.firstPoint.y == line.lastPoint.y
                             let lw = Line.defaultLineWidth
-                            let wb = rootView.worldBounds
+                            let wb = rootView.worldBoundsInScreen
                             let b0 = Rect(x: fp.x - lw / 2, y: wb.minY, width: lw, height: wb.height)
                             let b1 = Rect(x: wb.minX, y: fp.y - lw / 2, width: wb.width, height: lw)
                             let paths = [Path(b0), Path(b1)]
@@ -2960,8 +2951,7 @@ final class MoveBorderAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -2971,7 +2961,7 @@ final class MoveBorderAction: DragEventAction {
             let shp = rootView.sheetPosition(from: sheetView) {
                 
                 let sheetP = sheetView.convertFromWorld(p)
-                beganSP = sp
+                beganSP = event.screenPoint
                 beganInP = sheetP
                 self.sheetView = sheetView
                 beganBorder = border
@@ -3021,8 +3011,8 @@ final class MoveBorderAction: DragEventAction {
                     Node(path: $0, fillType: .color(.subSelected))
                 }
                 
-                let inP = p - sheetFrame.origin
-                let bnp = Sheet.borderSnappedPoint(inP, with: sheetFrame,
+                let sheetP = p - sheetFrame.origin
+                let bnp = Sheet.borderSnappedPoint(sheetP, with: sheetFrame,
                                                    distance: 3 / rootView.worldToScreenScale,
                                                    oldBorder: oldBorder)
                 isSnapped = bnp.isSnapped
@@ -3088,8 +3078,7 @@ final class MoveMainFrameAction: DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -3100,7 +3089,7 @@ final class MoveMainFrameAction: DragEventAction {
                 sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
                 
                 let sheetP = sheetView.convertFromWorld(p)
-                beganSP = sp
+                beganSP = event.screenPoint
                 beganSheetP = sheetP
                 beganOption = sheetView.model.option
                 
@@ -3196,17 +3185,16 @@ final class MoveZAction: DragEventAction {
             rootAction.keepOut(with: event)
             return
         }
-
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootAction.closeLookingUpAndStop(at: p)
             
             var isChange = false
             if let sheetView = rootView.sheetView(at: p) {
-                let inP = sheetView.convertFromWorld(p)
-                if let (lineView, li) = sheetView.lineTuple(at: inP,
+                let sheetP = sheetView.convertFromWorld(p)
+                if let (lineView, li) = sheetView.lineTuple(at: sheetP,
                                                             scale: rootView.screenToWorldScale) {
                     
                     self.sheetView = sheetView
@@ -3236,7 +3224,7 @@ final class MoveZAction: DragEventAction {
                         crossLineIndex = crossIndexes.firstIndex(of: li)!
                     }
                     
-                    oldSP = sp
+                    oldSP = event.screenPoint
                     lineNode.path = Path(lineView.model)
                     lineNode.lineType = lineView.node.lineType
                     lineNode.lineWidth = lineView.node.lineWidth
@@ -3286,7 +3274,7 @@ final class MoveZAction: DragEventAction {
                         crossLineIndex = crossIndexes.firstIndex(of: li)!
                     }
                     
-                    oldSP = sp
+                    oldSP = event.screenPoint
                     lineNode = noteNode.clone
                     lineNode.isHidden = false
                     sheetView.scoreView.notesNode.children.insert(lineNode, at: li)
@@ -3305,7 +3293,7 @@ final class MoveZAction: DragEventAction {
                 
                 guard !crossIndexes.isEmpty else { return }
                 
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                let cli = (Int((event.screenPoint.y - oldSP.y) / 10) + crossLineIndex)
                     .clipped(min: 0, max: crossIndexes.count - 1)
                 let li = crossIndexes[cli]
                     .clipped(min: 0, max: sheetView.linesView.elementViews.count)
@@ -3316,7 +3304,7 @@ final class MoveZAction: DragEventAction {
                 
                 guard !crossIndexes.isEmpty else { return }
                 
-                let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                let cli = (Int((event.screenPoint.y - oldSP.y) / 10) + crossLineIndex)
                     .clipped(min: 0, max: crossIndexes.count - 1)
                 let li = crossIndexes[cli]
                     .clipped(min: 0, max: sheetView.scoreView.model.notes.count)
@@ -3335,7 +3323,7 @@ final class MoveZAction: DragEventAction {
                     
                     guard !crossIndexes.isEmpty else { return }
                     
-                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                    let cli = (Int((event.screenPoint.y - oldSP.y) / 10) + crossLineIndex)
                         .clipped(min: 0, max: crossIndexes.count - 1)
                     let li = crossIndexes[cli]
                         .clipped(min: 0, max: sheetView.linesView.elementViews.count)
@@ -3350,7 +3338,7 @@ final class MoveZAction: DragEventAction {
                     
                     guard !crossIndexes.isEmpty else { return }
                     
-                    let cli = (Int((sp.y - oldSP.y) / 10) + crossLineIndex)
+                    let cli = (Int((event.screenPoint.y - oldSP.y) / 10) + crossLineIndex)
                         .clipped(min: 0, max: crossIndexes.count - 1)
                     let li = crossIndexes[cli]
                         .clipped(min: 0, max: sheetView.scoreView.model.notes.count)

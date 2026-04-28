@@ -45,8 +45,7 @@ final class GoPreviousAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootAction.closeLookingUpAndStop(at: p)
@@ -139,9 +138,7 @@ final class GoNextAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootAction.closeLookingUpAndStop(at: p)
@@ -264,8 +261,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootAction.closeLookingUpAndStop(at: p)
@@ -494,8 +490,7 @@ final class PlayAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -586,8 +581,7 @@ final class InsertAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -829,8 +823,7 @@ final class InterpolateAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1773,8 +1766,7 @@ final class DisconnectAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1837,13 +1829,13 @@ final class DisconnectAction: InputKeyEventAction {
             
             let (_, sheetView, _, _) = rootView.sheetViewAndFrame(at: p)
             if let sheetView = sheetView {
-                let inP = sheetView.convertFromWorld(p)
+                let sheetP = sheetView.convertFromWorld(p)
                 let lis: [Int], isSelected: Bool
-                if sheetView.containsSelectedLine(inP, scale: rootView.screenToWorldScale) {
+                if sheetView.containsSelectedLine(sheetP, scale: rootView.screenToWorldScale) {
                     lis = sheetView.keyframeView.selectedLineIs
                     isSelected = true
                 } else {
-                    if let li = sheetView.lineTuple(at: inP, scale: 1 / rootView.worldToScreenScale)?.lineIndex {
+                    if let li = sheetView.lineTuple(at: sheetP, scale: 1 / rootView.worldToScreenScale)?.lineIndex {
                         lis = [li]
                     } else {
                         lis = []
@@ -1895,7 +1887,7 @@ final class DisconnectAction: InputKeyEventAction {
                     let line = lines[li]
                     let iivs = splitLineIndexValues(with: sheetView.linesView.elementViews[li], index: li,
                                                     lineViews: sheetView.linesView.elementViews)
-                    let iv = line.nearestIndexValue(at: inP)
+                    let iv = line.nearestIndexValue(at: sheetP)
                     
                     enum RangeType {
                         case none, first, mid, last

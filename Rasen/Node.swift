@@ -1047,8 +1047,8 @@ extension Node {
             return nil
         }
         for child in backingChildren.reversed() {
-            let inPoint = p * child.localTransform.inverted()
-            if let hitChild = child.at(inPoint) {
+            let childP = p * child.localTransform.inverted()
+            if let hitChild = child.at(childP) {
                 return hitChild
             }
         }

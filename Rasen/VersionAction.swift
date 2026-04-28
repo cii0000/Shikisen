@@ -239,8 +239,7 @@ final class VersionAction: Action {
         undo(with: event, isRedo: true)
     }
     func undo(with event: InputKeyEvent, isRedo: Bool) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -585,40 +584,29 @@ final class ClearHistoryAction: InputKeyEventAction {
     }
     
     func flow(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             
-            if rootView.containsSelectedSheetPositions(p) {
-                let vs = rootView.world.selectedSheetPositions.map { rootView.sheetFrame(with: $0) }
+            if let shps = rootView.selectedSheetPositions(p) {
+                let vs = shps.map { rootView.sheetFrame(with: $0) }
                 selectingLineNode.children = vs.map {
                     Node(path: Path($0),
                          lineWidth: rootView.worldLineWidth,
                          lineType: .color(.selected),
                          fillType: .color(.subSelected))
                 }
-            } else {
-                selectingLineNode.lineWidth = rootView.worldLineWidth
-                selectingLineNode.fillType = .color(.subSelected)
-                selectingLineNode.lineType = .color(.selected)
-                let frame = rootView
-                    .sheetFrame(with: rootView.sheetPosition(at: p))
-                selectingLineNode.path = Path(frame)
+                rootView.node.append(child: selectingLineNode)
                 
-                rootView.updateSelectedColor(isMain: false)
+                rootView.textCursorNode.isHidden = true
+                rootView.textMaxTypelineWidthNode.isHidden = true
             }
-            rootView.node.append(child: selectingLineNode)
             
-            rootView.textCursorNode.isHidden = true
-            rootView.textMaxTypelineWidthNode.isHidden = true
         case .changed:
             break
         case .ended:
-            if rootView.containsSelectedSheetPositions(p) {
-                let shps = rootView.world.selectedSheetPositions
-                
+            if let shps = rootView.selectedSheetPositions(p) {
                 let mes = shps.count == 1 ?
                     "Do you want to clear history of this sheet?".localized :
                     String(format: "Do you want to clear %d historys?".localized, shps.count)
@@ -630,53 +618,40 @@ final class ClearHistoryAction: InputKeyEventAction {
                               isSaftyCheck: shps.count > 30)
                     switch result {
                     case .ok:
-                        let progressPanel = ProgressPanel(message: "Clearing Historys".localized)
-                        self.rootView.node.show(progressPanel)
-                        let task = Task.detached(priority: .high) {
-                            do {
-                                try self.rootView.clearHistorys(from: shps) { (progress, isStop) in
-                                    if Task.isCancelled {
-                                        isStop = true
-                                        return
+                        if shps.count == 1 {
+                            if let sheetView = rootView.sheetView(at: shps[0]) {
+                                sheetView.clearHistory()
+                                rootView.clearContents(from: sheetView)
+                            } else {
+                                rootView.removeSheetHistory(at: shps[0])
+                            }
+                        } else {
+                            let progressPanel = ProgressPanel(message: "Clearing Historys".localized)
+                            self.rootView.node.show(progressPanel)
+                            let task = Task.detached(priority: .high) {
+                                do {
+                                    try self.rootView.clearHistorys(from: shps) { (progress, isStop) in
+                                        if Task.isCancelled {
+                                            isStop = true
+                                            return
+                                        }
+                                        Task { @MainActor in
+                                            progressPanel.progress = progress
+                                        }
                                     }
                                     Task { @MainActor in
-                                        progressPanel.progress = progress
+                                        progressPanel.closePanel()
+                                        self.end()
+                                    }
+                                } catch {
+                                    Task { @MainActor in
+                                        self.rootView.node.show(error)
+                                        progressPanel.closePanel()
+                                        self.end()
                                     }
                                 }
-                                Task { @MainActor in
-                                    progressPanel.closePanel()
-                                    self.end()
-                                }
-                            } catch {
-                                Task { @MainActor in
-                                    self.rootView.node.show(error)
-                                    progressPanel.closePanel()
-                                    self.end()
-                                }
                             }
-                        }
-                        progressPanel.cancelHandler = { task.cancel() }
-                        
-                        end()
-                    case .cancel:
-                        end()
-                    }
-                }
-            } else {
-                let shp = rootView.sheetPosition(at: p)
-                
-                Task { @MainActor in
-                    let result = await rootView.node
-                        .show(message: "Do you want to clear history of this sheet?".localized,
-                              infomation: "You can’t undo this action. \nHistory is what is used in \"Undo\", \"Redo\" or \"Select Version\", and if you clear it, you will not be able to return to the previous work.".localized,
-                              okTitle: "Clear History".localized)
-                    switch result {
-                    case .ok:
-                        if let sheetView = rootView.sheetView(at: shp) {
-                            sheetView.clearHistory()
-                            rootView.clearContents(from: sheetView)
-                        } else {
-                            rootView.removeSheetHistory(at: shp)
+                            progressPanel.cancelHandler = { task.cancel() }
                         }
                         
                         end()

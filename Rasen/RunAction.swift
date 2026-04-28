@@ -51,8 +51,7 @@ final class RunAction: InputKeyEventAction {
             return
         }
         
-        let sp = event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -62,8 +61,8 @@ final class RunAction: InputKeyEventAction {
             
             let shp = rootView.sheetPosition(at: p)
             guard isEditingSheet, let sheetView = rootView.sheetView(at: shp) else { break }
-            let inP = sheetView.convertFromWorld(p)
-            if let (textView, ti, _, _) = sheetView.textTuple(at: inP) {
+            let sheetP = sheetView.convertFromWorld(p)
+            if let (textView, ti, _, _) = sheetView.textTuple(at: sheetP) {
                 let text = textView.model
                 
                 if text.string.hasPrefix("http"), URL(string: text.string)?.openInBrowser() ?? false { return }
@@ -87,7 +86,7 @@ final class RunAction: InputKeyEventAction {
                         let wx = Sheet.textPadding.width - dx
                         
                         let fx = view.x(atBeat: (view.beatRange?.start ?? 0) + (view.localBeatRange?.start ?? 0))
-                        let pw = inP.x - fx
+                        let pw = sheetP.x - fx
                         let firstX = -wx + pw
                         
                         let maxCount = 10000
@@ -205,7 +204,7 @@ final class RunAction: InputKeyEventAction {
                 }
                 
                 if text.string.last == "=" {
-                    send(inP, from: text, ti: ti, shp, sheetView)
+                    send(sheetP, from: text, ti: ti, shp, sheetView)
                 }
             }
         case .changed:

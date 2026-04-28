@@ -67,8 +67,7 @@ final class RootAction: Action {
     }
     
     func containsAllTimelines(with event: any Event) -> Bool {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         guard let sheetView = rootView.sheetView(at: p) else { return false }
         let sheetP = sheetView.convertFromWorld(p)
         let timelineP = sheetView.animationView.timelineNode.convertFromWorld(p)
@@ -165,11 +164,11 @@ final class RootAction: Action {
     
     func strongDrag(with event: DragEvent) {}
     
-    private func subDragAction(with gesture: Gesture) -> (any DragEventAction)? {
+    private func subDragAction(with gesture: Gesture) -> (any DragEventAction) {
         switch gesture {
         case .selectByRange: SelectByRangeAction(self)
         case .unselectByRange: UnselectByRangeAction(self)
-        default: nil
+        default: EmptyDragAction(self)
         }
     }
     private(set) var oldSubDragEvent: DragEvent?, subDragEventAction: (any DragEventAction)?
@@ -219,7 +218,7 @@ final class RootAction: Action {
         }
     }
     
-    private func dragAction(with gesture: Gesture) -> (any DragEventAction)? {
+    private func dragAction(with gesture: Gesture) -> (any DragEventAction) {
         switch gesture {
         case .drawLine: DrawLineAction(self)
         case .drawStraightLine: DrawStraightLineAction(self)
@@ -232,7 +231,7 @@ final class RootAction: Action {
         case .move: MoveAction(self)
 //        case .moveZ: MoveZAction(self)
         case .keySelectTime: SelectTimeAction(self)
-        default: nil
+        default: EmptyDragAction(self)
         }
     }
     private(set) var oldDragEvent: DragEvent?, dragAction: (any DragEventAction)?
@@ -540,6 +539,25 @@ final class EmptyKeyAction: InputKeyEventAction {
         }
     }
 }
+final class EmptyDragAction: DragEventAction {
+    let rootAction: RootAction, rootView: RootView
+    
+    init(_ rootAction: RootAction) {
+        self.rootAction = rootAction
+        rootView = rootAction.rootView
+    }
+    
+    func flow(with event: DragEvent) {
+        switch event.phase {
+        case .began:
+            rootView.cursor = .ban(string: "Empty Action".localized)
+            Feedback.beep()
+        case .changed: break
+        case .ended:
+            rootView.cursor = rootView.defaultCursor
+        }
+    }
+}
 
 final class ZoomAction: PinchEventAction {
     let rootAction: RootAction, rootView: RootView
@@ -671,6 +689,7 @@ final class ScrollAction: ScrollEventAction {
     private let updateSpeed = 1000.0
     private var isHighSpeed = false, oldTime = 0.0, oldDeltaPoint = Point()
     private var oldSpeedTime = 0.0, oldSpeedDistance = 0.0, oldSpeed = 0.0
+    
     func flow(with event: ScrollEvent) {
         switch event.phase {
         case .began:
@@ -1237,8 +1256,7 @@ final class DraftAction: Action {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1405,8 +1423,7 @@ final class DraftAction: Action {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1535,8 +1552,7 @@ final class FillAction: Action {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1627,8 +1643,7 @@ final class FillAction: Action {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1736,8 +1751,7 @@ final class AddTimeAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1832,8 +1846,7 @@ final class AddScoreAction: InputKeyEventAction {
             return
         }
         
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
@@ -1845,8 +1858,8 @@ final class AddScoreAction: InputKeyEventAction {
                         sheetView.unselectAndNewUndoGroupIfNeeded()
                         rootView.cursor = .arrowWith(string: "Conflict with Timeline".localized)
                     } else {
-                        let inP = sheetView.convertFromWorld(p)
-                        let tempo = sheetView.nearestTempo(at: inP) ?? rootView.nearestAroundTempo(at: p)
+                        let sheetP = sheetView.convertFromWorld(p)
+                        let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                         let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
                         
                         sheetView.newUndoGroup()

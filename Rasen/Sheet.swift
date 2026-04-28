@@ -2476,6 +2476,10 @@ extension SheetSelection {
         keyframeSelections.isEmpty && noteSelections.isEmpty
         && textSelections.isEmpty && contentIs.isEmpty
     }
+    var isEmptySheetValue: Bool {
+        keyframeSelections.contains { !$0.value.isEmpty }
+        || !textSelections.isEmpty || !contentIs.isEmpty
+    }
     func isChangeSelectedFrame(old: SheetSelection) -> Bool {
         keyframeSelections != old.keyframeSelections
         || textSelections != old.textSelections
@@ -2629,6 +2633,10 @@ extension Sheet {
     }
     var isEmpty: Bool {
         picture.lines.isEmpty && draftPicture.lines.isEmpty
+    }
+    
+    var keyframeSelection: KeyframeSelection? {
+        selection.keyframeSelections[animation.index]
     }
     
     func checkConsistency(_ selection: SheetSelection) -> Bool {

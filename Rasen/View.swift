@@ -275,8 +275,8 @@ final class ArrayView<T: BindableView>: BindableView {
             return nil
         }
         for (i, child) in elementViews.enumerated().reversed() {
-            let inP = p * child.node.localTransform.inverted()
-            if  child.node.contains(inP) {
+            let childP = p * child.node.localTransform.inverted()
+            if  child.node.contains(childP) {
                 return i
             }
         }
@@ -287,8 +287,8 @@ final class ArrayView<T: BindableView>: BindableView {
             return nil
         }
         for child in elementViews.reversed() {
-            let inP = p * child.node.localTransform.inverted()
-            if  child.node.contains(inP) {
+            let childP = p * child.node.localTransform.inverted()
+            if  child.node.contains(childP) {
                 return child
             }
         }

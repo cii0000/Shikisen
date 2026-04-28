@@ -29,6 +29,7 @@ final class RootView: View, @unchecked Sendable {
     let gridNode = Node(lineType: .color(.border))
     let mapNode = Node(lineType: .color(.border))
     let currentMapNode = Node(lineType: .color(.border))
+    let lastEditedSheetNode = Node(lineType: .color(.subBorder))
     let selectedNode = Node(), selectedFrameNode = Node()
     let accessoryNodeIndex = 1
     
@@ -41,7 +42,7 @@ final class RootView: View, @unchecked Sendable {
         pov = Self.clippedPOV(from: model.pov())
         baseThumbnailBlocks = model.baseThumbnailBlocks()
         
-        node.children = [sheetsNode, gridNode, mapNode, currentMapNode,
+        node.children = [sheetsNode, gridNode, mapNode, currentMapNode, lastEditedSheetNode,
                          selectedNode, selectedFrameNode]
         
         model.rootDirectory.changedIsWillwriteByChildrenClosure = { [weak self] (_, isWillwrite) in
@@ -671,7 +672,7 @@ final class RootView: View, @unchecked Sendable {
             updateTransformsWithPOV()
         }
     }
-    var worldBounds: Rect { screenBounds * screenToWorldTransform }
+    var worldBoundsInScreen: Rect { screenBounds * screenToWorldTransform }
     private(set) var screenToWorldTransform = Transform.identity
     var screenToWorldScale: Double { screenToWorldTransform.absXScale }
     private(set) var worldToScreenTransform = Transform.identity
@@ -1991,9 +1992,28 @@ final class RootView: View, @unchecked Sendable {
         return shps
     }
     
+    func selectedSheetPositions(_ p: Point) -> [IntPoint]? {
+        if containsSelectedSheetPositions(p) {
+            let shps = world.selectedSheetPositions
+            if !shps.isEmpty {
+                return shps
+            }
+        }
+        if isFromMenu {
+            return if let lastEditedSheetPosition {
+                [lastEditedSheetPosition]
+            } else {
+                nil
+            }
+        } else {
+            return nil
+        }
+    }
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
         if isEditingSheet {
             return false
+        } else if isFromMenu {
+            return selectableSheetInScreen
         } else {
             let maxDSq = (Sheet.knobEditDistance * screenToWorldScale).squared
             if world.selection.sheetIDs.contains(where: {
@@ -2760,29 +2780,27 @@ final class RootView: View, @unchecked Sendable {
     func updateLastEditedSheetPosition(fromScreen sp: Point) {
         lastEditedSheetPosition = sheetPosition(at: convertScreenToWorld(sp))
     }
-    
-    private(set) var lastEditedSheetPosition: IntPoint?
-    private var lastEditedSheetNode: Node?
-    var isShownLastEditedSheet = false {
+    private(set) var lastEditedSheetPosition: IntPoint? {
         didSet {
-            lastEditedSheetNode?.removeFromParent()
-            lastEditedSheetNode = nil
-            if isShownLastEditedSheet {
-                if let shp = lastEditedSheetPosition {
-                    let f = sheetFrame(with: shp)
-                    let selectedSheetNode = Node(path: Path(f),
-                                                 lineWidth: worldLineWidth,
-                                                 lineType: .color(.selected),
-                                                 fillType: .color(.subSelected))
-                    node.append(child: selectedSheetNode)
-                    self.lastEditedSheetNode = selectedSheetNode
-                }
+            guard lastEditedSheetPosition != oldValue else { return }
+            if let shp = lastEditedSheetPosition {
+                let f = sheetFrame(with: shp)
+                self.lastEditedSheetNode.path = .init(f)
+            } else {
+                lastEditedSheetNode.path = .init()
             }
         }
     }
-    private var lastEditedSheetPositionInWorld: IntPoint? {
+    private var lastEditedSheetPositionInScreen: IntPoint? {
         if let shp = lastEditedSheetPosition,
-           worldBounds.intersects(sheetFrame(with: shp)) { shp } else { nil }
+           worldBoundsInScreen.intersects(sheetFrame(with: shp)) { shp } else { nil }
+    }
+    var isAccentLastEdittedSheet = false {
+        didSet {
+            guard isAccentLastEdittedSheet != oldValue else { return }
+            lastEditedSheetNode.lineType = isAccentLastEdittedSheet ?
+                .color(.selected) : .color(.subBorder)
+        }
     }
     var isFromMenu = false
     var lastEditedSheetViewFromMenu: SheetView? {
@@ -2793,16 +2811,19 @@ final class RootView: View, @unchecked Sendable {
             nil
         }
     }
-    var screenPointFromMenu: Point? {
-        if isFromMenu, let shp = lastEditedSheetPositionInWorld {
-            convertWorldToScreen(sheetFrame(with: shp).centerPoint)
-        } else {
-            nil
-        }
-    }
     var editableFromMenu: Bool {
         guard isFromMenu else { return false }
-        return lastEditedSheetPositionInWorld != nil
+        return lastEditedSheetPositionInScreen != nil
+    }
+    var selectableSheetInScreen: Bool {
+        guard !isEditingSheet else { return lastEditedSheetPositionInScreen != nil }
+        let shps = world.selectedSheetPositions
+        guard !shps.isEmpty else { return lastEditedSheetPositionInScreen != nil }
+        let wb = worldBoundsInScreen
+        let contains = shps.contains {
+            sheetFrame(with: $0).intersects(wb)
+        }
+        return contains ? true : lastEditedSheetPositionInScreen != nil
     }
     
     func sheetViewAndFrame(at p: Point) -> (shp: IntPoint,
@@ -2905,17 +2926,17 @@ final class RootView: View, @unchecked Sendable {
         let shp = sheetPosition(at: p)
         guard let sheetView = sheetView(at: shp) else { return nil }
         let b = sheetFrame(with: shp)
-        let inP = sheetView.convertFromWorld(p)
+        let sheetP = sheetView.convertFromWorld(p)
         for (i, border) in sheetView.model.borders.enumerated() {
             switch border.orientation {
             case .horizontal:
-                if abs(inP.y - border.location) < d {
+                if abs(sheetP.y - border.location) < d {
                     return (border, i, sheetView,
                             Edge(Point(0, border.location) + b.origin,
                                  Point(b.width, border.location) + b.origin))
                 }
             case .vertical:
-                if abs(inP.x - border.location) < d {
+                if abs(sheetP.x - border.location) < d {
                     return (border, i, sheetView,
                             Edge(Point(border.location, 0) + b.origin,
                                  Point(border.location, b.height) + b.origin))
@@ -2945,6 +2966,12 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedSheetValue(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if isFromMenu,
+           let shp = lastEditedSheetPositionInScreen,
+           let sheetView = sheetView(at: shp), !sheetView.model.selection.isEmptySheetValue {
+            
+            return sheetView
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
@@ -2956,6 +2983,13 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLineOrPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if isFromMenu,
+           let shp = lastEditedSheetPositionInScreen,
+           let sheetView = sheetView(at: shp),
+           let keyframeSelection = sheetView.model.keyframeSelection, !keyframeSelection.isEmpty {
+            
+            return sheetView
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
@@ -2967,6 +3001,14 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLine(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if isFromMenu,
+           let shp = lastEditedSheetPositionInScreen,
+           let sheetView = sheetView(at: shp),
+           let keyframeSelection = sheetView.model.keyframeSelection,
+           !keyframeSelection.lineIs.isEmpty {
+            
+            return sheetView
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
@@ -2978,6 +3020,14 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if isFromMenu,
+           let shp = lastEditedSheetPositionInScreen,
+           let sheetView = sheetView(at: shp),
+           let keyframeSelection = sheetView.model.keyframeSelection,
+           !keyframeSelection.planeIs.isEmpty {
+            
+            return sheetView
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)) {
@@ -3034,8 +3084,8 @@ final class RootView: View, @unchecked Sendable {
     func colorPathValue(at p: Point, toColor: Color?,
                         color: Color, subColor: Color) -> ColorPathValue {
         if let sheetView = sheetView(at: p) {
-            let inP = sheetView.convertFromWorld(p)
-            return sheetView.sheetColorOwner(at: inP,
+            let sheetP = sheetView.convertFromWorld(p)
+            return sheetView.sheetColorOwner(at: sheetP,
                                              scale: screenToWorldScale).value
                 .colorPathValue(toColor: toColor, color: color, subColor: subColor)
         } else {
@@ -3047,8 +3097,8 @@ final class RootView: View, @unchecked Sendable {
     }
     func uuColor(at p: Point) -> UUColor {
         if let sheetView = sheetView(at: p) {
-            let inP = sheetView.convertFromWorld(p)
-            return sheetView.sheetColorOwner(at: inP,
+            let sheetP = sheetView.convertFromWorld(p)
+            return sheetView.sheetColorOwner(at: sheetP,
                                              scale: screenToWorldScale).value.uuColor
         } else {
             return Sheet.defalutBackgroundUUColor
@@ -3060,8 +3110,8 @@ final class RootView: View, @unchecked Sendable {
         guard let sheetView = madeSheetView(at: p) else {
             return []
         }
-        let inP = sheetView.convertFromWorld(p)
-        return [sheetView.sheetColorOwner(at: inP,
+        let sheetP = sheetView.convertFromWorld(p)
+        return [sheetView.sheetColorOwner(at: sheetP,
                                           enabledLine: enabledLine,
                                           removingUUColor: removingUUColor,
                                           scale: screenToWorldScale).value]
@@ -3074,14 +3124,14 @@ final class RootView: View, @unchecked Sendable {
             return nil
         }
         
-        let inP = sheetView.convertFromWorld(p)
-        let (isLine, topOwner) = sheetView.sheetColorOwner(at: inP,
+        let sheetP = sheetView.convertFromWorld(p)
+        let (isLine, topOwner) = sheetView.sheetColorOwner(at: sheetP,
                                                            enabledLinePlane: enabledLinePlane,
                                                            removingUUColor: removingUUColor,
                                                            scale: screenToWorldScale)
         let uuColor = topOwner.uuColor
         
-        if topOwner.sheetView.containsSelectedLineOrPlane(inP, scale: screenToWorldScale) {
+        if topOwner.sheetView.containsSelectedLineOrPlane(sheetP, scale: screenToWorldScale) {
             var colorOwners = [SheetColorOwner]()
             for co in sheetView.sheetColorOwnerWithSelection(isLine: isLine) {
                 colorOwners.append(co)
@@ -3110,8 +3160,8 @@ final class RootView: View, @unchecked Sendable {
         guard let sheetView = readSheetView(at: p) else {
             return []
         }
-        let inP = sheetView.convertFromWorld(p)
-        let uuColor = sheetView.sheetColorOwner(at: inP,
+        let sheetP = sheetView.convertFromWorld(p)
+        let uuColor = sheetView.sheetColorOwner(at: sheetP,
                                                 scale: screenToWorldScale).value.uuColor
         if let co = sheetView.sheetColorOwner(with: uuColor) {
             return [co]
@@ -3123,14 +3173,14 @@ final class RootView: View, @unchecked Sendable {
         guard let sheetView = readSheetView(at: p) else {
             return []
         }
-        let inP = sheetView.convertFromWorld(p)
-        return [sheetView.sheetColorOwner(at: inP,
+        let sheetP = sheetView.convertFromWorld(p)
+        return [sheetView.sheetColorOwner(at: sheetP,
                                           scale: screenToWorldScale).value]
     }
     func isDefaultUUColor(at p: Point) -> Bool {
         if let sheetView = sheetView(at: p) {
-            let inP = sheetView.convertFromWorld(p)
-            return sheetView.sheetColorOwner(at: inP,
+            let sheetP = sheetView.convertFromWorld(p)
+            return sheetView.sheetColorOwner(at: sheetP,
                                              scale: screenToWorldScale).value.uuColor
             == Sheet.defalutBackgroundUUColor
         } else {
@@ -3368,6 +3418,7 @@ final class RootView: View, @unchecked Sendable {
         }
         gridNode.path = Path(pathlines, isCap: false)
         gridNode.lineWidth = transform.absXScale
+        lastEditedSheetNode.lineWidth = gridNode.lineWidth
         
         updateMapColor(with: transform)
     }

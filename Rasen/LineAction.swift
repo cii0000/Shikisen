@@ -121,7 +121,7 @@ final class LineAction: Action {
         if let isStraightNode = isStraightNode {
             let fp = firstPoint + centerOrigin
             let lw = lassoPathNodeLineWidth
-            let wb = rootView.worldBounds
+            let wb = rootView.worldBoundsInScreen
             let b0 = Rect(x: fp.x - lw / 2, y: wb.minY, width: lw, height: wb.height)
             let b1 = Rect(x: wb.minX, y: fp.y - lw / 2, width: wb.width, height: lw)
             let paths = [Path(b0), Path(b1)]
@@ -213,7 +213,7 @@ final class LineAction: Action {
                 }
                 
                 let scoreView = sheetView.scoreView
-                let inP = sheetView.convertFromWorld(p)
+                let sheetP = sheetView.convertFromWorld(p)
                 let scoreP = scoreView.convertFromWorld(p)
                 let pitchInterval = rootView.currentPitchInterval
                 let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
@@ -221,7 +221,7 @@ final class LineAction: Action {
                 let score = scoreView.model
                 let count = score.notes.count
                 let beatInterval = rootView.currentBeatInterval
-                let beat = scoreView.beat(atX: inP.x, interval: beatInterval)
+                let beat = scoreView.beat(atX: sheetP.x, interval: beatInterval)
                 let beatRange = beat ..< beat
                 let isMinNoise = pitch == Score.minPitch, isMaxNoise = pitch == Score.maxPitch
                 
@@ -715,8 +715,7 @@ final class LineAction: Action {
                 }
                 revisionFirstBezier()
                 
-                func jointControl(lowAngle: Double = 0.3 * (.pi / 2),
-                                  angle: Double = 0.6 * (.pi / 2)) -> Line.Control? {
+                func jointControl(angle: Double = 0.75 * (.pi / 2)) -> Line.Control? {
                     guard nLine.controls.count >= 4 else { return nil }
                     let c0 = nLine.controls[nLine.controls.count - 4]
                     let c1 = nLine.controls[nLine.controls.count - 3]
@@ -727,17 +726,12 @@ final class LineAction: Action {
                         var nc = c1
                         nc.pressure = c2.pressure
                         return nc
-                    } else if dr > lowAngle {
-                        let t = 1 - (dr - lowAngle) / (angle - lowAngle)
-                        return Line.Control(point: Point.linear(c1.point, c2.point, t: t),
-                                            weight: 0.5,
-                                            pressure: c2.pressure)
                     } else {
                         return nil
                     }
                 }
                 
-                func isAppend(maxDSq: Double = 0.75.squared) -> Bool {
+                func isAppend(maxDSq: Double) -> Bool {
                     guard tempPs.count >= 3 else { return false }
                     let nMaxDSq = maxDSq * event.screenToWorldScale.squared
                     let ll = LinearLine(tempPs.first!,tempPs.last!)
@@ -759,7 +753,8 @@ final class LineAction: Action {
                     }
                     
                     tempPs = [p]
-                } else if isAppend(maxDSq: event.time - firstChangedTime < 0.04 ? 3.0.squared : 0.75.squared) {
+                } else if isAppend(maxDSq: event.time - firstChangedTime < 0.04 ?
+                                   3.0.squared : 0.5.squared) {
                     nLine.controls[nLine.controls.count - 3].weight = 0.5
                     let prp = nLine.controls[nLine.controls.count - 1]
                     nLine.controls[nLine.controls.count - 2] = prp

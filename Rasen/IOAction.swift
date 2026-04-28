@@ -212,7 +212,7 @@ final class IOAction: Action {
         isEditingSheet = rootView.isEditingSheet
     }
     
-    var fp = Point()
+    var beganP = Point()
     
     let pngMaxWidth = 2048.0, pdfMaxWidth = 512.0
     
@@ -278,11 +278,11 @@ final class IOAction: Action {
     }
     
     @discardableResult func beginImportFile(at sp: Point) -> IntPoint {
-        fp = rootView.convertScreenToWorld(sp)
+        beganP = rootView.convertScreenToWorld(sp)
         selectingLineNode.lineWidth = rootView.worldLineWidth
         selectingLineNode.fillType = .color(.subSelected)
         selectingLineNode.lineType = .color(.selected)
-        let shp = rootView.sheetPosition(at: fp)
+        let shp = rootView.sheetPosition(at: beganP)
         let frame = rootView.sheetFrame(with: shp)
         selectingLineNode.path = Path(frame)
         rootView.node.append(child: selectingLineNode)
@@ -360,7 +360,7 @@ final class IOAction: Action {
             let xCount = max(1, Int(Double(contentURLs.count).squareRoot()))
             for url in contentURLs {
                 if let sheetView = rootView.madeSheetView(at: shp + dshp) {
-                    let np = contentURLs.count == 1 ? sheetView.convertFromWorld(fp) : Point(10, 50)
+                    let np = contentURLs.count == 1 ? sheetView.convertFromWorld(beganP) : Point(10, 50)
                     let filename = url.deletingPathExtension().lastPathComponent
                     let name = UUID().uuidString + "." + url.pathExtension
                     
@@ -548,14 +548,13 @@ final class IOAction: Action {
         }
     }
     func importFile(with event: InputKeyEvent) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            beginImportFile(at: sp)
+            beginImportFile(at: event.screenPoint)
         case .changed:
             break
         case .ended:
@@ -565,7 +564,7 @@ final class IOAction: Action {
                                             fileTypes: Document.FileType.allCases + Content.FileType.allCases)
                 switch result {
                 case .complete(let ioResults):
-                    let shp = rootView.sheetPosition(at: fp)
+                    let shp = rootView.sheetPosition(at: beganP)
                     importFile(from: ioResults.map { $0.url }, at: shp)
                 case .cancel:
                     end(isUpdateSelect: true)
@@ -590,22 +589,21 @@ final class IOAction: Action {
     }
     
     func exportFile(with event: InputKeyEvent, _ type: ExportType) {
-        let sp = rootView.screenPointFromMenu ?? event.screenPoint
-        let p = rootView.convertScreenToWorld(sp)
+        let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            fp = p
-            if rootView.containsSelectedSheetPositions(fp) {
-                let fshp = rootView.sheetPosition(at: fp)
-                let vs = rootView.world.selectedSheetPositions.map {
+            beganP = p
+            if let shps = rootView.selectedSheetPositions(p) {
+                let fshp = rootView.sheetPosition(at: p)
+                let vs = shps.map {
                     SelectingValue(shp: $0, bounds: rootView.sheetFrame(with: $0).bounds)
                 }
                 let nvs = sorted(vs, with: orientation(vs, at: fshp))
                 
-                let mainFrame = rootView.sheetView(at: fp)?.model.mainFrame
+                let mainFrame = rootView.sheetView(at: p)?.model.mainFrame
                 
                 var oldP: Point?
                 selectingLineNode.children = nvs.map {
@@ -643,7 +641,7 @@ final class IOAction: Action {
                 selectingLineNode.fillType = .color(.subSelected)
                 selectingLineNode.lineType = .color(.selected)
                 if !type.isDocument {
-                    let (_, _, frame, _) = rootView.sheetViewAndFrame(at: fp)
+                    let (_, _, frame, _) = rootView.sheetViewAndFrame(at: p)
                     if frame.bounds != Sheet.defaultBounds,
                        let pathline = Rect(p, distance: 0).minLine(frame) {
                         selectingLineNode.path = Path([.init(frame), pathline])
@@ -651,7 +649,7 @@ final class IOAction: Action {
                         selectingLineNode.path = Path(frame)
                     }
                 } else {
-                    let frame = rootView.sheetFrame(with: rootView.sheetPosition(at: fp))
+                    let frame = rootView.sheetFrame(with: rootView.sheetPosition(at: p))
                     selectingLineNode.path = Path(frame)
                 }
                 
@@ -664,7 +662,7 @@ final class IOAction: Action {
         case .changed:
             break
         case .ended:
-            beginExportFile(type, at: fp)
+            beginExportFile(type, at: beganP)
         }
     }
     

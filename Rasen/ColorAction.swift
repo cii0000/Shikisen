@@ -102,13 +102,14 @@ final class ColorAction: Action {
                               fillType: .color(.content))
     let whiteLineNode = Node(lineWidth: 2,
                              lineType: .color(.content))
-    var whiteLightnessHeight = 140.0
+    static let whiteLightnessSplitCount = 150
+    var whiteLightnessHeight = Double(whiteLightnessSplitCount)
     var maxLightnessHeight: Double {
         isEditableMaxLightness ?
             whiteLightnessHeight * maxLightness / Color.whiteLightness :
             whiteLightnessHeight
     }
-    private func lightnessPointsWith(splitCount count: Int = 140) -> [Point] {
+    private func lightnessPointsWith(splitCount count: Int = whiteLightnessSplitCount) -> [Point] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             let t = Double($0) * rCount
@@ -116,7 +117,7 @@ final class ColorAction: Action {
         }
     }
     private func lightnessGradientWith(chroma: Double, hue: Double,
-                                       splitCount count: Int = 140, isReversed: Bool = false) -> [Color] {
+                                       splitCount count: Int = whiteLightnessSplitCount, isReversed: Bool = false) -> [Color] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             let t = Double.linear(isReversed ? maxLightness : Color.minLightness,
@@ -297,28 +298,28 @@ final class ColorAction: Action {
                      fillType: .color(.content))]
     }
     
-    private func panPointsWith(splitCount count: Int = 140, width: Double) -> [Point] {
+    private func panPointsWith(splitCount count: Int = panSplitCount, width: Double) -> [Point] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             let t = Double($0) * rCount
             return Point(-width / 2 + width * t, 0)
         }
     }
-    private func panGradientWith(splitCount count: Int = 140, volm: Double) -> [Color] {
+    private func panGradientWith(splitCount count: Int = panSplitCount, volm: Double) -> [Color] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             ScoreView.color(fromPan: Double($0) * rCount * 2 - 0.5, volm: volm)
         }
     }
     
-    private func noisePointsWith(splitCount count: Int = 140, width: Double) -> [Point] {
+    private func noisePointsWith(splitCount count: Int = noiseSplitCount, width: Double) -> [Point] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             let t = Double($0) * rCount
             return Point(width * t, 0)
         }
     }
-    private func noiseGradientWith(splitCount count: Int = 140, volm: Double) -> [Color] {
+    private func noiseGradientWith(splitCount count: Int = noiseSplitCount, volm: Double) -> [Color] {
         let rCount = 1 / Double(count)
         return (0 ... count).map {
             ScoreView.color(fromScale: volm, noise: Double($0) * rCount)
@@ -747,10 +748,14 @@ final class ColorAction: Action {
     }
     
     var noiseWorldPosition: Point {
-        beganWorldP - .init(panWidth * beganNoise * rootView.screenToWorldScale, 0)
+        beganWorldP - .init(noiseWidth * beganNoise * rootView.screenToWorldScale, 0)
     }
     
-    let panWidth = 140.0
+    static let panSplitCount = 140
+    let panWidth = Double(panSplitCount)
+    static let noiseSplitCount = 100
+    let noiseWidth = Double(noiseSplitCount)
+    
     private var beganWorldP = Point()
     private var isChangePan = false
     private var beganPan = 0.0, oldPan = 0.0, panNode = Node()//, panWorldPosition = Point()
@@ -920,13 +925,13 @@ final class ColorAction: Action {
                         
                         let outlineColor: Color = volm < 0.5 ? .content : .background
                         let outlineGradientNode = Node(path: .init([.init(0, 0),
-                                                                    .init(panWidth, 0)]),
+                                                                    .init(noiseWidth, 0)]),
                                                        lineWidth: 5, lineType: .color(outlineColor))
                         let gradient = noiseGradientWith(volm: volm)
-                        let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(panWidth),
-                                                                                   width: panWidth))]),
+                        let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(noiseWidth),
+                                                                                   width: noiseWidth))]),
                                                 lineWidth: 3, lineType: .gradient(gradient))
-                        colorPointNode.attitude.position = .init(panWidth * beganNoise, 0)
+                        colorPointNode.attitude.position = .init(noiseWidth * beganNoise, 0)
                         panNode.append(child: outlineGradientNode)
                         panNode.append(child: gradientNode)
                         panNode.append(child: colorPointNode)
@@ -942,13 +947,13 @@ final class ColorAction: Action {
                         
                         let outlineColor: Color = volm < 0.5 ? .content : .background
                         let outlineGradientNode = Node(path: .init([.init(0, 0),
-                                                                    .init(panWidth, 0)]),
+                                                                    .init(noiseWidth, 0)]),
                                                        lineWidth: 5, lineType: .color(outlineColor))
                         let gradient = noiseGradientWith(volm: volm)
-                        let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(panWidth),
-                                                                                   width: panWidth))]),
+                        let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(noiseWidth),
+                                                                                   width: noiseWidth))]),
                                                 lineWidth: 3, lineType: .gradient(gradient))
-                        colorPointNode.attitude.position = .init(panWidth * beganNoise, 0)
+                        colorPointNode.attitude.position = .init(noiseWidth * beganNoise, 0)
                         panNode.append(child: outlineGradientNode)
                         panNode.append(child: gradientNode)
                         panNode.append(child: colorPointNode)
@@ -1001,7 +1006,7 @@ final class ColorAction: Action {
             preEventTime = event.time
             
             if scoreResult?.isSprol ?? false {
-                let noise = (beganNoise + (sp.x - rootView.convertWorldToScreen(beganWorldP).x) / panWidth).clipped(min: 0, max: 1)
+                let noise = (beganNoise + (sp.x - rootView.convertWorldToScreen(beganWorldP).x) / noiseWidth).clipped(min: 0, max: 1)
                 let noiseScale = beganNoise == 0 ? 0 : noise / beganNoise
                 func newNoise(from otherNoise: Double) -> Double {
                     if beganNoise == otherNoise {
@@ -1031,7 +1036,7 @@ final class ColorAction: Action {
                 let nivs = nvs.map { IndexValue(value: $0.value, index: $0.key) }
                 scoreView.replace(nivs)
                 
-                colorPointNode.attitude.position = .init(panWidth * noise, 0)
+                colorPointNode.attitude.position = .init(noiseWidth * noise, 0)
                 
                 notePlayer?.notes = playerBeatNoteIndexes.map {
                     scoreView.rendableNormarizedPitResult(atBeat: beganBeat, at: $0)
@@ -1547,7 +1552,8 @@ final class ColorAction: Action {
         }
     }
     
-    let snappableDistance = 2.0
+    let tintR = 150.0
+    let snappableDistance = 3.0
     let tintNode = Node(lineWidth: 2)
     let tintBorderNode = Node(lineWidth: 3.25, lineType: .color(.background))
     let tintLineNode = Node(lineWidth: 1, lineType: .color(.content))
@@ -1588,7 +1594,9 @@ final class ColorAction: Action {
         for i in 0 ..< splitCount {
             let hue = Double(i) * rsc * .pi2
             let color = Color(lightness: tintLightness, unsafetyChroma: r, hue: hue)
-            let p = color.tint.rectangular
+            var tint = color.tint
+            tint.r *= tintR / 128
+            let p = tint.rectangular
             colors.append(color)
             points.append(p)
         }
@@ -1677,13 +1685,21 @@ final class ColorAction: Action {
             beganTintPosition = p
             editingMainUUColor = beganMainUUColor
             isEditingTint = true
-        case .changed:
-            let lightnessP = tintNode.convertFromWorld(p)
+            
+            let tintP = tintNode.convertFromWorld(p)
             let fTintP = Point()
-            let r = fTintP.distance(lightnessP)
-            let theta = fTintP.angle(lightnessP)
+            let r = fTintP.distance(tintP)
+            if r < snappableDistance {
+                lastTintSnapTime = event.time + 1
+                isSnappedTint = false
+            }
+        case .changed:
+            let tintP = tintNode.convertFromWorld(p)
+            let fTintP = Point()
+            let r = fTintP.distance(tintP)
+            let theta = fTintP.angle(tintP)
             var uuColor = beganMainUUColor
-            if r < snappableDistance * rootView.screenToWorldScale {
+            if r < snappableDistance {
                 if let lastTintSnapTime = lastTintSnapTime {
                     if event.time - lastTintSnapTime > 1 {
                         isSnappedTint = false
@@ -1699,7 +1715,7 @@ final class ColorAction: Action {
                 lastTintSnapTime = nil
                 isSnappedTint = false
             }
-            uuColor.value.chroma = isSnappedTint ? 0 : r - dr
+            uuColor.value.chroma = max(isSnappedTint ? 0 : (r - dr) * 128 / tintR, 0)
             uuColor.value.hue = theta
             if beganMainUUColor.value == .empty && beganMainUUColor.id == .two {
                 uuColor.value.opacity = 1
@@ -1724,7 +1740,7 @@ final class ColorAction: Action {
                 }
             }
             
-            editingTintPosition = PolarPoint(uuColor.value.chroma,
+            editingTintPosition = PolarPoint(uuColor.value.chroma * tintR / 128,
                                              uuColor.value.hue).rectangular
         case .ended:
             capture()

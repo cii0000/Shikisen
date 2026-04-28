@@ -16,6 +16,7 @@
 // along with Rasen.  If not, see <http://www.gnu.org/licenses/>.
 
 import struct Foundation.UUID
+import struct Foundation.Date
 
 final class FindAction: InputKeyEventAction {
     let rootAction: RootAction, rootView: RootView
@@ -37,9 +38,9 @@ final class FindAction: InputKeyEventAction {
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
             guard let sheetView = rootView.sheetView(at: p) else { return }
-            let inP = sheetView.convertFromWorld(p)
+            let sheetP = sheetView.convertFromWorld(p)
             var isFind = false
-            if let (textView, _, i, _) = sheetView.textTuple(at: inP) {
+            if let (textView, _, i, _) = sheetView.textTuple(at: sheetP) {
                 if let range = textView.selectedRange(at: textView.convertFromWorld(p))
                     ?? textView.wordRange(at: i) {
                     
@@ -47,7 +48,7 @@ final class FindAction: InputKeyEventAction {
                     rootView.finding = Finding(worldPosition: p, string: string)
                     isFind = true
                 }
-            } else if let tempo = sheetView.tempo(at: inP, scale: rootView.screenToWorldScale) {
+            } else if let tempo = sheetView.tempo(at: sheetP, scale: rootView.screenToWorldScale) {
                 let str = "\(tempo) bpm"
                 rootView.finding = Finding(worldPosition: p, string: str)
                 isFind = true
@@ -58,7 +59,7 @@ final class FindAction: InputKeyEventAction {
                     isFind = true
                 }
             } else {
-                let topOwner = sheetView.sheetColorOwner(at: inP, scale: rootView.screenToWorldScale).value
+                let topOwner = sheetView.sheetColorOwner(at: sheetP, scale: rootView.screenToWorldScale).value
                 let uuColor = topOwner.uuColor
                 if uuColor != Sheet.defalutBackgroundUUColor && uuColor.value.opacity != 0 {
                     let string = uuColor.id.uuidString
@@ -138,26 +139,80 @@ final class LookUpAction: InputKeyEventAction {
     func show(for p: Point) {
         if !rootView.isEditingSheet {
             let shp = rootView.sheetPosition(at: p)
-            if rootView.containsSelectedSheetPositions(p) {
-                let sheetCount = rootView.world.selectedSheetPositions.count
-                rootView.show("Sheet".localized
-                              + "\n\t\("Count".localized): \(sheetCount)",
-                              at: p)
+            if let shps = rootView.selectedSheetPositions(p) {
+                let sheetCount = shps.count
+                var allFileSize = 0, updateDate: Date?, createdDate: Date?
+                for shp in shps {
+                    if let sid = rootView.sheetID(at: shp),
+                       let recoder = rootView.model.sheetRecorders[sid] {
+                        
+                        if let aUpdateDate = recoder.directory.updateDate {
+                            updateDate = updateDate != nil ?
+                            max(updateDate!, aUpdateDate) : aUpdateDate
+                        }
+                        if let aCreatedDate = recoder.directory.createdDate {
+                            createdDate = createdDate != nil ?
+                            min(createdDate!, aCreatedDate) : aCreatedDate
+                        }
+                        allFileSize += recoder.fileSize
+                    }
+                }
+                
+                let string = IOResult.fileSizeNameFrom(fileSize: allFileSize)
+                rootView.show("Sheets".localized
+                              + "\n\t\("All File Size".localized): \(string)"
+                              + "\n\t\("Update Date".localized): \(updateDate?.defaultString ?? "N/A")"
+                              + "\n\t\("Created Date".localized): \(createdDate?.defaultString ?? "N/A")"
+                              + "\n\t\("Count".localized): \(sheetCount)", at: p)
             } else if let sid = rootView.sheetID(at: shp),
-                      let recoder = rootView.model.sheetRecorders[sid],
-                      let updateDate = recoder.directory.updateDate,
-                      let createdDate = recoder.directory.createdDate {
+                      let recoder = rootView.model.sheetRecorders[sid] {
                 
                 let fileSize = recoder.fileSize
+                let updateDate = recoder.directory.updateDate
+                let createdDate = recoder.directory.createdDate
                 let string = IOResult.fileSizeNameFrom(fileSize: fileSize)
                 rootView.show("Sheet".localized
                               + "\n\t\("File Size".localized): \(string)"
-                              + "\n\t\("Update Date".localized): \(updateDate.defaultString)"
-                              + "\n\t\("Created Date".localized): \(createdDate.defaultString)"
+                              + "\n\t\("Update Date".localized): \(updateDate?.defaultString ?? "N/A")"
+                              + "\n\t\("Created Date".localized): \(createdDate?.defaultString ?? "N/A")"
                               + "\n\t\("Position".localized): \(shp.x)_\(shp.y)", at: p)
             } else {
                 rootView.show("Root".localized, at: p)
             }
+        } else if let sheetView = rootView.sheetView(at: p),
+                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                           scale: rootView.screenToWorldScale),
+                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                                 scale: rootView.screenToWorldScale) {
+            let animationView = sheetView.animationView
+            
+            let isSelected = animationView.selectedIs.contains(ki)
+            if isSelected {
+                let indexes = animationView.selectedIs.sorted()
+                let animation = animationView.model
+                let startBeatStr = sheetView.timeString(fromBeat: animation.keyframes[indexes.first!].beat)
+                let endBeatStr = sheetView.timeString(fromBeat: animation.keyframes[indexes.last!].beat)
+                rootView.show("Keyframes".localized
+                              + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                              + "\n\t\("Count".localized): \(indexes.count)",
+                              at: p)
+            } else {
+                let beatStr = sheetView.timeString(fromBeat: sheetView.model.animation.keyframes[ki].beat)
+                rootView.show("Keyframe".localized
+                              + "\n\t\("Beat".localized): \(beatStr)",
+                              at: p)
+            }
+        } else if let sheetView = rootView.sheetView(at: p),
+                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                           scale: rootView.screenToWorldScale) {
+            let animation = sheetView.animationView.model
+            let tempoStr = Sheet.tempoNameFromStandardFrameRate(withTempo: animation.tempo)
+            let startBeatStr = sheetView.timeString(fromBeat: animation.beatRange.start)
+            let endBeatStr = sheetView.timeString(fromBeat: animation.endLoopDurBeat)
+            rootView.show("Timeline".localized
+                          + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                          + "\n\t\("Tempo".localized): \(tempoStr)",
+                          at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
                   let range = textView.selectedRange(at: textView.convertFromWorld(p)) {
@@ -236,25 +291,6 @@ final class LookUpAction: InputKeyEventAction {
                                               frameRate: Rational(Keyframe.defaultFrameRate)) + " beat"
                 rootView.show(fqStr, at: p)
             }
-        } else if let sheetView = rootView.sheetView(at: p),
-                   sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
-                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
-                                                                 scale: rootView.screenToWorldScale) {
-            let beatStr = sheetView.timeString(fromBeat: sheetView.model.animation.keyframes[ki].beat)
-            rootView.show("Keyframe".localized
-                          + "\n\t\("Beat".localized): \(beatStr)",
-                          at: p)
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
-                                                           scale: rootView.screenToWorldScale) {
-            let animation = sheetView.animationView.model
-            let tempoStr = Sheet.tempoNameFromStandardFrameRate(withTempo: animation.tempo)
-            let startBeatStr = sheetView.timeString(fromBeat: animation.beatRange.start)
-            let endBeatStr = sheetView.timeString(fromBeat: animation.endLoopDurBeat)
-            rootView.show("Timeline".localized
-                          + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
-                          + "\n\t\("Tempo".localized): \(tempoStr)",
-                          at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (node, contentView) = sheetView.spectrogramNode(at: sheetView.convertFromWorld(p)) {
             let pitch = contentView.spectrogramPitch(atY: node.convertFromWorld(p).y)!
@@ -493,9 +529,9 @@ final class TextOrientationAction: Action {
                         sheetView.replace([IndexValue(value: text, index: i)])
                     }
                 } else {
-                    let inP = sheetView.convertFromWorld(p)
+                    let sheetP = sheetView.convertFromWorld(p)
                     rootAction.textAction.appendEmptyText(screenPoint: event.screenPoint,
-                                                    at: inP,
+                                                    at: sheetP,
                                                     orientation: orientation,
                                                     in: sheetView)
                 }
@@ -698,11 +734,11 @@ final class TextAction: InputTextEventAction {
         rootView.textMaxTypelineWidthNode.isHidden = true
         
         guard let sheetView = rootView.madeSheetView(at: p) else { return }
-        let inP = sheetView.convertFromWorld(p)
+        let sheetP = sheetView.convertFromWorld(p)
         if !isMovedCursor, let eTextView = editingTextView,
            sheetView.textsView.elementViews.contains(eTextView) {
             
-        } else if let (textView, _, _, sri) = sheetView.textTuple(at: inP) {
+        } else if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP) {
             if isMovedCursor {
                 textView.selectedRange = sri ..< sri
                 textView.updateCursor()
@@ -836,12 +872,11 @@ final class TextAction: InputTextEventAction {
         
         if !rootView.finding.isEmpty,
            rootView.editingFindingSheetView == nil {
-            let sp = event.screenPoint
-            let p = rootView.convertScreenToWorld(sp)
+            let p = rootView.convertScreenToWorld(event.screenPoint)
             guard let sheetView = rootView.sheetView(at: p) else { return }
-            let inP = sheetView.convertFromWorld(p)
+            let sheetP = sheetView.convertFromWorld(p)
             
-            if let (textView, _, si, _) = sheetView.textTuple(at: inP),
+            if let (textView, _, si, _) = sheetView.textTuple(at: sheetP),
                 let range = textView.model.string.ranges(of: rootView.finding.string)
                 .first(where: { $0.contains(si) }) {
                 
@@ -874,8 +909,8 @@ final class TextAction: InputTextEventAction {
             rootAction.closeLookingUpAndStop(at: p)
             
             guard let sheetView = rootView.madeSheetView(at: p) else { return }
-            let inP = sheetView.convertFromWorld(p)
-            if let (textView, _, _, sri) = sheetView.textTuple(at: inP) {
+            let sheetP = sheetView.convertFromWorld(p)
+            if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP) {
                 if isMovedCursor {
                     textView.selectedRange = sri ..< sri
                     textView.updateCursor()
@@ -887,17 +922,17 @@ final class TextAction: InputTextEventAction {
                 inputKey(with: event, in: textView, in: sheetView)
                 isMovedCursor = false
             } else if event.inputKeyType.isInputText {
-                appendEmptyText(event, at: inP, in: sheetView)
+                appendEmptyText(event, at: sheetP, in: sheetView)
             } else {
                 rootView.cursor = .block
             }
         }
     }
-    func appendEmptyText(_ event: InputTextEvent, at inP: Point,
+    func appendEmptyText(_ event: InputTextEvent, at sheetP: Point,
                          orientation: Orientation = .horizontal,
                          in sheetView: SheetView) {
         let text = Text(string: "", orientation: orientation,
-                        size: rootView.sheetTextSize, origin: inP,
+                        size: rootView.sheetTextSize, origin: sheetP,
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
         sheetView.unselect()
@@ -920,11 +955,11 @@ final class TextAction: InputTextEventAction {
         
         isMovedCursor = false
     }
-    func appendEmptyText(screenPoint: Point, at inP: Point,
+    func appendEmptyText(screenPoint: Point, at sheetP: Point,
                          orientation: Orientation = .horizontal,
                          in sheetView: SheetView) {
         let text = Text(string: "", orientation: orientation,
-                        size: rootView.sheetTextSize, origin: inP,
+                        size: rootView.sheetTextSize, origin: sheetP,
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
         sheetView.unselect()
@@ -1178,8 +1213,8 @@ final class TextAction: InputTextEventAction {
     
     func cut(at p: Point) {
         guard let sheetView = rootView.madeSheetView(at: p) else { return }
-        let inP = sheetView.convertFromWorld(p)
-        guard let (textView, ti, _, _) = sheetView.textTuple(at: inP) else { return }
+        let sheetP = sheetView.convertFromWorld(p)
+        guard let (textView, ti, _, _) = sheetView.textTuple(at: sheetP) else { return }
         
         guard let range = textView.selectedRange(at: textView.convertFromWorld(p)) else { return }
         
