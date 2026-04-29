@@ -1557,11 +1557,16 @@ final class SheetView: View, @unchecked Sendable {
         
         for textView in textsView.elementViews {
             textView.selectedRangesNotification = { [weak self] textView, ranges in
-                if let self, let ti = self.textsView.elementViews.firstIndex(of: textView) {
-                    self.unupdateModel.selection.textSelections[ti]
-                    = .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
-                }
+                self?.updateSelection(from: ranges, textView)
             }
+        }
+    }
+    
+    func updateSelection(from ranges: [Range<String.Index>], _ textView: SheetTextView) {
+        if let ti = textsView.elementViews.firstIndex(of: textView) {
+            unupdateModel.selection.textSelections[ti]
+            = ranges.isEmpty ?
+            nil : .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
         }
     }
     
@@ -4304,10 +4309,7 @@ final class SheetView: View, @unchecked Sendable {
         textsView.insert(tivs)
         for tiv in tivs {
             textsView.elementViews[tiv.index].selectedRangesNotification = { [weak self] textView, ranges in
-                if let self, let ti = self.textsView.elementViews.firstIndex(of: textView) {
-                    self.binder[keyPath: self.keyPath].selection.textSelections[ti]
-                    = .init(ranges: ranges.map { textView.model.string.intRange(from: $0) })
-                }
+                self?.updateSelection(from: ranges, textView)
             }
         }
     }
@@ -6065,6 +6067,9 @@ final class SheetView: View, @unchecked Sendable {
             updateFirstReverse()
             
             if selection != model.selection {
+                print("RR", model.texts)
+                print(selection)
+                print(model.selection)
                 history.error(result)
             }
         }

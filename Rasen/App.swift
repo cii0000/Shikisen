@@ -135,7 +135,7 @@ final class SubNSApplication: NSApplication {
     static let defaultViewSize = NSSize(width: 900, height: 800)
     var window: NSWindow!
     var view: SubMTKView!
-    weak var fileMenu: NSMenu?, editMenu: NSMenu?, editMenuItem: NSMenuItem?
+    weak var editMenu: NSMenu?, editMenuItem: NSMenuItem?
     
     override init() {
         AppDelegate.updateSelectedColor()
@@ -247,79 +247,25 @@ final class SubNSApplication: NSApplication {
         let appMenuItem = NSMenuItem(title: appName, action: nil, keyEquivalent: "")
         appMenuItem.submenu = appMenu
         
-        let fileString = "File".localized
-        let fileMenu = NSMenu(title: fileString)
-        fileMenu.delegate = self
-        fileMenu.addItem(withTitle: "Import...".localized,
-                         action: #selector(SubMTKView.importDocument(_:)))
-        fileMenu.addItem(NSMenuItem.separator())
-        fileMenu.addItem(withTitle: "Export as Image...".localized,
-                         action: #selector(SubMTKView.exportAsImage(_:)))
-        fileMenu.addItem(withTitle: "Export as 4K Image...".localized,
-                         action: #selector(SubMTKView.exportAsImage4K(_:)))
-        fileMenu.addItem(withTitle: "Export as PDF...".localized,
-                         action: #selector(SubMTKView.exportAsPDF(_:)))
-        fileMenu.addItem(withTitle: "Export as GIF...".localized,
-                         action: #selector(SubMTKView.exportAsGIF(_:)))
-        fileMenu.addItem(NSMenuItem.separator())
-        fileMenu.addItem(withTitle: "Export as Movie...".localized,
-                         action: #selector(SubMTKView.exportAsMovie(_:)))
-        fileMenu.addItem(withTitle: "Export as 4K Movie...".localized,
-                         action: #selector(SubMTKView.exportAsMovie4K(_:)))
-        fileMenu.addItem(withTitle: "Export as Sound...".localized,
-                         action: #selector(SubMTKView.exportAsSound(_:)))
-        fileMenu.addItem(withTitle: "Export as Linear PCM...".localized,
-                         action: #selector(SubMTKView.exportAsLinearPCM(_:)))
-        fileMenu.addItem(NSMenuItem.separator())
-        fileMenu.addItem(withTitle: "Export as Caption...".localized,
-                         action: #selector(SubMTKView.exportAsCaption(_:)))
-        fileMenu.addItem(NSMenuItem.separator())
-        fileMenu.addItem(withTitle: "Export as Document...".localized,
-                         action: #selector(SubMTKView.exportAsDocument(_:)))
-        fileMenu.addItem(withTitle: "Export as Document with History...".localized,
-                         action: #selector(SubMTKView.exportAsDocumentWithHistory(_:)))
-        self.fileMenu = fileMenu
-        let fileMenuItem = NSMenuItem(title: fileString,
-                                      action: nil, keyEquivalent: "")
-        fileMenuItem.submenu = fileMenu
-        
         let editString = "Edit".localized
         let editMenu = NSMenu(title: editString)
         editMenu.delegate = self
         editMenu.addItem(withTitle: "Undo".localized,
-                         action: #selector(SubMTKView.undo(_:)),
+                         action: Selector(("undo:")),
                          keyEquivalent: "z", modifierFlags: [.command])
         editMenu.addItem(withTitle: "Redo".localized,
-                         action: #selector(SubMTKView.redo(_:)),
+                         action: Selector(("redo:")),
                          keyEquivalent: "z", modifierFlags: [.command, .shift])
         editMenu.addItem(NSMenuItem.separator())
         editMenu.addItem(withTitle: "Cut".localized,
-                         action: #selector(SubMTKView.cut(_:)),
+                         action: #selector(NSText.cut(_:)),
                          keyEquivalent: "x", modifierFlags: [.command])
         editMenu.addItem(withTitle: "Copy".localized,
-                         action: #selector(SubMTKView.copy(_:)),
+                         action: #selector(NSText.copy(_:)),
                          keyEquivalent: "c", modifierFlags: [.command])
         editMenu.addItem(withTitle: "Paste".localized,
-                         action: #selector(SubMTKView.paste(_:)),
+                         action: #selector(NSText.paste(_:)),
                          keyEquivalent: "v", modifierFlags: [.command])
-        editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Change to Draft".localized,
-                         action: #selector(SubMTKView.changeToDraft(_:)),
-                         keyEquivalent: "d", modifierFlags: [.command])
-        editMenu.addItem(withTitle: "Cut Draft".localized,
-                         action: #selector(SubMTKView.cutDraft(_:)),
-                         keyEquivalent: "d", modifierFlags: [.command, .shift])
-        editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Fill All".localized,
-                         action: #selector(SubMTKView.fillAll(_:)),
-                         keyEquivalent: "b", modifierFlags: [.command])
-        editMenu.addItem(withTitle: "Cut Colors All".localized,
-                         action: #selector(SubMTKView.cutColorsAll(_:)),
-                         keyEquivalent: "b", modifierFlags: [.command, .shift])
-        editMenu.addItem(NSMenuItem.separator())
-        editMenu.addItem(withTitle: "Clear History...".localized,
-                         action: #selector(SubMTKView.clearHistory(_:)),
-                         keyEquivalent: "")
         self.editMenu = editMenu
         let editMenuItem = NSMenuItem(title: editString,
                                       action: nil, keyEquivalent: "")
@@ -375,7 +321,6 @@ final class SubNSApplication: NSApplication {
         
         let mainMenu = NSMenu(title: "Main Menu")
         mainMenu.addItem(appMenuItem)
-        mainMenu.addItem(fileMenuItem)
         mainMenu.addItem(editMenuItem)
         mainMenu.addItem(actionMenuItem)
         mainMenu.addItem(windowMenuItem)
@@ -464,42 +409,12 @@ final class SubNSApplication: NSApplication {
         view.rootView.updateTextCursor()
     }
     
-    private var isShownFileMenu = false, isShownEditMenu = false
     func menuWillOpen(_ menu: NSMenu) {
-        if menu == fileMenu {
-            isShownFileMenu = true
-            view.isEnableMenuCommand = isShownFileMenu || isShownEditMenu
-            
-            let event = view.inputKeyEventWith(.began)
-            if view.menuAction != nil {
-                view.menuAction?.action.end()
-            }
-            view.menuAction = StartExportAction(view.rootAction)
-            view.menuAction?.flow(with: event)
-        } else if menu == editMenu {
+        if menu == editMenu {
             //hidden auto added menus
             if let i = menu.items.lastIndex(where: { $0.isSeparatorItem }) {
                 menu.items[i...].forEach { $0.isHidden = true }
             }
-            
-            isShownEditMenu = true
-            view.isEnableMenuCommand = isShownFileMenu || isShownEditMenu
-            
-            view.rootView.isAccentLastEdittedSheet = true
-        }
-    }
-    func menuDidClose(_ menu: NSMenu) {
-        if menu == fileMenu {
-            view.menuAction?.action.end()
-            view.menuAction = nil
-            
-            isShownFileMenu = false
-            view.isEnableMenuCommand = isShownFileMenu || isShownEditMenu
-        } else if menu == editMenu {
-            view.rootView.isAccentLastEdittedSheet = false
-            
-            isShownEditMenu = false
-            view.isEnableMenuCommand = isShownFileMenu || isShownEditMenu
         }
     }
     
@@ -514,6 +429,7 @@ final class SubNSApplication: NSApplication {
         let string = try! String(contentsOf: url, encoding: .utf8)
         acknowledgmentsPanel = AppDelegate.makePanel(from: string, title: "Acknowledgments".localized)
     }
+    
     weak var privacyPolicyPanel: NSPanel?
     @objc func showPrivacyPolicy(_ sender: Any) {
         guard privacyPolicyPanel == nil else {
@@ -899,102 +815,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         addCursorRect(bounds, cursor: rootView.cursor.ns)
     }
     
-    var isEnableMenuCommand = false {
-        didSet {
-            guard isEnableMenuCommand != oldValue else { return }
-            rootView.isFromMenu = isEnableMenuCommand
-        }
-    }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
-        case #selector(SubMTKView.importDocument(_:)):
-            return rootView.selectableSheetInScreen
-            
-        case #selector(SubMTKView.exportAsImage(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsImage4K(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsPDF(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsGIF(_:)):
-            return rootView.selectableSheetInScreen
-            
-        case #selector(SubMTKView.exportAsMovie(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsMovie4K(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsSound(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsLinearPCM(_:)):
-            return rootView.selectableSheetInScreen
-            
-        case #selector(SubMTKView.exportAsCaption(_:)):
-            return rootView.selectableSheetInScreen
-            
-        case #selector(SubMTKView.exportAsDocument(_:)):
-            return rootView.selectableSheetInScreen
-        case #selector(SubMTKView.exportAsDocumentWithHistory(_:)):
-            return rootView.selectableSheetInScreen
-            
-        case #selector(SubMTKView.undo(_:)):
-            if isEnableMenuCommand {
-                if rootView.isEditingSheet {
-                    if rootView.editableFromMenu {
-                        return rootView.lastEditedSheetViewFromMenu?.history.isCanUndo ?? false
-                    }
-                } else {
-                    return rootView.history.isCanUndo
-                }
-            }
-            return false
-        case #selector(SubMTKView.redo(_:)):
-            if isEnableMenuCommand {
-                if rootView.isEditingSheet {
-                    if rootView.editableFromMenu {
-                        return rootView.lastEditedSheetViewFromMenu?.history.isCanRedo ?? false
-                    }
-                } else {
-                    return rootView.history.isCanRedo
-                }
-            }
-            return false
-        case #selector(SubMTKView.cut(_:)):
-            return isEnableMenuCommand
-                && rootView.editableFromMenu
-        case #selector(SubMTKView.copy(_:)):
-            return isEnableMenuCommand
-                && rootView.editableFromMenu
-        case #selector(SubMTKView.paste(_:)):
-            return if isEnableMenuCommand
-                && rootView.editableFromMenu {
-                switch Pasteboard.shared.copiedObjects.first {
-                case .picture, .planesValue: rootView.isEditingSheet
-                case .copiedSheetsValue: !rootView.isEditingSheet
-                default: false
-                }
-            } else {
-                false
-            }
-        case #selector(SubMTKView.changeToDraft(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.editableFromMenu
-                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.isEmpty ?? true)
-        case #selector(SubMTKView.cutDraft(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.editableFromMenu
-                && !(rootView.lastEditedSheetViewFromMenu?.model.draftPicture.isEmpty ?? true)
-        case #selector(SubMTKView.fillAll(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.editableFromMenu
-                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.lines.isEmpty ?? true)
-        case #selector(SubMTKView.cutColorsAll(_:)):
-            return isEnableMenuCommand && rootView.isEditingSheet
-                && rootView.editableFromMenu
-                && !(rootView.lastEditedSheetViewFromMenu?.model.picture.planes.isEmpty ?? true)
-        
-        case #selector(SubMTKView.clearHistory(_:)):
-            return rootView.selectableSheetInScreen
-            
         case #selector(SubMTKView.shownActionList(_:)):
             menuItem.state = !isHiddenActionList ? .on : .off
         case #selector(SubMTKView.hiddenActionList(_:)):
@@ -1247,223 +1069,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     
-    @objc func importDocument(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ImportAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func exportAsImage(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsImageAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsImage4K(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAs4KImageAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsPDF(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsPDFAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsGIF(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsGIFAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func exportAsMovie(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsMovieAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsMovie4K(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAs4KMovieAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsSound(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsSoundAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsLinearPCM(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsLinearPCMAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func exportAsCaption(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsCaptionAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func exportAsDocument(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsDocumentAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func exportAsDocumentWithHistory(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ExportAsDocumentWithHistoryAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func undo(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = UndoAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func redo(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = RedoAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func cut(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = CutAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func copy(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = CopyAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func paste(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = PasteAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func find(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = FindAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func changeToDraft(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ChangeToDraftAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func cutDraft(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = CutDraftAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func fillAll(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = FillAllAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func cutColorsAll(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = CutColorsAllAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func changeToVerticalText(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ChangeToVerticalTextAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    @objc func changeToHorizontalText(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ChangeToHorizontalTextAction(rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-    @objc func clearHistory(_ sender: Any) {
-        rootView.isFromMenu = true
-        let action = ClearHistoryAction(self.rootAction)
-        action.flow(with: inputKeyEventWith(.began))
-        Sleep.start()
-        action.flow(with: inputKeyEventWith(.ended))
-        rootView.isFromMenu = false
-    }
-    
-//    @objc func startDictation(_ sender: Any) {
-//    }
-//    @objc func orderFrontCharacterPalette(_ sender: Any) {
-//    }
-    
     @objc func shownActionList(_ sender: Any) {
         UserDefaults.standard.set(false, forKey: SubMTKView.isHiddenActionListKey)
         isHiddenActionList = false
@@ -1684,24 +1289,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                        ns: nsEvent, inputContext: inputContext)
     }
     
-    private var isOneFlag = false, oneFlagTime: Double?
     override func flagsChanged(with nsEvent: NSEvent) {
-        let oldModifierKeys = rootAction.modifierKeys
-        
         rootAction.modifierKeys = nsEvent.modifierKeys
-        
-        if oldModifierKeys.isEmpty && rootAction.modifierKeys.isOne {
-            isOneFlag = true
-            oneFlagTime = nsEvent.timestamp
-        } else if let oneKey = oldModifierKeys.oneInputKeyTYpe,
-                  rootAction.modifierKeys.isEmpty && isOneFlag,
-            let oneFlagTime, nsEvent.timestamp - oneFlagTime < 0.175 {
-            rootAction.inputKey(with: inputKeyEventWith(nsEvent, oneKey, .began))
-            rootAction.inputKey(with: inputKeyEventWith(nsEvent, oneKey, .ended))
-            isOneFlag = false
-        } else {
-            isOneFlag = false
-        }
     }
     
     override func mouseMoved(with nsEvent: NSEvent) {
@@ -1726,8 +1315,11 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     }
     
     override func keyDown(with nsEvent: NSEvent) {
-        isOneFlag = false
         guard let key = nsEvent.key else { return }
+        if key == .escape {
+            super.keyDown(with: nsEvent)
+            return
+        }
         let phase: Phase = nsEvent.isARepeat ? .changed : .began
         if key.isTextEdit
             && !rootAction.modifierKeys.contains(.command)
@@ -1739,12 +1331,13 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         } else {
             rootAction.inputKey(with: inputKeyEventWith(nsEvent, key, isRepeat: nsEvent.isARepeat, phase))
         }
-        if key == .escape {
-            super.keyDown(with: nsEvent)
-        }
     }
     override func keyUp(with nsEvent: NSEvent) {
         guard let key = nsEvent.key else { return }
+        if key == .escape {
+            super.keyUp(with: nsEvent)
+            return
+        }
         let textEvent = inputTextEventWith(nsEvent, key, .ended)
         if rootAction.oldInputTextKeys.contains(textEvent.inputKeyType) {
             rootAction.inputText(with: textEvent)
@@ -1759,7 +1352,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                 firstTime = 0.0, firstP = Point(), isMovedDrag = false, maxPressure: Float = 0.0
     override func mouseDown(with nsEvent: NSEvent) {
         if beganSwipePosition != nil && nsEvent.subtype != .tabletPoint { return }
-        isOneFlag = false
         isDrag = false
         isStrongDrag = false
         let beganDragEvent = dragEventWith(nsEvent, .began)
@@ -1813,39 +1405,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                     rootAction.drag(with: beganDragEvent)
                     rootAction.drag(with: endedDragEvent)
                 } else {
-                    
-//                    //test
-//                    if let oldTouchEvent, nsEvent.subtype == .touch,
-//                       nsEvent.timestamp - oldTouchEvent.time < 0.1,
-//                       oldTouchEvent.fingers.count == 1 {
-//                        
-//                        let p = oldTouchEvent.positions.first!.value
-//                        print(p)
-//                        if p.distance(.init(130, 70)) < 30 {
-//                            let oldM = rootAction.modifierKeys
-//                            rootAction.modifierKeys = .command
-//                            var bEvent = inputKeyEventWith(beganDragEvent, .began)
-//                            bEvent.inputKeyType = .z
-//                            var eEvent = inputKeyEventWith(beganDragEvent, .ended)
-//                            eEvent.inputKeyType = .z
-//                            rootAction.inputKey(with: bEvent)
-//                            Sleep.start()
-//                            rootAction.inputKey(with: eEvent)
-//                            rootAction.modifierKeys = oldM
-//                        } else if p.distance(.init(170, 185)) < 30 {
-//                            let oldM = rootAction.modifierKeys
-//                            rootAction.modifierKeys = [.command, .shift]
-//                            var bEvent = inputKeyEventWith(beganDragEvent, .began)
-//                            bEvent.inputKeyType = .z
-//                            var eEvent = inputKeyEventWith(beganDragEvent, .ended)
-//                            eEvent.inputKeyType = .z
-//                            rootAction.inputKey(with: bEvent)
-//                            Sleep.start()
-//                            rootAction.inputKey(with: eEvent)
-//                            rootAction.modifierKeys = oldM
-//                        }
-//                    }
-                    
                     rootAction.inputKey(with: inputKeyEventWith(beganDragEvent, .began))
                     Sleep.start()
                     rootAction.inputKey(with: inputKeyEventWith(beganDragEvent, .ended))
@@ -1861,7 +1420,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     
     private var beganSubDragEvent: DragEvent?, isSubDrag = false, isSubTouth = false
     override func rightMouseDown(with nsEvent: NSEvent) {
-        isOneFlag = false
         isSubTouth = nsEvent.subtype == .touch
         isSubDrag = false
         let beganDragEvent = dragEventWith(nsEvent, .began)
@@ -1988,6 +1546,13 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(SubNSMenuItem(title: "Clear History...".localized, closure: { [weak self] in
+            guard let self else { return }
+            let action = ClearHistoryAction(self.rootAction)
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
+        }))
         
         rootAction.stopAllEvents()
         NSMenu.popUpContextMenu(menu, with: nsEvent, for: self)
@@ -1999,7 +1564,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     
     private var beganMiddleDragEvent: DragEvent?, isMiddleDrag = false
     override func otherMouseDown(with nsEvent: NSEvent) {
-        isOneFlag = false
         isMiddleDrag = false
         let beganDragEvent = dragEventWith(nsEvent, .began)
         self.beganMiddleDragEvent = beganDragEvent

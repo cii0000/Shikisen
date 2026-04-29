@@ -83,6 +83,9 @@
 "Under development" = "開発中";
 "The time selection of the score is under development" = "楽譜の時間選択は開発中";
 
+"Oldest" = "最古";
+"Newest" = "最新";
+
 "Added" = "追加済み";
 "Conflict with Score" = "楽譜があるため追加できません";
 "Conflict with Timeline" = "タイムラインがあるため追加できません";

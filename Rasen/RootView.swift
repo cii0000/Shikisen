@@ -586,8 +586,71 @@ final class RootView: View, @unchecked Sendable {
         model.worldHistoryRecord.value = history
         model.worldHistoryRecord.isWillwrite = true
     }
-    
-    func clearContents(from sheetView: SheetView) {
+    func clearSheetHistorys(from shps: [IntPoint],
+                            progressHandler: (Double, inout Bool) -> ()) throws {
+        var isStop = false
+        for (j, shp) in shps.enumerated() {
+            Task { @MainActor in
+                if let sheetView = self.sheetViewValues[shp]?.sheetView {
+                    clearHistory(from: sheetView)
+                } else if let sid = self.sheetID(at: shp),
+                          let sheetRecorder = self.model.sheetRecorders[sid] {
+                    let record = sheetRecorder.sheetRecord
+                    let historyRecord = sheetRecorder.sheetHistoryRecord
+                    guard let sheet = record.decodedValue else { return }
+                    
+                    let sheetBinder = RecordBinder(value: sheet, record: record)
+                    let sheetView = SheetView(binder: sheetBinder,
+                                              keyPath: \SheetBinder.value,
+                                              history: historyRecord.decodedValue ?? .init())
+                    let frame = self.sheetFrame(with: shp)
+                    sheetView.bounds = Rect(size: frame.size)
+                    sheetView.node.allChildrenAndSelf { $0.updateDatas() }
+                    
+                    sheetView.stopNotifications.append { [weak self] _ in
+                        self?.showSelected()
+                    }
+                    sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+                        self?.updateSelectedFrame()
+                    }
+                    
+                    clearHistory(from: sheetView)
+                    
+                    if self.savingItem != nil {
+                        self.savingFuncs.append { [model = sheetView.model, um = sheetView.history,
+                                                   tm = self.thumbnailMipmap(from: sheetView),
+                                                   weak self] in
+                            
+                            sheetRecorder.sheetRecord.value = model
+                            sheetRecorder.sheetRecord.isWillwrite = true
+                            sheetRecorder.sheetHistoryRecord.value = um
+                            sheetRecorder.sheetHistoryRecord.isWillwrite = true
+                            self?.updateStringRecord(at: sid, with: sheetView)
+                            if let tm = tm {
+                                self?.saveThumbnailRecord(tm, in: sheetRecorder)
+                                self?.baseThumbnailBlocks[sid]
+                                = try? Texture.block(from: tm.thumbnail4Data)
+                            }
+                        }
+                    } else {
+                        sheetRecorder.sheetRecord.value = sheetView.model
+                        sheetRecorder.sheetHistoryRecord.value = sheetView.history
+                        sheetRecorder.sheetHistoryRecord.isWillwrite = true
+                        self.makeThumbnailRecord(at: sid, with: sheetView)
+                        sheetRecorder.sheetRecord.willwriteClosure = { (_) in }
+                    }
+                }
+            }
+            
+            guard !Task.isCancelled else { return }
+            Sleep.start(atTime: 0.1)
+            
+            progressHandler(Double(j + 1) / Double(shps.count), &isStop)
+            if isStop { break }
+        }
+    }
+    func clearHistory(from sheetView: SheetView) {
+        sheetView.clearHistory()
         if let directory = model.sheetRecorders[sheetView.id]?.contentsDirectory {
             let nUrls = Set(sheetView.model.contents.map { $0.url })
             directory.childrenURLs.filter { !nUrls.contains($0.value) }.forEach {
@@ -1720,12 +1783,6 @@ final class RootView: View, @unchecked Sendable {
     }
     private(set) var sheetViewValues = [IntPoint: SheetViewValue]()
     
-    func removeSheetHistory(at shp: IntPoint) {
-        if let sid = sheetID(at: shp) {
-            try? model.removeSheetHistory(at: sid)
-        }
-    }
-    
     @discardableResult
     func readThumbnailNode(at sid: UUID) -> Node? {
         guard let shp = sheetPosition(at: sid) else { return nil }
@@ -1999,21 +2056,11 @@ final class RootView: View, @unchecked Sendable {
                 return shps
             }
         }
-        if isFromMenu {
-            return if let lastEditedSheetPosition {
-                [lastEditedSheetPosition]
-            } else {
-                nil
-            }
-        } else {
-            return nil
-        }
+        return nil
     }
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
         if isEditingSheet {
             return false
-        } else if isFromMenu {
-            return selectableSheetInScreen
         } else {
             let maxDSq = (Sheet.knobEditDistance * screenToWorldScale).squared
             if world.selection.sheetIDs.contains(where: {
@@ -2780,51 +2827,7 @@ final class RootView: View, @unchecked Sendable {
     func updateLastEditedSheetPosition(fromScreen sp: Point) {
         lastEditedSheetPosition = sheetPosition(at: convertScreenToWorld(sp))
     }
-    private(set) var lastEditedSheetPosition: IntPoint? {
-        didSet {
-            guard lastEditedSheetPosition != oldValue else { return }
-            if let shp = lastEditedSheetPosition {
-                let f = sheetFrame(with: shp)
-                self.lastEditedSheetNode.path = .init(f)
-            } else {
-                lastEditedSheetNode.path = .init()
-            }
-        }
-    }
-    private var lastEditedSheetPositionInScreen: IntPoint? {
-        if let shp = lastEditedSheetPosition,
-           worldBoundsInScreen.intersects(sheetFrame(with: shp)) { shp } else { nil }
-    }
-    var isAccentLastEdittedSheet = false {
-        didSet {
-            guard isAccentLastEdittedSheet != oldValue else { return }
-            lastEditedSheetNode.lineType = isAccentLastEdittedSheet ?
-                .color(.selected) : .color(.subBorder)
-        }
-    }
-    var isFromMenu = false
-    var lastEditedSheetViewFromMenu: SheetView? {
-        guard isFromMenu else { return nil }
-        return if let shp = lastEditedSheetPosition {
-            readSheetView(at: shp)
-        } else {
-            nil
-        }
-    }
-    var editableFromMenu: Bool {
-        guard isFromMenu else { return false }
-        return lastEditedSheetPositionInScreen != nil
-    }
-    var selectableSheetInScreen: Bool {
-        guard !isEditingSheet else { return lastEditedSheetPositionInScreen != nil }
-        let shps = world.selectedSheetPositions
-        guard !shps.isEmpty else { return lastEditedSheetPositionInScreen != nil }
-        let wb = worldBoundsInScreen
-        let contains = shps.contains {
-            sheetFrame(with: $0).intersects(wb)
-        }
-        return contains ? true : lastEditedSheetPositionInScreen != nil
-    }
+    private(set) var lastEditedSheetPosition: IntPoint?
     
     func sheetViewAndFrame(at p: Point) -> (shp: IntPoint,
                                             sheetView: SheetView?,
@@ -2966,12 +2969,6 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedSheetValue(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
-        if isFromMenu,
-           let shp = lastEditedSheetPositionInScreen,
-           let sheetView = sheetView(at: shp), !sheetView.model.selection.isEmptySheetValue {
-            
-            return sheetView
-        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
@@ -2983,13 +2980,6 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLineOrPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
-        if isFromMenu,
-           let shp = lastEditedSheetPositionInScreen,
-           let sheetView = sheetView(at: shp),
-           let keyframeSelection = sheetView.model.keyframeSelection, !keyframeSelection.isEmpty {
-            
-            return sheetView
-        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
@@ -3001,14 +2991,6 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLine(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
-        if isFromMenu,
-           let shp = lastEditedSheetPositionInScreen,
-           let sheetView = sheetView(at: shp),
-           let keyframeSelection = sheetView.model.keyframeSelection,
-           !keyframeSelection.lineIs.isEmpty {
-            
-            return sheetView
-        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
@@ -3020,14 +3002,6 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
-        if isFromMenu,
-           let shp = lastEditedSheetPositionInScreen,
-           let sheetView = sheetView(at: shp),
-           let keyframeSelection = sheetView.model.keyframeSelection,
-           !keyframeSelection.planeIs.isEmpty {
-            
-            return sheetView
-        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)) {

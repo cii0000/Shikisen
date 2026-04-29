@@ -1251,11 +1251,6 @@ final class TextAction: InputTextEventAction {
         textView.unmark()
         if let value = captureString.difference(to: textView.model.string) {
             sheetView.newUndoGroup()
-            var nSelection = sheetView.model.selection
-            sheetView.textsView.elementViews.enumerated().forEach {
-                nSelection.textSelections[$0.offset] = $0.element.selectedRanges.isEmpty ?
-                nil : .init(ranges: $0.element.selectedIntRanges)
-            }
             if captureSheetSelection != sheetView.model.selection {
                 sheetView.capture(old: captureSheetSelection)
             }

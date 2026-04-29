@@ -93,10 +93,11 @@ final class LineAction: Action {
     
     var enabledPressure = true
     
+    var straightTime = 0.0
     var isSnapStraight = false {
         didSet {
             guard isSnapStraight != oldValue else { return }
-            if isSnapStraight {
+            if isSnapStraight && straightTime > 0.5 {
                 Feedback.performAlignment()
             }
             tempLineNode?.lineType = isSnapStraight ? .color(.selected) : .color(.content)
@@ -1067,6 +1068,7 @@ final class LineAction: Action {
                             self.tempLineNode?.update(path: path,
                                                       withLinePathData: linePathData,
                                                       bufferVertexCounts: linePathBufferVertexCounts)
+                            self.straightTime = (events.last?.time ?? 0) - self.beganTime
                             self.isSnapStraight = isSnapStraight
                             self.drawLineEventsCount = events.count
                             

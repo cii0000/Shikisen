@@ -411,7 +411,10 @@ final class IOAction: Action {
                                     sheetView.unselect()
                                     sheetView.append(text)
                                     sheetView.append(content)
-                                    sheetView.doSet(.init(textSelections: [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])],
+                                    sheetView.doSet(.init(textSelections: text.string.isEmpty ?
+                                                          [:] :
+                                                             [sheetView.model.texts.count - 1:
+                                                                     .init(ranges: [text.string.allIntRange])],
                                                           contentIs: [sheetView.model.contents.count - 1]))
                                 }
                             }
@@ -451,7 +454,10 @@ final class IOAction: Action {
                         sheetView.unselect()
                         sheetView.append(text)
                         sheetView.append(content)
-                        sheetView.doSet(.init(textSelections: [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])],
+                        sheetView.doSet(.init(textSelections: text.string.isEmpty ?
+                                              [:] :
+                                                 [sheetView.model.texts.count - 1:
+                                                         .init(ranges: [text.string.allIntRange])],
                                               contentIs: [sheetView.model.contents.count - 1]))
                     }
                 }

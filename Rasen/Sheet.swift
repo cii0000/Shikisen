@@ -2641,36 +2641,36 @@ extension Sheet {
     
     func checkConsistency(_ selection: SheetSelection) -> Bool {
         if let maxKeyframeI = selection.keyframeSelections.keys.max() {
-            if maxKeyframeI >= animation.keyframes.count {
+            if !animation.keyframes.count.range.contains(maxKeyframeI) {
                 return false
             }
             for (keyframeI, keyframeSelection) in selection.keyframeSelections {
                 let keyframe = animation.keyframes[keyframeI]
                 if let maxLineI = keyframeSelection.lineIs.max(),
-                   maxLineI >= keyframe.picture.lines.count {
+                   !keyframe.picture.lines.count.range.contains(maxLineI) {
                    return false
                 }
                 if let maxPlaneI = keyframeSelection.planeIs.max(),
-                   maxPlaneI >= keyframe.picture.planes.count {
+                   !keyframe.picture.planes.count.range.contains(maxPlaneI) {
                    return false
                 }
             }
         }
         
         if let maxNoteI = selection.noteSelections.keys.max() {
-            if maxNoteI >= score.notes.count {
+            if !score.notes.count.range.contains(maxNoteI) {
                 return false
             }
             for (noteI, noteSelection) in selection.noteSelections {
                 let note = score.notes[noteI]
                 if let maxPitI = noteSelection.pitSelections.keys.max() {
-                    if maxPitI >= note.pits.count {
+                    if !note.pits.count.range.contains(maxPitI) {
                         return false
                     }
                     for (pitI, pitSelection) in noteSelection.pitSelections {
                         let pit = note.pits[pitI]
                         if let maxSprolI = pitSelection.sprolIs.max() {
-                            if maxSprolI >= pit.tone.spectlope.sprols.count {
+                            if !pit.tone.spectlope.sprols.count.range.contains(maxSprolI) {
                                 return false
                             }
                         }
@@ -2682,7 +2682,7 @@ extension Sheet {
         }
         
         if let maxTextI = selection.textSelections.keys.max() {
-            if maxTextI >= texts.count {
+            if !texts.count.range.contains(maxTextI) {
                 return false
             }
             for (textI, textSelection) in selection.textSelections {
@@ -2695,7 +2695,8 @@ extension Sheet {
             }
         }
         
-        if let maxContentI = selection.contentIs.max(), maxContentI >= contents.count {
+        if let maxContentI = selection.contentIs.max(),
+            !contents.count.range.contains(maxContentI) {
             return false
         }
         

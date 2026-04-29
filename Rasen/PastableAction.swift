@@ -869,6 +869,8 @@ final class PastableAction: Action {
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth
             selectingLineNode.path = Path(textView.convertToWorld(tf))
+            
+            return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
                                                      enabledPlane: true,
@@ -932,6 +934,8 @@ final class PastableAction: Action {
                 selectingLineNode.lineWidth = 1
                 selectingLineNode.path = Path(sheetView.convertToWorld(frame))
             }
+            
+            return true
         } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled,
                   let (noteI, result) = sheetView.scoreView
             .hitTestPoint(sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale / 2) {
@@ -2616,7 +2620,9 @@ final class PastableAction: Action {
                     updateUndoGroup(with: sheetView)
                     sheetView.append([nText])
                     if isSelected {
-                        updatedNewUndoGroupDic[sheetView]?.textSelections[sheetView.model.texts.count - 1] = .init(ranges: [text.string.allIntRange])
+                        updatedNewUndoGroupDic[sheetView]?
+                            .textSelections[sheetView.model.texts.count - 1] =
+                        text.string.isEmpty ? nil : .init(ranges: [text.string.allIntRange])
                     }
                 }
             }
@@ -2749,7 +2755,9 @@ final class PastableAction: Action {
                 updateUndoGroup(with: sheetView)
                 sheetView.append(text)
                 if isSelected {
-                    updatedNewUndoGroupDic[sheetView]?.textSelections = [sheetView.model.texts.count - 1: .init(ranges: [text.string.allIntRange])]
+                    updatedNewUndoGroupDic[sheetView]?
+                        .textSelections[sheetView.model.texts.count - 1] =
+                    text.string.isEmpty ? nil : .init(ranges: [text.string.allIntRange])
                 }
             }
         }
