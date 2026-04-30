@@ -55,68 +55,27 @@ extension Road {
             return []
         }
         if dx == 0 {
-            let sy = dy < 0 ? shp1.y : shp0.y
-            let ey = dy < 0 ? shp0.y : shp1.y
             let x = Double(shp0.x) * width + hw
-            return [Point(x, Double(sy) * height + 2 * hh),
-                    Point(x, Double(ey) * height)]
+            return [Point(x, Double(shp0.y) * height + (dy < 0 ? 0 : height)),
+                    Point(x, Double(shp1.y) * height + (dy < 0 ? height : 0))]
         } else if dy == 0 {
-            let sx = dx < 0 ? shp1.x : shp0.x
-            let ex = dx < 0 ? shp0.x : shp1.x
             let y = Double(shp0.y) * height + hh
-            return [Point(Double(sx) * width + hw + hw, y),
-                    Point(Double(ex) * width - hw + hw, y)]
+            return [Point(Double(shp0.x) * width + (dx < 0 ? 0 : width), y),
+                    Point(Double(shp1.x) * width + (dx < 0 ? width : 0), y)]
         } else {
-            var points = [Point]()
-            let isReversed = shp0.y > shp1.y
-            let sSHP = isReversed ? shp1 : shp0,
-                eSHP = isReversed ? shp0 : shp1
-            let sx = sSHP.x, sy = sSHP.y
-            let ex = eSHP.x, ey = eSHP.y
-            if sx < ex {
-                var oldXI = sx
-                for nyi in sy ... ey {
-                    let nxi = Int(Double(ex - sx) * Double(nyi - sy)
-                                    / Double(ey - sy) + Double(sx))
-                    if nyi == sy {
-                        points.append(Point(Double(sx) * width + hw,
-                                            Double(sy + 1) * height))
-                    } else if nyi == ey {
-                        let y = Double(nyi) * height + hh
-                        if oldXI < nxi {
-                            points.append(Point(Double(oldXI) * width + hw, y))
-                        }
-                        points.append(Point(Double(nxi) * width, y))
-                    } else if nxi != oldXI && nxi < ex {
-                        let y = Double(nyi) * height + hh
-                        points.append(Point(Double(oldXI) * width + hw, y))
-                        points.append(Point(Double(nxi) * width + hw, y))
-                        oldXI = nxi
-                    }
-                }
+            if dx < 0 {
+                let x = Double(shp1.x) * width + hw
+                let y = Double(shp0.y) * height + hh
+                return [Point(Double(shp0.x) * width, y),
+                        Point(x, y),
+                        Point(x, Double(shp1.y) * height + (dy < 0 ? height : 0))]
             } else {
-                var oldXI = ex
-                for nyi in (sy ... ey).reversed() {
-                    let nxi = Int(Double(ex - sx) * Double(nyi - sy)
-                                    / Double(ey - sy) + Double(sx))
-                    if nyi == sy {
-                        let y = Double(nyi) * height + hh
-                        if oldXI < nxi {
-                            points.append(Point(Double(oldXI) * width + hw, y))
-                        }
-                        points.append(Point(Double(nxi) * width, y))
-                    } else if nyi == ey {
-                        points.append(Point(Double(ex) * width + hw,
-                                            Double(ey) * height))
-                    } else if nxi != oldXI && nxi > sx {
-                        let y = Double(nyi) * height + hh
-                        points.append(Point(Double(oldXI) * width + hw, y))
-                        points.append(Point(Double(nxi) * width + hw, y))
-                        oldXI = nxi
-                    }
-                }
+                let x = Double(shp0.x) * width + hw
+                let y = Double(shp1.y) * height + hh
+                return [Point(x, Double(shp0.y) * height + (dy < 0 ? 0 : height)),
+                        Point(x, y),
+                        Point(Double(shp1.x) * width + (dx < 0 ? width : 0), y)]
             }
-            return points
         }
     }
 }

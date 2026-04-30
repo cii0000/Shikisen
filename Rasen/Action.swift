@@ -290,7 +290,7 @@ final class RootAction: Action {
         }
     }
     
-    private func inputKeyAction(with gesture: Gesture) -> (any InputKeyEventAction) {
+    private func inputKeyAction(with gesture: Gesture) -> (any InputKeyEventAction)? {
         switch gesture {
         case .undo: UndoAction(self)
         case .redo: RedoAction(self)
@@ -318,7 +318,7 @@ final class RootAction: Action {
         case .goNext: GoNextAction(self)
         case .changeABC: ChangeLanguageAction(self)
         case .changeAIU: ChangeLanguageAction(self)
-        default: EmptyKeyAction(self)
+        default: gesture.inputKeyType?.isClick ?? false ? nil : EmptyKeyAction(self)
         }
     }
     private(set) var oldInputKeyEvent: InputKeyEvent?
@@ -1019,7 +1019,7 @@ final class SelectAction: Action {
                         }
                     }
                     
-//                    nSelection.lastPosition = sheetView.convertFromWorld(p)
+                    nSelection.lastPosition = sheetView.convertFromWorld(p)
                     
                     if sheetView.model.selection != nSelection {
                         sheetView.selection = nSelection
@@ -1032,7 +1032,7 @@ final class SelectAction: Action {
                 }.map { $0.value }
                 rootView.world.selection.sheetIDs
                 = (isUnselect ? oSIDs.subtracting(nSIDs) : oSIDs.union(nSIDs)).sorted()
-//                rootView.world.selection.lastPosition = p
+                rootView.world.selection.lastPosition = p
                 rootView.updateSelected()
             }
             
@@ -1263,8 +1263,7 @@ final class DraftAction: Action {
             rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
-            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
-                ?? rootView.sheetViewWithSelectedLineOrPlane(at: p) {
+            if let sheetView = rootView.sheetViewWithSelectedLineOrPlane(at: p) {
                 let lis = sheetView.keyframeView.selectedLineIs
                 let pis = sheetView.keyframeView.selectedPlaneIs
                 if !lis.isEmpty || !pis.isEmpty {
@@ -1559,8 +1558,7 @@ final class FillAction: Action {
             rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
-            if let sheetView = rootView.sheetViewWithSelectedFrame(at: p)
-                ?? rootView.sheetViewWithSelectedSheetValue(at: p),
+            if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
                let rect = sheetView.selectedFrame {
                 
                 isChanged = sheetView.fillAll(withClipping: rect,
@@ -1650,7 +1648,19 @@ final class FillAction: Action {
             rootAction.closeLookingUpAndStop(at: p)
             
             var isChanged = false
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
+                sheetView.newUndoGroup()
+                let planes = sheetView.keyframeView.selectedPlaneIs
+                    .map { sheetView.model.picture.planes[$0] }
+                let t = Transform(translation: -sheetView.convertFromWorld(p))
+                sheetView.unselect()
+                sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
+                let value = SheetValue(lines: [], planes: planes, texts: [], isSelected: true) * t
+                Pasteboard.shared.copiedObjects = [.sheetValue(value)]
+                rootView.updateSelectedFrame()
+                
+                isChanged = true
+            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
                 let score = sheetView.scoreView.model
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
                 let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
@@ -1681,18 +1691,6 @@ final class FillAction: Action {
                     
                     isChanged = true
                 }
-            } else if let sheetView = rootView.sheetViewWithSelectedPlane(at: p) {
-                sheetView.newUndoGroup()
-                let planes = sheetView.keyframeView.selectedPlaneIs
-                    .map { sheetView.model.picture.planes[$0] }
-                let t = Transform(translation: -sheetView.convertFromWorld(p))
-                sheetView.unselect()
-                sheetView.removePlanes(at: sheetView.keyframeView.selectedPlaneIs)
-                let value = SheetValue(lines: [], planes: planes, texts: [], isSelected: true) * t
-                Pasteboard.shared.copiedObjects = [.sheetValue(value)]
-                rootView.updateSelectedFrame()
-                
-                isChanged = true
             } else if let sheetView = rootView.sheetViewWithSelectedKeyframe(at: p) {
                 let vs = sheetView.animationView.selectedIs.sorted().compactMap {
                     let planes = sheetView.model.animation.keyframes[$0].picture.planes

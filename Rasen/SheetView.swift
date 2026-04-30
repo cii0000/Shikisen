@@ -756,6 +756,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let mainBeatX = x(atBeat: model.mainBeat)
         
         let fpb = Sheet.fpb(fromTempo: model.tempo)
+        var selectedFrame: Rect?
         for (i, keyframe) in model.keyframes.enumerated() {
             let beat = keyframe.beat + beatRange.start
             let kx = x(atBeat: beat)
@@ -771,9 +772,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                              width: nKnobW, height: knobW))
                 if iSet.contains(i) {
                     selectedPathlines.append(pathline)
-                } else {
-                    contentPathlines.append(pathline)
                 }
+                contentPathlines.append(pathline)
+                
                 topD = knobW * 2
             } else {
                 topD = 0
@@ -790,8 +791,13 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                           y: centerY - nKnobH / 2 + bottomD,
                           width: niKnobW, height: nKnobH - bottomD - topD))
             if iSet.contains(i) {
+                let y = centerY - knobH / 2 + bottomD - 4
+                selectedFrame += Rect(x: kx, y: y)
+                selectedPathlines.append(.init(Rect(x: kx - 0.25, y: y,
+                                                    width: 0.5, height: pathline.bounds.minY - y)))
                 selectedPathlines.append(pathline)
-            } else if fpb == nil || !(Rational(fpb!) * beat).isInteger {
+            }
+            if fpb == nil || !(Rational(fpb!) * beat).isInteger {
                 warningPathlines.append(pathline)
             } else {
                 contentPathlines.append(pathline)
@@ -917,6 +923,12 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                            y: pnY - pnnH / 2,
                                            width: knobW, height: pnnH)))
         
+        
+        if let b = selectedFrame {
+            selectedPathlines.append(.init(Rect(x: b.minX, y: b.minY,
+                                                width: b.width, height: 0.5)))
+        }
+        
         var nodes = [Node]()
         
         if !fullEditBorderPathlines.isEmpty {
@@ -948,9 +960,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                               fillType: .color(.keyframeWarning)))
         }
         if !selectedPathlines.isEmpty {
-            nodes.append(Node(name: "selected",
+            nodes.append(Node(name: "selected", isHidden: isHiddenSelected,
                               path: Path(selectedPathlines),
-                              fillType: .color(isHiddenSelected ? .content : .selected)))
+                              fillType: .color(.selected)))
         }
         return nodes
     }
@@ -959,7 +971,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             guard isHiddenSelected != oldValue else { return }
             timelineNode.children.forEach {
                 if $0.name == "selected" {
-                    $0.fillType = .color(isHiddenSelected ? .content : .selected)
+                    $0.isHidden = isHiddenSelected
                 }
             }
         }
@@ -1487,6 +1499,11 @@ final class SheetView: View, @unchecked Sendable {
         }
         let scale = screenToWorldScale
         let rect = convertToWorld(selectedFrame)
+        let lastP: Point? = if let p = model.selection.lastPosition { convertToWorld(p) } else { nil }
+        selectedFrameNode = Node(children: Self.selectedFrameNodes(fom: rect, lastP: lastP,
+                                                                   scale: scale))
+    }
+    static func selectedFrameNodes(fom rect: Rect, lastP: Point?, scale: Double) -> [Node] {
         let cp = rect.centerPoint
         var knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
                          rect.midXMinYPoint, rect.midXMaxYPoint,
@@ -1508,17 +1525,17 @@ final class SheetView: View, @unchecked Sendable {
                  path: Path(Rect(x: -2.5, y: -0.75, width: 5, height: 1.5)),
                  fillType: .color(.selected))
         }
-        if let p = model.selection.lastPosition {
-            let ps = rect.minPoints(at: convertToWorld(p))
+        if let lastP {
+            let ps = rect.minPoints(at: lastP)
             if !ps.isEmpty {
                 knobNodes.append(.init(path: .init(ps),
                                        lineWidth: scale, lineType: .color(.selected)))
             }
         }
         
-        selectedFrameNode = Node(children: knobNodes + [Node(path: .init(rect),
-                                                             lineWidth: scale,
-                                                             lineType: .color(.selected))])
+        return knobNodes + [Node(path: .init(rect),
+                                 lineWidth: scale,
+                                 lineType: .color(.selected))]
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, history: SheetHistory) {
@@ -1830,6 +1847,7 @@ final class SheetView: View, @unchecked Sendable {
         || containsSelectedPlane(p)
         || containsSelectedText(p, scale: scale)
         || containsSelectedContent(p, scale: scale)
+        || containsSelectedLastLine(p, scale: scale)
     }
     func containsSelectedFrame(_ p: Point, scale: Double) -> Bool {
         guard let frame = selectedFrame else { return false }
@@ -1865,7 +1883,22 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         }
-        return minDSq
+        return minDSq.isInfinite ? nil : minDSq
+    }
+    func containsSelectedLastLine(_ p: Point, scale: Double) -> Bool {
+        guard let frame = selectedFrame else { return false }
+        let maxDSq = (Sheet.moveKnobEditDistance * scale).squared
+        if let lp = model.selection.lastPosition {
+            let ps = frame.minPoints(at: lp)
+            let edges = Edge.edges(from: ps)
+            for edge in edges {
+                let dSq = edge.distanceSquared(from: p)
+                if dSq < maxDSq {
+                    return true
+                }
+            }
+        }
+        return false
     }
     func containsSelectedLineOrPlane(_ p: Point, scale: Double) -> Bool {
         containsSelectedLine(p, scale: scale) || containsSelectedPlane(p)
@@ -7116,7 +7149,7 @@ final class SheetView: View, @unchecked Sendable {
                    scale: Double) -> (lineView: SheetLineView, lineIndex: Int)? {
         let isNoneDefaultColorPlane = !model.picture.planes.isEmpty && !isDefaultPlaneColor(at: p)
         let smallScale: Double? = if enabledPlane && isNoneDefaultColorPlane {
-            8.0
+            6.0
         } else if textTuple(at: p) != nil {
             2.0
         } else {

@@ -57,7 +57,7 @@ final class RunAction: InputKeyEventAction {
             rootView.cursor = .arrow
             rootView.closeAllPanels(at: p)
             
-            rootView.unselect(at: p)
+            rootView.unselectAllAndNewUndoGroupIfNeeded()
             
             let shp = rootView.sheetPosition(at: p)
             guard isEditingSheet, let sheetView = rootView.sheetView(at: shp) else { break }

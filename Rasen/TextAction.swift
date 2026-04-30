@@ -336,8 +336,7 @@ final class LookUpAction: InputKeyEventAction {
             rootView.show(str, at: p)
         } else if !rootView.isDefaultUUColor(at: p),
                   let sheetView = rootView.sheetView(at: p),
-                  let plane = sheetView.plane(at: sheetView.convertFromWorld(p)),
-                  plane.uuColor.value.opacity != 0 {
+                  let plane = sheetView.plane(at: sheetView.convertFromWorld(p)) {
             let rgba = plane.uuColor.value.rgba
             rootView.show("Color".localized + "\n\t\("Area".localized):  \(plane.topolygon.area.string(digitsCount: 4))\n\tsRGB: \(rgba.r) \(rgba.g) \(rgba.b)", at: p)
         } else if let sheetView = rootView.sheetView(at: p) {
@@ -817,6 +816,7 @@ final class TextAction: InputTextEventAction {
                     if isNewUndoGroup {
                         sheetView.newUndoGroup()
                         sheetView.unselect()
+                        rootView.unselectAllAndNewUndoGroupIfNeeded()
                     }
                     sheetView.replace(note, at: noteI)
                 }
@@ -857,11 +857,13 @@ final class TextAction: InputTextEventAction {
                 }
                 sheetView.newUndoGroup()
                 sheetView.unselect()
+                rootView.unselectAllAndNewUndoGroupIfNeeded()
                 sheetView.replace([IndexValue(value: note, index: noteI)])
                 appendLyric(atPit: pitI + 1, atNote: noteI, isNewUndoGroup: false)
             } else if event.inputKeyType.isText {
                 sheetView.newUndoGroup()
                 sheetView.unselect()
+                rootView.unselectAllAndNewUndoGroupIfNeeded()
                 sheetView.append(Note(beatRange: beat ..< beat + .init(1, 2), pitch: pitch, pits: [.init()]))
                 appendLyric(atPit: 0, atNote: scoreView.model.notes.count - 1, isNewUndoGroup: false)
             } else {
@@ -936,6 +938,7 @@ final class TextAction: InputTextEventAction {
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
         sheetView.unselect()
+        rootView.unselectAllAndNewUndoGroupIfNeeded()
         sheetView.append(text)
         
         self.isFirstInputKey = true
@@ -963,6 +966,7 @@ final class TextAction: InputTextEventAction {
                         locale: TextInputContext.currentLocale)
         sheetView.newUndoGroup()
         sheetView.unselect()
+        rootView.unselectAllAndNewUndoGroupIfNeeded()
         sheetView.append(text)
         
         self.isFirstInputKey = true
@@ -1035,6 +1039,8 @@ final class TextAction: InputTextEventAction {
         }
         isCapturing = true
         if !inputKeyTimer.isWait {
+            rootView.unselectAllAndNewUndoGroupIfNeeded()
+            
             self.captureString = textView.model.string
             self.captureSheetSelection = sheetView.model.selection
             self.captureOrigin = textView.model.origin

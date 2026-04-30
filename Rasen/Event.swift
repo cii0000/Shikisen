@@ -255,6 +255,14 @@ extension InputKeyType {
             false
         }
     }
+    var isClick: Bool {
+        switch self {
+        case .click, .subClick, .threeFingersTap, .fourFingersTap:
+            true
+        default:
+            false
+        }
+    }
 }
 
 struct EventType {

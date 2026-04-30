@@ -855,31 +855,6 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    func containsSelectedFrame(_ p: Point) -> Bool {
-        sheetViewValues.contains {
-            if let sheetView = $0.value.sheetView {
-                sheetView.containsSelectedFrame(sheetView.convertFromWorld(p),
-                                                scale: screenToWorldScale)
-            } else {
-                false
-            }
-        }
-    }
-    func sheetPositionFromSelectedFrame(at p: Point) -> IntPoint? {
-        var minSHP: IntPoint?, minDSq = Double.infinity
-        sheetViewValues.forEach {
-            if let sheetVeiw = $0.value.sheetView,
-               let dSq = sheetVeiw.selectedFrameDistanceSquared(sheetVeiw.convertFromWorld(p),
-                                                                scale: screenToWorldScale) {
-                if dSq < minDSq {
-                    minSHP = $0.key
-                    minDSq = dSq
-                }
-            }
-        }
-        return minSHP
-    }
-    
     var selectedBounds: Rect? {
         world.selection.sheetIDs.reduce(into: Rect?.none) { $0 += sheetFrame(at: $1) }
     }
@@ -909,19 +884,24 @@ final class RootView: View, @unchecked Sendable {
             }
         } else {
             let roads = roads(fromMap: shps)
-            let roadPath = Path(roads.compactMap {
+            var roadPathlines = roads.compactMap {
                 $0.pathlineWith(width: Sheet.width, height: Sheet.height)
-            }, isCap: false)
-            let framePath = Path(shps.map { .init(sheetFrame(with: $0)) })
+            }
+            let rects = shps.map { sheetFrame(with: $0) }
+            let framePath = Path(rects.map { .init($0) })
+            
+            if let lastPs = selectedLastPositionLinePoints {
+                roadPathlines.append(.init(lastPs))
+            }
             
             let l = worldLineWidth
             selectedNode.children = [Node(path: framePath,
                                           lineWidth: l,
                                           lineType: .color(.selected),
                                           fillType: .color(.subSelected))] +
-            (!roads.isEmpty ? [.init(path: roadPath,
-                                         lineWidth: l * 0.5,
-                                         lineType: .color(.selected))] : [])
+            (!roads.isEmpty ? [.init(path: .init(roadPathlines, isCap: false),
+                                     lineWidth: l * 0.5,
+                                     lineType: .color(.selected))] : [])
         }
         updateSelectedWithIsEditingSheet()
     }
@@ -1611,16 +1591,19 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    func unselect(at p: Point) {
-        if isEditingSheet {
-            if let sheetView = sheetView(at: p) {
-                sheetView.unselectAndNewUndoGroupIfNeeded()
-            }
-        } else {
-            if !world.selection.isEmpty {
-                newUndoGroup()
-                doSet(WorldSelection.empty)
-            }
+    func unselectAndNewUndoGroupIfNeeded() {
+        if !world.selection.isEmpty {
+            newUndoGroup()
+            doSet(WorldSelection.empty)
+        }
+    }
+    func unselectAllAndNewUndoGroupIfNeeded() {
+        sheetViewValues.forEach {
+            $0.value.sheetView?.unselectAndNewUndoGroupIfNeeded()
+        }
+        if !world.selection.isEmpty {
+            newUndoGroup()
+            doSet(WorldSelection.empty)
         }
     }
     func closeAllPanels(at p: Point) {
@@ -2058,6 +2041,29 @@ final class RootView: View, @unchecked Sendable {
         }
         return nil
     }
+    var selectedLastPositionLinePoints: [Point]? {
+        if let lastP = world.selection.lastPosition {
+            let shps = Set(world.selectedSheetPositions)
+            let lastSHP = sheetPosition(at: lastP)
+            if !shps.contains(lastSHP),
+               let nearestSHP = shps.min(by: { $0.distanceSquared(lastSHP) }) {
+                
+                var ps = Road(shp0: nearestSHP, shp1: lastSHP)
+                    .pointsWith(width: Sheet.width, height: Sheet.height)
+                if ps.count >= 2 {
+                    if ps[ps.count - 2].x == ps[ps.count - 1].x {
+                        ps[ps.count - 2].x = lastP.x
+                    }
+                    if ps[ps.count - 2].y == ps[ps.count - 1].y {
+                        ps[ps.count - 2].y = lastP.y
+                    }
+                    ps[ps.count - 1] = lastP
+                    return ps
+                }
+            }
+        }
+        return nil
+    }
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
         if isEditingSheet {
             return false
@@ -2073,7 +2079,17 @@ final class RootView: View, @unchecked Sendable {
                 return true
             }
             
-            let roads = roads(fromMap: Set(world.selectedSheetPositions))
+            let shps = Set(world.selectedSheetPositions)
+            
+            if let lastPs = selectedLastPositionLinePoints {
+                for edge in Edge.edges(from: lastPs) {
+                    if edge.distanceSquared(from: p) < maxDSq {
+                        return true
+                    }
+                }
+            }
+            
+            let roads = roads(fromMap: shps)
             return roads.contains {
                 let ps = $0.pointsWith(width: Sheet.width, height: Sheet.height)
                 return if ps.count > 1 {
@@ -2949,26 +2965,62 @@ final class RootView: View, @unchecked Sendable {
         return nil
     }
     
-    func sheetViewWithSelected(at p: Point) -> SheetView? {
-        guard isEditingSheet else { return nil }
-        for v in sheetViewValues {
-            guard let sheetView = v.value.sheetView else { continue }
+    func sheetViewsWithSelected(at p: Point) -> [SheetView] {
+        guard isEditingSheet else { return [] }
+        let sheetViews = sheetViewsFromSelectedFrame(at: p)
+        if !sheetViews.isEmpty {
+            return sheetViews
+        }
+        return sheetViewValues.compactMap {
+            guard let sheetView = $0.value.sheetView else { return nil }
             if sheetView.containsSelected(sheetView.convertFromWorld(p),
                                           scale: screenToWorldScale) {
                 return sheetView
+            } else {
+                return nil
             }
         }
-        return nil
     }
-    func sheetViewWithSelectedFrame(at p: Point) -> SheetView? {
-        if let shp = sheetPositionFromSelectedFrame(at: p) {
-            sheetView(at: shp)
-        } else {
-            nil
+    func containsSelectedFrame(_ p: Point) -> Bool {
+        sheetViewValues.contains {
+            if let sheetView = $0.value.sheetView {
+                sheetView.containsSelectedFrame(sheetView.convertFromWorld(p),
+                                                scale: screenToWorldScale)
+            } else {
+                false
+            }
+        }
+    }
+    func sheetPositionFromSelectedFrame(at p: Point) -> IntPoint? {
+        var minSHP: IntPoint?, minDSq = Double.infinity
+        sheetViewValues.forEach {
+            if let sheetVeiw = $0.value.sheetView,
+               let dSq = sheetVeiw.selectedFrameDistanceSquared(sheetVeiw.convertFromWorld(p),
+                                                                scale: screenToWorldScale) {
+                if dSq < minDSq {
+                    minSHP = $0.key
+                    minDSq = dSq
+                }
+            }
+        }
+        return minSHP
+    }
+    func sheetViewsFromSelectedFrame(at p: Point) -> [SheetView] {
+        sheetViewValues.compactMap {
+            if let sheetVeiw = $0.value.sheetView,
+               sheetVeiw.selectedFrameDistanceSquared(sheetVeiw.convertFromWorld(p),
+                                                      scale: screenToWorldScale) != nil {
+                sheetVeiw
+            } else {
+                nil
+            }
         }
     }
     func sheetViewWithSelectedSheetValue(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
@@ -2980,6 +3032,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLineOrPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
@@ -2991,6 +3046,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedLine(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
@@ -3002,6 +3060,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedPlane(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)) {
@@ -3012,6 +3073,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedText(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedText(sheetView.convertFromWorld(p),
@@ -3023,6 +3087,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedContent(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedContent(sheetView.convertFromWorld(p),
@@ -3154,9 +3221,10 @@ final class RootView: View, @unchecked Sendable {
     func isDefaultUUColor(at p: Point) -> Bool {
         if let sheetView = sheetView(at: p) {
             let sheetP = sheetView.convertFromWorld(p)
-            return sheetView.sheetColorOwner(at: sheetP,
-                                             scale: screenToWorldScale).value.uuColor
-            == Sheet.defalutBackgroundUUColor
+            let uuColor = sheetView.sheetColorOwner(at: sheetP,
+                                                    scale: screenToWorldScale).value.uuColor
+            return uuColor == Sheet.defalutBackgroundUUColor
+            || (uuColor.id == .two && uuColor.value.opacity == 0)
         } else {
             return true
         }

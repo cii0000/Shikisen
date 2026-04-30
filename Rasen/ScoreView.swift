@@ -303,11 +303,13 @@ final class ScoreView: TimelineView, @unchecked Sendable {
         for (noteI, pitSprols) in selectedNotePitSprolIs {
             let note = score.notes[noteI]
             
-            let ps = noteLines[noteI].controls.map { $0.point }
-            if !ps.isEmpty {
-                children.append(Node(path: Path(ps),
-                                     lineWidth: 1.5,
-                                     lineType: .color(.selected.with(opacity: 0.75))))
+            if pitSprols.isEmpty || pitSprols.count == note.pits.count {
+                let ps = noteLines[noteI].controls.map { $0.point }
+                if !ps.isEmpty {
+                    children.append(Node(path: Path(ps),
+                                         lineWidth: 1.5,
+                                         lineType: .color(.selected.with(opacity: 0.75))))
+                }
             }
             
             var pathlines = [Pathline]()

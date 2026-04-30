@@ -223,6 +223,22 @@ extension Collection {
         }
         return minV
     }
+    func min<V: Comparable>(by handler: (Element) throws -> V) rethrows -> Element? {
+        var minV: V?, minE: Element?
+        for e in self {
+            let v = try handler(e)
+            if let aMinV = minV {
+                if v < aMinV {
+                    minV = v
+                    minE = e
+                }
+            } else {
+                minV = v
+                minE = e
+            }
+        }
+        return minE
+    }
 }
 
 extension Array {

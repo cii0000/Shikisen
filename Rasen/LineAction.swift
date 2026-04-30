@@ -158,7 +158,6 @@ final class LineAction: Action {
             outlineLassoNode?.lineWidth = lassoPathNodeLineWidth
         }
     }
-    private var isNewUndoGroupNote = true
     
     private var isDrawNote = false
     private var noteSheetView: SheetView?, oldPitch = Rational(0), firstTone = Tone(),
@@ -207,10 +206,14 @@ final class LineAction: Action {
             rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = noteSheetView, sheetView.model.score.enabled {
-                if !sheetView.model.selection.isEmpty {
-                    sheetView.newUndoGroup()
-                    isNewUndoGroupNote = false
-                    sheetView.doSet(SheetSelection.empty)
+                rootView.unselectAndNewUndoGroupIfNeeded()
+                for sheetValue in rootView.sheetViewValues {
+                    guard let sheetView = sheetValue.value.sheetView else { continue }
+                    var isNewUndoGroup = true
+                    sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                    if !isNewUndoGroup {
+                        isUpdatedNewUndoGroupSheetViews.insert(sheetView)
+                    }
                 }
                 
                 let scoreView = sheetView.scoreView
@@ -345,12 +348,8 @@ final class LineAction: Action {
                 if beatRange.length == 0 {
                     scoreView.remove(at: noteI)
                 } else {
-                    if isNewUndoGroupNote {
+                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
                         sheetView.newUndoGroup()
-                    }
-                    if !sheetView.model.selection.isEmpty {
-                        sheetView.doSet(SheetSelection.empty)
-                        rootView.updateSelectedFrame()
                     }
                     sheetView.captureAppend(sheetView.model.score.notes.last!)
                 }
@@ -412,7 +411,7 @@ final class LineAction: Action {
                     }
                 }
                 if !replaceIVs.isEmpty {
-                    if isNewUndoGroupNote {
+                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
                         sheetView.newUndoGroup()
                     }
                     sheetView.replace(replaceIVs)
@@ -439,7 +438,7 @@ final class LineAction: Action {
                 Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
                                                                           deltaPitch: pitch,
                                                                           isSelected: true))]
-                if isNewUndoGroupNote {
+                if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
                     sheetView.newUndoGroup()
                 }
                 sheetView.removeNote(at: nis)
@@ -1001,13 +1000,17 @@ final class LineAction: Action {
                                      at: rootView.accessoryNodeIndex)
             
             let sheetView = rootView.sheetView(at: centerSHP)
-            if let sheetView {
+            
+            rootView.unselectAndNewUndoGroupIfNeeded()
+            for sheetValue in rootView.sheetViewValues {
+                guard let sheetView = sheetValue.value.sheetView else { continue }
                 var isNewUndoGroup = true
                 sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
                 if !isNewUndoGroup {
                     isUpdatedNewUndoGroupSheetViews.insert(sheetView)
                 }
             }
+            
             snapLines = sheetView?.model.picture.lines ?? []
             
             beganTime = event.time
@@ -1071,15 +1074,6 @@ final class LineAction: Action {
                             self.straightTime = (events.last?.time ?? 0) - self.beganTime
                             self.isSnapStraight = isSnapStraight
                             self.drawLineEventsCount = events.count
-                            
-                            if let sheetView = self.rootView.sheetView(at: tempLine.lastPoint + self.centerOrigin),
-                               !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
-                                var isNewUndoGroup = true
-                                sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
-                                if !isNewUndoGroup {
-                                    self.isUpdatedNewUndoGroupSheetViews.insert(sheetView)
-                                }
-                            }
                         }
                     }
                 }
@@ -1227,13 +1221,11 @@ final class LineAction: Action {
                 if let sheetView {
                     if isScore {
                         noteSheetView = sheetView
-                        sheetView.unselect(isNewUndoGroup: &isNewUndoGroupNote)
-                    } else {
-                        var isNewUndoGroup = true
-                        sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
-                        if !isNewUndoGroup {
-                            isUpdatedNewUndoGroupSheetViews.insert(sheetView)
-                        }
+                    }
+                    var isNewUndoGroup = true
+                    sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
+                    if !isNewUndoGroup {
+                        isUpdatedNewUndoGroupSheetViews.insert(sheetView)
                     }
                 }
             } else {

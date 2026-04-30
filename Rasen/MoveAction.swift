@@ -66,14 +66,14 @@ final class MoveAction: DragEventAction {
                 type = .sheets(MoveSheetsAction(rootAction))
             } else if rootView.containsSelectedFrame(p) {
                 type = .sheet(MoveSheetAction(rootAction))
+            } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
+                      !sheetView.scoreView.containsNote(sheetView.scoreView.convertFromWorld(p),
+                                                           scale: rootView.screenToWorldScale,
+                                                           enabledTone: true) {
+                type = .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.containsSelectedSheetValue(sheetP, scale: rootView.screenToWorldScale)
-                    && !sheetView.scoreView.containsNote(sheetView.scoreView.convertFromWorld(p),
-                                                         scale: rootView.screenToWorldScale,
-                                                         enabledTone: true) {
-                    type = .sheet(MoveSheetAction(rootAction))
-                } else if sheetView.lineTuple(at: sheetP,
+                if sheetView.lineTuple(at: sheetP,
                                               scale: rootView.screenToWorldScale) != nil {
                     type = .line(MoveLineAction(rootAction))
                 } else if sheetView.containsTempo(sheetP, scale: rootView.screenToWorldScale) {
@@ -168,7 +168,7 @@ final class MoveSheetsAction: DragEventAction {
     
     private var beganIsShownSpectrogram = false
     var pasteSheetNode = Node(), selectingLineNode = Node(), firstScale = 1.0
-    var editingSP = Point(), editingP = Point()
+    var beganScreenP = Point(), beganP = Point()
     var csv = CopiedSheetsValue(), isNewUndoGroup = false
     func flow(with event: DragEvent) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
@@ -210,8 +210,8 @@ final class MoveSheetsAction: DragEventAction {
             }
             
             firstScale = rootView.worldToScreenScale
-            editingSP = event.screenPoint
-            editingP = p
+            beganScreenP = event.screenPoint
+            beganP = p
             selectingLineNode.fillType = .color(.subSelected)
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth
@@ -302,7 +302,18 @@ final class MoveSheetsAction: DragEventAction {
                 rootView.append(nIndexes)
             }
             rootView.updateNode()
+            
+            if !rootView.world.selection.isEmpty, rootView.world.selection.lastPosition != nil {
+                var selection = rootView.world.selection
+                selection.lastPosition = selection.lastPosition! + p - beganP
+                rootView.doSet(selection)
+            }
         }
+        
+//        if !rootView.world.selection.isEmpty {
+//            rootView.newUndoGroup()
+//            rootView.doSet(WorldSelection.empty)
+//        }
     }
 }
 
@@ -2473,9 +2484,6 @@ final class MoveSheetAction: DragEventAction {
             node.removeFromParent()
             
             if let sheetView {
-                rootView.updateSelectedFrame()
-                sheetView.showSelected()
-                
                 let lines = sheetView.model.picture.lines[lineIs]
                 let planes = sheetView.model.picture.planes[planeIs]
                 let texts = sheetView.model.texts[textIs]
@@ -2520,7 +2528,16 @@ final class MoveSheetAction: DragEventAction {
                             sheetView.removeContents(at: cis)
                         }
                     }
+                    
+                    if !sheetView.selection.isEmpty, sheetView.selection.lastPosition != nil {
+                        var selection = sheetView.selection
+                        selection.lastPosition = selection.lastPosition! + p - oldP
+                        sheetView.doSet(selection)
+                    }
                 }
+                
+                rootView.updateSelectedFrame()
+                sheetView.showSelected()
             }
             
             rootView.cursor = rootView.defaultCursor

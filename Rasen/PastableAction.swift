@@ -610,7 +610,7 @@ final class PastableAction: Action {
             
             let isSelected = animationView.selectedIs.contains(ki)
             let indexes = isSelected ?
-                animationView.selectedIs.sorted() : [ki]
+            animationView.selectedIs.sorted() : [ki]
             var beat: Rational = 0
             let kfs = indexes.map {
                 var kf = animationView.model.keyframes[$0]
@@ -630,85 +630,7 @@ final class PastableAction: Action {
             selectingLineNode.path = Path(rects.map { Pathline(sheetView.convertToWorld($0)) })
             
             return true
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
-                                                 scale: rootView.screenToWorldScale) {
-            let scoreView = sheetView.scoreView
-            
-            func show(_ ps: [Point], r: Double) {
-                let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                                path: Path(ps.map { Pathline(circleRadius: r, position: $0) }),
-                                fillType: .color(.selected))
-                let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                                  path: Path(ps.map { Pathline(circleRadius: r * 0.5,
-                                                               position: $0) }),
-                                fillType: .color(.background))
-                selectingLineNode.children = [node, inNode]
-            }
-            
-            let scoreP = scoreView.convertFromWorld(p)
-            let pitchInterval = rootView.currentPitchInterval
-            let beatInterval = rootView.currentBeatInterval
-            let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
-            let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
-            
-            let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
-                .result.isPit ?? false
-            let nis = scoreView.selectedNotePitIs
-            let noteIs = nis.keys.sorted()
-            var ps = [Point]()
-            let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
-                let note = scoreView.model.notes[v.key]
-                let pitIs = v.value
-                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
-                    var currentBeat: Rational = 0, nPits = [Pit]()
-                    for pitI in pitIs {
-                        let pit = note.pits[pitI]
-                        let dBeat = (pitI + 1 < note.pits.count ?
-                                     note.pits[pitI + 1].beat : note.beatRange.length) - pit.beat
-                        nPits.append(.init(beat: currentBeat, pitch: pit.pitch, stereo: pit.stereo,
-                                           tone: pit.tone, lyric: pit.lyric))
-                        currentBeat += dBeat
-                        ps.append(scoreView.pitPosition(atPit:pitI, from: note))
-                    }
-                    let startBeat = note.pits[pitIs[0]].beat + note.beatRange.start
-                    var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
-                                     pitch: note.pitch, pits: nPits, id: .init())
-                    nNote.pitch -= pitch
-                    nNote.beatRange.start -= beat
-                    return nNote
-                } else {
-                    var nNote = note
-                    nNote.pitch -= pitch
-                    nNote.beatRange.start -= beat
-                    return nNote
-                }
-            }
-            if isSendPasteboard {
-                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
-                                                                          deltaPitch: pitch,
-                                                                          isSelected: true))]
-            }
-            
-            selectingLineNode.children = noteIs
-                .map { Path(scoreView.pointline(at: $0).controls
-                    .map { scoreView.convertToWorld($0.point) }) }
-                .map {
-                Node(path: $0,
-                     lineWidth: 1.5 * 2,
-                     lineType: .color(.selected))
-            } + [Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8, position: $0) }),
-                      fillType: .color(.selected)),
-                 Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
-                                                   position: $0) }),
-                      fillType: .color(.background))]
-            
-            return true
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
-                                                       scale: rootView.screenToWorldScale),
+        } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
                   let sheetValue = sheetView.selectedSheetValue() {
             let sheetP = sheetView.convertFromWorld(p)
             let t = Transform(translation: -sheetP)
@@ -750,7 +672,95 @@ final class PastableAction: Action {
                             lineType: .color(.selected),
                             fillType: .color(.subSelected))
             }
+            let selectedFrameNodes: [Node]
+            let scale = rootView.screenToWorldScale
+            if let selectedFrame = sheetView.selectedFrame {
+                let rect = sheetView.convertToWorld(selectedFrame)
+                let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
+                selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
+                                                                  scale: scale * 1.5)
+            } else {
+                selectedFrameNodes = []
+            }
+            
             selectingLineNode.children = planeNodes + lineNodes + textNodes + contentNodes
+            + selectedFrameNodes
+            
+            return true
+        } else if let sheetView = rootView.sheetView(at: p),
+                  sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
+                                                 scale: rootView.screenToWorldScale) {
+            let scoreView = sheetView.scoreView
+            
+            func show(_ ps: [Point], r: Double) {
+                let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                                path: Path(ps.map { Pathline(circleRadius: r, position: $0) }),
+                                fillType: .color(.selected))
+                let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                                  path: Path(ps.map { Pathline(circleRadius: r * 0.5,
+                                                               position: $0) }),
+                                fillType: .color(.background))
+                selectingLineNode.children = [node, inNode]
+            }
+            
+            let scoreP = scoreView.convertFromWorld(p)
+            let pitchInterval = rootView.currentPitchInterval
+            let beatInterval = rootView.currentBeatInterval
+            let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
+            let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
+            
+            let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
+                .result.isPit ?? false
+            let nis = scoreView.selectedNotePitIs
+            var ps = [Point](), allNoteIs = [Int]()
+            let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
+                let note = scoreView.model.notes[v.key]
+                let pitIs = v.value
+                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
+                    var currentBeat: Rational = 0, nPits = [Pit]()
+                    for pitI in pitIs {
+                        let pit = note.pits[pitI]
+                        let dBeat = (pitI + 1 < note.pits.count ?
+                                     note.pits[pitI + 1].beat : note.beatRange.length) - pit.beat
+                        nPits.append(.init(beat: currentBeat, pitch: pit.pitch, stereo: pit.stereo,
+                                           tone: pit.tone, lyric: pit.lyric))
+                        currentBeat += dBeat
+                        ps.append(scoreView.pitPosition(atPit:pitI, from: note))
+                    }
+                    let startBeat = note.pits[pitIs[0]].beat + note.beatRange.start
+                    var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
+                                     pitch: note.pitch, pits: nPits, id: .init())
+                    nNote.pitch -= pitch
+                    nNote.beatRange.start -= beat
+                    return nNote
+                } else {
+                    allNoteIs.append(v.key)
+                    var nNote = note
+                    nNote.pitch -= pitch
+                    nNote.beatRange.start -= beat
+                    return nNote
+                }
+            }
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.notesValue(NotesValue(notes: notes,
+                                                                          deltaPitch: pitch,
+                                                                          isSelected: true))]
+            }
+            
+            selectingLineNode.children = allNoteIs
+                .map { Path(scoreView.pointline(at: $0).controls
+                    .map { scoreView.convertToWorld($0.point) }) }
+                .map {
+                Node(path: $0,
+                     lineWidth: 1.5 * 2,
+                     lineType: .color(.selected))
+            } + [Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8, position: $0) }),
+                      fillType: .color(.selected)),
+                 Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
+                                                   position: $0) }),
+                      fillType: .color(.background))]
             
             return true
         } else if rootView.containsLookingUp(at: p),
@@ -1246,6 +1256,77 @@ final class PastableAction: Action {
             Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
             
             return true
+        } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
+                    let sheetValue = sheetView.selectedSheetValue() {
+            let sheetP = sheetView.convertFromWorld(p)
+            let t = Transform(translation: -sheetP)
+            var sheetValue = sheetValue * t
+            sheetValue.origin = sheetP
+            if let s = sheetValue.string {
+                Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue), .string(s)]
+            } else {
+                Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue)]
+            }
+            
+            let lineIs = sheetView.keyframeView.selectedLineIs
+            let planeIs = sheetView.keyframeView.selectedPlaneIs
+            let textRanges = sheetView.textsView.elementViews.enumerated().reversed()
+                .map { ($0.offset, $0.element.selectedRanges) }
+            let contentIs = sheetView.selectedContentIs
+            
+            sheetView.newUndoGroup()
+            sheetView.unselect()
+            
+            if !lineIs.isEmpty {
+                sheetView.removeLines(at: lineIs)
+            }
+            if !planeIs.isEmpty {
+                sheetView.removePlanes(at: planeIs)
+            }
+            for (ti, ranges) in textRanges {
+                let textView = sheetView.textsView.elementViews[ti]
+                guard !ranges.isEmpty else { continue }
+                
+                var minI = textView.model.string.endIndex
+                for range in ranges {
+                    let i = range.lowerBound
+                    if i < minI {
+                        minI = i
+                    }
+                }
+                let oldText = textView.model
+                var text = textView.model
+                for range in ranges.reversed() {
+                    text.string.removeSubrange(range)
+                }
+                
+                if text.string.isEmpty {
+                    sheetView.removeText(at: ti)
+                } else {
+                    let os = oldText.string
+                    let range = os.intRange(from: os.startIndex ..< os.endIndex)
+                    
+                    let sb = sheetView.bounds.inset(by: Sheet.textPadding)
+                    let origin: Point?
+                    if let textFrame = text.frame, !sb.contains(textFrame) {
+                        let nFrame = sb.clipped(textFrame)
+                        origin = text.origin + nFrame.origin - textFrame.origin
+                    } else {
+                        origin = nil
+                    }
+                    
+                    let tuv = TextValue(string: text.string,
+                                        replacedRange: range,
+                                        origin: origin, size: nil,
+                                        widthCount: nil)
+                    sheetView.replace(IndexValue(value: tuv, index: ti))
+                }
+            }
+            if !contentIs.isEmpty {
+                sheetView.removeContents(at: contentIs)
+            }
+            
+            return true
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
                                                  scale: rootView.screenToWorldScale) {
@@ -1320,79 +1401,6 @@ final class PastableAction: Action {
             }
             
             sheetView.updatePlaying()
-            
-            return true
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.containsSelectedSheetValue(sheetView.convertFromWorld(p),
-                                                       scale: rootView.screenToWorldScale),
-                    let sheetValue = sheetView.selectedSheetValue() {
-            let sheetP = sheetView.convertFromWorld(p)
-            let t = Transform(translation: -sheetP)
-            var sheetValue = sheetValue * t
-            sheetValue.origin = sheetP
-            if let s = sheetValue.string {
-                Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue), .string(s)]
-            } else {
-                Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue)]
-            }
-            
-            let lineIs = sheetView.keyframeView.selectedLineIs
-            let planeIs = sheetView.keyframeView.selectedPlaneIs
-            let textRanges = sheetView.textsView.elementViews.enumerated().reversed()
-                .map { ($0.offset, $0.element.selectedRanges) }
-            let contentIs = sheetView.selectedContentIs
-            
-            sheetView.newUndoGroup()
-            sheetView.unselect()
-            
-            if !lineIs.isEmpty {
-                sheetView.removeLines(at: lineIs)
-            }
-            if !planeIs.isEmpty {
-                sheetView.removePlanes(at: planeIs)
-            }
-            for (ti, ranges) in textRanges {
-                let textView = sheetView.textsView.elementViews[ti]
-                guard !ranges.isEmpty else { continue }
-                
-                var minI = textView.model.string.endIndex
-                for range in ranges {
-                    let i = range.lowerBound
-                    if i < minI {
-                        minI = i
-                    }
-                }
-                let oldText = textView.model
-                var text = textView.model
-                for range in ranges.reversed() {
-                    text.string.removeSubrange(range)
-                }
-                
-                if text.string.isEmpty {
-                    sheetView.removeText(at: ti)
-                } else {
-                    let os = oldText.string
-                    let range = os.intRange(from: os.startIndex ..< os.endIndex)
-                    
-                    let sb = sheetView.bounds.inset(by: Sheet.textPadding)
-                    let origin: Point?
-                    if let textFrame = text.frame, !sb.contains(textFrame) {
-                        let nFrame = sb.clipped(textFrame)
-                        origin = text.origin + nFrame.origin - textFrame.origin
-                    } else {
-                        origin = nil
-                    }
-                    
-                    let tuv = TextValue(string: text.string,
-                                        replacedRange: range,
-                                        origin: origin, size: nil,
-                                        widthCount: nil)
-                    sheetView.replace(IndexValue(value: tuv, index: ti))
-                }
-            }
-            if !contentIs.isEmpty {
-                sheetView.removeContents(at: contentIs)
-            }
             
             return true
         } else if let sheetView = rootView.sheetView(at: p),
@@ -3809,9 +3817,13 @@ final class PastableAction: Action {
             let p = rootView.convertScreenToWorld(event.screenPoint)
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             let roads = rootView.roads(fromMap: Set(values.map { $0.shp }))
-            let roadPath = Path(roads.compactMap {
+            var roadPathlines = roads.compactMap {
                 $0.pathlineWith(width: Sheet.width, height: Sheet.height)
-            }, isCap: false)
+            }
+            
+            if let lastPs = rootView.selectedLastPositionLinePoints {
+                roadPathlines.append(.init(lastPs))
+            }
             
             selectingLineNode.children = values.map {
                 let sf = $0.frame
@@ -3820,7 +3832,7 @@ final class PastableAction: Action {
                             lineWidth: selectingLineNode.lineWidth,
                             lineType: selectingLineNode.lineType,
                             fillType: selectingLineNode.fillType)
-            } + (!roads.isEmpty ? [.init(path: roadPath,
+            } + (!roads.isEmpty ? [.init(path: .init(roadPathlines, isCap: false),
                                          lineWidth: selectingLineNode.lineWidth * 0.5,
                                          lineType: .color(.selected))] : [])
             updateWithCopySheet(at: p, isSelected: isSelected, from: values)
