@@ -348,6 +348,11 @@ final class ScoreView: TimelineView, @unchecked Sendable {
         }
         selectedNode.children = children
     }
+    var selectedFrame: Rect? {
+        selectedNode.children.reduce(into: Rect?.none) {
+            $0 += $1.bounds
+        }
+    }
     
     init(binder: Binder, keyPath: BinderKeyPath) {
         self.binder = binder

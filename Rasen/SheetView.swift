@@ -1501,11 +1501,26 @@ final class SheetView: View, @unchecked Sendable {
         let rect = convertToWorld(selectedFrame)
         let lastP: Point? = if let p = model.selection.lastPosition { convertToWorld(p) } else { nil }
         selectedFrameNode = Node(children: Self.selectedFrameNodes(fom: rect, lastP: lastP,
+                                                                   isKnob: !model.score.enabled,
                                                                    scale: scale))
     }
-    static func selectedFrameNodes(fom rect: Rect, lastP: Point?, scale: Double) -> [Node] {
+    static func selectedFrameNodes(fom rect: Rect, lastP: Point?, isKnob: Bool,
+                                   scale: Double) -> [Node] {
+        var frameNodes = [Node(path: isKnob ? .init(rect) : .init(rect, cornerRadius: 2),
+                               lineWidth: scale,
+                               lineType: .color(.selected))]
+        if let lastP {
+            let ps = rect.minPoints(at: lastP)
+            if !ps.isEmpty {
+                frameNodes.append(.init(path: .init(ps),
+                                        lineWidth: scale, lineType: .color(.selected)))
+            }
+        }
+        if !isKnob {
+            return frameNodes
+        }
         let cp = rect.centerPoint
-        var knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
+        let knobNodes = [rect.minXMinYPoint, rect.minXMidYPoint, rect.minXMaxYPoint,
                          rect.midXMinYPoint, rect.midXMaxYPoint,
                          rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
             Node(name: "knob",
@@ -1525,17 +1540,8 @@ final class SheetView: View, @unchecked Sendable {
                  path: Path(Rect(x: -2.5, y: -0.75, width: 5, height: 1.5)),
                  fillType: .color(.selected))
         }
-        if let lastP {
-            let ps = rect.minPoints(at: lastP)
-            if !ps.isEmpty {
-                knobNodes.append(.init(path: .init(ps),
-                                       lineWidth: scale, lineType: .color(.selected)))
-            }
-        }
         
-        return knobNodes + [Node(path: .init(rect),
-                                 lineWidth: scale,
-                                 lineType: .color(.selected))]
+        return knobNodes + frameNodes
     }
     
     init(binder: Binder, keyPath: BinderKeyPath, history: SheetHistory) {
@@ -1773,6 +1779,9 @@ final class SheetView: View, @unchecked Sendable {
         selectedContentIs.forEach {
             rect += contentsView.elementViews[$0].transformedBounds
         }
+        if model.score.enabled, let selectedFrame = scoreView.selectedFrame {
+            rect += convert(selectedFrame, from: scoreView.node)
+        }
         return rect?.outset(by: 5)
     }
     func updateSelectedColor(isMain: Bool) {
@@ -1851,20 +1860,27 @@ final class SheetView: View, @unchecked Sendable {
     }
     func containsSelectedFrame(_ p: Point, scale: Double) -> Bool {
         guard let frame = selectedFrame else { return false }
-        let dSq = (Sheet.moveKnobEditDistance * scale).squared
-        let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
-        return frame.allPoints.contains { $0.distanceSquared(p) < dSq }
-        || frame.edges.contains { $0.distanceSquared(from: p) < edSq }
+        if model.score.enabled {
+            let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
+            return frame.edges.contains { $0.distanceSquared(from: p) < edSq }
+        } else {
+            let dSq = (Sheet.moveKnobEditDistance * scale).squared
+            let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
+            return frame.allPoints.contains { $0.distanceSquared(p) < dSq }
+            || frame.edges.contains { $0.distanceSquared(from: p) < edSq }
+        }
     }
     func selectedFrameDistanceSquared(_ p: Point, scale: Double) -> Double? {
         guard let frame = selectedFrame else { return nil }
         let maxDSq = (Sheet.moveKnobEditDistance * scale).squared
         let maxEDSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
         var minDSq = Double.infinity
-        frame.allPoints.forEach {
-            let dSq = $0.distanceSquared(p)
-            if dSq < minDSq && dSq < maxDSq {
-                minDSq = dSq
+        if !model.score.enabled {
+            frame.allPoints.forEach {
+                let dSq = $0.distanceSquared(p)
+                if dSq < minDSq && dSq < maxDSq {
+                    minDSq = dSq
+                }
             }
         }
         frame.edges.forEach {

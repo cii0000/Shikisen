@@ -678,6 +678,7 @@ final class PastableAction: Action {
                 let rect = sheetView.convertToWorld(selectedFrame)
                 let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
                 selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
+                                                                  isKnob: !sheetView.model.score.enabled,
                                                                   scale: scale * 1.5)
             } else {
                 selectedFrameNodes = []
@@ -687,9 +688,7 @@ final class PastableAction: Action {
             + selectedFrameNodes
             
             return true
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
-                                                 scale: rootView.screenToWorldScale) {
+        } else if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
             let scoreView = sheetView.scoreView
             
             func show(_ ps: [Point], r: Double) {
@@ -747,6 +746,18 @@ final class PastableAction: Action {
                                                                           isSelected: true))]
             }
             
+            let selectedFrameNodes: [Node]
+            let scale = rootView.screenToWorldScale
+            if let selectedFrame = sheetView.selectedFrame {
+                let rect = sheetView.convertToWorld(selectedFrame)
+                let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
+                selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
+                                                                  isKnob: !sheetView.model.score.enabled,
+                                                                  scale: scale * 1.5)
+            } else {
+                selectedFrameNodes = []
+            }
+            
             selectingLineNode.children = allNoteIs
                 .map { Path(scoreView.pointline(at: $0).controls
                     .map { scoreView.convertToWorld($0.point) }) }
@@ -760,7 +771,7 @@ final class PastableAction: Action {
                  Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
                       path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
                                                    position: $0) }),
-                      fillType: .color(.background))]
+                      fillType: .color(.background))] + selectedFrameNodes
             
             return true
         } else if rootView.containsLookingUp(at: p),
@@ -1327,9 +1338,7 @@ final class PastableAction: Action {
             }
             
             return true
-        } else if let sheetView = rootView.sheetView(at: p),
-                  sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
-                                                 scale: rootView.screenToWorldScale) {
+        } else if let sheetView = rootView.sheetViewWithSelectedNote(at: p) {
             let scoreView = sheetView.scoreView
             
             let scoreP = scoreView.convertFromWorld(p)

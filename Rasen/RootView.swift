@@ -2064,6 +2064,17 @@ final class RootView: View, @unchecked Sendable {
         }
         return nil
     }
+    func containsSelectedLastLine(_ p: Point) -> Bool {
+        let maxDSq = (Sheet.knobEditDistance * screenToWorldScale).squared
+        if let lastPs = selectedLastPositionLinePoints {
+            for edge in Edge.edges(from: lastPs) {
+                if edge.distanceSquared(from: p) < maxDSq {
+                    return true
+                }
+            }
+        }
+        return false
+    }
     func containsSelectedSheetPositions(_ p: Point) -> Bool {
         if isEditingSheet {
             return false
@@ -3112,6 +3123,9 @@ final class RootView: View, @unchecked Sendable {
     }
     func sheetViewWithSelectedNote(at p: Point) -> SheetView? {
         guard isEditingSheet else { return nil }
+        if let shp = sheetPositionFromSelectedFrame(at: p) {
+            return sheetView(at: shp)
+        }
         for v in sheetViewValues {
             guard let sheetView = v.value.sheetView else { continue }
             if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),

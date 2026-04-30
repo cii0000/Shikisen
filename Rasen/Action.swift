@@ -828,7 +828,8 @@ final class SelectAction: Action {
             }
             
             let rect = AABB(firstP, p).rect
-            node.path = .init(rect)
+            node.path = .init(rect, cornerRadius: min(rect.width / 2, rect.height / 2,
+                                                      2 * rootView.screenToWorldScale))
             
             if rootView.isEditingSheet, let sheetView = firstSheetView,
                 let ti = firstTextI, ti < sheetView.model.texts.count,
