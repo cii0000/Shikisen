@@ -799,7 +799,7 @@ final class MoveScoreAction: DragEventAction {
                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                     
                     let dSecStr = scoreView.isFullEdit ?
-                    " "
+                    "\n"
                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                      : ""
                     rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString() + dSecStr)
@@ -1224,7 +1224,7 @@ final class MoveScoreAction: DragEventAction {
                                     let result = note.pitResult(atBeat: Double(nsBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                                     let dSecStr = scoreView.isFullEdit ?
-                                    " "
+                                    "\n"
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
                                     rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
@@ -1279,7 +1279,7 @@ final class MoveScoreAction: DragEventAction {
                                     let result = note.pitResult(atBeat: Double(neBeat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
                                     let dSecStr = scoreView.isFullEdit ?
-                                    " "
+                                    "\n"
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
                                     rootView.cursor = .arrowWith(string: Pitch(value: cPitch).displayString(deltaPitch: dPitch) + dSecStr)
@@ -1290,14 +1290,15 @@ final class MoveScoreAction: DragEventAction {
                 case .note:
                     if let _ = beganBeatRange {
                         let beatInterval = rootView.currentBeatInterval
-                        let pitch = scoreView.pitch(atY: beganPitchY + sheetP.y - beganSheetP.y,
-                                                    interval: rootView.currentPitchInterval)
+                        let y = beganPitchY + sheetP.y - beganSheetP.y
+                        let doublePitch = scoreView.pitch(atY: y)
+                        let pitch = scoreView.pitch(atY: y, interval: rootView.currentPitchInterval)
                         let nsBeat = scoreView.durBeat(atWidth: sheetP.x - beganSheetP.x,
                                                        interval: beatInterval)
                         if pitch != oldPitch || nsBeat != oldBeat {
                             let dBeat = nsBeat
                             let dPitch = pitch - beganPitch
-                            
+                            let doubleDPitch = doublePitch - .init(beganPitch)
                             let startBeat = sheetView.animationView.beat(atX: Sheet.textPadding.width, interval: beatInterval)
                             let endBeat = sheetView.animationView.beat(atX: sheetView.animationView.bounds.width - Sheet.textPadding.width, interval: beatInterval)
                            
@@ -1311,25 +1312,27 @@ final class MoveScoreAction: DragEventAction {
                                 var note = beganNote
                                 if rootView.isFullEdit {
                                     let nPitch = dPitch + beganNote.pitch
+                                    let doubleNPitch = doubleDPitch + .init(beganNote.pitch)
                                     var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
-                                    let nny = scoreView.y(fromPitch: nnPitch)
-                                    var minD = scoreP.y.distance(nny)
-                                    let rnPitch = nnPitch.rounded()
+                                    let rnPitch = nPitch.rounded()
+                                    var minD = min(1 / 16.0, doubleNPitch.distance(.init(rnPitch)))
                                     for (ni, note) in score.notes.enumerated() {
                                         if beganNotes[ni] == nil,
                                            note.beatRange.contains(beganNote.beatRange.start),
                                            let oPitch = note.pitchWithStraight(atBeat: beganNote.beatRange.start - note.beatRange.start) {
                                             
                                             let roPitch = oPitch.rounded()
-                                            let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
-                                            let jy = scoreView.y(fromPitch: jPitch)
-                                            let d = scoreP.y.distance(jy)
-                                            if d < minD {
-                                                minD = d
-                                                if noteI == aNoteI {
-                                                    justFitUnison = Int(Pitch(value: roPitch).unison)
+                                            let unison = (rnPitch - roPitch).mod(12)
+                                            if unison != 0 {
+                                                let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
+                                                let d = doubleNPitch.distance(.init(jPitch))
+                                                if d < minD {
+                                                    minD = d
+                                                    if noteI == aNoteI {
+                                                        justFitUnison = Int(unison)
+                                                    }
+                                                    nnPitch = jPitch
                                                 }
-                                                nnPitch = jPitch
                                             }
                                         }
                                     }
@@ -1363,8 +1366,9 @@ final class MoveScoreAction: DragEventAction {
                                     let note = scoreView[noteI]
                                     let result = note.pitResult(atBeat: Double(beat - note.beatRange.start))
                                     let cPitch = result.notePitch + result.pitch.rationalValue(intervalScale: EditGrid.fullEditBeatInterval)
+                                    let dPitch = note.pitch - beganNotes[noteI]!.pitch
                                     let dSecStr = scoreView.isFullEdit && dBeat != 0 ?
-                                    " "
+                                    "\n"
                                     + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                      : ""
                                     let jStr = justFitUnison != nil ? " JI:\(justFitUnison!)" : ""
@@ -1505,6 +1509,8 @@ final class MoveScoreAction: DragEventAction {
                     if let noteI, noteI < score.notes.count {
                         let beatInterval = rootView.currentBeatInterval
                         let pitchInterval = rootView.currentPitchInterval
+                        let y = beganPitchY + sheetP.y - beganSheetP.y
+                        let doublePitch = scoreView.pitch(atY: y)
                         let pitch = scoreView.pitch(atY: beganPitchY + sheetP.y - beganSheetP.y,
                                                     interval: pitchInterval)
                         let nsBeat = scoreView.beat(atX: beganBeatX + sheetP.x - beganSheetP.x,
@@ -1512,6 +1518,7 @@ final class MoveScoreAction: DragEventAction {
                         if pitch != oldPitch || nsBeat != oldBeat {
                             let dBeat = nsBeat - beganBeat
                             let dPitch = pitch - beganPitch
+                            let doubleDPitch = doublePitch - .init(beganPitch)
                             
                             var justFitUnison: Int?
                             for (aNoteI, nv) in beganNotePits {
@@ -1530,25 +1537,27 @@ final class MoveScoreAction: DragEventAction {
                                     
                                     if rootView.isFullEdit {
                                         let nPitch = dPitch + beganPit.pitch + nv.note.pitch
+                                        let doubleNPitch = doubleDPitch + .init(beganPit.pitch + nv.note.pitch)
                                         var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
-                                        let nny = scoreView.y(fromPitch: nnPitch)
-                                        var minD = scoreP.y.distance(nny)
-                                        let rnPitch = nnPitch.rounded()
+                                        let rnPitch = nPitch.rounded()
+                                        var minD = min(1 / 16.0, doubleNPitch.distance(.init(rnPitch)))
                                         for (ni, note) in score.notes.enumerated() {
                                             if beganNotePits[ni] == nil,
                                                note.beatRange.contains(nv.note.beatRange.start + beganPit.beat),
                                                let oPitch = note.pitchWithStraight(atBeat: nv.note.beatRange.start + beganPit.beat - note.beatRange.start) {
                                                 
                                                 let roPitch = oPitch.rounded()
-                                                let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
-                                                let jy = scoreView.y(fromPitch: jPitch)
-                                                let d = scoreP.y.distance(jy)
-                                                if d < minD {
-                                                    minD = d
-                                                    if noteI == aNoteI {
-                                                        justFitUnison = Int(Pitch(value: roPitch).unison)
+                                                let unison = (rnPitch - roPitch).mod(12)
+                                                if unison != 0 {
+                                                    let jPitch = Chord.approximationJustIntonation(pitch: rnPitch - roPitch) + roPitch
+                                                    let d = doubleNPitch.distance(.init(jPitch))
+                                                    if d < minD {
+                                                        minD = d
+                                                        if noteI == aNoteI {
+                                                            justFitUnison = Int(unison)
+                                                        }
+                                                        nnPitch = jPitch
                                                     }
-                                                    nnPitch = jPitch.clipped(Score.pitchRange)
                                                 }
                                             }
                                         }
@@ -1614,7 +1623,7 @@ final class MoveScoreAction: DragEventAction {
                                 oldPitch = pitch
                                 
                                 let dSecStr = scoreView.isFullEdit && dBeat != 0 ?
-                                " "
+                                "/n"
                                 + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                  : ""
                                 let jStr = justFitUnison != nil ? " JI:\(justFitUnison!)" : ""

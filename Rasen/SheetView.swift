@@ -6116,9 +6116,8 @@ final class SheetView: View, @unchecked Sendable {
             updateFirstReverse()
             
             if selection != model.selection {
-                print("RR", model.texts)
-                print(selection)
-                print(model.selection)
+                print("n:", selection)
+                print("o:", model.selection)
                 history.error(result)
             }
         }

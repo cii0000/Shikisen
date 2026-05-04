@@ -350,6 +350,10 @@ extension Rational {
         }
         return ns
     }
+    
+    func distance(_ other: Self) -> Self {
+        abs(other - self)
+    }
 }
 extension Rational {
     init(_ o: Bool) {

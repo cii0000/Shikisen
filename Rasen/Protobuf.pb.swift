@@ -806,6 +806,8 @@ struct PBStereo: Sendable {
 
   var volm: Double = 0
 
+  var absolutePan: Double = 0
+
   var pan: Double = 0
 
   var id: PBUUID {
@@ -4735,7 +4737,7 @@ extension PBImage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBa
 
 extension PBStereo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBStereo"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}volm\0\u{1}pan\0\u{1}id\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}volm\0\u{1}absolutePan\0\u{1}id\0\u{1}pan\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4744,8 +4746,9 @@ extension PBStereo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationB
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularDoubleField(value: &self.volm) }()
-      case 2: try { try decoder.decodeSingularDoubleField(value: &self.pan) }()
+      case 2: try { try decoder.decodeSingularDoubleField(value: &self.absolutePan) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._id) }()
+      case 4: try { try decoder.decodeSingularDoubleField(value: &self.pan) }()
       default: break
       }
     }
@@ -4759,17 +4762,21 @@ extension PBStereo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationB
     if self.volm.bitPattern != 0 {
       try visitor.visitSingularDoubleField(value: self.volm, fieldNumber: 1)
     }
-    if self.pan.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.pan, fieldNumber: 2)
+    if self.absolutePan.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.absolutePan, fieldNumber: 2)
     }
     try { if let v = self._id {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if self.pan.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.pan, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBStereo, rhs: PBStereo) -> Bool {
     if lhs.volm != rhs.volm {return false}
+    if lhs.absolutePan != rhs.absolutePan {return false}
     if lhs.pan != rhs.pan {return false}
     if lhs._id != rhs._id {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

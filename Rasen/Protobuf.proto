@@ -161,7 +161,8 @@ message PBImage {
 
 message PBStereo {
     double volm = 1;
-    double pan = 2;
+    double absolutePan = 2;
+    double pan = 4;
     PBUUID id = 3;
 }
 

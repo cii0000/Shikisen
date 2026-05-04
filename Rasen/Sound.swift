@@ -273,13 +273,6 @@ struct Stereo: Codable, Hashable {
     var volm = 0.0, pan = 0.0, id = UUID()
 }
 extension Stereo {
-    var isEmpty: Bool {
-        volm == 0
-    }
-    var amp: Double {
-        Volm.amp(fromVolm: volm)
-    }
-    
     func with(volm: Double) -> Self {
         var v = self
         v.volm = volm
@@ -301,6 +294,15 @@ extension Stereo {
         return v
     }
     
+    var isEmpty: Bool {
+        volm == 0
+    }
+    
+    func panAmp() -> (l: Double, r: Double) {
+        let sqrt2 = Double.sqrt(2), theta = .pi / 2 * (pan.clipped(min: -1, max: 1) / 2 + 0.5)
+        return (sqrt2 * .cos(theta), sqrt2 * .sin(theta))
+    }
+    
     var displayName: String {
         "\(Volm.db(fromVolm: volm).string(digitsCount: 2)) db, \(pan.string(digitsCount: 2)) LR"
     }
@@ -309,6 +311,19 @@ extension Stereo: Protobuf {
     init(_ pb: PBStereo) throws {
         volm = ((try? pb.volm.notNaN()) ?? 1).clipped(Volm.volmRange)
         pan = pb.pan.clipped(min: -1, max: 1)
+        
+        if pan == 0 && pb.absolutePan != 0 {//delete
+            let aPan = pb.absolutePan.clipped(min: -1, max: 1)
+            let (l, r) = aPan < 0 ?
+            (1.0, Volm.amp(fromVolm: 1 + aPan)) :
+            (Volm.amp(fromVolm: 1 - aPan), 1.0)
+            let x = Double.sqrt(l * l + r * r)
+            let y = atan2(r, l)
+            let amp = Volm.amp(fromVolm: volm) * x / .sqrt(2)
+            volm = Volm.volm(fromAmp: amp).clipped(Volm.volmRange)
+            pan = ((y * (2 / .pi) - 0.5) * 2).clipped(min: -1, max: 1)
+        }
+        
         id = (try? .init(pb.id)) ?? .init()
     }
     var pb: PBStereo {

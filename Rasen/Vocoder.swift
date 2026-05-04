@@ -159,7 +159,7 @@ struct Pitbend: Codable, Hashable {
     let firstPitch: Double, firstFqScale: Double, isEqualAllPitch: Bool
     
     let stereoInterpolation: Interpolation<Stereo>
-    let firstStereo: Stereo, isEqualAllStereo: Bool, firstPan: Double, isEqualAllPan: Bool
+    let firstStereo: Stereo, isEqualAllStereo: Bool, isEqualAllPan: Bool
     
     let overtoneInterpolation: Interpolation<Overtone>
     let firstOvertone: Overtone, isEqualAllOvertone: Bool
@@ -203,7 +203,6 @@ struct Pitbend: Codable, Hashable {
         self.firstStereo = firstStereo
         isEqualAllStereo = stereos.allSatisfy { $0 == firstStereo }
         let firstPan = firstStereo.pan
-        self.firstPan = firstPan
         isEqualAllPan = stereos.allSatisfy { $0.pan == firstPan }
         stereoInterpolation = interpolation(isAll: isEqualAllStereo, stereos, .linear)
         
@@ -228,7 +227,6 @@ struct Pitbend: Codable, Hashable {
         
         stereoInterpolation = .init()
         firstStereo = stereo.with(id: .zero)
-        firstPan = firstStereo.pan
         isEqualAllStereo = true
         isEqualAllPan = true
         
@@ -490,13 +488,12 @@ extension Rendnote {
             let oSampless = sampless.map { vDSP.multiply(stereoAmp, $0) }
             let (oSamples0, oSamples1) = oSampless.count == 1 ?
             (oSampless[0], oSampless[0]) : (oSampless[0], oSampless[1])
-            let pan = stereo.pan.clipped(min: -1, max: 1)
-            nSampless = if pan == 0 {
-                [oSamples0, oSamples1]
-            } else if pan < 0 {
-                [oSamples0, vDSP.multiply(Volm.amp(fromVolm: 1 + pan), oSamples1)]
+            if stereo.pan == 0 {
+                nSampless = [oSamples0, oSamples1]
             } else {
-                [vDSP.multiply(Volm.amp(fromVolm: 1 - pan), oSamples0), oSamples1]
+                let (lAmp, rAmp) = stereo.panAmp()
+                nSampless = [vDSP.multiply(lAmp, oSamples0),
+                             vDSP.multiply(rAmp, oSamples1)]
             }
         } else {
             let rSampleRate = 1 / sampleRate
@@ -508,20 +505,23 @@ extension Rendnote {
             let (oSamples0, oSamples1) = oSampless.count == 1 ?
             (oSampless[0], oSampless[0]) : (oSampless[0], oSampless[1])
             if pitbend.isEqualAllPan {
-                let pan = pitbend.firstPan.clipped(min: -1, max: 1)
-                nSampless = if pan == 0 {
-                    [oSamples0, oSamples1]
-                } else if pan < 0 {
-                    [oSamples0, vDSP.multiply(Volm.amp(fromVolm: 1 + pan), oSamples1)]
+                if pitbend.firstStereo.pan == 0 {
+                    nSampless = [oSamples0, oSamples1]
                 } else {
-                    [vDSP.multiply(Volm.amp(fromVolm: 1 - pan), oSamples0), oSamples1]
+                    let (lAmp, rAmp) = pitbend.firstStereo.panAmp()
+                    nSampless = [vDSP.multiply(lAmp, oSamples0),
+                                 vDSP.multiply(rAmp, oSamples1)]
                 }
             } else {
-                let pans = stereos.map { $0.pan.clipped(min: -1, max: 1) }
-                let nPans = Volm.amps(fromVolms: pans.map { $0 < 0 ? 1 + $0 : 1 - $0 })
-                let pan0s = zip(pans, nPans).map { $0.0 <= 0 ? 1 : $0.1 }
-                let pan1s = zip(pans, nPans).map { $0.0 >= 0 ? 1 : $0.1 }
-                nSampless = [vDSP.multiply(oSamples0, pan0s), vDSP.multiply(oSamples1, pan1s)]
+                var lAmps = [Double](capacity: stereos.count)
+                var rAmps = [Double](capacity: stereos.count)
+                stereos.forEach {
+                    let (lAmp, rAmp) = $0.panAmp()
+                    lAmps.append(lAmp)
+                    rAmps.append(rAmp)
+                }
+                nSampless = [vDSP.multiply(oSamples0, lAmps),
+                             vDSP.multiply(oSamples1, rAmps)]
             }
         }
         

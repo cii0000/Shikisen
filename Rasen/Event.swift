@@ -194,7 +194,7 @@ extension InputKeyType {
     var isText: Bool {
         switch self {
         case .click, .subClick, .threeFingersTap, .fourFingersTap,
-             .space,
+                .space, .tab, .backTab,
              .escape, .command, .shift, .option, .control, .function,
              .backspace, .carriageReturn, .newline, .enter, .delete, .deleteForward,
              .up, .down, .left, .right, .pageUp, .pageDown, .home, .end,

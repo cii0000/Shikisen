@@ -4002,11 +4002,11 @@ struct Cursor {
             if let tPath {
                 let lineWidth = circleDefaultLineWidth, subLineWidth = 1.25
                 nodes = [outlineNode, inlineNode,
-                         Node(attitude: Attitude(position: Point(d, h / 2)),
+                         Node(attitude: Attitude(position: Point(d, tSize.height - h / 2)),
                               path: tPath,
                               lineWidth: lineWidth + subLineWidth,
                               lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, h / 2)),
+                         Node(attitude: Attitude(position: Point(d, tSize.height - h / 2)),
                               path: tPath,
                               fillType: .color(color))]
             } else {

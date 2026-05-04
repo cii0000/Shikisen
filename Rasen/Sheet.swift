@@ -2484,6 +2484,7 @@ extension SheetSelection {
         keyframeSelections != old.keyframeSelections
         || textSelections != old.textSelections
         || contentIs != old.contentIs
+        || noteSelections != old.noteSelections
         || lastPosition != old.lastPosition
     }
     var notePitSprolIs: [Int: [Int: Set<Int>]] {

@@ -289,6 +289,8 @@ final class Movie {
         }
         
         guard let bufferPool = pbAdaptor.pixelBufferPool else {
+            progressHandler(&isStop)
+            if isStop { return true }
             isAppend = false
             return false
         }
@@ -342,6 +344,8 @@ final class Movie {
             currentTime = currentTime + .init(value: .init(duration),
                                               timescale: .init(timeScale))
         }
+        progressHandler(&isStop)
+        if isStop { return true }
         return isAppend
     }
     
