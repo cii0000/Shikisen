@@ -1020,7 +1020,7 @@ final class SelectAction: Action {
                         }
                     }
                     
-                    nSelection.lastPosition = sheetView.convertFromWorld(p)
+//                    nSelection.lastPosition = sheetView.convertFromWorld(p)
                     
                     if sheetView.model.selection != nSelection {
                         sheetView.selection = nSelection
@@ -1033,7 +1033,7 @@ final class SelectAction: Action {
                 }.map { $0.value }
                 rootView.world.selection.sheetIDs
                 = (isUnselect ? oSIDs.subtracting(nSIDs) : oSIDs.union(nSIDs)).sorted()
-                rootView.world.selection.lastPosition = p
+//                rootView.world.selection.lastPosition = p
                 rootView.updateSelected()
             }
             
@@ -1560,7 +1560,7 @@ final class FillAction: Action {
             
             var isChanged = false
             if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
-               let rect = sheetView.selectedFrame {
+               let rect = sheetView.selectedFrame(scale: rootView.screenToWorldScale) {
                 
                 isChanged = sheetView.fillAll(withClipping: rect,
                                                 selectedKeyframeIs: [], isOutClip: true)

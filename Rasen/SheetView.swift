@@ -1492,12 +1492,12 @@ final class SheetView: View, @unchecked Sendable {
     
     var selectedFrameNode: Node?
     func updateSelectedFrame() {
-        guard let selectedFrame else {
+        let scale = screenToWorldScale
+        guard let selectedFrame = selectedFrame(scale: scale) else {
             selectedFrameNode?.removeFromParent()
             selectedFrameNode = nil
             return
         }
-        let scale = screenToWorldScale
         let rect = convertToWorld(selectedFrame)
         let lastP: Point? = if let p = model.selection.lastPosition { convertToWorld(p) } else { nil }
         selectedFrameNode = Node(children: Self.selectedFrameNodes(fom: rect, lastP: lastP,
@@ -1506,7 +1506,8 @@ final class SheetView: View, @unchecked Sendable {
     }
     static func selectedFrameNodes(fom rect: Rect, lastP: Point?, isKnob: Bool,
                                    scale: Double) -> [Node] {
-        var frameNodes = [Node(path: isKnob ? .init(rect) : .init(rect, cornerRadius: 2),
+        var frameNodes = [Node(path: isKnob ? .init(rect) :
+                .init(rect, cornerRadius: min(rect.width / 2, rect.height / 2, 2 * scale)),
                                lineWidth: scale,
                                lineType: .color(.selected))]
         if let lastP {
@@ -1760,7 +1761,7 @@ final class SheetView: View, @unchecked Sendable {
         return [node, tNode]
     }
     
-    var selectedFrame: Rect? {
+    func selectedFrame(scale: Double) -> Rect? {
         var rect: Rect?
         keyframeView.selectedLineIs.forEach {
             rect += keyframeView.linesView.elementViews[$0].node.bounds
@@ -1782,7 +1783,7 @@ final class SheetView: View, @unchecked Sendable {
         if model.score.enabled, let selectedFrame = scoreView.selectedFrame {
             rect += convert(selectedFrame, from: scoreView.node)
         }
-        return rect?.outset(by: 5)
+        return rect?.outset(by: 10 * scale)
     }
     func updateSelectedColor(isMain: Bool) {
         animationView.timelineNode.children.forEach {
@@ -1859,7 +1860,7 @@ final class SheetView: View, @unchecked Sendable {
         || containsSelectedLastLine(p, scale: scale)
     }
     func containsSelectedFrame(_ p: Point, scale: Double) -> Bool {
-        guard let frame = selectedFrame else { return false }
+        guard let frame = selectedFrame(scale: scale) else { return false }
         if model.score.enabled {
             let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
             return frame.edges.contains { $0.distanceSquared(from: p) < edSq }
@@ -1871,7 +1872,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     func selectedFrameDistanceSquared(_ p: Point, scale: Double) -> Double? {
-        guard let frame = selectedFrame else { return nil }
+        guard let frame = selectedFrame(scale: scale) else { return nil }
         let maxDSq = (Sheet.moveKnobEditDistance * scale).squared
         let maxEDSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
         var minDSq = Double.infinity
@@ -1902,7 +1903,7 @@ final class SheetView: View, @unchecked Sendable {
         return minDSq.isInfinite ? nil : minDSq
     }
     func containsSelectedLastLine(_ p: Point, scale: Double) -> Bool {
-        guard let frame = selectedFrame else { return false }
+        guard let frame = selectedFrame(scale: scale) else { return false }
         let maxDSq = (Sheet.moveKnobEditDistance * scale).squared
         if let lp = model.selection.lastPosition {
             let ps = frame.minPoints(at: lp)

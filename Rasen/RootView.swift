@@ -907,16 +907,7 @@ final class RootView: View, @unchecked Sendable {
     }
     func updateSelectedNodesWithScale() {
         if isEditingSheet {
-            let scale = screenToWorldScale
-            selectedFrameNode.children.forEach {
-                $0.children.forEach {
-                    if $0.name == "knob" {
-                        $0.attitude.scale = .init(square: scale)
-                    } else {
-                        $0.lineWidth = scale
-                    }
-                }
-            }
+           updateSelectedFrame()
         } else {
             let l = worldLineWidth
             if selectedNode.children.count == 1 {

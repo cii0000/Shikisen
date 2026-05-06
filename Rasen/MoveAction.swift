@@ -2385,7 +2385,9 @@ final class MoveSheetAction: DragEventAction {
                     self.sheetView = sheetView
                     sheetView.hideSelected()
                     
-                    if containsSelectedFrame, let rect = sheetView.selectedFrame {
+                    if containsSelectedFrame,
+                        let rect = sheetView.selectedFrame(scale: rootView.screenToWorldScale) {
+                        
                         typeRect = sheetView.convertToWorld(rect)
                         let rect = rootView.convertWorldToScreen(typeRect)
                         var minDSq = Double.infinity

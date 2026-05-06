@@ -2611,7 +2611,7 @@ extension Sheet {
     static let knobEditDistance = 20.0
     static let noteEditDistance = 50.0
     static let keyframeEditDistance = 80.0
-    static let moveKnobEditDistance = 30.0
+    static let moveKnobEditDistance = 10.0
     static let lastPositionEditDistance = 60.0
     static let timelineY = 18.0
     static let pitchHeight = 5.375

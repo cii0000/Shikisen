@@ -674,7 +674,7 @@ final class PastableAction: Action {
             }
             let selectedFrameNodes: [Node]
             let scale = rootView.screenToWorldScale
-            if let selectedFrame = sheetView.selectedFrame {
+            if let selectedFrame = sheetView.selectedFrame(scale: scale) {
                 let rect = sheetView.convertToWorld(selectedFrame)
                 let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
                 selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
@@ -748,7 +748,7 @@ final class PastableAction: Action {
             
             let selectedFrameNodes: [Node]
             let scale = rootView.screenToWorldScale
-            if let selectedFrame = sheetView.selectedFrame {
+            if let selectedFrame = sheetView.selectedFrame(scale: scale) {
                 let rect = sheetView.convertToWorld(selectedFrame)
                 let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
                 selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
@@ -2387,7 +2387,8 @@ final class PastableAction: Action {
         case .uuColor(let uuColor):
             guard phase == .began || (event == nil ? false : (event!.time - beganTime > enableUUColorTime)) else { return }
             if let sheetView = rootView.sheetView(at: p),
-               sheetView.selectedFrame?.contains(sheetView.convertFromWorld(p)) ?? false,
+               sheetView.selectedFrame(scale: rootView.screenToWorldScale)?
+                .contains(sheetView.convertFromWorld(p)) ?? false,
                sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale),
                 let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
