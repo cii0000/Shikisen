@@ -268,6 +268,7 @@ extension InputKeyType {
 struct EventType {
     static let indicate = EventType(name: "Indicate".localized)
     static let drag = EventType(name: "Drag".localized)
+    static let penDrag = EventType(name: "PenDrag".localized)
     static let subDrag = EventType(name: "SubDrag".localized)
     static let otherDrag = EventType(name: "OtherDrag".localized)
     static let scroll = EventType(name: "2FingersScroll".localized)
@@ -357,7 +358,7 @@ extension Gesture {
     }
 }
 extension Gesture {
-    static let drawLine = Self(.drag)
+    static let drawLine = Self(.penDrag)
     static let drawStraightLine = Self(modifier: [.shift], .drag)
     
     static let lassoCut = Self(modifier: [.command], .drag)
@@ -383,8 +384,8 @@ extension Gesture {
     static let rotate = Self(.rotate)
     static let keyRotate = Self(modifier: [.shift, .control, .option, .command], .drag)
     
-    static let selectByRange = Self(.subDrag)
-    static let unselectByRange = Self(modifier: [.shift], .subDrag)
+    static let selectByRange = Self(.drag)
+    static let unselectByRange = Self(.subDrag)
     
     static let runOrClose = Self(.click)
     static let openMenu = Self(.subClick)
@@ -542,7 +543,8 @@ extension ActionList {
         [.init(name: "Select by Range".localized, .selectByRange),
          .init(name: "Unselect by Range".localized, .unselectByRange)],
         
-        [.init(name: "Import / Export".localized, .openMenu),
+        [.init(name: "Run / Close".localized, .runOrClose),
+         .init(name: "Import / Export".localized, .openMenu),
          .init(name: "Look Up".localized, .lookUp),
          .init(name: "Input Character".localized, .inputCharacter)],
         

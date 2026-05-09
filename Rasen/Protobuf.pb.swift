@@ -1504,23 +1504,14 @@ struct PBKeyframe: Sendable {
   /// Clears the value of `beat`. Subsequent reads from it will return its default value.
   mutating func clearBeat() {self._beat = nil}
 
-  var previousPosition: PBPoint {
-    get {_previousPosition ?? PBPoint()}
-    set {_previousPosition = newValue}
+  var id: PBUUID {
+    get {_id ?? PBUUID()}
+    set {_id = newValue}
   }
-  /// Returns true if `previousPosition` has been explicitly set.
-  var hasPreviousPosition: Bool {self._previousPosition != nil}
-  /// Clears the value of `previousPosition`. Subsequent reads from it will return its default value.
-  mutating func clearPreviousPosition() {self._previousPosition = nil}
-
-  var nextPosition: PBPoint {
-    get {_nextPosition ?? PBPoint()}
-    set {_nextPosition = newValue}
-  }
-  /// Returns true if `nextPosition` has been explicitly set.
-  var hasNextPosition: Bool {self._nextPosition != nil}
-  /// Clears the value of `nextPosition`. Subsequent reads from it will return its default value.
-  mutating func clearNextPosition() {self._nextPosition = nil}
+  /// Returns true if `id` has been explicitly set.
+  var hasID: Bool {self._id != nil}
+  /// Clears the value of `id`. Subsequent reads from it will return its default value.
+  mutating func clearID() {self._id = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1529,8 +1520,7 @@ struct PBKeyframe: Sendable {
   fileprivate var _picture: PBPicture? = nil
   fileprivate var _draftPicture: PBPicture? = nil
   fileprivate var _beat: PBRational? = nil
-  fileprivate var _previousPosition: PBPoint? = nil
-  fileprivate var _nextPosition: PBPoint? = nil
+  fileprivate var _id: PBUUID? = nil
 }
 
 struct PBKeyframeKey: Sendable {
@@ -1555,31 +1545,21 @@ struct PBKeyframeKey: Sendable {
   /// Clears the value of `beat`. Subsequent reads from it will return its default value.
   mutating func clearBeat() {self._beat = nil}
 
-  var previousPosition: PBPoint {
-    get {_previousPosition ?? PBPoint()}
-    set {_previousPosition = newValue}
+  var id: PBUUID {
+    get {_id ?? PBUUID()}
+    set {_id = newValue}
   }
-  /// Returns true if `previousPosition` has been explicitly set.
-  var hasPreviousPosition: Bool {self._previousPosition != nil}
-  /// Clears the value of `previousPosition`. Subsequent reads from it will return its default value.
-  mutating func clearPreviousPosition() {self._previousPosition = nil}
-
-  var nextPosition: PBPoint {
-    get {_nextPosition ?? PBPoint()}
-    set {_nextPosition = newValue}
-  }
-  /// Returns true if `nextPosition` has been explicitly set.
-  var hasNextPosition: Bool {self._nextPosition != nil}
-  /// Clears the value of `nextPosition`. Subsequent reads from it will return its default value.
-  mutating func clearNextPosition() {self._nextPosition = nil}
+  /// Returns true if `id` has been explicitly set.
+  var hasID: Bool {self._id != nil}
+  /// Clears the value of `id`. Subsequent reads from it will return its default value.
+  mutating func clearID() {self._id = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _beat: PBRational? = nil
-  fileprivate var _previousPosition: PBPoint? = nil
-  fileprivate var _nextPosition: PBPoint? = nil
+  fileprivate var _id: PBUUID? = nil
 }
 
 struct PBAnimationZipper: Sendable {
@@ -3505,6 +3485,47 @@ struct PBPlanesValue: Sendable {
   init() {}
 }
 
+struct PBCopiedAnimation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var animation: PBAnimation {
+    get {_animation ?? PBAnimation()}
+    set {_animation = newValue}
+  }
+  /// Returns true if `animation` has been explicitly set.
+  var hasAnimation: Bool {self._animation != nil}
+  /// Clears the value of `animation`. Subsequent reads from it will return its default value.
+  mutating func clearAnimation() {self._animation = nil}
+
+  var sheetID: PBUUID {
+    get {_sheetID ?? PBUUID()}
+    set {_sheetID = newValue}
+  }
+  /// Returns true if `sheetID` has been explicitly set.
+  var hasSheetID: Bool {self._sheetID != nil}
+  /// Clears the value of `sheetID`. Subsequent reads from it will return its default value.
+  mutating func clearSheetID() {self._sheetID = nil}
+
+  var keyframeID: PBUUID {
+    get {_keyframeID ?? PBUUID()}
+    set {_keyframeID = newValue}
+  }
+  /// Returns true if `keyframeID` has been explicitly set.
+  var hasKeyframeID: Bool {self._keyframeID != nil}
+  /// Clears the value of `keyframeID`. Subsequent reads from it will return its default value.
+  mutating func clearKeyframeID() {self._keyframeID = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _animation: PBAnimation? = nil
+  fileprivate var _sheetID: PBUUID? = nil
+  fileprivate var _keyframeID: PBUUID? = nil
+}
+
 struct PBNotesValue: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -3626,12 +3647,12 @@ struct PBPastableObject: Sendable {
     set {value = .uuColor(newValue)}
   }
 
-  var animation: PBAnimation {
+  var copiedAnimation: PBCopiedAnimation {
     get {
-      if case .animation(let v)? = value {return v}
-      return PBAnimation()
+      if case .copiedAnimation(let v)? = value {return v}
+      return PBCopiedAnimation()
     }
-    set {value = .animation(newValue)}
+    set {value = .copiedAnimation(newValue)}
   }
 
   var ids: PBInterOptionsValue {
@@ -3733,7 +3754,7 @@ struct PBPastableObject: Sendable {
     case picture(PBPicture)
     case planesValue(PBPlanesValue)
     case uuColor(PBUUColor)
-    case animation(PBAnimation)
+    case copiedAnimation(PBCopiedAnimation)
     case ids(PBInterOptionsValue)
     case content(PBContent)
     case image(PBImage)
@@ -5807,7 +5828,7 @@ extension PBStringIntPointDic: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
 
 extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBKeyframe"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}picture\0\u{1}draftPicture\0\u{1}beat\0\u{2}\u{2}previousPosition\0\u{1}nextPosition\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}picture\0\u{1}draftPicture\0\u{1}beat\0\u{2}\u{4}id\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5818,8 +5839,7 @@ extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementatio
       case 1: try { try decoder.decodeSingularMessageField(value: &self._picture) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._draftPicture) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._beat) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._previousPosition) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._nextPosition) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._id) }()
       default: break
       }
     }
@@ -5839,11 +5859,8 @@ extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementatio
     try { if let v = self._beat {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
-    try { if let v = self._previousPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
-    try { if let v = self._nextPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    try { if let v = self._id {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5852,8 +5869,7 @@ extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementatio
     if lhs._picture != rhs._picture {return false}
     if lhs._draftPicture != rhs._draftPicture {return false}
     if lhs._beat != rhs._beat {return false}
-    if lhs._previousPosition != rhs._previousPosition {return false}
-    if lhs._nextPosition != rhs._nextPosition {return false}
+    if lhs._id != rhs._id {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5861,7 +5877,7 @@ extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementatio
 
 extension PBKeyframeKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBKeyframeKey"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lineIs\0\u{1}planeIs\0\u{1}draftLineIs\0\u{1}draftPlaneIs\0\u{1}beat\0\u{2}\u{2}previousPosition\0\u{1}nextPosition\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lineIs\0\u{1}planeIs\0\u{1}draftLineIs\0\u{1}draftPlaneIs\0\u{1}beat\0\u{2}\u{4}id\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5874,8 +5890,7 @@ extension PBKeyframeKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
       case 3: try { try decoder.decodeRepeatedInt64Field(value: &self.draftLineIs) }()
       case 4: try { try decoder.decodeRepeatedInt64Field(value: &self.draftPlaneIs) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._beat) }()
-      case 7: try { try decoder.decodeSingularMessageField(value: &self._previousPosition) }()
-      case 8: try { try decoder.decodeSingularMessageField(value: &self._nextPosition) }()
+      case 9: try { try decoder.decodeSingularMessageField(value: &self._id) }()
       default: break
       }
     }
@@ -5901,11 +5916,8 @@ extension PBKeyframeKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
     try { if let v = self._beat {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
-    try { if let v = self._previousPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    } }()
-    try { if let v = self._nextPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    try { if let v = self._id {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5916,8 +5928,7 @@ extension PBKeyframeKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
     if lhs.draftLineIs != rhs.draftLineIs {return false}
     if lhs.draftPlaneIs != rhs.draftPlaneIs {return false}
     if lhs._beat != rhs._beat {return false}
-    if lhs._previousPosition != rhs._previousPosition {return false}
-    if lhs._nextPosition != rhs._nextPosition {return false}
+    if lhs._id != rhs._id {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9524,6 +9535,50 @@ extension PBPlanesValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementa
   }
 }
 
+extension PBCopiedAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBCopiedAnimation"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}animation\0\u{1}sheetID\0\u{1}keyframeID\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._animation) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._sheetID) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._keyframeID) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._animation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._sheetID {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._keyframeID {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBCopiedAnimation, rhs: PBCopiedAnimation) -> Bool {
+    if lhs._animation != rhs._animation {return false}
+    if lhs._sheetID != rhs._sheetID {return false}
+    if lhs._keyframeID != rhs._keyframeID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension PBNotesValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBNotesValue"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}notes\0\u{1}deltaPitch\0\u{1}isSelected\0")
@@ -9614,7 +9669,7 @@ extension PBInterOptionsValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
 
 extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBPastableObject"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}copiedSheetsValue\0\u{1}sheetValue\0\u{1}border\0\u{1}text\0\u{1}string\0\u{1}picture\0\u{1}planesValue\0\u{1}uuColor\0\u{1}animation\0\u{1}ids\0\u{2}\u{2}beatRange\0\u{1}normalizationValue\0\u{1}notesValue\0\u{1}tone\0\u{1}normalizationRationalValue\0\u{2}\u{5}image\0\u{1}content\0\u{2}\u{2}stereo\0\u{1}rect\0\u{1}tempo\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}copiedSheetsValue\0\u{1}sheetValue\0\u{1}border\0\u{1}text\0\u{1}string\0\u{1}picture\0\u{1}planesValue\0\u{1}uuColor\0\u{1}copiedAnimation\0\u{1}ids\0\u{2}\u{2}beatRange\0\u{1}normalizationValue\0\u{1}notesValue\0\u{1}tone\0\u{1}normalizationRationalValue\0\u{2}\u{5}image\0\u{1}content\0\u{2}\u{2}stereo\0\u{1}rect\0\u{1}tempo\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9722,16 +9777,16 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
         }
       }()
       case 9: try {
-        var v: PBAnimation?
+        var v: PBCopiedAnimation?
         var hadOneofValue = false
         if let current = self.value {
           hadOneofValue = true
-          if case .animation(let m) = current {v = m}
+          if case .copiedAnimation(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.value = .animation(v)
+          self.value = .copiedAnimation(v)
         }
       }()
       case 10: try {
@@ -9915,8 +9970,8 @@ extension PBPastableObject: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
       guard case .uuColor(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
-    case .animation?: try {
-      guard case .animation(let v)? = self.value else { preconditionFailure() }
+    case .copiedAnimation?: try {
+      guard case .copiedAnimation(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     }()
     case .ids?: try {

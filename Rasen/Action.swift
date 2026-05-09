@@ -164,13 +164,6 @@ final class RootAction: Action {
     
     func strongDrag(with event: DragEvent) {}
     
-    private func subDragAction(with gesture: Gesture) -> (any DragEventAction) {
-        switch gesture {
-        case .selectByRange: SelectByRangeAction(self)
-        case .unselectByRange: UnselectByRangeAction(self)
-        default: EmptyDragAction(self)
-        }
-    }
     private(set) var oldSubDragEvent: DragEvent?, subDragEventAction: (any DragEventAction)?
     func subDrag(with event: DragEvent) {
         switch event.phase {
@@ -180,7 +173,7 @@ final class RootAction: Action {
             stopInputKeyEvent()
             stopDragEvent()
             let gesture = Gesture(modifier: modifierKeys, .subDrag)
-            subDragEventAction = self.subDragAction(with: gesture)
+            subDragEventAction = self.dragAction(with: gesture)
             subDragEventAction?.flow(with: event)
             oldSubDragEvent = event
             rootView.textCursorNode.isHidden = true
@@ -231,6 +224,8 @@ final class RootAction: Action {
         case .move: MoveAction(self)
 //        case .moveZ: MoveZAction(self)
         case .keySelectTime: SelectTimeAction(self)
+        case .selectByRange: SelectByRangeAction(self)
+        case .unselectByRange: UnselectByRangeAction(self)
         default: EmptyDragAction(self)
         }
     }
@@ -240,7 +235,10 @@ final class RootAction: Action {
         case .began:
             updateLastEditedSheetPosition(from: event)
             stopInputTextEvent()
-            let gesture = Gesture(modifier: modifierKeys, .drag)
+            var gesture = Gesture(modifier: modifierKeys, .drag)
+            if gesture == .selectByRange && event.isTablet {
+                gesture = .drawLine
+            }
             if gesture != .selectTime {
                 stopInputKeyEvent()
             }
@@ -778,7 +776,7 @@ final class SelectAction: Action {
     
     private var firstP = Point(), selectKeyframeAction: SelectKeyframeAction?,
                 captureSelections = [SheetView: SheetSelection](),
-                beganWorldSelection: WorldSelection?,
+                beganWorldSelection: WorldSelection?, beganTime = 0.0,
                 firstSheetView: SheetView?, firstTextI: Int?, firstTextRect: Rect?
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
@@ -800,6 +798,7 @@ final class SelectAction: Action {
             rootAction.closeLookingUpAndStop(at: p)
             
             firstP = p
+            beganTime = event.time
             
             if !isEditingSheet {
                 beganWorldSelection = rootView.world.selection
@@ -1045,15 +1044,35 @@ final class SelectAction: Action {
             
             node.removeFromParent()
             
+            var isChange = false
+            
             if let beganWorldSelection, beganWorldSelection != rootView.world.selection {
                 rootView.newUndoGroup()
                 rootView.capture(old: beganWorldSelection)
+                isChange = true
             }
             for (sheetView, oldSelection) in captureSelections {
                 if oldSelection != sheetView.model.selection {
                     sheetView.newUndoGroup()
                     sheetView.capture(old: oldSelection)
+                    isChange = true
                 }
+            }
+            
+            if !isChange,
+               !(firstP.distance(p) * rootView.worldToScreenScale < (event.isTablet ? 0.1 : 2)
+                 && event.time - beganTime < 3) {
+            
+                rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
+                                                time: event.time, pressure: event.pressure,
+                                                phase: .began, isRepeat: false,
+                                                inputKeyType: .click))
+                Sleep.start()
+                rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
+                                                time: event.time, pressure: event.pressure,
+                                                phase: .ended, isRepeat: false,
+                                                inputKeyType: .click))
+                return
             }
             
             rootView.cursor = rootView.defaultCursor

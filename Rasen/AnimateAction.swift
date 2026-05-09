@@ -1172,6 +1172,50 @@ final class InterpolateAction: InputKeyEventAction {
                 ios = v.ids.map { $0.with(.key) }
                 oRootKI = v.rootKeyframeIndex
                 oldLines = []
+            case .copiedAnimation(let copiedAnimation):
+                if let sheetView = rootView.sheetView(at: p),
+                    sheetView.id == copiedAnimation.sheetID,
+                   let nKI = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                                   scale: rootView.screenToWorldScale),
+                   let oKI = sheetView.model.animation.keyframeIndex(at: copiedAnimation.keyframeID) {
+                    
+                    let animationView = sheetView.animationView
+                    var isNewUndoGroup = true
+                    if oKI != nKI {
+                        let beat = animationView.model.localBeat
+                        let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
+                        
+                        let oneBeat = Rational(1, animationView.frameRate)
+                        
+                        let nki0 = min(oKI, nKI), nki1 = max(oKI, nKI)
+                        let ranges = [nki0 ..< nki1]
+                        
+                        var nj = 0
+                        for range in ranges {
+                            for j in range {
+                                let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
+                                if durBeat >= oneBeat {
+                                    if isNewUndoGroup {
+                                        sheetView.newUndoGroup()
+                                        sheetView.unselect()
+                                        isNewUndoGroup = false
+                                    }
+                                    
+                                    let nBeat = animationView.model.keyframes[j + nj].beat
+                                    let count = Int(durBeat / oneBeat) - 1
+                                    sheetView.insert((0 ..< count).map { k in
+                                        IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
+                                                   index: k + j + nj + 1)
+                                    })
+                                    nj += count
+                                }
+                            }
+                        }
+                        sheetView.rootBeat = animationView.model.localDurBeat * count + beat
+                        rootAction.updateActionNode()
+                    }
+                }
+                return
             default:
                 rootView.cursor = .ban(string: "There is no line on the pasteboard".localized)
                 Feedback.beep()
@@ -1183,41 +1227,6 @@ final class InterpolateAction: InputKeyEventAction {
                 
                 let animationView = sheetView.animationView
                 var isNewUndoGroup = true
-//                if oldRootKeyframeIndex != animationView.rootKeyframeIndex {
-//                    let beat = animationView.model.localBeat
-//                    let count = ((animationView.rootBeat - beat) / animationView.model.localDurBeat).rounded(.towardZero)
-//                    
-//                    let oneBeat = Rational(1, animationView.frameRate)
-//                    
-//                    let ki0 = animationView.model.index(atRoot: oldRootKeyframeIndex)
-//                    let ki1 = animationView.model.index(atRoot: animationView.rootKeyframeIndex)
-//                    let nki0 = min(ki0, ki1), nki1 = max(ki0, ki1)
-//                    let ranges = (oldRootKeyframeIndex < animationView.rootKeyframeIndex ? ki0 < ki1 : ki1 < ki0) ? [nki0 ..< nki1] : [0 ..< nki0, nki1 ..< animationView.model.keyframes.count]
-//                    
-//                    var nj = 0
-//                    for range in ranges {
-//                        for j in range {
-//                            let durBeat = animationView.model.keyframeDurBeat(at: j + nj)
-//                            if durBeat >= oneBeat {
-//                                if !isNewUndoGroup {
-//                                    sheetView.newUndoGroup()
-//                                    isNewUndoGroup = true
-//                                }
-//                                
-//                                let nBeat = animationView.model.keyframes[j + nj].beat
-//                                let count = Int(durBeat / oneBeat) - 1
-//                                sheetView.insert((0 ..< count).map { k in
-//                                    IndexValue(value: Keyframe(beat: oneBeat * .init(k + 1) + nBeat),
-//                                               index: k + j + nj + 1)
-//                                })
-//                                nj += count
-//                            }
-//                        }
-//                    }
-//                    sheetView.rootBeat = animationView.model.localDurBeat * count + beat
-//                    rootAction.updateActionNode()
-//                    rootView.updateSelectedNodes()
-//                }
                 
                 let lis: [Int], nKI, nRootKI: Int
                 if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),

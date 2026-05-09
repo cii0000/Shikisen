@@ -1575,17 +1575,19 @@ struct Keyframe: Picable {
     
     var beat = Rational()
     var previousPosition = Point(), nextPosition = Point()
+    var id = UUID()
     private(set) var isKey = true
     
     init(picture: Picture = Picture(), draftPicture: Picture = Picture(),
          beat: Rational = Keyframe.defaultDurBeat,
-         previousPosition: Point = .init(), nextPosition: Point = .init()) {
+         previousPosition: Point = .init(), nextPosition: Point = .init(), id: UUID = .init()) {
         
         self.picture = picture
         self.draftPicture = draftPicture
         self.beat = beat
         self.previousPosition = previousPosition
         self.nextPosition = nextPosition
+        self.id = id
         isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
     }
 }
@@ -1633,7 +1635,7 @@ extension Keyframe: AppliableTransform {
         .init(picture: lhs.picture * rhs,
               draftPicture: lhs.draftPicture * rhs,
               beat: lhs.beat,
-              previousPosition: lhs.previousPosition, nextPosition: lhs.nextPosition)
+              previousPosition: lhs.previousPosition, nextPosition: lhs.nextPosition, id: lhs.id)
     }
 }
 extension Keyframe: Protobuf {
@@ -1641,8 +1643,7 @@ extension Keyframe: Protobuf {
         picture = (try? Picture(pb.picture)) ?? Picture()
         draftPicture = (try? Picture(pb.draftPicture)) ?? Picture()
         beat = max((try? Rational(pb.beat)) ?? 1, 0)
-        previousPosition = (try? .init(pb.previousPosition)) ?? .init()
-        nextPosition = (try? .init(pb.nextPosition)) ?? .init()
+        id = (try? .init(pb.id)) ?? .init()
         isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
     }
     var pb: PBKeyframe {
@@ -1650,8 +1651,7 @@ extension Keyframe: Protobuf {
             $0.picture = picture.pb
             $0.draftPicture = draftPicture.pb
             $0.beat = beat.pb
-            $0.previousPosition = previousPosition.pb
-            $0.nextPosition = nextPosition.pb
+            $0.id = id.pb
         }
     }
 }
@@ -1695,7 +1695,7 @@ struct KeyframeKey {
     var lineIs = [Int](), planeIs = [Int]()
     var draftLineIs = [Int](), draftPlaneIs = [Int]()
     var beat: Rational = 0
-    var previousPosition = Point(), nextPosition = Point()
+    var id = UUID()
 }
 extension KeyframeKey: Protobuf {
     init(_ pb: PBKeyframeKey) throws {
@@ -1704,8 +1704,7 @@ extension KeyframeKey: Protobuf {
         draftLineIs = pb.draftLineIs.map { Int($0) }
         draftPlaneIs = pb.draftPlaneIs.map { Int($0) }
         beat = max((try? Rational(pb.beat)) ?? 1, 0)
-        previousPosition = (try? .init(pb.previousPosition)) ?? .init()
-        nextPosition = (try? .init(pb.nextPosition)) ?? .init()
+        id = (try? .init(pb.id)) ?? .init()
     }
     var pb: PBKeyframeKey {
         .with {
@@ -1714,8 +1713,7 @@ extension KeyframeKey: Protobuf {
             $0.draftLineIs = draftLineIs.map { Int64($0) }
             $0.draftPlaneIs = draftPlaneIs.map { Int64($0) }
             $0.beat = beat.pb
-            $0.previousPosition = previousPosition.pb
-            $0.nextPosition = nextPosition.pb
+            $0.id = id.pb
         }
     }
 }
@@ -1810,9 +1808,7 @@ extension Animation: Protobuf {
                                             planes: planes),
                              draftPicture: .init(lines: draftLines,
                                                  planes: draftPlanes),
-                             beat: $0.beat,
-                             previousPosition: $0.previousPosition,
-                             nextPosition: $0.nextPosition)
+                             beat: $0.beat, id: $0.id)
             }
         }
         
@@ -1876,8 +1872,7 @@ extension Animation: Protobuf {
                              draftLineIs: draftLineIs,
                              draftPlaneIs: draftPlaneIs,
                              beat: keyframe.beat,
-                             previousPosition: keyframe.previousPosition,
-                             nextPosition: keyframe.nextPosition)
+                             id: keyframe.id)
             }
             
             let lines = lineIs
@@ -1907,6 +1902,10 @@ extension Animation: Protobuf {
 extension Animation: BeatRangeType {
     var isEmpty: Bool {
         keyframes.isEmpty
+    }
+    
+    func keyframeIndex(at id: UUID) -> Int? {
+        keyframes.firstIndex { $0.id == id }
     }
     
     var mainBeat: Rational {

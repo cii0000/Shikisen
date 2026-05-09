@@ -77,6 +77,26 @@ extension NotesValue: Protobuf {
     }
 }
 
+struct CopiedAnimation: Codable {
+    var animation: Animation
+    var sheetID: UUID
+    var keyframeID: UUID
+}
+extension CopiedAnimation: Protobuf {
+    init(_ pb: PBCopiedAnimation) throws {
+        animation = try .init(pb.animation)
+        sheetID = try UUID(pb.sheetID)
+        keyframeID = try UUID(pb.keyframeID)
+    }
+    var pb: PBCopiedAnimation {
+        .with {
+            $0.animation = animation.pb
+            $0.sheetID = sheetID.pb
+            $0.keyframeID = keyframeID.pb
+        }
+    }
+}
+
 struct InteroptionsValue: Codable {
     var ids: [InterOption]
     var sheetID: UUID
@@ -106,7 +126,7 @@ enum PastableObject: Sendable {
     case picture(_ picture: Picture)
     case planesValue(_ planesValue: PlanesValue)
     case uuColor(_ uuColor: UUColor)
-    case animation(_ animation: Animation)
+    case copiedAnimation(_ copiedAnimation: CopiedAnimation)
     case ids(_ ids: InteroptionsValue)
     case content(_ content: Content)
     case image(_ image: Image)
@@ -152,8 +172,8 @@ extension PastableObject {
              PastableObject.typeName(with: planesValue)
         case .uuColor(let uuColor):
              PastableObject.typeName(with: uuColor)
-        case .animation(let animation):
-             PastableObject.typeName(with: animation)
+        case .copiedAnimation(let copiedAnimation):
+             PastableObject.typeName(with: copiedAnimation)
         case .ids(let ids):
              PastableObject.typeName(with: ids)
         case .content(let content):
@@ -201,8 +221,8 @@ extension PastableObject {
             self = .planesValue(try PlanesValue(serializedData: data))
         case PastableObject.objectTypeName(with: UUColor.self):
             self = .uuColor(try UUColor(serializedData: data))
-        case PastableObject.objectTypeName(with: Animation.self):
-            self = .animation(try Animation(serializedData: data))
+        case PastableObject.objectTypeName(with: CopiedAnimation.self):
+            self = .copiedAnimation(try CopiedAnimation(serializedData: data))
         case PastableObject.objectTypeName(with: InteroptionsValue.self):
             self = .ids(try InteroptionsValue(serializedData: data))
         case PastableObject.objectTypeName(with: Content.self):
@@ -247,8 +267,8 @@ extension PastableObject {
              try? planesValue.serializedData()
         case .uuColor(let uuColor):
              try? uuColor.serializedData()
-        case .animation(let animation):
-             try? animation.serializedData()
+        case .copiedAnimation(let copiedAnimation):
+             try? copiedAnimation.serializedData()
         case .ids(let ids):
              try? ids.serializedData()
         case .content(let content):
@@ -296,8 +316,8 @@ extension PastableObject: Protobuf {
             self = .planesValue(try PlanesValue(planesValue))
         case .uuColor(let uuColor):
             self = .uuColor(try UUColor(uuColor))
-        case .animation(let animation):
-            self = .animation(try Animation(animation))
+        case .copiedAnimation(let copiedAnimation):
+            self = .copiedAnimation(try CopiedAnimation(copiedAnimation))
         case .ids(let ids):
             self = .ids(try InteroptionsValue(ids))
         case .content(let content):
@@ -341,8 +361,8 @@ extension PastableObject: Protobuf {
                 $0.value = .planesValue(planesValue.pb)
             case .uuColor(let uuColor):
                 $0.value = .uuColor(uuColor.pb)
-            case .animation(let animation):
-                $0.value = .animation(animation.pb)
+            case .copiedAnimation(let copiedAnimation):
+                $0.value = .copiedAnimation(copiedAnimation.pb)
             case .ids(let ids):
                 $0.value = .ids(ids.pb)
             case .content(let content):
@@ -379,7 +399,7 @@ extension PastableObject: Codable {
         case picture = "5"
         case planesValue = "6"
         case uuColor = "7"
-        case animation = "8"
+        case copiedAnimation = "8"
         case ids = "9"
         case content = "16"
         case image = "20"
@@ -412,8 +432,8 @@ extension PastableObject: Codable {
             self = .planesValue(try container.decode(PlanesValue.self))
         case .uuColor:
             self = .uuColor(try container.decode(UUColor.self))
-        case .animation:
-            self = .animation(try container.decode(Animation.self))
+        case .copiedAnimation:
+            self = .copiedAnimation(try container.decode(CopiedAnimation.self))
         case .ids:
             self = .ids(try container.decode(InteroptionsValue.self))
         case .content:
@@ -465,9 +485,9 @@ extension PastableObject: Codable {
         case .uuColor(let uuColor):
             try container.encode(CodingTypeKey.uuColor)
             try container.encode(uuColor)
-        case .animation(let animation):
-            try container.encode(CodingTypeKey.animation)
-            try container.encode(animation)
+        case .copiedAnimation(let copiedAnimation):
+            try container.encode(CodingTypeKey.copiedAnimation)
+            try container.encode(copiedAnimation)
         case .ids(let ids):
             try container.encode(CodingTypeKey.ids)
             try container.encode(ids)
@@ -621,7 +641,10 @@ final class APasteAction: Action {
                 return kf
             }
             
-            Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
+            Pasteboard.shared.copiedObjects
+            = [.copiedAnimation(.init(animation: .init(keyframes: kfs),
+                                      sheetID: sheetView.id,
+                                      keyframeID: animationView.model.keyframes[ki].id))]
             
             selectingLineNode.fillType = .color(.selected)
             let scale = rootView.screenToWorldScale
@@ -1230,6 +1253,7 @@ final class APasteAction: Action {
                                                                  scale: rootView.screenToWorldScale) {
             
             let animationView = sheetView.animationView
+            let keyframeID = animationView.model.keyframes[ki].id
             
             let isSelected = animationView.selectedIs.contains(ki)
             var indexes = isSelected ?
@@ -1264,7 +1288,10 @@ final class APasteAction: Action {
             }
             rootView.updateSelectedFrame()
             
-            Pasteboard.shared.copiedObjects = [.animation(Animation(keyframes: kfs))]
+            Pasteboard.shared.copiedObjects
+            = [.copiedAnimation(.init(animation: .init(keyframes: kfs),
+                                      sheetID: sheetView.id,
+                                      keyframeID: keyframeID))]
             
             return true
         } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
@@ -2427,7 +2454,7 @@ final class APasteAction: Action {
             }
             
             break
-        case .animation:
+        case .copiedAnimation:
             break
         case .ids(let ids):
             updateIDs(ids.ids)
@@ -3126,8 +3153,8 @@ final class APasteAction: Action {
                 rootView.updateSelectedFrame()
             }
             
-        case .animation(let animation):
-            guard !animation.keyframes.isEmpty,
+        case .copiedAnimation(let copiedAnimation):
+            guard !copiedAnimation.animation.keyframes.isEmpty,
                   let sheetView = rootView.sheetView(at: shp) else { return }
             let beat: Rational = sheetView.animationView.beat(atX: sheetView.convertFromWorld(p).x)
             var ni = 0
@@ -3142,12 +3169,13 @@ final class APasteAction: Action {
             let count = (sheetView.rootKeyframeIndex - currentIndex) / sheetView.model.animation.keyframes.count
             let nextBeat = ni < sheetView.model.animation.keyframes.count ? sheetView.model.animation.keyframes[ni].beat : sheetView.model.animation.beatRange.length
             var ki = ni
-            let kivs: [IndexValue<Keyframe>] = animation.keyframes.compactMap {
+            let kivs: [IndexValue<Keyframe>] = copiedAnimation.animation.keyframes.compactMap {
                 var keyframe = $0
                 keyframe.beat += beat - sheetView.model.animation.beatRange.start
                 if keyframe.beat >= nextBeat {
                     return nil
                 }
+                keyframe.id = .init()
                 let v = IndexValue(value: keyframe, index: ki)
                 ki += 1
                 return v
@@ -3512,7 +3540,7 @@ final class APasteAction: Action {
         case .text: true
         case .border: true
         case .uuColor: true
-        case .animation: true
+        case .copiedAnimation: true
         case .ids: true
         case .content: true
         case .image: true

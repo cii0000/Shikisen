@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -176,6 +176,10 @@
 		23F0B2E525ECC336003AFE2A /* Encoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Encoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		2318F3622FAF6D7B00CEB074 /* Images */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Images; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		23A72870216CF1B5000A7350 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -290,6 +294,7 @@
 				234ED98B22AE484E0012B057 /* Protobuf.pb.swift */,
 				234ED98922AE2BB10012B057 /* Protobuf.proto */,
 				235BF0CB21771B0F00EEFABE /* Shaders.metal */,
+				2318F3622FAF6D7B00CEB074 /* Images */,
 				2340EF7A2AAE14D200FD874F /* Fonts */,
 				23B9940A24E8F214000D544F /* Acknowledgments.txt */,
 				2371F6622F11331600A81A45 /* PrivacyPolicy.md */,
@@ -324,6 +329,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2318F3622FAF6D7B00CEB074 /* Images */,
 			);
 			name = Rasen;
 			packageProductDependencies = (

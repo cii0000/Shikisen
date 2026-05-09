@@ -300,8 +300,7 @@ message PBKeyframe {
     PBPicture picture = 1;
     PBPicture draftPicture = 2;
     PBRational beat = 3;
-    PBPoint previousPosition = 5;
-    PBPoint nextPosition = 6;
+    PBUUID id = 7;
 }
 
 message PBKeyframeKey {
@@ -310,8 +309,7 @@ message PBKeyframeKey {
     repeated int64 draftLineIs = 3;
     repeated int64 draftPlaneIs = 4;
     PBRational beat = 5;
-    PBPoint previousPosition = 7;
-    PBPoint nextPosition = 8;
+    PBUUID id = 9;
 }
 message PBAnimationZipper {
     repeated PBKeyframeKey keys = 1;
@@ -682,6 +680,11 @@ message PBCopiedSheetsValue {
 message PBPlanesValue {
     repeated PBPlane planes = 1;
 }
+message PBCopiedAnimation {
+    PBAnimation animation = 1;
+    PBUUID sheetID = 2;
+    PBUUID keyframeID = 3;
+}
 message PBNotesValue {
     repeated PBNote notes = 1;
     PBRational deltaPitch = 2;
@@ -702,7 +705,7 @@ message PBPastableObject {
         PBPicture picture = 6;
         PBPlanesValue planesValue = 7;
         PBUUColor uuColor = 8;
-        PBAnimation animation = 9;
+        PBCopiedAnimation copiedAnimation = 9;
         PBInterOptionsValue ids = 10;
         PBContent content = 22;
         PBImage image = 21;

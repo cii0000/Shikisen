@@ -62,7 +62,9 @@ final class SubNSApplication: NSApplication {
     private var touchDeviceSizes = [UInt64: Size](), oldTouchEvent: TouchEvent?
     override func sendEvent(_ nsEvent: NSEvent) {
         if nsEvent.type == .gesture {
-            if let cgEvent = nsEvent.cgEvent, let view = nsEvent.window?.contentView as? SubMTKView {
+            if let cgEvent = nsEvent.cgEvent,
+               let window = nsEvent.window, window.isKeyWindow,
+                let view = window.contentView as? SubMTKView {
                 let ioEvent = CGEventCopyIOHIDEvent(cgEvent)
                 let flags = IOHIDEventGetEventFlags(ioEvent)
                 let flagID = (flags >> 4) & 0xF
@@ -1310,6 +1312,28 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                     rootAction.subDrag(with: beganDragEvent)
                 }
                 rootAction.subDrag(with: nEvent)
+            }
+        } else if var beganDragEvent = beganDragEvent {
+            isMovedDrag = true
+            maxPressure = max(maxPressure, nsEvent.pressure)
+            if !isDrag {
+                guard nsEvent.pressure >= 0 else {
+                    beganDragEvent = dragEventWith(nsEvent, .began)
+                    self.beganDragEvent = beganDragEvent
+                    return
+                }
+                isDrag = true
+                if oldPressureStage == 2 {
+                    isStrongDrag = true
+                    rootAction.strongDrag(with: beganDragEvent)
+                } else {
+                    rootAction.drag(with: beganDragEvent)
+                }
+            }
+            if isStrongDrag {
+                rootAction.strongDrag(with: dragEventWith(nsEvent, .changed))
+            } else {
+                rootAction.drag(with: dragEventWith(nsEvent, .changed))
             }
         }
     }
