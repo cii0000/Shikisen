@@ -62,7 +62,7 @@ final class RunAction: InputKeyEventAction {
             let shp = rootView.sheetPosition(at: p)
             guard isEditingSheet, let sheetView = rootView.sheetView(at: shp) else { break }
             let sheetP = sheetView.convertFromWorld(p)
-            if let (textView, ti, _, _) = sheetView.textTuple(at: sheetP) {
+            if let (textView, ti, _, _) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale) {
                 let text = textView.model
                 
                 if text.string.hasPrefix("http"), URL(string: text.string)?.openInBrowser() ?? false { return }

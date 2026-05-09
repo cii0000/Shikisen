@@ -269,7 +269,7 @@ final class RootAction: Action {
     }
     
     private(set) var oldInputTextKeys = Set<InputKeyType>()
-    lazy private(set) var textAction: TextAction = { TextAction(self) } ()
+    lazy private(set) var textAction: InputTextAction = { InputTextAction(self) } ()
     func inputText(with event: InputTextEvent) {
         switch event.phase {
         case .began:
@@ -1020,7 +1020,7 @@ final class SelectAction: Action {
                         }
                     }
                     
-//                    nSelection.lastPosition = sheetView.convertFromWorld(p)
+                    nSelection.lastPosition = sheetView.convertFromWorld(p)
                     
                     if sheetView.model.selection != nSelection {
                         sheetView.selection = nSelection
@@ -1033,7 +1033,7 @@ final class SelectAction: Action {
                 }.map { $0.value }
                 rootView.world.selection.sheetIDs
                 = (isUnselect ? oSIDs.subtracting(nSIDs) : oSIDs.union(nSIDs)).sorted()
-//                rootView.world.selection.lastPosition = p
+                rootView.world.selection.lastPosition = p
                 rootView.updateSelected()
             }
             

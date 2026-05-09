@@ -1315,7 +1315,7 @@ final class MoveScoreAction: DragEventAction {
                                     let doubleNPitch = doubleDPitch + .init(beganNote.pitch)
                                     var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
                                     let rnPitch = nPitch.rounded()
-                                    var minD = min(1 / 16.0, doubleNPitch.distance(.init(rnPitch)))
+                                    var minD = min(1 / 32.0, doubleNPitch.distance(.init(rnPitch)))
                                     for (ni, note) in score.notes.enumerated() {
                                         if beganNotes[ni] == nil,
                                            note.beatRange.contains(beganNote.beatRange.start),
@@ -1540,7 +1540,7 @@ final class MoveScoreAction: DragEventAction {
                                         let doubleNPitch = doubleDPitch + .init(beganPit.pitch + nv.note.pitch)
                                         var nnPitch = nPitch.interval(scale: rootView.currentPitchInterval)
                                         let rnPitch = nPitch.rounded()
-                                        var minD = min(1 / 16.0, doubleNPitch.distance(.init(rnPitch)))
+                                        var minD = min(1 / 32.0, doubleNPitch.distance(.init(rnPitch)))
                                         for (ni, note) in score.notes.enumerated() {
                                             if beganNotePits[ni] == nil,
                                                note.beatRange.contains(nv.note.beatRange.start + beganPit.beat),
@@ -1623,7 +1623,7 @@ final class MoveScoreAction: DragEventAction {
                                 oldPitch = pitch
                                 
                                 let dSecStr = scoreView.isFullEdit && dBeat != 0 ?
-                                "/n"
+                                "\n"
                                 + Duration.msString(fromSec: Double(scoreView.model.sec(fromBeat: dBeat)))
                                  : ""
                                 let jStr = justFitUnison != nil ? " JI:\(justFitUnison!)" : ""
@@ -2385,7 +2385,7 @@ final class MoveSheetAction: DragEventAction {
                     self.sheetView = sheetView
                     sheetView.hideSelected()
                     
-                    if containsSelectedFrame,
+                    if containsSelectedFrame || containsSelectedLastLine,
                         let rect = sheetView.selectedFrame(scale: rootView.screenToWorldScale) {
                         
                         typeRect = sheetView.convertToWorld(rect)

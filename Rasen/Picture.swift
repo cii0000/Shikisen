@@ -72,7 +72,7 @@ extension Picture {
         return Self.autoFill(fromOther: otherPlanes, from: nPolys,
                              from: planes,
                              in: bounds,
-                             clippingBounds: clippingBounds)
+                             clippingBounds: clippingBounds, isOutClip: isOutClip)
     }
     func makePolygons(in bounds: Rect,
                       clippingBounds: Rect?,
@@ -89,7 +89,8 @@ extension Picture {
                          in bounds: Rect,
                          clippingBounds: Rect?,
                          renderingScale: Double = Self.defaultRenderingScale,
-                         borders: [Border] = []) -> AutoFillResult {
+                         borders: [Border] = [],
+                         isOutClip: Bool) -> AutoFillResult {
         if (nPolys.isEmpty && clippingBounds == nil) || (nPolys.count == 1 && nPolys[0] == bounds) {
             return .background(UU(bounds.area < 1 ?
                                   Color.randomLightness(45 ... 55) :
@@ -122,9 +123,9 @@ extension Picture {
         var isIndexesArray = Array(repeating: false, count: planes.count)
         
         if let clippingBounds {
-            nPlanes = planes.lazy
+            nPlanes = (isOutClip ? planes.lazy
                 .filter { !clippingBounds.contains($0.topolygon) }
-                .map { ($0, $0.topolygon.area) }
+                .map { ($0, $0.topolygon.area) } : [])
             + nPlanes.filter { clippingBounds.contains($0.plane.topolygon) }
             nPlanes.sort { $0.area > $1.area }
         }

@@ -169,7 +169,7 @@ final class SubNSApplication: NSApplication {
         let viewController = NSViewController()
         viewController.view = view
         window = NSWindow(contentViewController: viewController)
-        window.title = System.appName.localized
+        window.title = ""
         window.center()
         window.setFrameAutosaveName("Main")
         window.delegate = self

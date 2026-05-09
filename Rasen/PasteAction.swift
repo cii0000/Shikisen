@@ -513,10 +513,10 @@ extension PastableObject {
 }
 
 final class CutAction: InputKeyEventAction {
-    let action: PastableAction
+    let action: APasteAction
     
     init(_ rootAction: RootAction) {
-        action = PastableAction(rootAction)
+        action = APasteAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -527,10 +527,10 @@ final class CutAction: InputKeyEventAction {
     }
 }
 final class CopyAction: InputKeyEventAction {
-    let action: PastableAction
+    let action: APasteAction
     
     init(_ rootAction: RootAction) {
-        action = PastableAction(rootAction)
+        action = APasteAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -541,10 +541,10 @@ final class CopyAction: InputKeyEventAction {
     }
 }
 final class PasteAction: InputKeyEventAction {
-    let action: PastableAction
+    let action: APasteAction
     
     init(_ rootAction: RootAction) {
-        action = PastableAction(rootAction)
+        action = APasteAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -554,7 +554,7 @@ final class PasteAction: InputKeyEventAction {
         action.updateNode()
     }
 }
-final class PastableAction: Action {
+final class APasteAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -819,7 +819,7 @@ final class PastableAction: Action {
             
             return true
         } else if let sheetView = rootView.sheetView(at: p),
-                  let (textView, _, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
+                  let (textView, _, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             if let node = rootView.findingNode(at: p) {
                 if isSendPasteboard {
                     if let range = textView.model.string.ranges(of: rootView.finding.string)
@@ -1456,7 +1456,7 @@ final class PastableAction: Action {
             }
             return true
         } else if let sheetView = rootView.sheetView(at: p),
-                  let (textView, ti, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
+                  let (textView, ti, si, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             if rootView.findingNode(at: p) != nil {
                 if let range = textView.model.string.ranges(of: rootView.finding.string)
                     .first(where: { $0.contains(si) }) {
@@ -1961,7 +1961,7 @@ final class PastableAction: Action {
                     textView = aTextView
                     sri = asri
                 }
-            } else if let (aTextView, _, _, asri) = sheetView?.textTuple(at: sheetP) {
+            } else if let (aTextView, _, _, asri) = sheetView?.textTuple(at: sheetP, scale: rootView.screenToWorldScale) {
                 textView = aTextView
                 sri = asri
             }
@@ -2082,7 +2082,7 @@ final class PastableAction: Action {
             selectingLineNode.lineWidth = lw
             
             if let sheetView = sheetView,
-               let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+               let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                let x = textView.typesetter.warpCursorOffset(at: textView.convertFromWorld(p))?.offset,
                textView.textOrientation == oldBorder.orientation.reversed(),
                let frame = textView.model.frame {
@@ -2876,7 +2876,8 @@ final class PastableAction: Action {
         case .picture(let picture):
             if let sheetView = rootView.madeSheetView(at: shp) {
                 sheetView.newUndoGroup()
-                sheetView.set(picture)
+                sheetView.append(picture.lines)
+                sheetView.append(picture.planes)
             }
         case .sheetValue(let value):
             let snapP = value.origin + rootView.sheetFrame(with: shp).origin
@@ -2995,7 +2996,7 @@ final class PastableAction: Action {
             pasteText(text, isSelected: false)
         case .border(let border):
             if let sheetView = rootView.sheetView(at: shp),
-               let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+               let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                let x = textView.typesetter.warpCursorOffset(at: textView.convertFromWorld(p))?.offset {
                 let widthCount = textView.model.size == 0 ?
                     Typobute.maxWidthCount :

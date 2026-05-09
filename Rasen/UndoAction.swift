@@ -18,10 +18,10 @@
 import struct Foundation.Date
 
 final class UndoAction: InputKeyEventAction {
-    let action: VersionAction
+    let action: ASelectVersionAction
     
     init(_ rootAction: RootAction) {
-        action = VersionAction(rootAction)
+        action = ASelectVersionAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -32,10 +32,10 @@ final class UndoAction: InputKeyEventAction {
     }
 }
 final class RedoAction: InputKeyEventAction {
-    let action: VersionAction
+    let action: ASelectVersionAction
     
     init(_ rootAction: RootAction) {
-        action = VersionAction(rootAction)
+        action = ASelectVersionAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -46,10 +46,10 @@ final class RedoAction: InputKeyEventAction {
     }
 }
 final class SelectVersionAction: DragEventAction {
-    let action: VersionAction
+    let action: ASelectVersionAction
     
     init(_ rootAction: RootAction) {
-        action = VersionAction(rootAction)
+        action = ASelectVersionAction(rootAction)
     }
     
     func flow(with event: DragEvent) {
@@ -59,7 +59,7 @@ final class SelectVersionAction: DragEventAction {
         action.updateNode()
     }
 }
-final class VersionAction: Action {
+final class ASelectVersionAction: Action {
     let rootAction: RootAction, rootView: RootView
     
     init(_ rootAction: RootAction) {

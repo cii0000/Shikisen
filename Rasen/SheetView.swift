@@ -2131,7 +2131,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     func textIndex(at p: Point, scale: Double) -> Int? {
-        if let i = textTuple(at: p)?.textIndex {
+        if let i = textTuple(at: p, scale: scale)?.textIndex {
             return i
         }
         for (i, view) in textsView.elementViews.enumerated().reversed() {
@@ -7098,7 +7098,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     
-    func textTuple(at p: Point) -> (textView: SheetTextView,
+    func textTuple(at p: Point, scale: Double) -> (textView: SheetTextView,
                                     textIndex: Int,
                                     stringIndex: String.Index,
                                     cursorIndex: String.Index)? {
@@ -7166,7 +7166,7 @@ final class SheetView: View, @unchecked Sendable {
         let isNoneDefaultColorPlane = !model.picture.planes.isEmpty && !isDefaultPlaneColor(at: p)
         let smallScale: Double? = if enabledPlane && isNoneDefaultColorPlane {
             6.0
-        } else if textTuple(at: p) != nil {
+        } else if textTuple(at: p, scale: scale) != nil {
             2.0
         } else {
             nil
@@ -7637,12 +7637,14 @@ final class SheetView: View, @unchecked Sendable {
                                       from: topolygons,
                                       from: model.picture.planes,
                                       in: b,
-                                      clippingBounds: cb, borders: model.borders)
+                                      clippingBounds: cb, borders: model.borders,
+                                      isOutClip: isOutClip)
         } else {
             result = Picture.autoFill(from: topolygons,
                                       from: model.picture.planes,
                                       in: b,
-                                      clippingBounds: cb, borders: model.borders)
+                                      clippingBounds: cb, borders: model.borders,
+                                      isOutClip: isOutClip)
         }
         switch result {
         case .planes(let planes):

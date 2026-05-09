@@ -40,7 +40,7 @@ final class FindAction: InputKeyEventAction {
             guard let sheetView = rootView.sheetView(at: p) else { return }
             let sheetP = sheetView.convertFromWorld(p)
             var isFind = false
-            if let (textView, _, i, _) = sheetView.textTuple(at: sheetP) {
+            if let (textView, _, i, _) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale) {
                 if let range = textView.selectedRange(at: textView.convertFromWorld(p))
                     ?? textView.wordRange(at: i) {
                     
@@ -214,7 +214,7 @@ final class LookUpAction: InputKeyEventAction {
                           + "\n\t\("Tempo".localized): \(tempoStr)",
                           at: p)
         } else if let sheetView = rootView.sheetView(at: p),
-                  let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+                  let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                   let range = textView.selectedRange(at: textView.convertFromWorld(p)) {
             let string = String(textView.model.string[range])
             showDefinition(string: string, range: range,
@@ -229,7 +229,7 @@ final class LookUpAction: InputKeyEventAction {
                                                      scale: 1 / rootView.worldToScreenScale)?.lineView {
             rootView.show((lineView.model.controls.count == 2 ? "Straight Line".localized : "Line".localized) + "\n\t\("Length".localized):  \(lineView.model.length().string(digitsCount: 4))", at: p)
         } else if let sheetView = rootView.sheetView(at: p),
-                  let (textView, _, i, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)) {
+                  let (textView, _, i, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             
             if let range = textView.wordRange(at: i) {
                 let string = String(textView.model.string[range])
@@ -413,10 +413,10 @@ final class LookUpAction: InputKeyEventAction {
 }
 
 final class ChangeToVerticalTextAction: InputKeyEventAction {
-    let action: TextOrientationAction
+    let action: ChangeTextOrientationAction
     
     init(_ rootAction: RootAction) {
-        action = TextOrientationAction(rootAction)
+        action = ChangeTextOrientationAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -427,10 +427,10 @@ final class ChangeToVerticalTextAction: InputKeyEventAction {
     }
 }
 final class ChangeToHorizontalTextAction: InputKeyEventAction {
-    let action: TextOrientationAction
+    let action: ChangeTextOrientationAction
     
     init(_ rootAction: RootAction) {
-        action = TextOrientationAction(rootAction)
+        action = ChangeTextOrientationAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -440,7 +440,7 @@ final class ChangeToHorizontalTextAction: InputKeyEventAction {
         action.updateNode()
     }
 }
-final class TextOrientationAction: Action {
+final class ChangeTextOrientationAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -547,10 +547,10 @@ final class TextOrientationAction: Action {
 }
 
 final class ChangeToSuperscriptAction: InputKeyEventAction {
-    let action: TextScriptAction
+    let action: ChangeTextScriptAction
     
     init(_ rootAction: RootAction) {
-        action = TextScriptAction(rootAction)
+        action = ChangeTextScriptAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -561,10 +561,10 @@ final class ChangeToSuperscriptAction: InputKeyEventAction {
     }
 }
 final class ChangeToSubscriptAction: InputKeyEventAction {
-    let action: TextScriptAction
+    let action: ChangeTextScriptAction
     
     init(_ rootAction: RootAction) {
-        action = TextScriptAction(rootAction)
+        action = ChangeTextScriptAction(rootAction)
     }
     
     func flow(with event: InputKeyEvent) {
@@ -574,7 +574,7 @@ final class ChangeToSubscriptAction: InputKeyEventAction {
         action.updateNode()
     }
 }
-final class TextScriptAction: Action {
+final class ChangeTextScriptAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -619,7 +619,7 @@ final class TextScriptAction: Action {
             let p = rootView.convertScreenToWorld(event.screenPoint)
             
             if let sheetView = rootView.sheetView(at: p),
-               let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p)),
+               let (textView, _, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                textView.selectedRange(at: textView.convertFromWorld(p)) != nil {
                 
                 var isNewUndoGroup = true
@@ -692,7 +692,7 @@ final class TextScriptAction: Action {
     }
 }
 
-final class TextAction: InputTextEventAction {
+final class InputTextAction: InputTextEventAction {
     let rootAction: RootAction, rootView: RootView
     
     init(_ rootAction: RootAction) {
@@ -737,7 +737,7 @@ final class TextAction: InputTextEventAction {
         if !isMovedCursor, let eTextView = editingTextView,
            sheetView.textsView.elementViews.contains(eTextView) {
             
-        } else if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP) {
+        } else if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale) {
             if isMovedCursor {
                 textView.selectedRange = sri ..< sri
                 textView.updateCursor()
@@ -878,7 +878,7 @@ final class TextAction: InputTextEventAction {
             guard let sheetView = rootView.sheetView(at: p) else { return }
             let sheetP = sheetView.convertFromWorld(p)
             
-            if let (textView, _, si, _) = sheetView.textTuple(at: sheetP),
+            if let (textView, _, si, _) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale),
                 let range = textView.model.string.ranges(of: rootView.finding.string)
                 .first(where: { $0.contains(si) }) {
                 
@@ -912,7 +912,7 @@ final class TextAction: InputTextEventAction {
             
             guard let sheetView = rootView.madeSheetView(at: p) else { return }
             let sheetP = sheetView.convertFromWorld(p)
-            if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP) {
+            if let (textView, _, _, sri) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale) {
                 if isMovedCursor {
                     textView.selectedRange = sri ..< sri
                     textView.updateCursor()
@@ -1220,7 +1220,7 @@ final class TextAction: InputTextEventAction {
     func cut(at p: Point) {
         guard let sheetView = rootView.madeSheetView(at: p) else { return }
         let sheetP = sheetView.convertFromWorld(p)
-        guard let (textView, ti, _, _) = sheetView.textTuple(at: sheetP) else { return }
+        guard let (textView, ti, _, _) = sheetView.textTuple(at: sheetP, scale: rootView.screenToWorldScale) else { return }
         
         guard let range = textView.selectedRange(at: textView.convertFromWorld(p)) else { return }
         

@@ -1674,7 +1674,7 @@ final class RootView: View, @unchecked Sendable {
                     textCursorWidthNode.path = textCursorNode.path
                     let mPath = textView.typesetter.maxTypelineWidthPath
                     textMaxTypelineWidthNode.path = textView.convertToWorld(mPath)
-                } else if let (textView, _, _, cursorIndex) = sheetView.textTuple(at: vp) {
+                } else if let (textView, _, _, cursorIndex) = sheetView.textTuple(at: vp, scale: screenToWorldScale) {
                     if textMaxTypelineWidthNode.parent == nil {
                         node.append(child: textMaxTypelineWidthNode)
                     }

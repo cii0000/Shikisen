@@ -18,10 +18,10 @@
 import struct Foundation.UUID
 
 final class AdjustBrightnessAction: DragEventAction {
-    let action: ColorAction
+    let action: ChangeColorAction
     
     init(_ rootAction: RootAction) {
-        action = ColorAction(rootAction)
+        action = ChangeColorAction(rootAction)
     }
     
     func flow(with event: DragEvent) {
@@ -32,10 +32,10 @@ final class AdjustBrightnessAction: DragEventAction {
     }
 }
 final class AdjustTintAction: DragEventAction {
-    let action: ColorAction
+    let action: ChangeColorAction
     
     init(_ rootAction: RootAction) {
-        action = ColorAction(rootAction)
+        action = ChangeColorAction(rootAction)
     }
     
     func flow(with event: DragEvent) {
@@ -46,10 +46,10 @@ final class AdjustTintAction: DragEventAction {
     }
 }
 final class ChangeOpacityAction: DragEventAction {
-    let action: ColorAction
+    let action: ChangeColorAction
     
     init(_ rootAction: RootAction) {
-        action = ColorAction(rootAction)
+        action = ChangeColorAction(rootAction)
     }
     
     func flow(with event: DragEvent) {
@@ -59,7 +59,7 @@ final class ChangeOpacityAction: DragEventAction {
         action.updateNode()
     }
 }
-final class ColorAction: Action {
+final class ChangeColorAction: Action {
     let rootAction: RootAction, rootView: RootView
     let isEditingSheet: Bool
     
@@ -1552,7 +1552,7 @@ final class ColorAction: Action {
         }
     }
     
-    let tintR = 150.0
+    let tintR = 135.0
     let snappableDistance = 3.0
     let tintNode = Node(lineWidth: 2)
     let tintBorderNode = Node(lineWidth: 3.25, lineType: .color(.background))
