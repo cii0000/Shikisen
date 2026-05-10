@@ -1597,6 +1597,19 @@ final class RootView: View, @unchecked Sendable {
             doSet(WorldSelection.empty)
         }
     }
+    func unselectAllAndNewUndoGroupIfNeeded(withoutTextI textI: Int, in sheetView: SheetView) {
+        sheetViewValues.forEach {
+            if $0.value.sheetView == sheetView {
+                $0.value.sheetView?.unselectAndNewUndoGroupIfNeeded(withoutText: textI)
+            } else {
+                $0.value.sheetView?.unselectAndNewUndoGroupIfNeeded()
+            }
+        }
+        if !world.selection.isEmpty {
+            newUndoGroup()
+            doSet(WorldSelection.empty)
+        }
+    }
     func closeAllPanels(at p: Point) {
         closeLookingUp()
         finding = Finding()

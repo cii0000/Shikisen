@@ -937,7 +937,7 @@ final class LineAction: Action {
                 if isSnapStraight {
                     if abs(nsd.x) > 0 {
                         nLine.controls[.last].point.x = nLine.controls[.first].point.x
-                    } else {
+                    } else if abs(nsd.y) > 0 {
                         nLine.controls[.last].point.y = nLine.controls[.first].point.y
                     }
                 } else {

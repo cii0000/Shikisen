@@ -1039,7 +1039,12 @@ final class InputTextAction: InputTextEventAction {
         }
         isCapturing = true
         if !inputKeyTimer.isWait {
-            rootView.unselectAllAndNewUndoGroupIfNeeded()
+            if let i = sheetView.textsView.elementViews
+                .firstIndex(of: textView) {
+                rootView.unselectAllAndNewUndoGroupIfNeeded(withoutTextI: i, in: sheetView)
+            } else {
+                rootView.unselectAllAndNewUndoGroupIfNeeded()
+            }
             
             self.captureString = textView.model.string
             self.captureSheetSelection = sheetView.model.selection

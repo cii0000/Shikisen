@@ -3133,6 +3133,14 @@ final class SheetView: View, @unchecked Sendable {
             doSet(SheetSelection.empty)
         }
     }
+    func unselectAndNewUndoGroupIfNeeded(withoutText textI: Int) {
+        var selection = model.selection
+        selection.textSelections[textI] = nil
+        if !selection.isEmpty {
+            newUndoGroup()
+            doSet(SheetSelection.empty)
+        }
+    }
     func unselect(isNewUndoGroup: inout Bool) {
         if !model.selection.isEmpty {
             if isNewUndoGroup {

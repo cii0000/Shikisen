@@ -781,7 +781,35 @@ final class SelectAction: Action {
     private let node = Node(lineType: .color(.selected), fillType: .color(.subSelected))
     let snappedDistance = 3.5
     
+    private var beganEvent: DragEvent?
     func select(with event: DragEvent, isUnselect: Bool) {
+        if event.phase == .began {
+            beganEvent = event
+        }
+        if let beganEvent {
+            guard event.screenPoint.distance(beganEvent.screenPoint) >= 5
+                    || event.time - beganEvent.time >= 0.33 else {
+                if event.phase == .ended {
+                    rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
+                                                    time: event.time,
+                                                    pressure: event.pressure,
+                                                    phase: .began, isRepeat: false,
+                                                    inputKeyType: .click))
+                    Sleep.start()
+                    rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
+                                                    time: event.time,
+                                                    pressure: event.pressure,
+                                                    phase: .ended, isRepeat: false,
+                                                    inputKeyType: .click))
+                }
+                return
+            }
+            aSelect(with: beganEvent, isUnselect: isUnselect)
+            self.beganEvent = nil
+        }
+        aSelect(with: event, isUnselect: isUnselect)
+    }
+    func aSelect(with event: DragEvent, isUnselect: Bool) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
@@ -1044,35 +1072,15 @@ final class SelectAction: Action {
             
             node.removeFromParent()
             
-            var isChange = false
-            
             if let beganWorldSelection, beganWorldSelection != rootView.world.selection {
                 rootView.newUndoGroup()
                 rootView.capture(old: beganWorldSelection)
-                isChange = true
             }
             for (sheetView, oldSelection) in captureSelections {
                 if oldSelection != sheetView.model.selection {
                     sheetView.newUndoGroup()
                     sheetView.capture(old: oldSelection)
-                    isChange = true
                 }
-            }
-            
-            if !isChange,
-               !(firstP.distance(p) * rootView.worldToScreenScale < (event.isTablet ? 0.1 : 2)
-                 && event.time - beganTime < 3) {
-            
-                rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
-                                                time: event.time, pressure: event.pressure,
-                                                phase: .began, isRepeat: false,
-                                                inputKeyType: .click))
-                Sleep.start()
-                rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
-                                                time: event.time, pressure: event.pressure,
-                                                phase: .ended, isRepeat: false,
-                                                inputKeyType: .click))
-                return
             }
             
             rootView.cursor = rootView.defaultCursor
