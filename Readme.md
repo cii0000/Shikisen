@@ -1,4 +1,4 @@
-# <img src="Shikisen/Assets.xcassets/AppIcon.appiconset/64.png" alt="メモ" width="32px">シキセン 1.0
+# <img src="Shikisen/Assets.xcassets/AppIcon.appiconset/64.png" alt="メモ" width="38px">シキセン 1.0
 
 注意：諸事情によりアプリの公証は現在行っておりません。使用したくても不安な方はソースコードを確認した上でXcodeでビルドするか、アプリの公証が行われるまでお待ちください。
 
