@@ -75,17 +75,17 @@ final class MoveAction: DragEventAction {
                 type = .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.lineTuple(at: sheetP,
-                                              scale: rootView.screenToWorldScale) != nil {
-                    type = .line(MoveLineAction(rootAction))
+                if sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
+                    type = .animation(MoveAnimationAction(rootAction))
                 } else if sheetView.containsTempo(sheetP, scale: rootView.screenToWorldScale) {
                     type = .tempo(MoveTempoAction(rootAction))
+                } else if sheetView.lineTuple(at: sheetP,
+                                              scale: rootView.screenToWorldScale) != nil {
+                    type = .line(MoveLineAction(rootAction))
                 } else if sheetView.textIndex(at: sheetP, scale: rootView.screenToWorldScale) != nil {
                     type = .text(MoveTextAction(rootAction))
                 } else if sheetView.contentIndex(at: sheetP, scale: rootView.screenToWorldScale) != nil {
                     type = .content(MoveContentAction(rootAction))
-                } else if sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
-                    type = .animation(MoveAnimationAction(rootAction))
                 } else if sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
                                                        scale: rootView.screenToWorldScale) {
                     type = .score(MoveScoreAction(rootAction))

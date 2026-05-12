@@ -53,7 +53,7 @@ struct Triangle: Hashable, Codable {
 }
 extension Triangle {
     var area: Double {
-        abs((p0 - p2).cross(p1 - p2)) / 2
+        abs((p1 - p0).cross(p2 - p0)) / 2
     }
     var centroid: Point {
         (p0 + p1 + p2) / 3
@@ -688,26 +688,90 @@ extension Polygon {
     
     var triangles: [Triangle] {
         guard points.count > 2 else { return [] }
+        
+        var pd = [Double](), counts = [Int](), oldIndex = 0
+        triangles(in: &pd, counts: &counts, oldIndex: &oldIndex)
+        var i = 0
+        return counts.flatMap { count in
+            let points = (i ..< (i + count)).map {
+                Point(pd[$0 * 4], pd[$0 * 4 + 1])
+            }
+            i += count
+            
+            return TriangleStrip(points: points).triangles
+        }
+    }
+    
+    func triangles(in doublePoints: inout [Double],
+                   counts: inout [Int], oldIndex: inout Int) {
+        guard points.count > 2 else { return }
         if points.count == 3 {
-            return [Triangle(points[0], points[1], points[2])]
+            var nps = [Double]()
+            func append(_ p: Point) {
+                nps.append(p.x)
+                nps.append(p.y)
+                nps.append(0)
+                nps.append(1)
+            }
+            append(points[0])
+            append(points[1])
+            append(points[2])
+            doublePoints += nps
+            counts.append((doublePoints.count - oldIndex) / 4)
+            oldIndex = doublePoints.count
         } else if isConvex {
-            var ps = [Point]()
-            ps.reserveCapacity(points.count)
-            ps.append(points[0])
+            var nps = [Double]()
+            func append(_ p: Point) {
+                nps.append(p.x)
+                nps.append(p.y)
+                nps.append(0)
+                nps.append(1)
+            }
+            append(points[0])
             (1 ..< points.count).forEach { i in
-                let i = i % 2 != 0 ?
-                    i / 2 + 1 :
-                    points.count - i / 2
-                ps.append(points[i])
+                let i = i % 2 != 0 ? i / 2 + 1 : points.count - i / 2
+                append(points[i])
             }
-            let tCount = points.count - 2
-            return (0 ..< tCount).map {
-                Triangle(points[$0], points[$0 + 1], points[$0 + 2])
-            }
+            doublePoints += nps
+            counts.append((doublePoints.count - oldIndex) / 4)
+            oldIndex = doublePoints.count
         } else {
-            var ts = [Triangle]()
+            var nps = [Double](), oldI0 = 0, oldI1 = 0
+            func append(_ p: Point) {
+                nps.append(p.x)
+                nps.append(p.y)
+                nps.append(0)
+                nps.append(1)
+            }
+            func newIndex(_ i0: Int, _ i1: Int, _ i2: Int) -> Int? {
+                if (oldI0 == i0 && oldI1 == i1)
+                    || (oldI0 == i1 && oldI1 == i0) {
+                    
+                    return i2
+                } else if (oldI0 == i0 && oldI1 == i2)
+                            || (oldI0 == i2 && oldI1 == i0) {
+                    return i1
+                } else if (oldI0 == i2 && oldI1 == i1)
+                            || (oldI0 == i1 && oldI1 == i2) {
+                    return i0
+                } else {
+                    return nil
+                }
+            }
             func appendTriangle(_ i0: Int, _ i1: Int, _ i2: Int) {
-                ts.append(Triangle(points[i0], points[i1], points[i2]))
+                if let ni = newIndex(i0, i1, i2) {
+                    append(points[ni])
+                } else {
+                    if !nps.isEmpty {
+                        doublePoints += nps
+                        counts.append((doublePoints.count - oldIndex) / 4)
+                        oldIndex = doublePoints.count
+                        nps = []
+                    }
+                    append(points[i0])
+                    append(points[i1])
+                    append(points[i2])
+                }
             }
             
             var topIndex = 0, bottomIndex = 0
@@ -828,7 +892,12 @@ extension Polygon {
                 }
             }
             
-            return ts
+            if !nps.isEmpty {
+                doublePoints += nps
+                counts.append((doublePoints.count - oldIndex) / 4)
+                oldIndex = doublePoints.count
+                nps = []
+            }
         }
     }
     func floatTriangles(in floatPoints: inout [Float],

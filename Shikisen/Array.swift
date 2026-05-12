@@ -194,7 +194,7 @@ extension Array {
     }
 }
 
-extension Collection {
+extension Sequence {
     func minValue<V: Comparable>(by handler: (Element) throws -> V) rethrows -> V? {
         var minV: V?
         for e in self {

@@ -1734,17 +1734,9 @@ final class FillAction: Action {
                     
                     isChanged = true
                 }
-            } else {
-                let (_, sheetView, frame, isAll) = rootView.sheetViewAndFrame(at: p)
-                if let sheetView = sheetView {
-                    if isAll {
-                        isChanged = sheetView.cutColorsAll(with: nil)
-                    } else {
-                        let f = sheetView.convertFromWorld(frame).inset(by: 1)
-                        isChanged = sheetView.cutColorsAll(with: Path(f))
-                    }
-                    rootView.updateSelectedFrame()
-                }
+            } else if let sheetView = rootView.sheetView(at: p) {
+                isChanged = sheetView.cutColorsAll(with: nil)
+                rootView.updateSelectedFrame()
             }
             
             if !isChanged {

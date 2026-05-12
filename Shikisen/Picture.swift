@@ -15,6 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
+//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+import Accelerate.vecLib.vDSP
+//#elseif os(linux) && os(windows)
+//#endif
+
 struct Picture {
     var lines = [Line](), planes = [Plane]()
 }
@@ -149,69 +154,103 @@ extension Picture {
         }
         
         struct V {
-            var plane: Plane,
-                oxs: SIMD16<Float16>, oys: SIMD16<Float16>,
-                pSet: Set<Point>,
-                centroid: Point, area: Double
-        }
-        if !newPlanes.isEmpty {
-            let oldPlanes = (otherPlanes ?? []) + (removePlaneIndexes.map { planes[$0] })
-            let oldVs: [V] = oldPlanes.compactMap { oldPlane in
-                let tripolygon = oldPlane.topolygon.tripolygon
+            var centroid: Point, area: Double, pxs: [Float], pys: [Float], pSet: Set< Point>,
+                uuColor: UUColor
+            
+            init?(_ plane: Plane) {
+                guard !plane.topolygon.polygon.points.isEmpty else { return nil }
+                
+                let tripolygon = plane.topolygon.tripolygon
                 let area = tripolygon.area
-                if let centroid = tripolygon.centroid, area > 0 {
-                    let p16s = oldPlane.topolygon.polygon
-                        .sortedTopCounterClockwise().edgePoints(count: 16)
-                    return V(plane: oldPlane,
-                             oxs: SIMD16(p16s.map { .init($0.x) }),
-                             oys: SIMD16(p16s.map { .init($0.y) }),
-                             pSet: Set(oldPlane.topolygon.allPoints),
-                             centroid: centroid,
-                             area: area)
-                } else {
-                    return nil
-                }
-            }
-            if !oldVs.isEmpty {
-                var vs = [(oi: Int, ni: Int, s: Double)]()
-                newPlanes.enumerated().forEach { (ni, newPlaneValue) in
-                    guard let newCentroid
-                            = newPlaneValue.plane.topolygon.tripolygon.centroid else { return }
-                    let p16s = newPlaneValue.plane.topolygon.polygon
-                        .sortedTopCounterClockwise().edgePoints(count: 16)
-                    let nxs = SIMD16(p16s.map { Float16($0.x) })
-                    let nys = SIMD16(p16s.map { Float16($0.y) })
-                    let newArea = newPlaneValue.area
-                    guard newArea > 0 else { return }
-
-                    let nps = newPlaneValue.plane.topolygon.allPoints
-
-                    oldVs.enumerated().forEach { (oi, oldV) in
-                        let ds = oldV.centroid.distanceSquared(newCentroid) / oldV.area.mid(newArea)
-                        let x0 = ds.squareRoot()
-                        if x0 < 3 {
-                            let x1 = oldV.area.absRatio(newArea).squareRoot() - 1
-                            if x1 < 5 {
-                                let oxs = oldV.oxs, oys = oldV.oys
-                                let dxs = nxs - oxs
-                                let dys = nys - oys
-                                let x2 = (dxs * dxs + dys * dys).squareRoot().sum()
-                                if x2 < 50 * 16 {
-                                    let x3 = nps.contains(where: { oldV.pSet.contains($0) }) ? 0.0 : 100000.0
-                                    let s = x0 * 100 + x1 * 1000 + Double(x2) * 1 + x3 * 1
-                                    vs.append((oi, ni, s))
-                                }
+                guard let centroid = tripolygon.centroid, area > 0 else { return nil }
+                self.centroid = centroid
+                self.area = area
+                
+                let ps = plane.topolygon.polygon.sortedTopCounterClockwise().points
+                    .map { $0 * Transform(translation: -centroid) }
+                var nps = [Point](capacity: ps.count)
+                nps.append(ps[0])
+                for i in 1 ..< ps.count {
+                    let preP = ps[i - 1], nextP = ps[i]
+                    let d = preP.distance(nextP)
+                    if d > 2 {
+                        let count = (d / 2).rounded(.down) + 1
+                        if count >= 2 {
+                            let rCount = 1 / count
+                            for j in 1 ..< Int(count) {
+                                nps.append(.linear(preP, nextP, t: .init(j) * rCount))
                             }
                         }
                     }
+                    nps.append(nextP)
                 }
-                vs.sort(by: { $0.s < $1.s })
+                pxs = nps.map { .init($0.x) }
+                pys = nps.map { .init($0.y) }
                 
-                var isOFilleds = Array(repeating: false, count: oldVs.count)
+                pSet = .init(plane.topolygon.polygon.points)
+                
+                self.uuColor = plane.uuColor
+            }
+            
+            func d(_ other: V, maxCentroidDSq: Double) -> Double? {
+                let isDuplicated = Double(pSet.intersection(other.pSet).count)
+                / Double(pSet.count) > 0.5
+                let dSq = other.centroid.distanceSquared(centroid)
+                guard isDuplicated || dSq < maxCentroidDSq else { return nil }
+                let area = other.area.mid(area)
+                
+                let ox0 = dSq / area
+                if isDuplicated || ox0 < 2 * 2 {
+                    let ox1 = other.area.absRatio(area)
+                    if isDuplicated || ox1 < 2 * 2 {
+                        var fox2: Float = 0.0
+                        for (px, py) in zip(pxs, pys) {
+                            let dSq = vDSP.minimum(vDSP.add(vDSP.square(vDSP.add(-px, other.pxs)),
+                                                            vDSP.square(vDSP.add(-py, other.pys))))
+                            if dSq > fox2 {
+                                fox2 = dSq
+                            }
+                        }
+                        for (px, py) in zip(other.pxs, other.pys) {
+                            let dSq = vDSP.minimum(vDSP.add(vDSP.square(vDSP.add(-px, pxs)),
+                                                            vDSP.square(vDSP.add(-py, pys))))
+                            if dSq > fox2 {
+                                fox2 = dSq
+                            }
+                        }
+                        let ox2 = Double(fox2) / area
+                        let x0 = ox0.squareRoot()
+                        let x1 = ox1 - 1
+                        let x2 = ox2.squareRoot()
+                        return x0 + x1 * 5 + x2
+                    }
+                }
+                return nil
+            }
+        }
+        if !newPlanes.isEmpty {
+            let maxCentroidDSq = (max(bounds.width, bounds.height) / 16).squared
+            
+            let oldPlanes = (otherPlanes ?? []) + (removePlaneIndexes.map { planes[$0] })
+            let ovs = oldPlanes.compactMap { V($0) }
+            if !ovs.isEmpty {
+                var vs = [(oi: Int, ni: Int, d: Double)]()
+                newPlanes.enumerated().forEach { (ni, newPlaneValue) in
+                    guard let nv = V(newPlaneValue.plane) else { return }
+                    
+                    ovs.enumerated().forEach { (oi, ov) in
+                        if let d = ov.d(nv, maxCentroidDSq: maxCentroidDSq) {
+                            vs.append((oi, ni, d))
+                        }
+                    }
+                }
+                vs.sort { $0.d < $1.d }
+                
+                var isOFilleds = Array(repeating: false, count: ovs.count)
                 var isNFilleds = Array(repeating: false, count: newPlanes.count)
                 for v in vs {
                     if !isOFilleds[v.oi] && !isNFilleds[v.ni] {
-                        newPlanes[v.ni].plane.uuColor = oldVs[v.oi].plane.uuColor
+                        newPlanes[v.ni].plane.uuColor = ovs[v.oi].uuColor
                         isOFilleds[v.oi] = true
                         isNFilleds[v.ni] = true
                     }

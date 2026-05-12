@@ -36,6 +36,12 @@ extension TriangleStrip {
         }
         return nPoints
     }
+    var triangles: [Triangle] {
+        guard points.count >= 3 else { return [] }
+        return (points.count - 2).range.map {
+            .init(points[$0], points[$0 + 1], points[$0 + 2])
+        }
+    }
 }
 extension TriangleStrip: AppliableTransform {
     static func * (lhs: Self, rhs: Transform) -> Self {
