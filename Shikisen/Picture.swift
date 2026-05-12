@@ -154,11 +154,12 @@ extension Picture {
         }
         
         struct V {
-            var centroid: Point, area: Double, pxs: [Float], pys: [Float], pSet: Set< Point>,
+            var centroid: Point, area: Double, pSet: Set< Point>,
                 uuColor: UUColor
             
             init?(_ plane: Plane) {
-                guard !plane.topolygon.polygon.points.isEmpty else { return nil }
+                guard let rect = plane.topolygon.bounds,
+                      !plane.topolygon.polygon.points.isEmpty else { return nil }
                 
                 let tripolygon = plane.topolygon.tripolygon
                 let area = tripolygon.area
@@ -166,70 +167,30 @@ extension Picture {
                 self.centroid = centroid
                 self.area = area
                 
-                let ps = plane.topolygon.polygon.sortedTopCounterClockwise().points
-                    .map { $0 * Transform(translation: -centroid) }
-                var nps = [Point](capacity: ps.count)
-                nps.append(ps[0])
-                for i in 1 ..< ps.count {
-                    let preP = ps[i - 1], nextP = ps[i]
-                    let d = preP.distance(nextP)
-                    if d > 2 {
-                        let count = (d / 2).rounded(.down) + 1
-                        if count >= 2 {
-                            let rCount = 1 / count
-                            for j in 1 ..< Int(count) {
-                                nps.append(.linear(preP, nextP, t: .init(j) * rCount))
-                            }
-                        }
-                    }
-                    nps.append(nextP)
-                }
-                pxs = nps.map { .init($0.x) }
-                pys = nps.map { .init($0.y) }
-                
                 pSet = .init(plane.topolygon.polygon.points)
                 
                 self.uuColor = plane.uuColor
             }
             
-            func d(_ other: V, maxCentroidDSq: Double) -> Double? {
+            func d(_ other: V, maxDSq: Double) -> Double? {
                 let isDuplicated = Double(pSet.intersection(other.pSet).count)
                 / Double(pSet.count) > 0.5
                 let dSq = other.centroid.distanceSquared(centroid)
-                guard isDuplicated || dSq < maxCentroidDSq else { return nil }
-                let area = other.area.mid(area)
-                
-                let ox0 = dSq / area
+                guard isDuplicated || dSq < maxDSq else { return nil }
+                let ox0 = dSq / other.area.mid(area)
                 if isDuplicated || ox0 < 2 * 2 {
                     let ox1 = other.area.absRatio(area)
-                    if isDuplicated || ox1 < 2 * 2 {
-                        var fox2: Float = 0.0
-                        for (px, py) in zip(pxs, pys) {
-                            let dSq = vDSP.minimum(vDSP.add(vDSP.square(vDSP.add(-px, other.pxs)),
-                                                            vDSP.square(vDSP.add(-py, other.pys))))
-                            if dSq > fox2 {
-                                fox2 = dSq
-                            }
-                        }
-                        for (px, py) in zip(other.pxs, other.pys) {
-                            let dSq = vDSP.minimum(vDSP.add(vDSP.square(vDSP.add(-px, pxs)),
-                                                            vDSP.square(vDSP.add(-py, pys))))
-                            if dSq > fox2 {
-                                fox2 = dSq
-                            }
-                        }
-                        let ox2 = Double(fox2) / area
+                    if isDuplicated || ox1 < 1.25 * 1.25 {
                         let x0 = ox0.squareRoot()
                         let x1 = ox1 - 1
-                        let x2 = ox2.squareRoot()
-                        return x0 + x1 * 5 + x2
+                        return x0 + x1 * 5
                     }
                 }
                 return nil
             }
         }
         if !newPlanes.isEmpty {
-            let maxCentroidDSq = (max(bounds.width, bounds.height) / 16).squared
+            let maxDSq = (max(bounds.width, bounds.height) / 16).squared
             
             let oldPlanes = (otherPlanes ?? []) + (removePlaneIndexes.map { planes[$0] })
             let ovs = oldPlanes.compactMap { V($0) }
@@ -239,7 +200,7 @@ extension Picture {
                     guard let nv = V(newPlaneValue.plane) else { return }
                     
                     ovs.enumerated().forEach { (oi, ov) in
-                        if let d = ov.d(nv, maxCentroidDSq: maxCentroidDSq) {
+                        if let d = ov.d(nv, maxDSq: maxDSq) {
                             vs.append((oi, ni, d))
                         }
                     }
