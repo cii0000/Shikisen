@@ -937,7 +937,7 @@ final class SelectAction: Action {
                            scoreView.isEditTone(from: score.notes[noteI]) {
                             let note = score.notes[noteI]
                             let toneFrames = scoreView.toneFrames(from: note)
-                            nNotePitSprolIs = [noteI: toneFrames.reduce(into: .init()) { (v, tf) in
+                            let pitSprolIs: [Int : Set<Int>] = toneFrames.reduce(into: .init()) { (v, tf) in
                                 tf.pitIs.forEach { pitI in
                                     let pit = note.pits[pitI]
                                     for sprolI in pit.tone.spectlope.sprols.count.range {
@@ -950,7 +950,12 @@ final class SelectAction: Action {
                                         }
                                     }
                                 }
-                            }]
+                            }
+                            if !pitSprolIs.isEmpty {
+                                nNotePitSprolIs = [noteI: pitSprolIs]
+                            } else {
+                                nNotePitSprolIs = [:]
+                            }
                         } else {
                             let noteIs = (0 ..< scoreView.model.notes.count).filter {
                                 scoreView.intersectsNote(scoreRect, at: $0)
@@ -965,14 +970,36 @@ final class SelectAction: Action {
                             }
                         }
                         
+                        let oNotePitSprolIs = selection.notePitSprolIs
                         if isUnselect {
-                            let oNotePitSprolIs = selection.notePitSprolIs
-                            nSelection.notePitSprolIs
-                            = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
-                                v0.merging(v1) { w0, w1 in w0.subtracting(w1) }
+                            for (noteI, pitSprols) in nNotePitSprolIs {
+                                if pitSprols.isEmpty {
+                                    nSelection.noteSelections[noteI] = nil
+                                } else {
+                                    for (pitI, sprolIs) in pitSprols {
+                                        if sprolIs.isEmpty {
+                                            nSelection.noteSelections[noteI]?.pitSelections[pitI] = nil
+                                            if nSelection.noteSelections[noteI]?.pitSelections.isEmpty ?? false {
+                                                
+                                                nSelection.noteSelections[noteI] = nil
+                                            }
+                                        } else {
+                                            nSelection.noteSelections[noteI]?
+                                                .pitSelections[pitI]?.sprolIs
+                                            = oNotePitSprolIs[noteI]?[pitI]?.subtracting(sprolIs) ?? []
+                                            if nSelection.noteSelections[noteI]?
+                                                .pitSelections[pitI]?.sprolIs.isEmpty ?? false {
+                                                nSelection.noteSelections[noteI]?
+                                                    .pitSelections[pitI] = nil
+                                                if nSelection.noteSelections[noteI]?.pitSelections.isEmpty ?? false {
+                                                    nSelection.noteSelections[noteI] = nil
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         } else {
-                            let oNotePitSprolIs = selection.notePitSprolIs
                             nSelection.notePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
                                 v0.merging(v1) { w0, w1 in w0.union(w1) }

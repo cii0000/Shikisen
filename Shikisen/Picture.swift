@@ -158,8 +158,7 @@ extension Picture {
                 uuColor: UUColor
             
             init?(_ plane: Plane) {
-                guard let rect = plane.topolygon.bounds,
-                      !plane.topolygon.polygon.points.isEmpty else { return nil }
+                guard !plane.topolygon.polygon.points.isEmpty else { return nil }
                 
                 let tripolygon = plane.topolygon.tripolygon
                 let area = tripolygon.area
