@@ -197,7 +197,9 @@ final class LookUpAction: InputKeyEventAction {
                               + "\n\t\("Count".localized): \(indexes.count)",
                               at: p)
             } else {
-                let beatStr = sheetView.timeString(fromBeat: sheetView.model.animation.keyframes[ki].beat)
+                let fpb = Sheet.fpb(fromTempo: sheetView.model.animation.tempo)
+                let beat = sheetView.model.animation.keyframes[ki].beat
+                let beatStr = sheetView.timeString(fromBeat: beat) + (fpb == nil || !(Rational(fpb!) * beat).isInteger ? " (" + "Rounding error".localized + ")" : "")
                 rootView.show("Keyframe".localized
                               + "\n\t\("Beat".localized): \(beatStr)",
                               at: p)

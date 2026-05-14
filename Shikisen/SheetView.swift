@@ -729,6 +729,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             eBeat = min(beatRange.end, 10000)
         let sx = x(atBeat: sBeat), ex = x(atBeat: eBeat)
         let lw = 1.0
+        let fpbD = 0.5
         let knobW = Sheet.knobWidth, knobH = Sheet.knobHeight
         let rulerH = Sheet.rulerHeight
         let iKnobW = knobW, iKnobH = Sheet.interpolatedKnobHeight
@@ -739,7 +740,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let iSet = Set(selectedIs)
         
-        var contentPathlines = [Pathline](), warningPathlines = [Pathline](),
+        var contentPathlines = [Pathline](), backgroundPathlines = [Pathline](),
             borderPathlines = [Pathline](), subBorderPathlines = [Pathline]()
         var fullEditBorderPathlines = [Pathline](), secondEditBorderPathlines = [Pathline]()
         var selectedPathlines = [Pathline]()
@@ -798,10 +799,11 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                 selectedPathlines.append(pathline)
             }
             if fpb == nil || !(Rational(fpb!) * beat).isInteger {
-                warningPathlines.append(pathline)
-            } else {
-                contentPathlines.append(pathline)
+                backgroundPathlines.append(Pathline(Rect(x: kx - fpbD,
+                                                         y: centerY - fpbD,
+                                                         width: fpbD * 2, height: fpbD * 2)))
             }
+            contentPathlines.append(pathline)
         }
         let kx = ex
         let nKnobW = eBeat % EditGrid.beatInterval == 0 ? knobW : knobW / 2
@@ -809,10 +811,10 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let lkb = Rect(x: kx - nKnobW / 2, y: eKnobMinY,
                        width: nKnobW, height: knobH + 2)
         if fpb == nil || !(Rational(fpb!) * eBeat).isInteger {
-            warningPathlines.append(.init(lkb))
-        } else {
-            contentPathlines.append(.init(lkb))
+            backgroundPathlines.append(.init(Rect(x: kx - fpbD, y: centerY - fpbD,
+                                                  width: fpbD * 2, height: fpbD * 2)))
         }
+        contentPathlines.append(.init(lkb))
         
         let loopKnobH = 4.0
         let neBeat = eBeat + loopDurBeat
@@ -838,10 +840,10 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let llkb = Rect(x: lkx - nKnobW / 2, y: ey - loopKnobH / 2,
                         width: nKnobW, height: loopKnobH)
         if let fpb, !(Rational(fpb) * neBeat).isInteger {
-            warningPathlines.append(.init(llkb))
-        } else {
-            contentPathlines.append(.init(llkb))
+            backgroundPathlines.append(.init(Rect(x: lkx - fpbD, y: ey - fpbD,
+                                                  width: fpbD * 2, height: fpbD * 2)))
         }
+        contentPathlines.append(.init(llkb))
         
         let d = knobH / 2
         let kkx = x(atBeat: model.currentKeyframe.beat + beatRange.start)
@@ -955,9 +957,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             nodes.append(Node(path: Path(contentPathlines),
                               fillType: .color(.content)))
         }
-        if !warningPathlines.isEmpty {
-            nodes.append(Node(path: Path(warningPathlines),
-                              fillType: .color(.keyframeWarning)))
+        if !backgroundPathlines.isEmpty {
+            nodes.append(Node(path: Path(backgroundPathlines),
+                              fillType: .color(.background)))
         }
         if !selectedPathlines.isEmpty {
             nodes.append(Node(name: "selected", isHidden: isHiddenSelected,

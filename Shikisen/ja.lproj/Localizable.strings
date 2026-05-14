@@ -122,6 +122,7 @@
 "Main Size" = "メインサイズ";
 "Position" = "位置";
 "File Size" = "ファイルサイズ";
+"Rounding error" = "丸め誤差あり";
 
 "Music Scale" = "音階";
 "Major" = "メジャー";

@@ -75,10 +75,10 @@ final class MoveAction: DragEventAction {
                 type = .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
-                    type = .animation(MoveAnimationAction(rootAction))
-                } else if sheetView.containsTempo(sheetP, scale: rootView.screenToWorldScale) {
+                if sheetView.containsTempo(sheetP, scale: rootView.screenToWorldScale) {
                     type = .tempo(MoveTempoAction(rootAction))
+                } else if sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
+                    type = .animation(MoveAnimationAction(rootAction))
                 } else if sheetView.lineTuple(at: sheetP,
                                               scale: rootView.screenToWorldScale) != nil {
                     type = .line(MoveLineAction(rootAction))

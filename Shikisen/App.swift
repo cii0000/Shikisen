@@ -2182,7 +2182,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         
         if !isBeganScroll && !isBeganPinch && !isBeganRotate && !isBeganSwipe && isPrepare3FingersTap {
             if event.isAllEnded, let beganTouchTime,
-                event.time - beganTouchTime >= 0.08 && event.time - beganTouchTime < 0.2 {
+                event.time - beganTouchTime >= 0.06 && event.time - beganTouchTime < 0.25 {
                 
                 var event = InputKeyEvent(screenPoint: event.screenPoint,
                                           time: event.time,
