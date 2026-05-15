@@ -1500,9 +1500,10 @@ final class APasteAction: Action {
                 return true
             } else if let result = textView.typesetter.warpCursorOffset(at: textView.convertFromWorld(p)), result.isLastWarp {
                 let x = result.offset
-                let widthCount = Typobute.maxWidthCount
-                
                 var text = textView.model
+                let widthCount = text.widthCount == Typobute.mainWidthCount ?
+                Typobute.maxWidthCount : Typobute.mainWidthCount
+                
                 if text.widthCount != widthCount {
                     text.widthCount = widthCount
                     
@@ -2305,8 +2306,6 @@ final class APasteAction: Action {
                 beganPitch = pitch
                 beganBeat = beat
                 
-                sheetView.hideSelected()
-                
                 sheetView.newUndoGroup()
                 sheetView.unselect()
                 if !sheetView.scoreView.model.enabled {
@@ -2326,10 +2325,6 @@ final class APasteAction: Action {
                 
                 let notes = beganNotes.sorted(by: { $0.key < $1.key }).map { $0.value }
                 sheetView.append(notes)
-                if isSelected {
-                    sheetView.doSet(SheetSelection(noteSelections: beganNotes.keys.sorted()
-                        .reduce(into: .init()) { $0[$1] = .init(pitSelections: [0: .init()]) }))
-                }
                 
                 let octaveNode = scoreView.octaveNode(noteIs: Array(count ..< count + notes.count))
                 octaveNode.attitude.position = sheetView.convertToWorld(scoreView.node.attitude.position)
@@ -3026,10 +3021,10 @@ final class APasteAction: Action {
                let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                let x = textView.typesetter.warpCursorOffset(at: textView.convertFromWorld(p))?.offset {
                 let widthCount = textView.model.size == 0 ?
-                    Typobute.maxWidthCount :
+                    Typobute.mainWidthCount :
                     (x / textView.model.size)
                     .clipped(min: Typobute.minWidthCount,
-                             max: Typobute.maxWidthCount)
+                             max: Typobute.mainWidthCount)
                 
                 var text = textView.model
                 if text.widthCount != widthCount {
@@ -3293,7 +3288,7 @@ final class APasteAction: Action {
                     }
                 }
             }
-        case .notesValue:
+        case .notesValue(let v):
             octaveNode?.removeFromParent()
             octaveNode = nil
             
@@ -3314,8 +3309,10 @@ final class APasteAction: Action {
             if !noteIVs.isEmpty {
                 sheetView.capture(noteIVs, old: oldNoteIVs)
             }
-            
-            sheetView.showSelected()
+            if v.isSelected {
+                sheetView.doSet(SheetSelection(noteSelections: noteIVs.map { $0.index }
+                    .reduce(into: .init()) { $0[$1] = .init(pitSelections: [0: .init()]) }))
+            }
         case .stereo(let stereo):
             guard let sheetView = rootView.sheetView(at: shp) else { return }
             if sheetView.model.score.enabled {

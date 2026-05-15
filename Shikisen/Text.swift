@@ -352,7 +352,7 @@ extension Text {
         }
         let widthCount = Double(maxCount)
             .clipped(min: Typobute.defaultWidthCount,
-                     max: Typobute.maxWidthCount)
+                     max: Typobute.mainWidthCount)
         self.init(string: string,
                   size: size,
                   widthCount: widthCount,
@@ -367,7 +367,7 @@ extension Text: Protobuf {
         self.size = size.clipped(min: 0, max: Font.maxSize)
         let wc = (try? pb.widthCount.notZeroAndNaN()) ?? Typobute.defaultWidthCount
         self.widthCount = wc.clipped(min: Typobute.minWidthCount,
-                                     max: Typobute.maxWidthCount)
+                                     max: Typobute.mainWidthCount)
         origin = (try? .init(pb.origin).notInfiniteAndNAN()) ?? .init()
         self.locale = (try? .init(pb.locale)) ?? .current
         self.timeOption = if case .timeOption(let timeOption)? = pb.timeOptionOptional {

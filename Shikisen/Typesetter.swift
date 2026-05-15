@@ -22,10 +22,11 @@ enum Alignment {
 struct Typobute: Hashable {
     static let minWidthCount = 4.0
     static let defaultWidthCount = 40.0
-    static let maxWidthCount = 40.0
+    static let mainWidthCount = 40.0
+    static let maxWidthCount = 56.0
     
     var font = Font.default,
-        maxTypelineWidth = Font.defaultSize * maxWidthCount,
+        maxTypelineWidth = Font.defaultSize * mainWidthCount,
         clippedMaxTypelineWidth = Font.defaultSize * 58,
         spacing: Double?,
         alignment = Alignment.natural,

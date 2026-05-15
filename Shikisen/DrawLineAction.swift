@@ -754,7 +754,7 @@ final class LineAction: Action {
                     
                     tempPs = [p]
                 } else if isAppend(maxDSq: event.time - firstChangedTime < 0.04 ?
-                                   3.0.squared : 0.5.squared) {
+                                   3.0.squared : 0.75.squared) {
                     nLine.controls[nLine.controls.count - 3].weight = 0.5
                     let prp = nLine.controls[nLine.controls.count - 1]
                     nLine.controls[nLine.controls.count - 2] = prp
