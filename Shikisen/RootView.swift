@@ -1014,6 +1014,7 @@ final class RootView: View, @unchecked Sendable {
         var findingChildrenNodeDic = [IntPoint: Node]()
         for sr in model.sheetRecorders {
             guard let shp = sheetPosition(at: sr.key) else { continue }
+            if !world.selection.isEmpty && !world.selection.sheetIDs.contains(sr.key) { continue }
             let string = sheetViewValues[shp]?.sheetView?.model.allTextsString
                 ?? sr.value.stringRecord.decodedValue
             if string?.contains(finding.string) ?? false {
@@ -1180,9 +1181,11 @@ final class RootView: View, @unchecked Sendable {
                 }
             }
             let sb = sheetView.bounds.inset(by: Sheet.textPadding)
+            let selection = sheetView.model.selection
             for (i, textView) in sheetView.textsView.elementViews.enumerated() {
                 var text = textView.model
-                if text.string.contains(fromStr) {
+                if selection.textSelections.isEmpty || selection.textSelections[i] != nil,
+                   text.string.contains(fromStr) {
                     let rRange = 0 ..< text.string.count
                     var ns = text.string
                     if let oldString = oldString, let oldTextView = oldTextView,
