@@ -341,6 +341,7 @@ extension ContentView {
     var beatRange: Range<Rational>? {
         model.timeOption?.beatRange
     }
+    var loopDurBeat: Rational? { nil }
     var localBeatRange: Range<Rational>? {
         model.localBeatRange
     }

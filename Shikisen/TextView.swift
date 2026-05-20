@@ -242,6 +242,7 @@ extension TextView {
     var beatRange: Range<Rational>? {
         model.timeOption?.beatRange
     }
+    var loopDurBeat: Rational? { nil }
     var localBeatRange: Range<Rational>? {
         nil
     }

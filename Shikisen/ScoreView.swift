@@ -37,6 +37,7 @@ protocol TimelineView: BindableView where Model: TempoType {
     func containsTimeline(_ p: Point, scale: Double) -> Bool
     var timelineCenterY: Double { get }
     var beatRange: Range<Rational>? { get }
+    var loopDurBeat: Rational? { get }
     var localBeatRange: Range<Rational>? { get }
 }
 extension TimelineView {
@@ -94,8 +95,9 @@ extension TimelineView {
     
     func tempoFrames() -> [Rect] {
         guard let beatRange else { return [] }
+        let loopDurBeat = loopDurBeat ?? 0
         let knobW = Sheet.knobWidth, rulerH = Sheet.rulerHeight
-        let secRange = model.secRange(fromBeat: beatRange)
+        let secRange = model.secRange(fromBeat: beatRange.start ..< (beatRange.end + loopDurBeat))
         let sy = timelineCenterY - Sheet.timelineHalfHeight - rulerH / 2 + origin.y
         var rects = [Rect]()
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
@@ -108,7 +110,8 @@ extension TimelineView {
     }
     func containsTempo(_ p: Point, scale: Double) -> Bool {
         guard let beatRange else { return false }
-        let secRange = model.secRange(fromBeat: beatRange)
+        let loopDurBeat = loopDurBeat ?? 0
+        let secRange = model.secRange(fromBeat: beatRange.start ..< (beatRange.end + loopDurBeat))
         let sy = timelineCenterY - Sheet.timelineHalfHeight - Sheet.rulerHeight / 2 + origin.y
         for sec in Int(secRange.start.rounded(.up)) ..< Int(secRange.end.rounded(.up)) {
             let sec = Rational(sec)
@@ -490,6 +493,9 @@ extension ScoreView {
     var timelineCenterY: Double { 0 }
     var beatRange: Range<Rational>? {
         model.beatRange
+    }
+    var loopDurBeat: Rational? {
+        model.loopDurBeat
     }
     var localBeatRange: Range<Rational>? {
         model.localMaxBeatRange

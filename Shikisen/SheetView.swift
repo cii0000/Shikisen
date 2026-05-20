@@ -1337,6 +1337,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             updateTimeline()
         }
     }
+    var loopDurBeat: Rational? { model.loopDurBeat }
     var localBeatRange: Range<Rational>? {
         model.localBeatRange
     }
