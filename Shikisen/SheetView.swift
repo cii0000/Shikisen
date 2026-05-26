@@ -6127,10 +6127,12 @@ final class SheetView: View, @unchecked Sendable {
         case .setSelection(let selection):
             updateFirstReverse()
             
-            if selection != model.selection {
+            let oldSelection = model.selection
+            if selection != oldSelection {
                 print("n:", selection)
-                print("o:", model.selection)
-                history.error(result)
+                print("o:", oldSelection)
+                history[result.version].values[result.valueIndex]
+                    .saveUndoItemValue?.set(.setSelection(oldSelection), type: reversedType)
             }
         }
         

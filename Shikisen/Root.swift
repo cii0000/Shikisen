@@ -51,7 +51,7 @@ extension Road {
     func pointsWith(width: Double, height: Double) -> [Point] {
         let hw = width / 2, hh = height / 2
         let dx = shp1.x - shp0.x, dy = shp1.y - shp0.y
-        if abs(dx) <= 1 && abs(dy) <= 1 {
+        if abs(dx) < 1 && abs(dy) < 1 {
             return []
         }
         if dx == 0 {

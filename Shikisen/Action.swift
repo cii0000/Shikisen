@@ -787,7 +787,7 @@ final class SelectAction: Action {
             beganEvent = event
         }
         if let beganEvent {
-            guard event.screenPoint.distance(beganEvent.screenPoint) >= 5
+            guard event.screenPoint.distance(beganEvent.screenPoint) >= 20
                     || event.time - beganEvent.time >= 0.33 else {
                 if event.phase == .ended {
                     rootAction.inputKey(with: .init(screenPoint: event.screenPoint,
@@ -933,7 +933,8 @@ final class SelectAction: Action {
                         let scoreRect = scoreView.convertFromWorld(rect)
                         
                         let nNotePitSprolIs: [Int : [Int : Set<Int>]]
-                        if let noteI = scoreView.noteIInTone(at: scoreP),
+                        if let noteI = scoreView.noteIInTone(at: scoreP,
+                                                             scale: rootView.screenToWorldScale),
                            scoreView.isEditTone(from: score.notes[noteI]) {
                             let note = score.notes[noteI]
                             let toneFrames = scoreView.toneFrames(from: note)
@@ -1002,7 +1003,7 @@ final class SelectAction: Action {
                         } else {
                             nSelection.notePitSprolIs
                             = oNotePitSprolIs.merging(nNotePitSprolIs) { v0, v1 in
-                                v0.merging(v1) { w0, w1 in w0.union(w1) }
+                                v1.values.isEmpty ? v1 : v0.merging(v1) { w0, w1 in w0.union(w1) }
                             }
                         }
                     }

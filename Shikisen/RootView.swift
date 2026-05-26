@@ -488,6 +488,7 @@ final class RootView: View, @unchecked Sendable {
                                                record: record)
                 let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
                                           history: .init())
+                sheetView.screenToWorldScale = self.screenToWorldScale
                 let frame = self.sheetFrame(with: shp)
                 sheetView.bounds = Rect(size: frame.size)
                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -603,6 +604,7 @@ final class RootView: View, @unchecked Sendable {
                     let sheetView = SheetView(binder: sheetBinder,
                                               keyPath: \SheetBinder.value,
                                               history: historyRecord.decodedValue ?? .init())
+                    sheetView.screenToWorldScale = self.screenToWorldScale
                     let frame = self.sheetFrame(with: shp)
                     sheetView.bounds = Rect(size: frame.size)
                     sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -899,9 +901,9 @@ final class RootView: View, @unchecked Sendable {
                                           lineWidth: l,
                                           lineType: .color(.selected),
                                           fillType: .color(.subSelected))] +
-            (!roads.isEmpty ? [.init(path: .init(roadPathlines, isCap: false),
-                                     lineWidth: l * 0.5,
-                                     lineType: .color(.selected))] : [])
+            (!roadPathlines.isEmpty ? [.init(path: .init(roadPathlines, isCap: false),
+                                             lineWidth: l * 0.5,
+                                             lineType: .color(.selected))] : [])
         }
         updateSelectedWithIsEditingSheet()
     }
@@ -1257,6 +1259,7 @@ final class RootView: View, @unchecked Sendable {
                                 let sheetBinder = RecordBinder(value: sheet, record: record)
                                 let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
                                                           history: historyRecord.decodedValue ?? .init())
+                                sheetView.screenToWorldScale = self.screenToWorldScale
                                 let frame = self.sheetFrame(with: shp)
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -1410,6 +1413,7 @@ final class RootView: View, @unchecked Sendable {
                                 let sheetView = SheetView(binder: sheetBinder,
                                                           keyPath: \SheetBinder.value,
                                                           history: historyRecord.decodedValue ?? .init())
+                                sheetView.screenToWorldScale = self.screenToWorldScale
                                 let frame = self.sheetFrame(with: shp)
                                 sheetView.bounds = Rect(size: frame.size)
                                 sheetView.node.allChildrenAndSelf { $0.updateDatas() }
@@ -2058,11 +2062,19 @@ final class RootView: View, @unchecked Sendable {
                 var ps = Road(shp0: nearestSHP, shp1: lastSHP)
                     .pointsWith(width: Sheet.width, height: Sheet.height)
                 if ps.count >= 2 {
-                    if ps[ps.count - 2].x == ps[ps.count - 1].x {
-                        ps[ps.count - 2].x = lastP.x
-                    }
-                    if ps[ps.count - 2].y == ps[ps.count - 1].y {
-                        ps[ps.count - 2].y = lastP.y
+                    if ps[ps.count - 2] != ps[ps.count - 1] {
+                        if ps[ps.count - 2].x == ps[ps.count - 1].x {
+                            ps[ps.count - 2].x = lastP.x
+                        }
+                        if ps[ps.count - 2].y == ps[ps.count - 1].y {
+                            ps[ps.count - 2].y = lastP.y
+                        }
+                    } else {
+                        if nearestSHP.x != lastSHP.x {
+                            ps[ps.count - 2].y = lastP.y
+                        } else {
+                            ps[ps.count - 2].x = lastP.x
+                        }
                     }
                     ps[ps.count - 1] = lastP
                     return ps
@@ -2341,7 +2353,6 @@ final class RootView: View, @unchecked Sendable {
             if sheetViewValues.contains(where: { $0.value.sheetID == sid }) { return }
             guard let sheetRecorder = self.model.sheetRecorders[sid] else { return }
             let frame = self.sheetFrame(with: shp)
-            let screenToWorldScale = self.screenToWorldScale
             
             Task.detached(priority: .high) {
                 try await Task.sleep(sec: 1.5)
@@ -2368,7 +2379,6 @@ final class RootView: View, @unchecked Sendable {
                     let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
                                               history: history ?? .init())
                     try Task.checkCancellation()
-                    sheetView.screenToWorldScale = screenToWorldScale
                     sheetView.id = sid
                     sheetView.bounds = Rect(size: frame.size)
                     sheetView.node.attitude.position = frame.origin
@@ -2431,6 +2441,11 @@ final class RootView: View, @unchecked Sendable {
                         self.updateFindingNodes(at: shp)
                         if shp == self.sheetPosition(at: self.convertScreenToWorld(self.cursorPoint)) {
                             self.updateTextCursor()
+                        }
+                        
+                        if sheetView.screenToWorldScale != self.screenToWorldScale {
+                            sheetView.screenToWorldScale = self.screenToWorldScale
+                            self.updateSelectedFrame()
                         }
                         
                         sheetView.stopNotifications.append { [weak self] _ in

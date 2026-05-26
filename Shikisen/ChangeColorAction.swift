@@ -527,7 +527,7 @@ final class ChangeColorAction: Action {
                     beganContents[ci] = content
                 }
                 
-                let (minV, maxV) = scoreResult?.isStereo ?? false ? (Volm.minVolm, Volm.safeVolm) : (0, 1)
+                let (minV, maxV) = scoreResult?.isStereo ?? false ? (Volm.minVolm, Volm.maxVolm) : (0, 1)
                 updateNode()
                 fsp = event.screenPoint
                 isReversedLightness = true
@@ -547,7 +547,7 @@ final class ChangeColorAction: Action {
             let p = lightnessNode.convertFromWorld(wp)
             let t = (p.y / maxLightnessHeight).clipped(min: 0, max: 1)
             let volm = (scoreResult?.isStereo ?? false) ?
-            Double.linear(Volm.minVolm, Volm.safeVolm, t: t).rounded(decimalPlaces: 4) : Double.linear(0, 1, t: t)
+            Double.linear(Volm.minVolm, Volm.maxVolm, t: t).rounded(decimalPlaces: 4) : Double.linear(0, 1, t: t)
             
             let db = Volm.db(fromVolm: volm)
             let ddb = db - Volm.db(fromVolm: beganVolm)
@@ -573,7 +573,7 @@ final class ChangeColorAction: Action {
                                 nvs[noteI] = nv.note
                             }
                             nv.pits.forEach { (pitI, beganPit) in
-                                nvs[noteI]?.pits[pitI].stereo.volm = newVolm(from: beganPit.pit.stereo.volm, Volm.safeVolmRange)
+                                nvs[noteI]?.pits[pitI].stereo.volm = newVolm(from: beganPit.pit.stereo.volm, Volm.volmRange)
                                 nvs[noteI]?.pits[pitI].stereo.id = v.nid
                             }
                         }
@@ -656,7 +656,7 @@ final class ChangeColorAction: Action {
             }
             
             editingLightness = scoreResult?.isStereo ?? false ?
-            volm.clipped(min: Volm.minVolm, max: Volm.safeVolm, newMin: 0, newMax: 100) :
+            volm.clipped(min: Volm.minVolm, max: Volm.maxVolm, newMin: 0, newMax: 100) :
             volm.clipped(min: 0, max: 1, newMin: 0, newMax: 100)
         case .ended:
             notePlayer?.stop()

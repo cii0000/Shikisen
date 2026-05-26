@@ -733,14 +733,14 @@ final class APasteAction: Action {
             
             let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
                 .result.isPit ?? false
-            let nis = scoreView.selectedNotePitIs
+            let nis = scoreView.selectedNotePitSprolIs
             var ps = [Point](), allNoteIs = [Int]()
             let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
                 let note = scoreView.model.notes[v.key]
-                let pitIs = v.value
-                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
+                let pitSprolIs = v.value
+                if isPit, !pitSprolIs.isEmpty && note.pits.count > 1 && pitSprolIs.count != note.pits.count {
                     var currentBeat: Rational = 0, nPits = [Pit]()
-                    for pitI in pitIs {
+                    for (pitI, _) in pitSprolIs {
                         let pit = note.pits[pitI]
                         let dBeat = (pitI + 1 < note.pits.count ?
                                      note.pits[pitI + 1].beat : note.beatRange.length) - pit.beat
@@ -749,7 +749,7 @@ final class APasteAction: Action {
                         currentBeat += dBeat
                         ps.append(scoreView.pitPosition(atPit:pitI, from: note))
                     }
-                    let startBeat = note.pits[pitIs[0]].beat + note.beatRange.start
+                    let startBeat = note.pits[pitSprolIs.keys.min()!].beat + note.beatRange.start
                     var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
                                      pitch: note.pitch, pits: nPits, id: .init())
                     nNote.pitch -= pitch
@@ -1374,7 +1374,7 @@ final class APasteAction: Action {
             let pitch = scoreView.pitch(atY: scoreP.y, interval: pitchInterval)
             let beat = scoreView.beat(atX: scoreP.x, interval: beatInterval)
             
-            let nis = scoreView.selectedNotePitIs
+            let nis = scoreView.selectedNotePitSprolIs
             
             let isPit = scoreView.hitTestPoint(scoreP, scale: rootView.screenToWorldScale / 2)?
                 .result.isPit ?? false
@@ -1383,10 +1383,13 @@ final class APasteAction: Action {
             let notes = nis.sorted(by: { $0.key < $1.key }).map { v in
                 let noteI = v.key
                 let note = scoreView.model.notes[noteI]
-                let pitIs = v.value
-                if isPit, !pitIs.isEmpty && note.pits.count > 1 && pitIs.count != note.pits.count {
+                let pitSprolIs = v.value
+                if (isPit && !pitSprolIs.isEmpty && note.pits.count > 1 && pitSprolIs.count != note.pits.count)
+                    || scoreView.containsTone(at: scoreP, at: noteI,
+                                              scale: rootView.screenToWorldScale) {
+                    
                     var currentBeat: Rational = 0, nPits = [Pit]()
-                    for pitI in pitIs {
+                    for (pitI, _) in pitSprolIs {
                         let pit = note.pits[pitI]
                         let dBeat = (pitI + 1 < note.pits.count ?
                                      note.pits[pitI + 1].beat : note.beatRange.length) - pit.beat
@@ -1394,14 +1397,22 @@ final class APasteAction: Action {
                                            tone: pit.tone, lyric: pit.lyric))
                         currentBeat += dBeat
                     }
-                    let startBeat = note.pits[pitIs[0]].beat + note.beatRange.start
+                    let startBeat = note.pits[pitSprolIs.keys.min()!].beat + note.beatRange.start
                     var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
                                      pitch: note.pitch, pits: nPits, id: .init())
                     nNote.pitch -= pitch
                     nNote.beatRange.start -= beat
                     
                     var pits = note.pits
-                    pits.remove(at: pitIs)
+                    for (pitI, sprolIs) in pitSprolIs.sorted(by: { $0.key < $1.key }).reversed() {
+                        if sprolIs.isEmpty {
+                            pits.remove(at: pitI)
+                        } else {
+                            var pit = note.pits[pitI]
+                            pit.tone.spectlope.sprols.remove(at: sprolIs.sorted())
+                            pits[pitI] = pit
+                        }
+                    }
                     let fBeat = pits[0].beat
                     for i in pits.count.range {
                         pits[i].beat -= fBeat

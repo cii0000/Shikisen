@@ -67,7 +67,7 @@ extension vDSP {
         gaussianNoise(count: count, seed0: seed, seed1: seed << 10)
     }
     static func gaussianNoise(count: Int, seed0: UInt64, seed1: UInt64,
-                              maxAmp: Double = 3) -> [Double] {
+                              maxAmp: Double = 100) -> [Double] {
         guard count > 0 else { return [] }
         
         var random0 = Random(seed: seed0),
@@ -307,7 +307,8 @@ struct RendnoteManager {
         
         func rendnote(from range: Range<Int>, endBeat: Rational) -> Rendnote {
             var note = note
-            if !(range.start == 0 && range.end == note.pits.count) {
+            if !(range.start == 0 && range.end == note.pits.count)
+                && (note.beatRange.start + note.pits[range.start].beat) < endBeat {
                 let startPitBeat = note.pits[range.start].beat
                 note.beatRange = (note.beatRange.start + startPitBeat)
                 ..< endBeat
@@ -322,7 +323,7 @@ struct RendnoteManager {
             let pitbend = note.pitbend(fromTempo: score.tempo)
             let sSec = Double(score.sec(fromBeat: note.beatRange.start))
             let eSec = Double(score.sec(fromBeat: note.beatRange.end))
-            let isSmall = !note.isFullNoise && eSec - sSec < Waveclip.default.attackSec
+            let isSmall = (!note.isFullNoise && eSec - sSec < Waveclip.default.attackSec) || (note.pits.count >= 2 && note.pits[0].pitch.distance(note.pits[1].pitch) > 24)
             
             let nDeltaPhase = deltaPhase
             deltaPhase += Double(score.sec(fromBeat: note.beatRange.length))
@@ -394,7 +395,7 @@ extension Rendnote {
         let (seed0, seed1) = note.containsNoise ? note.id.uInt64Values : (0, 0)
         let rootFq = Pitch.fq(fromPitch: .init(note.pitch))
         let pitbend = note.pitbend(fromTempo: score.tempo)
-        let isSmall = !note.isFullNoise && eSec - sSec < Waveclip.default.attackSec
+        let isSmall = (!note.isFullNoise && eSec - sSec < Waveclip.default.attackSec) || (note.pits.count >= 2 && note.pits[0].pitch.distance(note.pits[1].pitch) > 24)
         self.init(rootFq: rootFq,
                   firstFq: rootFq * pitbend.firstFqScale,
                   noiseSeed0: seed0, noiseSeed1: seed1,
@@ -473,7 +474,9 @@ extension Rendnote {
             _ = Random.next(seed: &noiseSeed3)
             let samples0 = nSamples(noiseSeed0: noiseSeed0, noiseSeed1: noiseSeed1)
             let samples1 = nSamples(noiseSeed0: noiseSeed2, noiseSeed1: noiseSeed3)
-            return notewave(from: [samples0, samples1], sampleRate: sampleRate)
+            let scale = 2.0 / .sqrt(2)
+            return notewave(from: [vDSP.multiply(scale, samples0),
+                                   vDSP.multiply(scale, samples1)], sampleRate: sampleRate)
         } else {
             let samples = nSamples(noiseSeed0: noiseSeed0, noiseSeed1: noiseSeed1)
             return notewave(from: [samples], sampleRate: sampleRate)
@@ -921,7 +924,7 @@ extension Rendnote {
                     vDSP.multiply(scale * clearVolm, spectrum, result: &spectrum)
                     vDSP.multiply(scale, mainSpectrum, result: &mainSpectrum)
                     
-                    if i > 0 {
+                    if i >= overlapSamplesCount - 1 {
                         for j in i - overlapSamplesCount + 1 ..< i {
                             let t = Double(j - i + overlapSamplesCount) / Double(overlapSamplesCount)
                             

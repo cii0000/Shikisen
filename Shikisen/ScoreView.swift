@@ -2775,23 +2775,20 @@ extension ScoreView {
         }
         return minPitI
     }
-    func noteIInTone(at p: Point) -> Int? {
-        notesNode.children.firstIndex {
+    func noteIInTone(at p: Point, scale: Double) -> Int? {
+        let toneMaxD = min(Sheet.tonePadding - Sheet.noteHeight / 2,
+                           Sheet.knobEditDistance * scale)
+        return notesNode.children.firstIndex {
             $0.children.contains {
-                $0.name == "toneFrame" ? $0.contains(p) : false
+                $0.name == "toneFrame" ? $0.bounds?.outset(by: toneMaxD).contains(p) ?? false : false
             }
         }
     }
-    func containsTone(at p: Point) -> Bool {
-        notesNode.children.contains {
-            $0.children.contains {
-                $0.name == "toneFrame" ? $0.contains(p) : false
-            }
-        }
-    }
-    func containsTone(at p: Point, at noteI: Int) -> Bool {
-        notesNode.children[noteI].children.contains {
-            $0.name == "toneFrame" ? $0.contains(p) : false
+    func containsTone(at p: Point, at noteI: Int, scale: Double) -> Bool {
+        let toneMaxD = min(Sheet.tonePadding - Sheet.noteHeight / 2,
+                           Sheet.knobEditDistance * scale)
+        return notesNode.children[noteI].children.contains {
+            $0.name == "toneFrame" ? $0.bounds?.outset(by: toneMaxD).contains(p) ?? false : false
         }
     }
     func toneFrames(from note: Note) -> [(pitIs: [Int], frame: Rect)] {
