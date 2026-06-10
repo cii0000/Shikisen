@@ -2952,10 +2952,10 @@ final class MoveLineAction: DragEventAction {
                         }
                         
                         if !isSnapped && !isSnapStraight {
-                            if rootView.isSecondEdit {
-                                nLine.controls[fol1].point = nLine.controls[fol1].point.interval(scale: 0.25)
-                            } else {
+                            switch rootView.editGrid {
+                            case .main:
                                 nLine.controls[fol1].point.round()
+                            case .second, .full: break
                             }
                         }
                         

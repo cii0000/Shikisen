@@ -3345,23 +3345,26 @@ final class RootView: View, @unchecked Sendable {
         Sheet.knobEditDistance * screenToWorldScale
     }
     
+    var editGrid: EditGrid {
+        .init(logScale: pov.logScale)
+    }
     var currentBeatInterval: Rational {
-        EditGrid(logScale: pov.logScale).beatInterval
+        editGrid.beatInterval
     }
     var currentKeyframeBeatInterval: Rational {
         currentBeatInterval
     }
     var currentPitchInterval: Rational {
-        EditGrid(logScale: pov.logScale).pitchInterval
+        editGrid.pitchInterval
     }
     func smoothPitch(from scoreView: ScoreView, at scoreP: Point) -> Double? {
         scoreView.smoothPitch(atY: scoreP.y)
     }
     var isFullEdit: Bool {
-        EditGrid(logScale: pov.logScale) == .full
+        editGrid == .full
     }
     var isSecondEdit: Bool {
-        EditGrid(logScale: pov.logScale) == .second
+        editGrid == .second
     }
     
     static let mapScale = 16

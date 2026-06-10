@@ -3173,7 +3173,7 @@ final class SheetView: View, @unchecked Sendable {
             let uuColor = lineView.model.uuColor
             
             if model.enabledAnimation {
-                if !animationView.selectedIs.isEmpty {
+                if containsSelectedKeyframe(p, scale: scale) {
                     return (true, sheetColorOwnerFromAnimation(with: uuColor, isLine: true))
                 } else {
                     let cv = ColorValue(uuColor: uuColor,
@@ -3196,7 +3196,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (true, SheetColorOwner(sheetView: self, colorValue: cv))
             }
         } else {
-            return (false, sheetColorOwnerFromPlane(at: p))
+            return (false, sheetColorOwnerFromPlane(at: p, scale: scale))
         }
     }
     func sheetColorOwnerFromAnimation(with uuColor: UUColor,
@@ -3228,10 +3228,11 @@ final class SheetView: View, @unchecked Sendable {
                             animationColors: [])
         return SheetColorOwner(sheetView: self, colorValue: cv)
     }
-    func sheetColorOwnerFromPlane(at p: Point) -> SheetColorOwner {
+    func sheetColorOwnerFromPlane(at p: Point,
+                                  scale: Double) -> SheetColorOwner {
         if let pi = planesView.firstIndex(at: p) {
             if model.enabledAnimation {
-                if !animationView.selectedIs.isEmpty {
+                if containsSelectedKeyframe(p, scale: scale) {
                     let uuColor = model.picture.planes[pi].uuColor
                     return sheetColorOwnerFromAnimation(with: uuColor)
                 } else {
@@ -7167,8 +7168,8 @@ final class SheetView: View, @unchecked Sendable {
         return ncv
     }
     
-    func isDefaultPlaneColor(at p: Point) -> Bool {
-        let uuColor = sheetColorOwnerFromPlane(at: p).uuColor
+    func isDefaultPlaneColor(at p: Point, scale: Double) -> Bool {
+        let uuColor = sheetColorOwnerFromPlane(at: p, scale: scale).uuColor
         return uuColor == Sheet.defalutBackgroundUUColor
         || (uuColor.id == .two && uuColor.value.opacity == 0)
     }
@@ -7176,16 +7177,16 @@ final class SheetView: View, @unchecked Sendable {
                    isSelectedOnly: Bool = false,
                    removingUUColor: UUColor? = nil,
                    scale: Double) -> (lineView: SheetLineView, lineIndex: Int)? {
-        let isNoneDefaultColorPlane = !model.picture.planes.isEmpty && !isDefaultPlaneColor(at: p)
-        let smallScale: Double? = if enabledPlane && isNoneDefaultColorPlane {
-            6.0
+        let isNoneDefaultColorPlane = !model.picture.planes.isEmpty
+        && !isDefaultPlaneColor(at: p, scale: scale)
+        let ds = if enabledPlane && isNoneDefaultColorPlane {
+            0.0
         } else if textTuple(at: p, scale: scale) != nil {
-            2.0
+            4 * scale
         } else {
-            nil
+            40 * scale
         }
         
-        let ds = Line.defaultLineWidth * 6 * scale
         var minI: Int?, minDSq = Double.infinity
         for (i, line) in model.picture.lines.enumerated().reversed() {
             guard !isSelectedOnly || keyframeView.linesView.elementViews[i].isSelected else { continue }
@@ -7196,9 +7197,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
             } else {
                 let (dSq, pressure) = line.minDistanceSquaredAndPressure(at: p)
-                let nd = smallScale != nil ?
-                (line.size / 2 * pressure + ds) / smallScale! :
-                line.size / 2 * pressure + ds * 8
+                let nd = line.size / 2 * pressure + ds
                 let ldSq = nd * nd
                 if dSq < minDSq && dSq < ldSq {
                     minDSq = dSq

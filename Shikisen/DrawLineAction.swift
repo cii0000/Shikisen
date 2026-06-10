@@ -536,11 +536,12 @@ final class LineAction: Action {
     
     nonisolated
     private static func revision(pressure: Double, tiltAngle: Double,
+                                 minPressure: Double = 0.5,
                                  targetPressure: Double = 0.325,
                                  revisonMinPressure: Double = 0.1875) -> Double {
         ((pressure / targetPressure) * tiltAngle.clipped(min: .pi * 0.25, max: .pi * 0.3,
                                                          newMin: 1, newMax: 0))
-        .clipped(min: revisonMinPressure, max: 1)
+        .clipped(min: minPressure, max: 1, newMin: revisonMinPressure, newMax: 1)
     }
     
     nonisolated
@@ -715,19 +716,26 @@ final class LineAction: Action {
                 }
                 revisionFirstBezier()
                 
+                let maxDSq = (event.time - firstChangedTime < 0.04 ? 3.0 : 0.75).squared
+                
                 func jointControl(angle: Double = 0.75 * (.pi / 2)) -> Line.Control? {
-                    guard nLine.controls.count >= 4 else { return nil }
-                    let c0 = nLine.controls[nLine.controls.count - 4]
-                    let c1 = nLine.controls[nLine.controls.count - 3]
-                    let c2 = lastC
-                    guard c0.point != c1.point && c1.point != c2.point else { return nil }
-                    let dr = abs(Point.differenceAngle(c0.point, c1.point, c2.point))
-                    if dr > angle {
-                        var nc = c1
-                        nc.pressure = c2.pressure
-                        return nc
+                    guard tempPs.count >= 3 else { return nil }
+                    let p0 = tempPs.first!, p2 = tempPs.last!
+                    guard p0.distanceSquared(p2) > (5 * event.screenToWorldScale).squared else { return nil }
+                    var maxDr = 0.0, np1 = tempPs[1]
+                    for i in 1 ..< tempPs.count - 1 {
+                        let p1 = tempPs[i]
+                        guard p0 != p1 && p1 != p2 else { continue }
+                        let dr = abs(Point.differenceAngle(p0, p1, p2))
+                        if dr > maxDr {
+                            maxDr = dr
+                            np1 = p1
+                        }
+                    }
+                    return if maxDr > angle {
+                        .init(point: np1, pressure: lastC.pressure)
                     } else {
-                        return nil
+                        nil
                     }
                 }
                 
@@ -745,16 +753,16 @@ final class LineAction: Action {
                         nLine.controls = [jointC, jointC, jointC, jointC]
                         nLineTimes = [event.time, event.time, event.time, event.time]
                     } else {
-                        nLine.controls[nLine.controls.count - 3].weight = 0.5
-                        jointC.weight = 1
-                        
+                        jointC.weight = 0
                         nLine.controls.insert(jointC, at: nLine.controls.count - 2)
+                        jointC.weight = 1
+                        nLine.controls.insert(jointC, at: nLine.controls.count - 2)
+                        nLineTimes.insert(event.time, at: nLineTimes.count - 2)
                         nLineTimes.insert(event.time, at: nLineTimes.count - 2)
                     }
                     
                     tempPs = [p]
-                } else if isAppend(maxDSq: event.time - firstChangedTime < 0.04 ?
-                                   3.0.squared : 0.75.squared) {
+                } else if isAppend(maxDSq: maxDSq) {
                     nLine.controls[nLine.controls.count - 3].weight = 0.5
                     let prp = nLine.controls[nLine.controls.count - 1]
                     nLine.controls[nLine.controls.count - 2] = prp
@@ -822,28 +830,6 @@ final class LineAction: Action {
                                          from: lastSnapLines) {
                     nLine.controls[.last].point = nc.point
                 }
-                
-                func toStraight() {
-                    let edge = Edge(nLine.firstPoint, nLine.lastPoint)
-                    let length = edge.length
-                    if length > 0 {
-                        let lScale = length.clipped(min: 10 * event.screenToWorldScale,
-                                                    max: 100 * event.screenToWorldScale,
-                                                    newMin: 0.25, newMax: 0.5)
-                        if nLine.straightDistance() * event.worldToScreenScale < lScale {
-                            nLine.controls = [nLine.controls.first!, nLine.controls.last!]
-                            let pd = nLine.controls.first!.pressure
-                                .distance(nLine.controls.last!.pressure)
-                            if pd < 0.1 {
-                                let pres = max(nLine.controls.first!.pressure,
-                                               nLine.controls.last!.pressure)
-                                nLine.controls[.first].pressure = pres
-                                nLine.controls[.last].pressure = pres
-                            }
-                        }
-                    }
-                }
-                toStraight()
             }
         }
         
