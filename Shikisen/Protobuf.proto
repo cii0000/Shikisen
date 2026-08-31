@@ -311,7 +311,7 @@ message PBKeyframeKey {
     PBRational beat = 5;
     PBUUID id = 9;
 }
-message PBAnimationZipper {
+message PBAnimationCompressor {
     repeated PBKeyframeKey keys = 1;
     repeated PBLine lines = 2;
     repeated PBPlane planes = 3;
@@ -324,18 +324,20 @@ message PBAnimationOption {
     PBRational loopDurBeat = 5;
     PBRational tempo = 2;
     PBPreviousNext previousNext = 6;
+    repeated PBRational keyBeats = 7;
     double timelineY = 3;
     bool enabled = 4;
 }
 message PBAnimation {
     repeated PBKeyframe keyframes = 1;
-    PBAnimationZipper zipper = 8;
+    PBAnimationCompressor compressor = 8;
     PBRational rootBeat = 2;
     PBRationalRange beatRange = 3;
     PBRational loopDurBeat = 9;
     PBRational tempo = 4;
     PBPreviousNext previousNext = 10;
     bool isPlaying = 5;
+    repeated PBRational keyBeats = 11;
     double timelineY = 6;
     bool enabled = 7;
 }

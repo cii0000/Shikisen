@@ -720,6 +720,22 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         timelineBounds?.outset(by: Sheet.timelinePadding)
     }
     
+    func keyBeatRect(fromBeat beat: Rational) -> Rect {
+        let x = x(atBeat: beat)
+        let centerY = 0.0
+        let sy = centerY - Sheet.timelineHalfHeight - 3
+        let ey = centerY + Sheet.timelineHalfHeight + 3
+        let lw = ScoreView.beatLineWidth(atBeat: beat)
+        return .init(x: x - lw / 2, y: sy, width: lw, height: ey - sy)
+    }
+    func keyBeatKnobRect(fromBeat beat: Rational) -> Rect {
+        let nx = x(atBeat: beat)
+        let knobW = Sheet.knobWidth, knobH = Sheet.knobHeight
+        let nKnobW = beat % EditGrid.beatInterval == 0 ? knobW : knobW / 2
+        return Rect(x: nx - nKnobW / 2, y: timelineCenterY - knobH / 2,
+                    width: nKnobW, height: knobH)
+    }
+    
     var editGrid = EditGrid.main {
         didSet {
             guard editGrid != oldValue else { return }
@@ -736,6 +752,26 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                 }
             }
         }
+    }
+    
+    enum OptionHitResult {
+        case keyBeat(beatI: Int)
+    }
+    func hitTestOption(_ p: Point, scale: Double) -> OptionHitResult? {
+        let maxD = Sheet.knobEditDistance * scale
+        let maxDSq = maxD * maxD
+        let score = model
+        
+        var result: OptionHitResult?, minDSq = Double.infinity
+        for (ki, keyBeat) in score.keyBeats.enumerated() {
+            let x = x(atBeat: keyBeat)
+            let dSq = p.x.distanceSquared(x)
+            if dSq < minDSq && dSq < maxDSq {
+                minDSq = dSq
+                result = .keyBeat(beatI: ki)
+            }
+        }
+        return result
     }
     
     func updateTimeline() {
@@ -797,6 +833,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                            width: w, height: lw)))
         
         makeBeatPathlines(in: beatRange.start ..< beatRange.end + loopDurBeat, sy: sy, ey: ey,
+                          subBorderBeats: Set(model.keyBeats),
                           subBorderPathlines: &subBorderPathlines,
                           fullEditBorderPathlines: &fullEditBorderPathlines,
                           secondEditBorderPathlines: &secondEditBorderPathlines,
@@ -921,6 +958,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                            y: ey - lw,
                                            width: lw * 4,
                                            height: lw)))
+        
         
         let secRange = model.secRange
         for sec in Int(secRange.start.rounded(.up)) ..< Int((secRange.end + model.loopDurSec).rounded(.up)) {
@@ -7876,22 +7914,22 @@ final class SheetColorOwner {
                     }
                 }
                 if !removeKeyLines.isEmpty || !insertKeyLines.isEmpty {
-                    sheetView.removeKeyLines(removeKeyLines)
-                    sheetView.insertKeyLines(insertKeyLines)
-                    
                     //
                     sheetView.doSet(.empty)
+                    
+                    sheetView.removeKeyLines(removeKeyLines)
+                    sheetView.insertKeyLines(insertKeyLines)
                 }
             } else {
                 let lis = colorValue.lineIndexes.filter { $0 != 0 }
                 if !lis.isEmpty {
+                    //
+                    sheetView.doSet(.empty)
+                    
                     let livs = sheetView.model.picture.lines[lis].enumerated()
                         .map { IndexValue(value: $0.element, index: $0.offset) }
                     sheetView.removeLines(at: lis)
                     sheetView.insert(livs)
-                    
-                    //
-                    sheetView.doSet(.empty)
                 }
             }
         }

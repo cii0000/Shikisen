@@ -1661,6 +1661,7 @@ struct AnimationOption {
     var loopDurBeat: Rational = 0
     var tempo = Music.defaultTempo
     var previousNext = PreviousNext.none
+    var keyBeats = [Rational]()
     var timelineY = Sheet.timelineY
     var enabled = false
 }
@@ -1670,6 +1671,7 @@ extension AnimationOption: Protobuf {
         loopDurBeat = (try? Rational(pb.loopDurBeat)) ?? 0
         tempo = (try? Rational(pb.tempo))?.clipped(Music.tempoRange) ?? Music.defaultTempo
         previousNext = (try? .init(pb.previousNext)) ?? .none
+        keyBeats = pb.keyBeats.compactMap { try? Rational($0) }
         timelineY = pb.timelineY
         enabled = pb.enabled
     }
@@ -1679,6 +1681,7 @@ extension AnimationOption: Protobuf {
             $0.loopDurBeat = loopDurBeat.pb
             $0.tempo = tempo.pb
             $0.previousNext = previousNext.pb
+            $0.keyBeats = keyBeats.map { $0.pb }
             $0.timelineY = timelineY
             $0.enabled = enabled
         }
@@ -1717,20 +1720,20 @@ extension KeyframeKey: Protobuf {
         }
     }
 }
-struct AnimationZipper {
+struct AnimationCompressor {
     var keys = [KeyframeKey]()
     var lines = [Line](), planes = [Plane]()
     var draftLines = [Line](), draftPlanes = [Plane]()
 }
-extension AnimationZipper: Protobuf {
-    init(_ pb: PBAnimationZipper) throws {
+extension AnimationCompressor: Protobuf {
+    init(_ pb: PBAnimationCompressor) throws {
         keys = pb.keys.compactMap { try? KeyframeKey($0) }
         lines = pb.lines.compactMap { try? Line($0) }
         planes = pb.planes.compactMap { try? Plane($0) }
         draftLines = pb.draftLines.compactMap { try? Line($0) }
         draftPlanes = pb.draftPlanes.compactMap { try? Plane($0) }
     }
-    var pb: PBAnimationZipper {
+    var pb: PBAnimationCompressor {
         .with {
             $0.keys = keys.map { $0.pb }
             $0.lines = lines.map { $0.pb }
@@ -1755,6 +1758,7 @@ struct Animation {
     var loopDurBeat: Rational = 0
     var tempo = Music.defaultTempo
     var previousNext = PreviousNext.none
+    var keyBeats = [Rational]()
     var timelineY = Sheet.timelineY
     var enabled = false
     
@@ -1764,6 +1768,7 @@ struct Animation {
          loopDurBeat: Rational = 0,
          tempo: Rational = Music.defaultTempo,
          previousNext: PreviousNext = .none,
+         keyBeats: [Rational] = [],
          timelineY: Double = Sheet.timelineY,
          enabled: Bool = false) {
         
@@ -1773,6 +1778,7 @@ struct Animation {
         self.loopDurBeat = loopDurBeat
         self.tempo = tempo
         self.previousNext = previousNext
+        self.keyBeats = keyBeats
         self.timelineY = timelineY
         self.enabled = enabled
         index = keyframes.isEmpty ?
@@ -1784,24 +1790,24 @@ extension Animation: Protobuf {
     init(_ pb: PBAnimation) throws {
         keyframes = pb.keyframes.compactMap { try? Keyframe($0) }.sorted(by: { $0.beat < $1.beat })
         if keyframes.isEmpty,
-            let zipper = try? AnimationZipper(pb.zipper) {
+            let compressor = try? AnimationCompressor(pb.compressor) {
             
-            keyframes = zipper.keys.map {
+            keyframes = compressor.keys.map {
                 let lines = $0.lineIs.map {
-                    $0 < zipper.lines.count ?
-                        zipper.lines[$0] : .init()
+                    $0 < compressor.lines.count ?
+                        compressor.lines[$0] : .init()
                 }
                 let planes = $0.planeIs.map {
-                    $0 < zipper.planes.count ?
-                        zipper.planes[$0] : .init()
+                    $0 < compressor.planes.count ?
+                        compressor.planes[$0] : .init()
                 }
                 let draftLines = $0.draftLineIs.map {
-                    $0 < zipper.draftLines.count ?
-                        zipper.draftLines[$0] : .init()
+                    $0 < compressor.draftLines.count ?
+                        compressor.draftLines[$0] : .init()
                 }
                 let draftPlanes = $0.draftPlaneIs.map {
-                    $0 < zipper.draftPlanes.count ?
-                        zipper.draftPlanes[$0] : .init()
+                    $0 < compressor.draftPlanes.count ?
+                        compressor.draftPlanes[$0] : .init()
                 }
                 
                 return .init(picture: .init(lines: lines,
@@ -1817,6 +1823,7 @@ extension Animation: Protobuf {
         loopDurBeat = (try? Rational(pb.loopDurBeat)) ?? 0
         tempo = (try? Rational(pb.tempo))?.clipped(Music.tempoRange) ?? Music.defaultTempo
         previousNext = (try? .init(pb.previousNext)) ?? .none
+        keyBeats = pb.keyBeats.compactMap { try? Rational($0) }
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
         enabled = pb.enabled
@@ -1883,17 +1890,18 @@ extension Animation: Protobuf {
                 .sorted(by: { $0.value < $1.value }).map { $0.key }
             let draftPlanes = draftPlaneIs
                 .sorted(by: { $0.value < $1.value }).map { $0.key }
-            let zipper = AnimationZipper(keys: keys,
-                                         lines: lines, planes: planes,
-                                         draftLines: draftLines,
-                                         draftPlanes: draftPlanes)
-            $0.zipper = zipper.pb
+            let compressor = AnimationCompressor(keys: keys,
+                                                 lines: lines, planes: planes,
+                                                 draftLines: draftLines,
+                                                 draftPlanes: draftPlanes)
+            $0.compressor = compressor.pb
             
             $0.rootBeat = rootBeat.pb
             $0.beatRange = RationalRange(value: beatRange).pb
             $0.loopDurBeat = loopDurBeat.pb
             $0.tempo = tempo.pb
             $0.previousNext = previousNext.pb
+            $0.keyBeats = keyBeats.map { $0.pb }
             $0.timelineY = timelineY
             $0.enabled = enabled
         }
@@ -2317,7 +2325,7 @@ extension Animation {
     var option: AnimationOption {
         get {
             .init(beatRange: beatRange, loopDurBeat: loopDurBeat, tempo: tempo,
-                  previousNext: previousNext,
+                  previousNext: previousNext, keyBeats: keyBeats,
                   timelineY: timelineY, enabled: enabled)
         }
         set {
@@ -2325,6 +2333,7 @@ extension Animation {
             loopDurBeat = newValue.loopDurBeat
             tempo = newValue.tempo
             previousNext = newValue.previousNext
+            keyBeats = newValue.keyBeats
             timelineY = newValue.timelineY
             enabled = newValue.enabled
         }

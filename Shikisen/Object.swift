@@ -601,42 +601,6 @@ extension G {
         }
     }
 }
-enum Generics: Hashable {
-    case customArray([O])
-    case customDic([O: O])
-    case array(element: O)
-    case dic(key: O, value: O)
-    //matrix mxn
-}
-extension Generics {
-    func rounded(_ rule: FloatingPointRoundingRule
-                    = .toNearestOrAwayFromZero) -> Generics {
-        switch self {
-        case .customArray(let a):
-             .customArray(a.rounded(rule))
-        case .customDic(let a):
-             .customDic(a.rounded(rule))
-        case .array(let element):
-             .array(element: element.rounded(rule))
-        case .dic(let key, let value):
-             .dic(key: key.rounded(rule), value: value.rounded(rule))
-        }
-    }
-}
-extension Generics: CustomStringConvertible {
-    var description: String {
-        switch self {
-        case .customArray(let a):
-             a.description
-        case .customDic(let a):
-             a.description
-        case .array(let element):
-             "\(element.description)]"
-        case .dic(let key, let value):
-             "\(key.description):\(value.description)]"
-        }
-    }
-}
 
 struct Selected: Hashable {
     var o: O, ranges: [O]
@@ -1235,7 +1199,6 @@ enum O: Sendable {
     indirect case string(String)
     indirect case sheet(OSheet)
     indirect case g(G)
-    indirect case generics(Generics)
     indirect case selected(Selected)
     indirect case f(F)
     indirect case label(OLabel)
@@ -1249,13 +1212,12 @@ extension O {
     init(_ v: Rational) { self = .rational(v) }
     init(_ v: Double) { self = .double(v) }
     init(_ v: OArray) { self = .array(v) }
-//    init(_ v: [O]) { self = .array(OArray(v)) }
+    init(_ v: [O]) { self = .array(OArray(v)) }
     init(_ v: ORange) { self = .range(v) }
     init(_ v: [O: O]) { self = .dic(v) }
     init(_ v: String) { self = .string(v) }
     init(_ v: OSheet) { self = .sheet(v) }
     init(_ v: G) { self = .g(v) }
-    init(_ v: Generics) { self = .generics(v) }
     init(_ v: Selected) { self = .selected(v) }
     init(_ v: F) { self = .f(v) }
     init(_ v: OLabel) { self = .label(v) }
@@ -2800,11 +2762,6 @@ extension O: Equatable {
             case .g(let b): return a == b
             default: return false
             }
-        case .generics(let a):
-            switch rhs {
-            case .generics(let b): return a == b
-            default: return false
-            }
         case .f(let a):
             switch rhs {
             case .f(let b): return a == b
@@ -2998,7 +2955,6 @@ extension O: Hashable {
         case .sheet(let a): hasher.combine(a)
         case .selected(let a): hasher.combine(a)
         case .g(let a): hasher.combine(a)
-        case .generics(let a): hasher.combine(a)
         case .f(let a): hasher.combine(a)
         case .label(let a): hasher.combine(a)
         case .id(let a): hasher.combine(a)
@@ -3069,7 +3025,6 @@ extension O {
         case .string: return self
         case .sheet(let a): return O(a.rounded(rule))
         case .g: return self
-        case .generics(let a): return O(a.rounded(rule))
         case .selected(let a): return O(a.rounded(rule))
         case .f(let a): return O(a.rounded(rule))
         case .label(let a): return O(a.rounded(rule))
@@ -4587,53 +4542,6 @@ extension O {
             case .dic: return ao.isDic
             case .all: return O(true)
             }
-        case .generics(let b):
-            switch b {
-            case .customArray(let bb):
-                for (i, ao) in ao.elements.enumerated() {
-                    guard i < bo.count else {
-                        return O(false)
-                    }
-                    if O.isO(ao, bb[i]) == O(false) {
-                        return O(false)
-                    }
-                }
-                return O(true)
-            case .customDic(let bb):
-                switch ao {
-                case .dic(let aa):
-                    if aa.count != bb.count {
-                        return O(false)
-                    }
-                    for (aaKey, aaValue) in aa {
-                        if let bbo = bb[aaKey] {
-                            if O.isO(aaValue, bbo) == O(false) {
-                                return O(false)
-                            }
-                        } else {
-                            return O(false)
-                        }
-                    }
-                    return O(true)
-                default:
-                    return O(false)
-                }
-            case .array(let bb):
-                return O(!ao.elements.contains(where: { O.isO($0, bb) == O(false) }))
-            case .dic(let bbKey, let bbValue):
-                switch ao {
-                case .dic(let aa):
-                    if aa.keys.contains(where: { O.isO($0, bbKey) == O(false) }) {
-                        return O(false)
-                    }
-                    if aa.values.contains(where: { O.isO($0, bbValue) == O(false) }) {
-                        return O(false)
-                    }
-                    return O(true)
-                default:
-                    return O(false)
-                }
-            }
         case .array(let b):
             return O(b.contains(ao))
         case .dic(let b):
@@ -5944,7 +5852,6 @@ extension O {
             }
             return "(" + s + ")"
         case .g(let a): return a.rawValue
-        case .generics(let a): return a.description
         case .selected(let a):
             if a.ranges.count == 1 {
                 return a.o.asString + O.selectName + a.ranges[0].asString

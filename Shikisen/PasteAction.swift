@@ -1249,50 +1249,66 @@ final class APasteAction: Action {
             rootAction.textAction.cut(at: p)
             return true
         } else if let sheetView = rootView.sheetView(at: p),
-           sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
-                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
-                                                                 scale: rootView.screenToWorldScale) {
+           sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             
-            let animationView = sheetView.animationView
-            let keyframeID = animationView.model.keyframes[ki].id
-            
-            let isSelected = animationView.selectedIs.contains(ki)
-            var indexes = isSelected ?
-            animationView.selectedIs.sorted() : [ki]
-            if indexes.last == animationView.model.keyframes.count {
-                indexes.removeLast()
-            }
-            
-            var beat: Rational = 0
-            let kfs = indexes.map {
-                var kf = animationView.model.keyframes[$0]
-                let nextBeat = $0 + 1 < animationView.model.keyframes.count ? animationView.model.keyframes[$0 + 1].beat : animationView.model.beatRange.upperBound
-                let dBeat = nextBeat - kf.beat
-                kf.beat = beat
-                beat += dBeat
-                return kf
-            }
-            
-            sheetView.newUndoGroup(enabledKeyframeIndex: false)
-            sheetView.unselect()
-            if indexes == animationView.model.keyframes.count.array {
-                let keyframe = Keyframe(beat: 0)
-                sheetView.insert([IndexValue(value: keyframe, index: 0)])
-                sheetView.removeKeyframes(at: indexes)
+            if let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                              scale: rootView.screenToWorldScale) {
+                let animationView = sheetView.animationView
+                let keyframeID = animationView.model.keyframes[ki].id
                 
-                let option = AnimationOption(enabled: false)
-                sheetView.set(option)
+                let isSelected = animationView.selectedIs.contains(ki)
+                var indexes = isSelected ?
+                animationView.selectedIs.sorted() : [ki]
+                if indexes.last == animationView.model.keyframes.count {
+                    indexes.removeLast()
+                }
                 
-                sheetView.rootKeyframeIndex = 0
-            } else {
-                sheetView.removeKeyframes(at: indexes)
+                var beat: Rational = 0
+                let kfs = indexes.map {
+                    var kf = animationView.model.keyframes[$0]
+                    let nextBeat = $0 + 1 < animationView.model.keyframes.count ? animationView.model.keyframes[$0 + 1].beat : animationView.model.beatRange.upperBound
+                    let dBeat = nextBeat - kf.beat
+                    kf.beat = beat
+                    beat += dBeat
+                    return kf
+                }
+                
+                sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                sheetView.unselect()
+                if indexes == animationView.model.keyframes.count.array {
+                    let keyframe = Keyframe(beat: 0)
+                    sheetView.insert([IndexValue(value: keyframe, index: 0)])
+                    sheetView.removeKeyframes(at: indexes)
+                    
+                    let option = AnimationOption(enabled: false)
+                    sheetView.set(option)
+                    
+                    sheetView.rootKeyframeIndex = 0
+                } else {
+                    sheetView.removeKeyframes(at: indexes)
+                }
+                rootView.updateSelectedFrame()
+                
+                Pasteboard.shared.copiedObjects
+                = [.copiedAnimation(.init(animation: .init(keyframes: kfs),
+                                          sheetID: sheetView.id,
+                                          keyframeID: keyframeID))]
+            } else if let result = sheetView.animationView
+                .hitTestOption(sheetView.animationView.timelineNode.convertFromWorld(p),
+                               scale: rootView.screenToWorldScale) {
+                switch result {
+                case .keyBeat(let keyBeatI):
+                    var option = sheetView.animationView.model.option
+                    option.keyBeats.remove(at: keyBeatI)
+                    
+                    Pasteboard.shared.copiedObjects = [.border(.init(.vertical))]
+                    
+                    sheetView.newUndoGroup()
+                    sheetView.unselect()
+                    sheetView.set(option)
+                    return true
+                }
             }
-            rootView.updateSelectedFrame()
-            
-            Pasteboard.shared.copiedObjects
-            = [.copiedAnimation(.init(animation: .init(keyframes: kfs),
-                                      sheetID: sheetView.id,
-                                      keyframeID: keyframeID))]
             
             return true
         } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
@@ -1641,7 +1657,9 @@ final class APasteAction: Action {
                         pits[i].beat -= fBeat
                     }
                     var nnNote = note
-                    nnNote.beatRange = (nnNote.beatRange.start + fBeat) ..< note.beatRange.end
+                    if fBeat < note.beatRange.length {
+                        nnNote.beatRange = (nnNote.beatRange.start + fBeat) ..< note.beatRange.end
+                    }
                     nnNote.pits = pits
                     
                     sheetView.newUndoGroup()
@@ -2186,6 +2204,24 @@ final class APasteAction: Action {
                                                   .init(path: .init(knobRect),
                                                         fillType: .color(.content))]
                 }
+                
+                return
+            } else if oldBorder.orientation == .vertical, let sheetView,
+                      sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                               scale: rootView.screenToWorldScale) {
+                let animationView = sheetView.animationView
+                let sheetP = sheetView.convertFromWorld(p)
+                let keyBeat = animationView.beat(atX: sheetP.x,
+                                             interval: rootView.currentBeatInterval)
+                isSnapped = keyBeat.isInteger
+                if !snapLineNode.children.isEmpty {
+                    rootView.cursor = .arrow
+                }
+                snapLineNode.children = []
+                
+                let rect = animationView.timelineNode.convertToWorld(animationView.keyBeatRect(fromBeat: keyBeat))
+                selectingLineNode.children = [.init(path: .init(rect),
+                                                    fillType: .color(.subBorder))]
                 
                 return
             }
@@ -3118,6 +3154,21 @@ final class APasteAction: Action {
                         sheetView.newUndoGroup()
                         sheetView.set(option)
                     }
+                }
+                return
+            } else if border.orientation == .vertical,
+                      let sheetView = rootView.sheetView(at: shp),
+                      sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                   scale: rootView.screenToWorldScale) {
+                let sheetP = sheetView.convertFromWorld(p)
+                let beat = sheetView.animationView.beat(atX: sheetP.x,
+                                                    interval: rootView.currentBeatInterval)
+                var option = sheetView.animationView.model.option
+                if !option.keyBeats.contains(beat) {
+                    option.keyBeats.append(beat)
+                    option.keyBeats.sort()
+                    sheetView.newUndoGroup()
+                    sheetView.set(option)
                 }
                 return
             } else if let sheetView = rootView.madeSheetView(at: shp) {
