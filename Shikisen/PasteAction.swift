@@ -751,7 +751,7 @@ final class APasteAction: Action {
                     }
                     let startBeat = note.pits[pitSprolIs.keys.min()!].beat + note.beatRange.start
                     var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
-                                     pitch: note.pitch, pits: nPits, id: .init())
+                                     pitch: note.pitch, pits: nPits, id: note.id)
                     nNote.pitch -= pitch
                     nNote.beatRange.start -= beat
                     return nNote
@@ -1416,7 +1416,7 @@ final class APasteAction: Action {
                     }
                     let startBeat = note.pits[pitSprolIs.keys.min()!].beat + note.beatRange.start
                     var nNote = Note(beatRange: startBeat ..< (startBeat + currentBeat),
-                                     pitch: note.pitch, pits: nPits, id: .init())
+                                     pitch: note.pitch, pits: nPits, id: note.id)
                     nNote.pitch -= pitch
                     nNote.beatRange.start -= beat
                     

@@ -2589,7 +2589,7 @@ final class MoveLineAction: DragEventAction {
     }
     
     enum MoveType {
-        case point, warp, straight, all
+        case point, warp, straight
     }
     
     private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0
@@ -2657,17 +2657,8 @@ final class MoveLineAction: DragEventAction {
                         let d = line.minDistanceSquared(at: sheetP).squareRoot()
                         type = if d < line.size + 0.5 * rootView.screenToWorldScale {
                             line.controls.count == 2 ? .straight : .point
-                        } else if d < line.size + 20 * rootView.screenToWorldScale {
-                            line.controls.count == 2 ? .straight : .warp
                         } else {
-                            .all
-                        }
-                        if type == .straight {
-                            let d = min(line.firstPoint.distance(sheetP),
-                                        line.lastPoint.distance(sheetP))
-                            if d >= line.size + 20 * rootView.screenToWorldScale {
-                                type = .all
-                            }
+                            line.controls.count == 2 ? .straight : .warp
                         }
                         
                         switch type {
@@ -2710,26 +2701,6 @@ final class MoveLineAction: DragEventAction {
                                 Node(path: $0, fillType: .color(.subSelected))
                             }
                             rootView.node.append(child: node)
-                        case .all:
-                            let niv = line.nearestIndexValue(at: sheetP)
-                            
-                            let length = line.length()
-                            if length > 0 {
-                                if line.length(with: .init(startIndexValue: line.firstIndexValue,
-                                                                endIndexValue: niv)) / length < 0.25 {
-                                    pointIndex = 0
-                                } else if line.length(with: .init(startIndexValue: niv,
-                                                                       endIndexValue: line.lastIndexValue)) / length < 0.25 {
-                                    pointIndex = line.mainPointCount - 1
-                                } else {
-                                    isSnappable = false
-                                }
-                            } else {
-                                isSnappable = false
-                            }
-                            
-                            pointIndex = line.firstPoint.distance(sheetP)
-                            < line.lastPoint.distance(sheetP) ? 0 : line.controls.count - 1
                         }
                         
                         var lines = sheetView.keyframeView.linesView.model
@@ -2813,7 +2784,7 @@ final class MoveLineAction: DragEventAction {
                                              fillType: .color(.background))]
                             }
                         }
-                    case .warp, .all:
+                    case .warp:
                         var line = beganLine
                         let sheetP = sheetView.convertFromWorld(p)
                         var dp = sheetP - beganSheetP
@@ -2822,8 +2793,7 @@ final class MoveLineAction: DragEventAction {
                         lines.remove(at: lineIndex)
                         
                         if isSnappable, let np {
-                            let nLine = type == .all ? line * Transform(translation: dp)
-                            : line.warpedWith(deltaPoint: dp - snapDP, at: pointIndex)
+                            let nLine = line.warpedWith(deltaPoint: dp - snapDP, at: pointIndex)
                             let nnp = pointIndex == 0 || pointIndex == line.mainPointCount - 1 ?
                             LineAction.snap(pointIndex == 0 ? .first : .last, nLine,
                                             isSnapSelf: line.controls.count != 2,
@@ -2860,8 +2830,7 @@ final class MoveLineAction: DragEventAction {
                             }
                         }
                         
-                        line = type == .all ? line * Transform(translation: dp)
-                        : line.warpedWith(deltaPoint: dp, at: pointIndex)
+                        line = line.warpedWith(deltaPoint: dp, at: pointIndex)
                         
                         if line.controls.count == 2 {
                             if !isSnapped && !isSnapStraight {

@@ -1124,33 +1124,22 @@ struct Texture {
         return .init(items: items)
     }
     
-//    @MainActor
-    init(imageData: Data,
-         isMipmapped: Bool = false,
-         isOpaque: Bool = true,
+    init(imageData: Data, isMipmapped: Bool = false, isOpaque: Bool = true,
          _ colorSpace: ColorSpace = .sRGB, isBGR: Bool = false) throws {
         let block = try Self.block(from: imageData, isMipmapped: isMipmapped)
         try self.init(block: block, isOpaque: isOpaque, colorSpace, isBGR: isBGR)
     }
-//    @MainActor
-    init(image: Image,
-         isMipmapped: Bool = false,
-         isOpaque: Bool = true,
+    init(image: Image, isMipmapped: Bool = false, isOpaque: Bool = true,
          _ colorSpace: ColorSpace = .sRGB, isBGR: Bool = false) throws {
         let block = try Self.block(from: image, isMipmapped: isMipmapped)
         try self.init(block: block, isOpaque: isOpaque, colorSpace, isBGR: isBGR)
     }
-//    @MainActor
-    init(cgImage: CGImage,
-         isMipmapped: Bool = false,
-         isOpaque: Bool = true,
+    init(cgImage: CGImage, isMipmapped: Bool = false, isOpaque: Bool = true,
          _ colorSpace: ColorSpace = .sRGB, isBGR: Bool = false) throws {
         let block = try Self.block(from: cgImage, isMipmapped: isMipmapped)
         try self.init(block: block, isOpaque: isOpaque, colorSpace, isBGR: isBGR)
     }
-//    @MainActor
-    init(block: Block,
-                    isOpaque: Bool = true,
+    init(block: Block, isOpaque: Bool = true,
          _ colorSpace: ColorSpace = .sRGB, isBGR: Bool = false) throws {
         guard let cgColorSpace = colorSpace.cg, !block.items.isEmpty else { throw TextureError() }
         let format = if colorSpace.isHDR {
@@ -1174,10 +1163,9 @@ struct Texture {
         self.init(mtl, isOpaque: isOpaque, colorSpace: cgColorSpace)
     }
     
-    @MainActor static func withGPU(block: Block,
-                                   isOpaque: Bool,
-                                   _ colorSpace: ColorSpace = .sRGB,
-                                   completionHandler: @Sendable @escaping (Texture) -> ()) throws {
+    static func withGPU(block: Block, isOpaque: Bool,
+                        _ colorSpace: ColorSpace = .sRGB,
+                        completionHandler: @Sendable @escaping (Texture) -> ()) throws {
         guard let cgColorSpace = colorSpace.cg, !block.items.isEmpty else { throw TextureError() }
         let format = if colorSpace.isHDR {
             MTLPixelFormat.bgr10_xr_srgb
@@ -1208,7 +1196,7 @@ struct Texture {
         commandBuffer?.commit()
     }
     
-    @MainActor func with(mipmapLevel: Int) throws -> Self {
+    func with(mipmapLevel: Int) throws -> Self {
         let cgImage = try mtl.cgImage(with: cgColorSpace, mipmapLevel: mipmapLevel)
         let block = try Self.block(from: cgImage, isMipmapped: false)
         return try .init(block: block)

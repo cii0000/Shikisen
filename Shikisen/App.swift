@@ -140,6 +140,8 @@ final class SubNSApplication: NSApplication {
     weak var editMenu: NSMenu?, editMenuItem: NSMenuItem?
     
     override init() {
+        try? FileManager.default.removeItemIfFileExists(URL.appTemporaryDirectory)
+        
         AppDelegate.updateSelectedColor()
         super.init()
     }
@@ -164,7 +166,7 @@ final class SubNSApplication: NSApplication {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
     
     func applicationWillFinishLaunching(_ notification: Notification) {
-        view = SubMTKView(url: URL.library)
+        view = SubMTKView(url: URL.libraryDirectory)
         view.frame = NSRect(origin: NSPoint(),
                             size: AppDelegate.defaultViewSize)
         
@@ -3099,16 +3101,31 @@ extension URL {
         NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
     }
 }
+extension FileManager {
+    func removeItemIfFileExists(_ url: URL) throws {
+        if fileExists(atPath: url.path()) {
+            try removeItem(at: url)
+        }
+    }
+}
 extension URL {
-    static let library = {
+    static let libraryDirectory = {
         let libraryName = "User" + "." + (Document.FileType.shikisendata.utType.uti.preferredFilenameExtension ?? "shikisendata")
         return URL(libraryName: libraryName)
     } ()
-    static let contents = library.appending(path: "contents")
+    static let contentsDirectory = libraryDirectory.appending(path: "contents")
+    
+    static let appTemporaryDirectory = {
+        return URL(appTemporaryName: System.id)
+    } ()
     
     init(libraryName: String) {
         let directoryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         self = directoryURL.appendingPathComponent(libraryName)
+    }
+    init(appTemporaryName: String) {
+        let directoryURL = FileManager.default.temporaryDirectory
+        self = directoryURL.appendingPathComponent(appTemporaryName)
     }
     init?(bundleName: String, extension ex: String) {
         guard let url = Bundle.main.url(forResource: bundleName, withExtension: ex) else { return nil }

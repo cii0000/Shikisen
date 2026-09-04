@@ -297,6 +297,56 @@ extension World {
 }
 
 typealias WorldHistory = History<WorldUndoItem>
+extension World {
+    func undoItemValue(with result: WorldHistory.UndoResult,
+                       in history: inout WorldHistory) -> UndoItemValue<WorldUndoItem>? {
+        if result.item.loadType == .unload {
+            _ = history[result.version].values[result.valueIndex].loadRedoItem()
+            loadCheck(with: result, in: &history)
+            return history[result.version].values[result.valueIndex].undoItemValue
+        } else {
+            return result.item.undoItemValue
+        }
+    }
+    func loadCheck(with result: WorldHistory.UndoResult, in history: inout WorldHistory) {
+        guard let uiv = history[result.version].values[result.valueIndex]
+            .undoItemValue else { return }
+        
+        let isUndo = result.type == .undo
+        let reversedType: UndoType = isUndo ? .redo : .undo
+        
+        switch !isUndo ? uiv.undoItem : uiv.redoItem {
+        case .insertSheets(let sids):
+            for (shp, sid) in sids {
+                if sheetIDs[shp] != sid {
+                    history[result.version].values[result.valueIndex].error()
+                    break
+                }
+            }
+        case .removeSheets: break
+        case .setSelection(let selection):
+            if self.selection != selection {
+                history[result.version].values[result.valueIndex]
+                    .saveUndoItemValue?.set(.setSelection(self.selection),
+                                            type: reversedType)
+            }
+        }
+        
+        switch isUndo ? uiv.undoItem : uiv.redoItem {
+        case .insertSheets(_): break
+        case .removeSheets(_): break
+        case .setSelection:
+            switch result.type {
+            case .undo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.redoItem = .setSelection(selection)
+            case .redo:
+                history[result.version].values[result.valueIndex]
+                    .undoItemValue?.undoItem = .setSelection(selection)
+            }
+        }
+    }
+}
 
 typealias Document = Root
 

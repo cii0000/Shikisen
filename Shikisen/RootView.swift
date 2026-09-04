@@ -357,68 +357,12 @@ final class RootView: View, @unchecked Sendable {
         var frame = Rect?.none
         let results = history.undoAndResults(to: toTopIndex)
         for result in results {
-            let item: UndoItemValue<WorldUndoItem>?
-            if result.item.loadType == .unload {
-                _ = history[result.version].values[result.valueIndex].loadRedoItem()
-                loadCheck(with: result)
-                item = history[result.version].values[result.valueIndex].undoItemValue
-            } else {
-                item = result.item.undoItemValue
-            }
-            switch result.type {
-            case .undo:
-                if let undoItem = item?.undoItem {
-                    if let aFrame = set(undoItem, isMakeRect: true) {
-                        frame += aFrame
-                    }
-                }
-            case .redo:
-                if let redoItem = item?.redoItem {
-                    if let aFrame = set(redoItem, isMakeRect: true) {
-                        frame += aFrame
-                    }
-                }
+            guard let uiv = world.undoItemValue(with: result, in: &history) else { continue }
+            if let aFrame = set(result.undoItem(with: uiv), isMakeRect: true) {
+                frame += aFrame
             }
         }
         return frame
-    }
-    func loadCheck(with result: WorldHistory.UndoResult) {
-        guard let uiv = history[result.version].values[result.valueIndex]
-            .undoItemValue else { return }
-        
-        let isUndo = result.type == .undo
-        let reversedType: UndoType = isUndo ? .redo : .undo
-        
-        switch !isUndo ? uiv.undoItem : uiv.redoItem {
-        case .insertSheets(let sids):
-            for (shp, sid) in sids {
-                if world.sheetIDs[shp] != sid {
-                    history[result.version].values[result.valueIndex].error()
-                    break
-                }
-            }
-        case .removeSheets: break
-        case .setSelection(let selection):
-            if world.selection != selection {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setSelection(world.selection),
-                                            type: reversedType)
-            }
-        }
-        
-        switch isUndo ? uiv.undoItem : uiv.redoItem {
-        case .insertSheets(_): break
-        case .removeSheets(_): break
-        case .setSelection:
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setSelection(world.selection)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setSelection(world.selection)
-            }
-        }
     }
     
     struct RestoreError: Error {

@@ -109,7 +109,7 @@ struct Content: Hashable, Codable {
     
     var directoryName: String {
         didSet {
-            url = URL.library
+            url = URL.libraryDirectory
                 .appending(component: "sheets")
                 .appending(component: directoryName)
                 .appending(component: "contents")
@@ -119,7 +119,7 @@ struct Content: Hashable, Codable {
     }
     var name: String {
         didSet {
-            url = URL.library
+            url = URL.libraryDirectory
                 .appending(component: "sheets")
                 .appending(component: directoryName)
                 .appending(component: "contents")
@@ -158,7 +158,7 @@ struct Content: Hashable, Codable {
         
         self.directoryName = directoryName
         self.name = name
-        url = URL.library
+        url = URL.libraryDirectory
             .appending(component: "sheets")
             .appending(component: directoryName)
             .appending(component: "contents")
@@ -246,7 +246,7 @@ extension Content: Protobuf {
     init(_ pb: PBContent) throws {
         directoryName = pb.directoryName
         name = pb.name
-        url = URL.library
+        url = URL.libraryDirectory
             .appending(component: "sheets")
             .appending(component: directoryName)
             .appending(component: "contents")

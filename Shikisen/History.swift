@@ -717,6 +717,13 @@ extension History {
     struct UndoResult {
         var item: UndoDataValue<T>, type: UndoType
         var version: Version, valueIndex: Int
+        
+        func undoItem(with iv: UndoItemValue<T>) -> T {
+            switch type {
+            case .undo: iv.undoItem
+            case .redo: iv.redoItem
+            }
+        }
     }
     mutating func undoAndResults(to toTopIndex: Int) -> [UndoResult] {
         copyIfShared()
