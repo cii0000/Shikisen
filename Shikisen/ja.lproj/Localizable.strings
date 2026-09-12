@@ -182,6 +182,7 @@
 "Export as Sound..." = "サウンドとして書き出す...";
 "Export as Linear PCM..." = "リニアPCMとして書き出す...";
 "Export as Caption..." = "キャプションとして書き出す...";
+"Export as Timelapse..." = "タイムラプスとして書き出す...";
 
 "Export as Document..." = "書類として書き出す...";
 "Export as Document with History..." = "履歴付き書類として書き出す...";
@@ -200,6 +201,7 @@
 "Export as Sound" = "サウンドとして書き出す";
 "Export as Linear PCM" = "リニアPCMとして書き出す";
 "Export as Caption" = "キャプションとして書き出す";
+"Export as Timelapse" = "タイムラプスとして書き出す";
 
 "Export as Document" = "書類として書き出す";
 "Export as Document with History" = "履歴付き書類として書き出す";
@@ -232,6 +234,7 @@
 "Exporting Sound" = "サウンドを書き出し中";
 "Exporting Linear PCM" = "リニアPCMを書き出し中";
 "Exporting Caption" = "キャプションを書き出し中";
+"Exporting Timelapse" = "タイムラプスを書き出し中";
 "Exporting Document" = "書類を書き出し中";
 "Exporting Document with History" = "履歴付き書類を書き出し中";
 

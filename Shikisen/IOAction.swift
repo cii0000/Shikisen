@@ -174,6 +174,20 @@ final class ExportAsCaptionAction: InputKeyEventAction {
         action.updateNode()
     }
 }
+final class ExportAsTimelapseAction: InputKeyEventAction {
+    let action: IOAction
+    
+    init(_ rootAction: RootAction) {
+        action = IOAction(rootAction)
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        action.exportFile(with: event, .timelapse)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
 final class ExportAsDocumentAction: InputKeyEventAction {
     let action: IOAction
     
@@ -585,7 +599,7 @@ final class IOAction: Action {
     
     enum ExportType {
         case image, image4K, pdf, gif, movie, movie4K,
-             sound, linearPCM, document, documentWithHistory, caption
+             sound, linearPCM, document, documentWithHistory, caption, timelapse
         var isDocument: Bool {
             self == .document || self == .documentWithHistory
         }
@@ -675,6 +689,7 @@ final class IOAction: Action {
     struct Rendering {
         struct Item {
             var id: UUID, sheet: Sheet?, data: Data?, url: URL?, frame = Rect()
+            var sheetHistory: SheetHistory?, historyData: Data?, historyURL: URL?
             
             func decodedSheet() -> Sheet? {
                 if let sheet {
@@ -682,6 +697,17 @@ final class IOAction: Action {
                 } else if let data {
                     try? .init(serializedData: data)
                 } else if let url, let data = try? Data(contentsOf: url) {
+                    try? .init(serializedData: data)
+                } else {
+                    nil
+                }
+            }
+            func decodedSheetHistory() -> SheetHistory? {
+                if let sheetHistory {
+                    sheetHistory
+                } else if let historyData {
+                    try? .init(serializedData: historyData)
+                } else if let historyURL, let data = try? Data(contentsOf: historyURL) {
                     try? .init(serializedData: data)
                 } else {
                     nil
@@ -807,6 +833,29 @@ final class IOAction: Action {
                 }
             }
             documentRecorders = []
+        case .timelapse:
+            renderings = nvs.map {
+                if let sid = rootView.sheetID(at: $0.shp),
+                   let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord,
+                   let sheetHistoryRecord = rootView.model.sheetRecorders[sid]?.sheetHistoryRecord {
+                    .init(mainItem: .init(id: sid, sheet: sheetRecord.value,
+                                          data: sheetRecord.data, url: sheetRecord.url,
+                                          frame: rootView.sheetFrame(with: $0.shp),
+                                          sheetHistory: sheetHistoryRecord.value,
+                                          historyData: sheetHistoryRecord.data,
+                                          historyURL: sheetHistoryRecord.url),
+                          bottomItems: [], topItems: [],
+                          
+                          bounds: mainFrame ?? $0.bounds)
+                } else {
+                    .init(mainItem: .init(id: .init(), sheet: nil,
+                                          data: nil, url: nil,
+                                          frame: rootView.sheetFrame(with: $0.shp)),
+                          bottomItems: [], topItems: [],
+                          bounds: mainFrame ?? $0.bounds)
+                }
+            }
+            documentRecorders = []
         case .document, .documentWithHistory:
             let sids = nvs.reduce(into: [IntPoint: UUID]()) {
                 $0[$1.shp] = rootView.sheetID(at: $1.shp)
@@ -823,7 +872,7 @@ final class IOAction: Action {
         case .image4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
-        case .movie, .movie4K: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
+        case .movie, .movie4K, .timelapse: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
         case .sound: Content.FileType.m4a
         case .linearPCM: Content.FileType.wav
         case .caption: Caption.FileType.itt
@@ -865,7 +914,7 @@ final class IOAction: Action {
                 } else {
                     return nil
                 }
-            case .gif, .movie, .movie4K: return nil
+            case .gif, .movie, .movie4K, .timelapse: return nil
             case .sound, .linearPCM: return nil
             case .caption: return nil
             case .document:
@@ -885,6 +934,7 @@ final class IOAction: Action {
         case .sound: "Export as Sound".localized
         case .linearPCM: "Export as Linear PCM".localized
         case .caption: "Export as Caption".localized
+        case .timelapse: "Export as Timelapse".localized
         case .document: "Export as Document".localized
         case .documentWithHistory: "Export as Document with History".localized
         }
@@ -935,6 +985,13 @@ final class IOAction: Action {
                     exportSound(from: renderings, isLinearPCM: true, at: ioResult)
                 case .caption:
                     exportCaption(from: renderings, at: ioResult)
+                case .timelapse:
+                    let nSize = size.width > size.height ?
+                    size.snapped(height: 1080).rounded(.down) :
+                    size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
+                    exportTimelapse(from: renderings,
+                                    isAlphaChannel: isAlphaChannel,
+                                    colorSpace, size: nSize, at: ioResult)
                 case .document:
                     exportDocument(from: nvs, isHistory: false, at: ioResult)
                 case .documentWithHistory:
@@ -1739,6 +1796,132 @@ final class IOAction: Action {
                 }
             }
             progressPanel.cancelHandler = { task.cancel() }
+        }
+    }
+    
+    func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
+                         _ colorSpace: ColorSpace,
+                         size: Size, at ioResult: IOResult) {
+        @Sendable func export(progressHandler: (Double, inout Bool) -> (),
+                              completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
+            do {
+                var isStop = false, filledIDs = Set<UUID>()
+                let movie = try Movie(url: ioResult.url, renderSize: size,
+                                      isAlphaChannel: isAlphaChannel,
+                                      isLinearPCM: false, colorSpace, frameRate: 60)
+                for (i, rendering) in renderings.enumerated() {
+                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                    filledIDs.insert(rendering.mainItem.id)
+                    
+                    if let url = rendering.mainItem.url,
+                       let sheet = rendering.mainItem.decodedSheet(),
+                       let history = rendering.mainItem.decodedSheetHistory() {
+                        
+                        let sheetBinder = RecordBinder(value: sheet, record: Record(url: url))
+                        let sheetView = SheetView(binder: sheetBinder,
+                                                  keyPath: \SheetBinder.value,
+                                                  history: history)
+                        var allGroups = [(version: Version,
+                                          group: UndoGroup<SheetUndoItem>)]()
+                        history.allGroups { indexPath, groups in
+                            allGroups += groups.enumerated()
+                                .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
+                                        $0.element) }
+                        }
+                        allGroups.sort { $0.group.date < $1.group.date }
+                        let frameCount = allGroups.count
+                        let vs = [nil] + allGroups.map { $0.version }
+                        for (vi, version) in vs.enumerated() {
+                            try sheetView.history.move(to: version) { yIndexPath in
+                                sheetView.history.set(indexPath: yIndexPath)
+                            } topIHandler: { topIndex in
+                                sheetView.undo(to: topIndex, isMakeRect: false, isSleep: false)
+                                if vi == 0 && topIndex != 0 {
+                                    progressHandler(.init(vi) / .init(frameCount) * 0.6 + 0.1, &isStop)
+                                    if isStop {
+                                        throw CancellationError()
+                                    }
+                                    return
+                                }
+                                
+                                let children = [sheetView.node]
+                                let backgroundColor = sheetView.model.backgroundUUColor.value
+                                let origin = rendering.mainItem.frame.origin
+                                let b = rendering.bounds
+                                let sheetBounds = rendering.mainItem.frame.bounds
+                                
+                                let node = Node(children: children,
+                                                attitude: .init(position: origin),
+                                                path: Path(sheetBounds),
+                                                fillType: .color(backgroundColor))
+                                guard let image = node.renderedTexture(in: b, to: size, backgroundColor: backgroundColor)?.image else { throw Movie.exportError }
+                                let isAppend = movie.write(image, duration: 1, timeScale: 60) { (stop) in
+                                    progressHandler(.init(vi) / .init(frameCount) * 0.6 + 0.1, &isStop)
+                                    if isStop {
+                                        stop = true
+                                    }
+                                }
+                                if isStop || !isAppend {
+                                    throw CancellationError()
+                                }
+                            }
+                        }
+                    }
+                    
+                    progressHandler(.init(i) / .init(renderings.count) * 0.1, &isStop)
+                    if isStop { break }
+                }
+                
+                do {
+                    let isStop = try await movie.finish()
+                    handler(isStop, nil)
+                } catch {
+                    handler(true, error)
+                }
+            } catch is CancellationError {
+                handler(true, nil)
+            } catch {
+                handler(false, error)
+            }
+        }
+        
+        let progressPanel = ProgressPanel(message: "Exporting Timelapse".localized)
+        rootView.node.show(progressPanel)
+        do {
+            try ioResult.remove()
+            
+            let task = Task.detached(priority: .high) {
+                await export(progressHandler: { (progress, isStop) in
+                    if Task.isCancelled {
+                        isStop = true
+                        return
+                    }
+                    Task { @MainActor in
+                        progressPanel.progress = progress
+                    }
+                }, completionHandler: { (stop, error) in
+                    Task { @MainActor in
+                        if !stop {
+                            if let error {
+                                self.rootView.node.show(error)
+                            } else {
+                                do {
+                                    try ioResult.setAttributes()
+                                } catch {
+                                    self.rootView.node.show(error)
+                                }
+                            }
+                        }
+                        progressPanel.closePanel()
+                        self.end()
+                    }
+                })
+            }
+            progressPanel.cancelHandler = { task.cancel() }
+        } catch {
+            rootView.node.show(error)
+            progressPanel.closePanel()
+            end()
         }
     }
 }

@@ -800,6 +800,17 @@ extension History {
         copyIfShared()
         
         rootBranch[indexPath].selectedChildIndex = selectedChildIndex
+        currentVersion = rootBranch.version(atAll: currentVersionIndex)
+    }
+    mutating func set(indexPath: [Int]) {
+        copyIfShared()
+        
+        var un = rootBranch
+        for vi in indexPath {
+            un.selectedChildIndex = vi
+            un = un.children[vi]
+        }
+        currentVersion = rootBranch.version(atAll: currentVersionIndex)
     }
     
     mutating func reset() {
@@ -867,6 +878,81 @@ extension History {
                           selectedChildIndex: branch.selectedChildIndex),
                     i)
             branch = branch.children[i]
+        }
+    }
+    
+    func currentYIndexPath() -> [Int]? {
+        let currentVersion = currentVersion
+        let indexPath = currentVersion?.indexPath ?? []
+        let branch = branch(from: indexPath)
+        if branch.selectedChildIndex != nil {
+            if currentVersion?.groupIndex == nil
+                || currentVersion?.groupIndex == branch.groups.count - 1 {
+                
+                return indexPath
+            }
+        }
+        return nil
+    }
+    
+    func topIndex(from version: Version?) -> Int {
+        guard let version else { return 0 }
+        var un = rootBranch, i = 1
+        for vi in version.indexPath {
+            i += un.groups.count
+            un = un.children[vi]
+        }
+        return i + version.groupIndex
+    }
+    func move(to toVersion: Version?,
+              yIndexPathHandler: ([Int]) -> (),
+              topIHandler: (Int) throws -> ()) rethrows {
+        let fromVersion = currentVersion
+        if let toVersion {
+            if let fromVersion {
+                let fromTopI = topIndex(from: fromVersion)
+                let toTopI = topIndex(from: toVersion)
+                let isEqualIndexPath = fromVersion.indexPath == toVersion.indexPath
+                let count = zip(fromVersion.indexPath, toVersion.indexPath)
+                    .prefix(while: { $0 == $1 }).count
+                if isEqualIndexPath
+                    || (fromVersion.indexPath.count == count
+                        || toVersion.indexPath.count == count) {
+                    if fromTopI < toTopI {
+                        if !isEqualIndexPath && fromVersion.indexPath.count == count {
+                            yIndexPathHandler(toVersion.indexPath)
+                        }
+                        for i in fromTopI + 1 ... toTopI {
+                            try topIHandler(i)
+                        }
+                    } else {
+                        for i in (toTopI ..< fromTopI).reversed() {
+                            try topIHandler(i)
+                        }
+                    }
+                } else {
+                    let nFromIndexPath = Array(fromVersion.indexPath[..<count])
+                    let nFromVersion = Version(indexPath: nFromIndexPath,
+                                               groupIndex: branch(from: nFromIndexPath).groups.count - 1)
+                    let nFromTopI = topIndex(from: nFromVersion)
+                    for i in (nFromTopI ..< fromTopI).reversed() {
+                        try topIHandler(i)
+                    }
+                    yIndexPathHandler(toVersion.indexPath)
+                    for i in nFromTopI + 1 ... toTopI {
+                        try topIHandler(i)
+                    }
+                }
+            } else {
+                yIndexPathHandler(toVersion.indexPath)
+                for i in 1 ... topIndex(from: toVersion) {
+                    try topIHandler(i)
+                }
+            }
+        } else if let fromVersion {
+            for i in (0 ..< topIndex(from: fromVersion)).reversed() {
+                try topIHandler(i)
+            }
         }
     }
 }

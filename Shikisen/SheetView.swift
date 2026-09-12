@@ -3493,7 +3493,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     @discardableResult
     func set(_ item: SheetUndoItem,
-             isMakeRect: Bool = false) -> (rect: Rect?, nodes: [Node]) {
+             isMakeRect: Bool = false, isSleep: Bool = true) -> (rect: Rect?, nodes: [Node]) {
         selectedTextView = nil
         switch item {
         case .appendLine(let line):
@@ -3861,7 +3861,9 @@ final class SheetView: View, @unchecked Sendable {
                 updateWithKeyframeIndex()
                 updateTimeline()
                 node.draw()
-                Sleep.start(atTime: 0.04)
+                if isSleep {
+                    Sleep.start(atTime: 0.04)
+                }
             }
         case .insertKeyframes(let kivs):
             stop()
@@ -5434,14 +5436,16 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     @discardableResult
-    func undo(to toTopIndex: Int) -> (rect: Rect?, nodes: [Node]) {
+    func undo(to toTopIndex: Int,
+              isMakeRect: Bool = true, isSleep: Bool = true) -> (rect: Rect?, nodes: [Node]) {
         var rect = Rect?.none, nodes = [Node]()
         let results = history.undoAndResults(to: toTopIndex)
         var reverses = [Version: Int]()
         for result in results {
             guard let uiv = model.undoItemValue(with: result, reverses: &reverses,
                                                 in: &history) else { continue }
-            let (aRect, aNodes) = set(result.undoItem(with: uiv), isMakeRect: true)
+            let (aRect, aNodes) = set(result.undoItem(with: uiv),
+                                      isMakeRect: isMakeRect, isSleep: isSleep)
             rect += aRect
             nodes += aNodes
         }

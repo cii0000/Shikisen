@@ -3945,8 +3945,6 @@ extension Sheet {
             
             let oldSelection = self.selection
             if selection != oldSelection {
-                print("n:", selection)
-                print("o:", oldSelection)
                 history[result.version].values[result.valueIndex]
                     .saveUndoItemValue?.set(.setSelection(oldSelection), type: reversedType)
             }

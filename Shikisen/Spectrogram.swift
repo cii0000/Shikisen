@@ -781,10 +781,13 @@ struct Spectrogram {
                     
                     let inputRs = vDSP.multiply(windowSamples, wave)
                     let (_, amps) = fft.dcAndAmps(inputRs)
-                    
-                    return volmCount.range.map {
+                    let nAmps = volmCount.range.map {
                         $0 == 0 ? 0 : loudnessScales[$0] * Volm.volm(fromAmp: amps[$0 - 1])
                     }
+                    
+                    let cutAmps = nAmps[...Int(Double(nAmps.count) * Score.maxFq / Self.maxLinearFq)]
+                    let indices = vDSP.ramp(in: 0 ... Double(volmCount), count: cutAmps.count)
+                    return vDSP.linearInterpolate(values: cutAmps, atIndices: indices)
                 }
             }
         case .pitch:

@@ -642,10 +642,13 @@ extension Node {
         ctx.restoreGState()
     }
     
+    
+    
+    
     func renderedAntialiasFillImage(in bounds: Rect, to size: Size,
                                     backgroundColor: Color, _ colorSpace: ColorSpace) -> Image? {
         guard children.contains(where: { $0.fillType != nil }) else {
-            return image(in: bounds, size: size, backgroundColor: backgroundColor, .sRGB)
+            return image(in: bounds, to: size, backgroundColor: backgroundColor, .sRGB)
         }
         
         children.forEach {
@@ -653,7 +656,7 @@ extension Node {
                 $0.isHidden = true
             }
         }
-        guard let oImage = image(in: bounds, size: size * 2, backgroundColor: backgroundColor,
+        guard let oImage = image(in: bounds, to: size * 2, backgroundColor: backgroundColor,
                                  colorSpace, isAntialias: false)?
             .resize(with: size) else { return nil }
         children.forEach {
@@ -665,7 +668,7 @@ extension Node {
             }
         }
         fillType = nil
-        guard let nImage = image(in: bounds, size: size, backgroundColor: nil, colorSpace) else { return nil }
+        guard let nImage = image(in: bounds, to: size, backgroundColor: nil, colorSpace) else { return nil }
         return oImage.drawn(nImage, in: Rect(size: size))
     }
     func imageInBounds(size: Size? = nil,
@@ -674,12 +677,12 @@ extension Node {
                        isAntialias: Bool = true,
                        isGray: Bool = false) -> Image? {
         guard let bounds = bounds else { return nil }
-        return image(in: bounds, size: size ?? bounds.size,
+        return image(in: bounds, to: size ?? bounds.size,
                      backgroundColor: backgroundColor, colorSpace,
                      isAntialias: isAntialias, isGray: isGray)
     }
     func image(in bounds: Rect,
-               size: Size,
+               to size: Size,
                backgroundColor: Color? = nil, _ colorSpace: ColorSpace,
                isAntialias: Bool = true,
                isGray: Bool = false) -> Image? {
@@ -1272,7 +1275,7 @@ extension MTLTexture {
     }
 }
 extension CGContext {
-    func renderedTexture(isOpaque: Bool) -> Texture? {
+    func texture(isOpaque: Bool) -> Texture? {
         if let cg = makeImage() {
             let mltTextureLoader = MTKTextureLoader(device: Renderer.shared.device)
             let option = MTKTextureLoader.Origin.flippedVertically

@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-import Dispatch
 import struct Foundation.UUID
 import struct Foundation.URL
 
@@ -31,7 +30,7 @@ final class RunAction: InputKeyEventAction {
     
     private(set) var calculatingString = ""
     private var calculatingNode = Node(fillType: .color(.content))
-    private var calculatingTimer: (any DispatchSourceTimer)?
+    private var calculatingTimer: Task<(), any Error>?
     
     private var task: Task<(o: O, id: ID?), Never>?
     private var firstErrorNode: Node?
@@ -316,11 +315,8 @@ extension RunAction {
         calculatingNode.attitude.position = nodePoint(from: nText)
         rootView.node.append(child: calculatingNode)
         
-        let clock = SuspendingClock.now
-        calculatingTimer = DispatchSource.scheduledTimer(withTimeInterval: 1) { [weak self] in
-            DispatchQueue.main.async { [weak self] in
-                self?.showCalculating(sec: clock.duration(to: .now).sec.rounded())
-            }
+        calculatingTimer = Task.timer(interval: .seconds(1)) { dur in
+            await self.showCalculating(sec: dur.sec.rounded())
         }
         
         rootAction.runActions.insert(self)

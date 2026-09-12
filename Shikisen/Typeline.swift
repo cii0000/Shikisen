@@ -715,7 +715,7 @@ extension Typesetter {
         ctx.translateBy(x: CGFloat(dp.x),
                         y: CGFloat(bounds.height - firstLine.height / 2 + dp.y))
         draw(in: bounds, fillColor: fillColor, in: ctx)
-        return ctx.renderedTexture(isOpaque: backgroundColor.opacity == 1)
+        return ctx.texture(isOpaque: backgroundColor.opacity == 1)
     }
     func draw(in bounds: Rect, fillColor: Color, in ctx: CGContext) {
         ctx.setFillColor(fillColor.cg)

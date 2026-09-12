@@ -17,7 +17,6 @@
 
 //#if os(macOS)
 import MetalKit
-import Carbon.HIToolbox
 //#elseif os(iOS) && os(watchOS) && os(tvOS) && os(visionOS) && os(linux) && os(windows)
 //#endif
 
@@ -36,89 +35,8 @@ import UniformTypeIdentifiers
 }
 
 final class SubNSApplication: NSApplication {
-    // AppKit bug: nsEvent.allTouches() returns [] after sleep
-    static let cgHandle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_NOW)
-    typealias CGEventCopyIOHIDEventType = @convention(c) (_ cgEvent: CGEvent) -> any CFTypeRef
-    let CGEventCopyIOHIDEvent = unsafeBitCast(dlsym(cgHandle, "CGEventCopyIOHIDEvent"),
-                                              to: CGEventCopyIOHIDEventType.self)
-    
-    static let ioKitHandle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW)
-    typealias IOHIDEventGetChildrenType = @convention(c) (_ event: any CFTypeRef) -> CFArray
-    let IOHIDEventGetChildren = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetChildren"),
-                                              to: IOHIDEventGetChildrenType.self)
-    typealias IOHIDEventGetTypeType = @convention(c) (_ event: any CFTypeRef) -> UInt32
-    let IOHIDEventGetType = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetType"),
-                                          to: IOHIDEventGetTypeType.self)
-    typealias IOHIDEventGetEventFlagsType = @convention(c) (_ event: any CFTypeRef) -> UInt64
-    let IOHIDEventGetEventFlags = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetEventFlags"),
-                                                to: IOHIDEventGetEventFlagsType.self)
-    typealias IOHIDEventGetIntegerValueType = @convention(c) (_ event: any CFTypeRef, UInt32) -> Int32
-    let IOHIDEventGetIntegerValue = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetIntegerValue"),
-                                                  to: IOHIDEventGetIntegerValueType.self)
-    typealias IOHIDEventGetFloatValueType = @convention(c) (_ event: any CFTypeRef, UInt32) -> Double
-    let IOHIDEventGetFloatValue = unsafeBitCast(dlsym(ioKitHandle, "IOHIDEventGetFloatValue"),
-                                                to: IOHIDEventGetFloatValueType.self)
-    
-    private var touchDeviceSizes = [UInt64: Size](), oldTouchEvent: TouchEvent?
     override func sendEvent(_ nsEvent: NSEvent) {
         if nsEvent.type == .gesture {
-            if let cgEvent = nsEvent.cgEvent,
-               let window = nsEvent.window, window.isKeyWindow,
-                let view = window.contentView as? SubMTKView {
-                let ioEvent = CGEventCopyIOHIDEvent(cgEvent)
-                let flags = IOHIDEventGetEventFlags(ioEvent)
-                let flagID = (flags >> 4) & 0xF
-                if let size = nsEvent.allTouches().first?.deviceSize {
-                    touchDeviceSizes[flagID] = size.my
-                }
-                if let deviceSize = touchDeviceSizes[flagID] {
-                    let array = IOHIDEventGetChildren(ioEvent) as Array
-                    var fingers = [Int: TouchEvent.Finger]()
-                    for o in array {
-                        // Referenced definition:
-                        // https://github.com/apple-oss-distributions/IOHIDFamily/blob/IOHIDFamily-2102.0.6/IOHIDFamily/IOHIDEvent.h
-                        // https://github.com/apple-oss-distributions/IOHIDFamily/blob/IOHIDFamily-1446.140.2/IOHIDFamily/IOHIDEventFieldDefs.h
-                        if IOHIDEventGetType(o) == 11 {
-                            let x = IOHIDEventGetFloatValue(o, (11 << 16) | 0)
-                            let y = IOHIDEventGetFloatValue(o, (11 << 16) | 1)
-                            let id = Int(IOHIDEventGetIntegerValue(o, (11 << 16) | 5))
-                            let flags = IOHIDEventGetEventFlags(o)
-                            let flags1 = flags == 0x1, flags2 = flags == 0x10001
-                            let isTouch = Int(IOHIDEventGetIntegerValue(o, (11 << 16) | 9)) == 1
-                            guard !(oldTouchEvent == nil && !isTouch) else { continue }
-                            let phase: Phase = if let oldTouchEvent,
-                                                    let v = oldTouchEvent.fingers[id] {
-                                flags1 ? .ended : (v.phase == .ended ?
-                                                   (!isTouch ? .ended : .began) :
-                                                    (flags2 && !isTouch ? .ended : .changed))
-                            } else {
-                                .began
-                            }
-                            guard !(phase == .began && (flags1 || flags2)) else { continue }
-                            if let oldTouchEvent, phase == .ended,
-                               let oldFinger = oldTouchEvent.fingers[id], oldFinger.phase == .ended { continue }
-                            fingers[id] = .init(normalizedPosition: .init(x, 1 - y), phase: phase, id: id)
-                        }
-                    }
-                    if !fingers.isEmpty {
-                        let screenPoint = view.screenPoint(with: nsEvent).my
-                        let time = nsEvent.timestamp
-                        let phase: Phase = fingers.contains(where: { $0.value.phase == .began }) ?
-                            .began : (fingers.contains(where: { $0.value.phase == .ended }) ? .ended : .changed)
-                        let event = TouchEvent(screenPoint: screenPoint, time: time, phase: phase,
-                                               fingers: fingers, deviceSize: deviceSize)
-                        switch event.phase {
-                        case .began: view.touchesBegan(with: event)
-                        case .changed: view.touchesMoved(with: event)
-                        case .ended: view.touchesEnded(with: event)
-                        }
-                        
-                        oldTouchEvent = fingers.allSatisfy({ $0.value.phase == .ended }) ? nil : event
-                        return
-                    }
-                }
-            }
-            
             nsEvent.window?.sendEvent(nsEvent)
         } else if nsEvent.type == .keyUp && nsEvent.modifierFlags.contains(.command) {
             nsEvent.window?.sendEvent(nsEvent)
@@ -1653,6 +1571,12 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         menu.addItem(SubNSMenuItem(title: "Export as Caption...".localized, closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsCaptionAction(self.rootAction)
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
+        }))
+        menu.addItem(SubNSMenuItem(title: "Export as Timelapse...".localized, closure: { [weak self] in
+            guard let self else { return }
+            let action = ExportAsTimelapseAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))

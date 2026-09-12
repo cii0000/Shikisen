@@ -425,23 +425,10 @@ final class ASelectVersionAction: Action {
         case .changed:
             guard (sheetView != nil || isEditRoot) && maxXCount > 0 else { return }
             
-            func yIndexPath<T: UndoItem>(from history: History<T>) -> [Int]? {
-                let currentVersion = history.currentVersion
-                let indexPath = currentVersion?.indexPath ?? []
-                let branch = history.branch(from: indexPath)
-                if branch.selectedChildIndex != nil {
-                    if currentVersion?.groupIndex == nil
-                        || currentVersion?.groupIndex == branch.groups.count - 1 {
-                        
-                        return indexPath
-                    }
-                }
-                return nil
-            }
             let yIndexPath = if let sheetView {
-                yIndexPath(from: sheetView.history)
+                sheetView.history.currentYIndexPath()
             } else {
-                yIndexPath(from: rootView.history)
+                rootView.history.currentYIndexPath()
             }
             
             let speed = (event.screenPoint - oldSP).length() / (event.time - oldTime)

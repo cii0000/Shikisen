@@ -87,3 +87,32 @@ extension DispatchSource {
         return dsTimer
     }
 }
+
+extension Task where Success == Void, Failure == any Error {
+    static func timer(interval: Duration, executeImmediately: Bool = false,
+                      operation: sending @escaping @isolated(any) (Duration) async -> Success) -> Self {
+        precondition(interval > .zero)
+        return Self(priority: .high) {
+            let clock = ContinuousClock()
+            let startClock = clock.now
+            var allDur = executeImmediately ? Duration.zero : interval
+            var nextClock = startClock + allDur
+            while !Task<Never, Never>.isCancelled {
+                if nextClock > clock.now {
+                    do {
+                        try await clock.sleep(until: nextClock)
+                    } catch { break }
+                }
+                guard !Task<Never, Never>.isCancelled else { break }
+                await operation(allDur)
+                guard !Task<Never, Never>.isCancelled else { break }
+                allDur += interval
+                nextClock = startClock + allDur
+                while nextClock <= clock.now {
+                    allDur += interval
+                    nextClock = startClock + allDur
+                }
+            }
+        }
+    }
+}
