@@ -461,152 +461,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     
     private(set) var rootAction: RootAction
     private(set) var rootView: RootView
+    let hudView = HUDView()
     let renderstate = Renderstate.sampleCount4!
-    
-    let hudNode = Node()
-    
-    private func updateHUD() {
-        if isShownClock, let clockNode {
-            let sb = rootView.screenBounds
-            let size = clockNode.path.bounds?.size ?? .init()
-            let dx = if !isHiddenActionList, let actionNode,
-               let b = actionNode.bounds, size.height >= (sb.height - b.height) / 2 {
-                
-                sb.height < b.maxY && b.maxY > 0 ?
-                -b.width * (sb.height / b.maxY) : -b.width
-            } else {
-                0.0
-            }
-            clockNode.attitude.position = Point(sb.width - size.width + dx, sb.height - size.height)
-        }
-        if !isHiddenActionList, let actionNode {
-            if let b = actionNode.bounds {
-                let sb = rootView.screenBounds
-                if sb.height < b.maxY, b.maxY > 0 {
-                    let scale = sb.height / b.maxY
-                    let x = sb.maxX - b.maxX * scale
-                    let y = 0.0
-                    actionNode.attitude.scale = .init(square: scale)
-                    actionNode.attitude.position = Point(x, y)
-                } else {
-                    let x = sb.maxX - b.maxX
-                    let y = sb.midY - b.midY
-                    actionNode.attitude.scale = .init(square: 1)
-                    actionNode.attitude.position = Point(x, y)
-                }
-            }
-        }
-    }
-    
-    private var clockNode: Node?, clockTextNode: Node?, clockTimer: Timer?
-    var isShownClock = false {
-        didSet {
-            guard isShownClock != oldValue else { return }
-            if isShownClock {
-                showClock()
-            } else {
-                clockNode?.removeFromParent()
-                clockNode = nil
-            }
-        }
-    }
-    private func showClock() {
-        func textNode(with string: String, color: Color = .content,
-                              fontSize: Double = 14,
-                              imagePadding: Double = 3.0) -> (size: Size, node: Node)? {
-            let typesetter = Text(string: string, size: fontSize).typesetter
-            let paddingSize = Size(square: imagePadding)
-            guard let b = typesetter.typoBounds else { return nil }
-            let nb = b.outset(by: paddingSize).integral
-            let backColor = Color(lightness: color.lightness, opacity: 0)
-            guard let texture = typesetter.texture(with: nb, fillColor: color,
-                                                   backgroundColor: backColor) else { return nil }
-            return (b.integral.size, Node(path: Path(nb), fillType: .texture(texture)))
-        }
-        let fontSize = 14.0
-        let padding = fontSize / 2, lineWidth = 1.0, cornerRadius = 8.0
-        let margin = fontSize / 2 + 1.0
-        
-        var children = [Node](), w = 0.0, h = 0.0
-        if let v = textNode(with: "\(Date().defaultString)", fontSize: fontSize) {
-            children.append(v.node)
-            w = v.size.width + padding * 2
-            h = v.size.height + padding * 2
-            v.node.attitude.position = .init(x: padding, y: fontSize / 2 + padding)
-            clockTextNode = v.node
-        }
-        
-        let f = Rect(x: 0, y: 0, width: w, height: h)
-        let node = Node(children: children,
-                             attitude: Attitude(position: Point()),
-                             path: Path(f, cornerRadius: cornerRadius),
-                             lineWidth: lineWidth, lineType: .color(.subBorder),
-                             fillType: .color(.transparentDisabled))
-        let clockNode = Node(children: [node], path: Path(f.inset(by: -margin)))
-        hudNode.append(child: clockNode)
-        
-        self.clockNode = clockNode
-        
-        let nowDate = Date()
-        let nextSec = ceil(nowDate.timeIntervalSince1970)
-        let delay = nextSec - nowDate.timeIntervalSince1970
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.updateTime()
-            
-            self?.clockTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                Task { @MainActor in
-                    self?.updateTime()
-                }
-            }
-        }
-    }
-    private func updateTime(fontSize: Double = 14, imagePadding: Double = 3,
-                            color: Color = .content) {
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.setLocalizedDateFormatFromTemplate("MMMMdEEE HHmmss")
-        let dateStr = formatter.string(from: Date())
-        let typesetter = Text(string: dateStr, size: fontSize).typesetter
-        let paddingSize = Size(square: imagePadding)
-        guard let b = typesetter.typoBounds else { return }
-        let nb = b.outset(by: paddingSize).integral
-        let backColor = Color(lightness: color.lightness, opacity: 0)
-        guard let texture = typesetter.texture(with: nb, fillColor: color,
-                                               backgroundColor: backColor) else { return }
-        clockTextNode?.fillType = .texture(texture)
-        update()
-    }
-    
-    private var actionNode: Node?
-    var isHiddenActionList = true {
-        didSet {
-            guard isHiddenActionList != oldValue else { return }
-            updateActionList()
-            if isShownTrackpadAlternative {
-                updateTrackpadAlternativePositions()
-            }
-        }
-    }
-    private func makeActionNode() -> Node {
-        let actionNode = ActionList.default.node()
-        let b = rootView.screenBounds
-        let w = b.maxX - (actionNode.bounds?.maxX ?? 0)
-        let h = b.midY - (actionNode.bounds?.midY ?? 0)
-        actionNode.attitude.position = Point(w, h)
-        return actionNode
-    }
-    private func updateActionList() {
-        if isHiddenActionList {
-            actionNode?.removeFromParent()
-            actionNode = nil
-        } else if actionNode == nil {
-            let actionNode = makeActionNode()
-            hudNode.append(child: actionNode)
-            self.actionNode = actionNode
-        }
-        update()
-    }
     
     func update() {
         needsDisplay = true
@@ -615,7 +471,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     required init(url: URL, frame: NSRect = NSRect()) {
         let rootView = RootView(url: url)
         self.rootView = rootView
-        self.rootAction = .init(rootView)
+        self.rootAction = .init(rootView, hudView)
         
         super.init(frame: frame, device: Renderer.shared.device)
         delegate = self
@@ -642,9 +498,16 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         self.wantsRestingTouches = true
         setupRootView()
         
+        hudView.node.allChildrenAndSelf { $0.owner = self }
         if !UserDefaults.standard.bool(forKey: SubMTKView.isHiddenActionListKey) {
-            isHiddenActionList = false
-            updateActionList()
+            hudView.isHiddenActionList = false
+            updateTrackpadAlternativePositions()
+        }
+        hudView.didChengeIsHiddenActionListClosure = { [weak self] hudView in
+            guard let self else { return }
+            UserDefaults.standard.set(hudView.isHiddenActionList,
+                                      forKey: SubMTKView.isHiddenActionListKey)
+            self.updateTrackpadAlternativePositions()
         }
         
         if UserDefaults.standard.bool(forKey: SubMTKView.isShownTrackpadAlternativeKey) {
@@ -664,6 +527,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         pinchTimer?.cancel()
         pinchTimer = nil
         rootAction.cancelTasks()
+        hudView.cancelTasks()
     }
     
     override func viewDidChangeEffectiveAppearance() {
@@ -728,9 +592,6 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
         rootView.povNotifications.append { [weak self] (_, _) in
             guard let self else { return }
-            if !self.isHiddenActionList {
-                self.updateActionList()
-            }
             self.update()
         }
         rootView.node.allChildrenAndSelf { $0.owner = self }
@@ -802,7 +663,8 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         }
     }
     func updateTrackpadAlternativePositions() {
-        let aw = max(actionNode?.transformedBounds?.cg.width ?? 0, 150)
+        guard isShownTrackpadAlternative else { return }
+        let aw = max(hudView.actionNode?.transformedBounds?.cg.width ?? 0, 150)
         let w: CGFloat = 40.0, padding: CGFloat = 4.0
         let scrollSize = NSSize(width: w, height: 40)
         let zoomSize = NSSize(width: w, height: 100)
@@ -839,9 +701,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(SubMTKView.shownActionList(_:)):
-            menuItem.state = !isHiddenActionList ? .on : .off
+            menuItem.state = !hudView.isHiddenActionList ? .on : .off
         case #selector(SubMTKView.hiddenActionList(_:)):
-            menuItem.state = isHiddenActionList ? .on : .off
+            menuItem.state = hudView.isHiddenActionList ? .on : .off
             
         case #selector(SubMTKView.shownTrackpadAlternative(_:)):
             menuItem.state = isShownTrackpadAlternative ? .on : .off
@@ -1091,12 +953,10 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     }
     
     @objc func shownActionList(_ sender: Any) {
-        UserDefaults.standard.set(false, forKey: SubMTKView.isHiddenActionListKey)
-        isHiddenActionList = false
+        hudView.isHiddenActionList = false
     }
     @objc func hiddenActionList(_ sender: Any) {
-        UserDefaults.standard.set(true, forKey: SubMTKView.isHiddenActionListKey)
-        isHiddenActionList = true
+        hudView.isHiddenActionList = true
     }
     
     @objc func shownTrackpadAlternative(_ sender: Any) {
@@ -1110,7 +970,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
     
     func updateWithURL() {
         rootView = .init(url: rootView.model.url)
-        self.rootAction = .init(rootView)
+        self.rootAction = .init(rootView, hudView)
         setupRootView()
         do {
             try rootView.restoreDatabase()
@@ -1128,11 +988,9 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         rootView.screenBounds = bounds.my
         rootView.drawableSize = size.my
         
-        updateHUD()
+        hudView.screenBounds = bounds.my
         
-        if isShownTrackpadAlternative {
-            updateTrackpadAlternativePositions()
-        }
+        updateTrackpadAlternativePositions()
         
         update()
     }
@@ -1518,76 +1376,88 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(SubNSMenuItem(title: "Export as Image...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.image.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsImageAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as 4K Image...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.image4K.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAs4KImageAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as PDF...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.pdf.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsPDFAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as GIF...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.gif.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsGIFAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(SubNSMenuItem(title: "Export as Movie...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.movie.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsMovieAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as 4K Movie...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.movie4K.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAs4KMovieAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as Sound...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.sound.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsSoundAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as Linear PCM...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.linearPCM.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsLinearPCMAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(SubNSMenuItem(title: "Export as Caption...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.caption.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsCaptionAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as Timelapse...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.timelapse.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsTimelapseAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(SubNSMenuItem(title: "Export as Document...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.document.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsDocumentAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
-        menu.addItem(SubNSMenuItem(title: "Export as Document with History...".localized, closure: { [weak self] in
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.documentWithHistory.displayName), closure: { [weak self] in
             guard let self else { return }
             let action = ExportAsDocumentWithHistoryAction(self.rootAction)
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
@@ -2660,8 +2530,8 @@ extension SubMTKView {
             let wtsScale = rootView.worldToScreenScale
             rootView.node.draw(with: wtvTransform, scale: wtsScale, in: ctx)
             
-            if !hudNode.children.isEmpty {
-                hudNode.draw(with: rootView.screenToViewportTransform, scale: 1, in: ctx)
+            if !hudView.node.children.isEmpty {
+                hudView.node.draw(with: rootView.screenToViewportTransform, scale: 1, in: ctx)
             }
             
             ctx.encoder.endEncoding()

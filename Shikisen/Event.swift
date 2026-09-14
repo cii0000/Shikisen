@@ -651,6 +651,6 @@ extension ActionList {
                         path: Path(f, cornerRadius: cornerRadius),
                         lineWidth: lineWidth, lineType: .color(.subBorder),
                         fillType: .color(.transparentDisabled))
-        return Node(children: [node], path: Path(f.inset(by: -margin)))
+        return Node(children: [node], path: Path(f.outset(by: margin)))
     }
 }

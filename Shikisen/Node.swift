@@ -1034,6 +1034,9 @@ extension Node {
         lineWidth > 0 && lineType != nil ?
             path.bounds?.inset(by: -lineWidth) : path.bounds
     }
+    var childrenBounds: Rect? {
+        children.reduce(into: Rect?.none) { $0 += $1.bounds }
+    }
     var transformedDrawableBounds: Rect? {
         if let bounds = drawableBounds {
             return bounds * localTransform

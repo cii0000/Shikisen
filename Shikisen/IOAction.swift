@@ -18,6 +18,7 @@
 import struct Foundation.UUID
 import struct Foundation.Data
 import struct Foundation.URL
+import class Foundation.FileManager
 
 final class ImportAction: InputKeyEventAction {
     let action: IOAction
@@ -388,7 +389,7 @@ final class IOAction: Action {
                     let content = Content(directoryName: sheetView.id.uuidString,
                                           name: name, origin: rootView.roundedPoint(from: np))
                     if content.type == .movie {
-                        Task.detached(priority: .high) {
+                        Task.detached(priority: .userInitiated) {
                             if let size = try? await Movie.size(from: content.url),
                                let durSec = try? await Movie.durSec(from: content.url),
                                let frameRate = try? await Movie.frameRate(from: content.url) {
@@ -597,18 +598,7 @@ final class IOAction: Action {
         var shp: IntPoint, bounds: Rect
     }
     
-    enum ExportType {
-        case image, image4K, pdf, gif, movie, movie4K,
-             sound, linearPCM, document, documentWithHistory, caption, timelapse
-        var isDocument: Bool {
-            self == .document || self == .documentWithHistory
-        }
-        var is4K: Bool {
-            self == .image4K || self == .movie4K
-        }
-    }
-    
-    func exportFile(with event: InputKeyEvent, _ type: ExportType) {
+    func exportFile(with event: InputKeyEvent, _ type: Exporting.ExportType) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
         switch event.phase {
         case .began:
@@ -713,9 +703,27 @@ final class IOAction: Action {
                     nil
                 }
             }
+            
+            mutating func makeTemps(urls: inout [URL]) throws {
+                if let oURL = url {
+                    let nURL = URL.appTemporaryDirectory
+                        .appending(component: UUID().uuidString)
+                    try FileManager.default.copyItem(at: oURL, to: nURL)
+                    self.url = nURL
+                    urls.append(nURL)
+                }
+                if let oURL = historyURL {
+                    let nURL = URL.appTemporaryDirectory
+                        .appending(component: UUID().uuidString)
+                    try FileManager.default.copyItem(at: oURL, to: nURL)
+                    self.historyURL = nURL
+                    urls.append(nURL)
+                }
+            }
         }
         var mainItem: Item, bottomItems = [Item](), topItems = [Item]()
         var bounds: Rect
+        var tempURLs = [URL]()
         
         func renderableMainSheetNode() -> CPUNode? {
             guard mainItem.url != nil else {
@@ -724,9 +732,26 @@ final class IOAction: Action {
             guard let sheet = mainItem.decodedSheet() else { return nil }
             return sheet.node(isBorder: false, attitude: .init(position: mainItem.frame.origin), in: bounds)
         }
+        
+        mutating func makeTemps() throws {
+            if !FileManager.default.fileExists(atPath: URL.appTemporaryDirectory.path()) {
+                try FileManager.default.createDirectory(at: URL.appTemporaryDirectory,
+                                                        withIntermediateDirectories: true)
+            }
+            try mainItem.makeTemps(urls: &tempURLs)
+            for i in bottomItems.count.range {
+                try bottomItems[i].makeTemps(urls: &tempURLs)
+            }
+            for i in topItems.count.range {
+                try topItems[i].makeTemps(urls: &tempURLs)
+            }
+        }
+        func resetTemps() {
+            tempURLs.forEach { try? FileManager.default.removeItem(at: $0) }
+        }
     }
     
-    func beginExportFile(_ type: ExportType, at p: Point) {
+    func beginExportFile(_ type: Exporting.ExportType, at p: Point) {
         let nvs: [SelectingValue]
         let isSelect = rootView.containsSelectedSheetPositions(p)
         if isSelect {
@@ -763,7 +788,7 @@ final class IOAction: Action {
         
         let renderings: [Rendering], documentRecorders: [Document.SheetRecorder]
         switch type {
-        case .image, .image4K, .pdf:
+        case .image, .image4K, .images, .images4K, .pdf:
             renderings = nvs.map {
                 if let sid = rootView.sheetID(at: $0.shp),
                    let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord {
@@ -868,8 +893,8 @@ final class IOAction: Action {
         let isAlphaChannel = (rootView.sheetView(at: p)?.model.backgroundUUColor.value.opacity ?? 1) != 1
         
         let fType: any FileTypeProtocol = switch type {
-        case .image: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
-        case .image4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
+        case .image, .images: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
+        case .image4K, .images4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
         case .movie, .movie4K, .timelapse: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
@@ -882,7 +907,7 @@ final class IOAction: Action {
         
         let fileSize: @Sendable () -> (Int?) = {
             switch type {
-            case .image:
+            case .image, .images:
                 if renderings.count == 1, let node = renderings[0].renderableMainSheetNode() {
                     let nSize = size.width > size.height ?
                     size.snapped(height: 1080).rounded(.down) :
@@ -892,7 +917,7 @@ final class IOAction: Action {
                 } else {
                     return nil
                 }
-            case .image4K:
+            case .image4K, .images4K:
                 if renderings.count == 1, let node = renderings[0].renderableMainSheetNode() {
                     let nSize = size.width > size.height ?
                     size.snapped(height: 2160).rounded(.down) :
@@ -924,20 +949,7 @@ final class IOAction: Action {
             }
         }
         
-        let message = switch type {
-        case .image: "Export as Image".localized
-        case .image4K: "Export as 4K Image".localized
-        case .pdf: "Export as PDF".localized
-        case .gif: "Export as GIF".localized
-        case .movie: "Export as Movie".localized
-        case .movie4K: "Export as 4K Movie".localized
-        case .sound: "Export as Sound".localized
-        case .linearPCM: "Export as Linear PCM".localized
-        case .caption: "Export as Caption".localized
-        case .timelapse: "Export as Timelapse".localized
-        case .document: "Export as Document".localized
-        case .documentWithHistory: "Export as Document with History".localized
-        }
+        let message = String(format: "Export as %@".localized, type.displayName)
         let name = name(from: nvs.map { $0.shp }) + (type.is4K ? "_4k" : "")
         
         Task { @MainActor in
@@ -948,15 +960,16 @@ final class IOAction: Action {
             switch result {
             case .complete(let ioResult):
                 rootView.syncSave()
+                end()
                 
                 switch type {
-                case .image:
+                case .image, .images:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 1080).rounded(.down) :
                     size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
                     exportImage(from: renderings, is4K: false, colorSpace,
                                 size: nSize, at: ioResult)
-                case .image4K:
+                case .image4K, .images4K:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 2160).rounded(.down) :
                     size.snapped(max: Size(width: 2160, height: 3840)).rounded(.down)
@@ -997,7 +1010,6 @@ final class IOAction: Action {
                 case .documentWithHistory:
                     exportDocument(from: nvs, isHistory: true, at: ioResult)
                 }
-                end()
             case .cancel:
                 end()
             }
@@ -1013,70 +1025,80 @@ final class IOAction: Action {
                 try ioResult.remove()
                 
                 if let node = renderings[0].renderableMainSheetNode() {
-                    let image = node.image(in: renderings[0].bounds, to: size, colorSpace)
-                    try image?.write(.png, to: ioResult.url)
+                    if let image = node.image(in: renderings[0].bounds, to: size, colorSpace) {
+                        try image.write(.png, to: ioResult.url)
+                        try ioResult.setAttributes()
+                    }
                 }
-                
-                try ioResult.setAttributes()
             } catch {
                 rootView.node.show(error)
             }
         } else {
-            let progressPanel = ProgressPanel(message: is4K ?
-                                              "Exporting 4K Images".localized : "Exporting Images".localized)
-            rootView.node.show(progressPanel)
+            let exportingView = ExportingView(type: is4K ? .images4K : .images,
+                                              name: ioResult.name)
+            rootAction.hudView.append(exportingView)
             do {
                 try ioResult.remove()
                 try ioResult.makeDirectory()
                 
-                @Sendable func export(progressHandler: (Double, inout Bool) -> ()) throws {
+                @Sendable func export(from renderings: [Rendering],
+                                      progressHandler: (Double, inout Bool) -> ()) throws {
                     var isStop = false
                     for (j, rendering) in renderings.enumerated() {
                         if let node = rendering.renderableMainSheetNode() {
-                            let image = node.image(in: rendering.bounds, to: size, colorSpace)
-                            let subIOResult = ioResult.sub(name: "\(j).png")
-                            try image?.write(.png, to: subIOResult.url)
-                            try subIOResult.setAttributes()
+                            if let image = node.image(in: rendering.bounds, to: size,
+                                                      colorSpace) {
+                                let subIOResult = ioResult.sub(name: "\(j).png")
+                                try image.write(.png, to: subIOResult.url)
+                                try subIOResult.setAttributes()
+                            }
                         }
                         progressHandler(Double(j + 1) / Double(renderings.count), &isStop)
                         if isStop { break }
                     }
+                    if isStop {
+                        try? ioResult.remove()
+                    }
                 }
                 
-                let task = Task.detached(priority: .high) {
+                let task = Task.detached(priority: .utility) {
+                    var renderings = renderings
+                    for i in renderings.count.range {
+                        try? renderings[i].makeTemps()
+                    }
+                    defer { renderings.forEach { $0.resetTemps() } }
+                    
                     do {
-                        try export { (progress, isStop) in
+                        try export(from: renderings) { (progress, isStop) in
                             if Task.isCancelled {
                                 isStop = true
                                 return
                             }
                             Task { @MainActor in
-                                progressPanel.progress = progress
+                                exportingView.progress = progress
                             }
                         }
                         Task { @MainActor in
-                            progressPanel.closePanel()
-                            self.end()
+                            exportingView.close()
                         }
                     } catch {
                         Task { @MainActor in
                             self.rootView.node.show(error)
-                            progressPanel.closePanel()
-                            self.end()
+                            exportingView.close()
                         }
                     }
                 }
-                progressPanel.cancelHandler = { task.cancel() }
+                exportingView.cancelHandler = { task.cancel() }
             } catch {
                 self.rootView.node.show(error)
-                progressPanel.closePanel()
-                self.end()
+                exportingView.close()
             }
         }
     }
     
     func exportPDF(from renderings: [Rendering], size: Size, at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> ()) throws {
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> ()) throws {
             var isStop = false
             let pdf = try PDF(url: ioResult.url, mediaBox: Rect(size: size))
             
@@ -1090,61 +1112,66 @@ final class IOAction: Action {
                 progressHandler(Double(i + 1) / Double(renderings.count), &isStop)
                 if isStop { break }
             }
-            
-            pdf.finish()
-            
-            try ioResult.setAttributes()
+            if !isStop {
+                pdf.finish()
+                try ioResult.setAttributes()
+            } else {
+                try? ioResult.remove()
+            }
         }
         
         if renderings.count == 1 {
             do {
-                try export { (_, isStop) in }
-                end()
+                try export(from: renderings) { (_, isStop) in }
             } catch {
                 rootView.node.show(error)
-                end()
             }
         } else {
-            let progressPanel = ProgressPanel(message: "Exporting PDF".localized)
-            rootView.node.show(progressPanel)
+            let exportingView = ExportingView(type: .pdf,
+                                              name: ioResult.name)
+            rootAction.hudView.append(exportingView)
             do {
                 try ioResult.remove()
                 
-                let task = Task.detached(priority: .high) {
+                let task = Task.detached(priority: .utility) {
+                    var renderings = renderings
+                    for i in renderings.count.range {
+                        try? renderings[i].makeTemps()
+                    }
+                    defer { renderings.forEach { $0.resetTemps() } }
+                    
                     do {
-                        try export { (progress, isStop) in
+                        try export(from: renderings) { (progress, isStop) in
                             if Task.isCancelled {
                                 isStop = true
                                 return
                             }
                             Task { @MainActor in
-                                progressPanel.progress = progress
+                                exportingView.progress = progress
                             }
                         }
                         Task { @MainActor in
-                            progressPanel.closePanel()
-                            self.end()
+                            exportingView.close()
                         }
                     } catch {
                         Task { @MainActor in
                             self.rootView.node.show(error)
-                            progressPanel.closePanel()
-                            self.end()
+                            exportingView.close()
                         }
                     }
                 }
-                progressPanel.cancelHandler = { task.cancel() }
+                exportingView.cancelHandler = { task.cancel() }
             } catch {
                 rootView.node.show(error)
-                progressPanel.closePanel()
-                end()
+                exportingView.close()
             }
         }
     }
     
     func exportGIF(from renderings: [Rendering], _ colorSpace: ColorSpace,
                    size: Size, at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> ()) throws {
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> ()) throws {
             var images = [(image: Image, time: Rational)]()
             var isStop = false, t = 0.0
             let allC = renderings.count + 1
@@ -1164,7 +1191,7 @@ final class IOAction: Action {
                             images.append((image, durSec))
                         }
                         sec += durSec
-                        let d = Double(i) / Double(sheet.animation.keyframes.count - 1)
+                        let d = Double(i + 1) / Double(sheet.animation.keyframes.count)
                         t = ot + d / Double(allC)
                         progressHandler(t, &isStop)
                     }
@@ -1181,53 +1208,61 @@ final class IOAction: Action {
                 
                 if isStop { break }
             }
-            
-            try Image.writeGIF(images, to: ioResult.url)
-            
-            progressHandler(1, &isStop)
-            try ioResult.setAttributes()
+            if !isStop {
+                try Image.writeGIF(images, to: ioResult.url)
+                progressHandler(1, &isStop)
+                if !isStop {
+                    try ioResult.setAttributes()
+                } else {
+                    try? ioResult.remove()
+                }
+            }
         }
         
-        let progressPanel = ProgressPanel(message: "Exporting GIF".localized)
-        rootView.node.show(progressPanel)
+        let exportingView = ExportingView(type: .gif, name: ioResult.name)
+        rootAction.hudView.append(exportingView)
         do {
             try ioResult.remove()
             
-            let task = Task.detached(priority: .high) {
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
                 do {
-                    try export { (progress, isStop) in
+                    try export(from: renderings) { (progress, isStop) in
                         if Task.isCancelled {
                             isStop = true
                             return
                         }
                         Task { @MainActor in
-                            progressPanel.progress = progress
+                            exportingView.progress = progress
                         }
                     }
                     Task { @MainActor in
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 } catch {
                     Task { @MainActor in
                         self.rootView.node.show(error)
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 }
             }
-            progressPanel.cancelHandler = { task.cancel() }
+            exportingView.cancelHandler = { task.cancel() }
         } catch {
             rootView.node.show(error)
-            progressPanel.closePanel()
-            end()
+            exportingView.close()
         }
     }
     
     func exportMovie(from renderings: [Rendering], is4K: Bool, isAlphaChannel: Bool,
                      _ colorSpace: ColorSpace,
                      size: Size, at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> (),
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> (),
                               completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
             do {
                 var isStop = false
@@ -1247,7 +1282,7 @@ final class IOAction: Action {
                     }
                 }
                 var filledIDs = Set<UUID>()
-                var tracks = [Track]()
+                var tracks = [Track](), isEnabledAudio = false
                 for (i, rendering) in renderings.enumerated() {
                     guard !filledIDs.contains(rendering.mainItem.id) else { continue }
                     filledIDs.insert(rendering.mainItem.id)
@@ -1256,10 +1291,16 @@ final class IOAction: Action {
                     if let sheet = rendering.mainItem.decodedSheet() {
                         var captions = sheet.captions
                         
+                        if sheet.isEnabledAudio {
+                            isEnabledAudio = true
+                        }
                         var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
                         for item in rendering.bottomItems {
                             filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                            if sheet.isEnabledAudio {
+                                isEnabledAudio = true
+                            }
                             captions += sheet.captions
                             if sheet.enabledAnimation {
                                 sheets.append((sheet, item.frame.bounds))
@@ -1275,6 +1316,9 @@ final class IOAction: Action {
                         for item in rendering.topItems {
                             filledIDs.insert(item.id)
                             guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                            if sheet.isEnabledAudio {
+                                isEnabledAudio = true
+                            }
                             captions += sheet.captions
                             if sheet.enabledAnimation {
                                 sheets.append((sheet, item.frame.bounds))
@@ -1362,7 +1406,7 @@ final class IOAction: Action {
                     }
                     
                     let image: Image?
-                    if isChanged {
+                    if isChanged || oldImage == nil {
                         let node = CPUNode(children: children + [.init(children: captionNodes)], attitude: .init(position: track.sheetOrigin),
                                            path: Path(track.sheetBounds),
                                            fillType: .color(track.backgroundColor))
@@ -1374,7 +1418,7 @@ final class IOAction: Action {
                     
                     guard let image else { throw Movie.exportError }
                     let isAppend = movie.write(image, duration: 1, timeScale: frameRate) { (stop) in
-                        progressHandler(.init(i) / .init(frameCount) * 0.6 + 0.1, &isStop)
+                        progressHandler(.init(i) / .init(frameCount) * (isEnabledAudio ? 0.8 : 0.9) + 0.1, &isStop)
                         if isStop {
                             stop = true
                         }
@@ -1410,14 +1454,14 @@ final class IOAction: Action {
                             audiotracks.append(audiotrack)
                         }
                         
-                        let t = (Double(i) / Double(renderings.count - 1)) * 0.1 + 0.7
+                        let t = (Double(i) / Double(renderings.count)) * 0.05 + 0.9
                         progressHandler(t, &isStop)
                         if isStop { break }
                     }
                     if !isStop {
                         if let sequencer = Sequencer(audiotracks: audiotracks, type: .normal) {
                             try movie.writeAudio(from: sequencer) { t, stop in
-                                progressHandler(t * 0.2 + 0.8, &isStop)
+                                progressHandler(t * 0.05 + 0.95, &isStop)
                                 if isStop {
                                     stop = true
                                 }
@@ -1428,6 +1472,11 @@ final class IOAction: Action {
                 
                 do {
                     let isStop = try await movie.finish()
+                    if !isStop {
+                        try ioResult.setAttributes()
+                    } else {
+                        try? ioResult.remove()
+                    }
                     handler(isStop, nil)
                 } catch {
                     handler(true, error)
@@ -1437,49 +1486,45 @@ final class IOAction: Action {
             }
         }
         
-        let progressPanel = ProgressPanel(message: is4K ?
-                                          "Exporting 4K Movie".localized : "Exporting Movie".localized)
-        rootView.node.show(progressPanel)
+        let exportingView = ExportingView(type: is4K ? .movie4K : .movie, name: ioResult.name)
+        rootAction.hudView.append(exportingView)
         do {
             try ioResult.remove()
             
-            let task = Task.detached(priority: .high) {
-                await export(progressHandler: { (progress, isStop) in
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
+                await export(from: renderings, progressHandler: { (progress, isStop) in
                     if Task.isCancelled {
                         isStop = true
                         return
                     }
                     Task { @MainActor in
-                        progressPanel.progress = progress
+                        exportingView.progress = progress
                     }
                 }, completionHandler: { (stop, error) in
                     Task { @MainActor in
-                        if !stop {
-                            if let error {
-                                self.rootView.node.show(error)
-                            } else {
-                                do {
-                                    try ioResult.setAttributes()
-                                } catch {
-                                    self.rootView.node.show(error)
-                                }
-                            }
+                        if !stop, let error {
+                            self.rootView.node.show(error)
                         }
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 })
             }
-            progressPanel.cancelHandler = { task.cancel() }
+            exportingView.cancelHandler = { task.cancel() }
         } catch {
             rootView.node.show(error)
-            progressPanel.closePanel()
-            end()
+            exportingView.close()
         }
     }
     
     func exportSound(from renderings: [Rendering], isLinearPCM: Bool, at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> (),
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> (),
                     completionHandler handler: @escaping ((any Error)?) -> ()) {
             do {
                 var audiotracks = [Audiotrack]()
@@ -1522,6 +1567,11 @@ final class IOAction: Action {
                                 stop = true
                             }
                         }
+                        if !isStop {
+                            try ioResult.setAttributes()
+                        } else {
+                            try? ioResult.remove()
+                        }
                     }
                 }
                 
@@ -1531,47 +1581,46 @@ final class IOAction: Action {
             }
         }
         
-        let progressPanel = ProgressPanel(message: isLinearPCM ?
-                                          "Exporting Linear PCM".localized : "Exporting Sound".localized)
-        rootView.node.show(progressPanel)
+        let exportingView = ExportingView(type: isLinearPCM ? .linearPCM : .sound,
+                                          name: ioResult.name)
+        rootAction.hudView.append(exportingView)
         do {
             try ioResult.remove()
             
-            let task = Task.detached(priority: .high) {
-                export(progressHandler: { (progress, isStop) in
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
+                export(from: renderings, progressHandler: { (progress, isStop) in
                     if Task.isCancelled {
                         isStop = true
                         return
                     }
                     Task { @MainActor in
-                        progressPanel.progress = progress
+                        exportingView.progress = progress
                     }
                 }, completionHandler: { error in
                     Task { @MainActor in
                         if let error {
                             self.rootView.node.show(error)
-                        } else {
-                            do {
-                                try ioResult.setAttributes()
-                            } catch {
-                                self.rootView.node.show(error)
-                            }
                         }
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 })
             }
-            progressPanel.cancelHandler = { task.cancel() }
+            exportingView.cancelHandler = { task.cancel() }
         } catch {
             rootView.node.show(error)
-            progressPanel.closePanel()
-            end()
+            exportingView.close()
         }
     }
     
     func exportCaption(from renderings: [Rendering], at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> ()) async throws -> Bool {
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> ()) async throws -> Bool {
             var isStop = false,
                 sheets = [Sheet](), currentSec: Rational = 0, captions = [Caption]()
             for (ri, rendering) in renderings.enumerated() {
@@ -1636,51 +1685,51 @@ final class IOAction: Action {
                 }
             })
             try await renderer.finish()
+            if !isStop {
+                try ioResult.setAttributes()
+            } else {
+                try? ioResult.remove()
+            }
             return isStop
         }
         
-        let progressPanel = ProgressPanel(message: "Exporting Caption".localized)
-        rootView.node.show(progressPanel)
+        let exportingView = ExportingView(type: .caption, name: ioResult.name)
+        rootAction.hudView.append(exportingView)
         do {
             try ioResult.remove()
             
-            let task = Task.detached(priority: .high) {
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
                 do {
-                    let isStop = try await export(progressHandler: { (progress, isStop) in
+                    _ = try await export(from: renderings,
+                                         progressHandler: { (progress, isStop) in
                         if Task.isCancelled {
                             isStop = true
                             return
                         }
                         Task { @MainActor in
-                            progressPanel.progress = progress
+                            exportingView.progress = progress
                         }
                     })
                     Task { @MainActor in
-                        if !isStop {
-                            do {
-                                try ioResult.setAttributes()
-                            } catch {
-                                self.rootView.node.show(error)
-                            }
-                        }
-                        
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 } catch {
                     Task { @MainActor in
                         self.rootView.node.show(error)
-                        
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 }
             }
-            progressPanel.cancelHandler = { task.cancel() }
+            exportingView.cancelHandler = { task.cancel() }
         } catch {
             rootView.node.show(error)
-            progressPanel.closePanel()
-            end()
+            exportingView.close()
         }
     }
     
@@ -1764,15 +1813,14 @@ final class IOAction: Action {
         if vs.count == 1 {
             do {
                 try export { (_, isStop) in }
-                end()
             } catch {
                 rootView.node.show(error)
-                end()
             }
         } else {
-            let progressPanel = ProgressPanel(message: isHistory ? "Exporting Document with History".localized : "Exporting Document".localized)
+            let type: Exporting.ExportType = isHistory ? .documentWithHistory : .document
+            let progressPanel = ProgressPanel(message: String(format: "Exporting %1$@ \"%2$@\"".localized, type.displayName, ioResult.name))
             rootView.node.show(progressPanel)
-            let task = Task.detached(priority: .high) {
+            let task = Task.detached(priority: .utility) {
                 do {
                     try export { (progress, isStop) in
                         if Task.isCancelled {
@@ -1785,13 +1833,11 @@ final class IOAction: Action {
                     }
                     Task { @MainActor in
                         progressPanel.closePanel()
-                        self.end()
                     }
                 } catch {
                     Task { @MainActor in
                         self.rootView.node.show(error)
                         progressPanel.closePanel()
-                        self.end()
                     }
                 }
             }
@@ -1802,7 +1848,8 @@ final class IOAction: Action {
     func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
                          _ colorSpace: ColorSpace,
                          size: Size, at ioResult: IOResult) {
-        @Sendable func export(progressHandler: (Double, inout Bool) -> (),
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double, inout Bool) -> (),
                               completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
             do {
                 var isStop = false, filledIDs = Set<UUID>()
@@ -1874,54 +1921,57 @@ final class IOAction: Action {
                 
                 do {
                     let isStop = try await movie.finish()
+                    if !isStop {
+                        try ioResult.setAttributes()
+                    } else {
+                        try? ioResult.remove()
+                    }
                     handler(isStop, nil)
                 } catch {
                     handler(true, error)
                 }
             } catch is CancellationError {
+                try? ioResult.remove()
                 handler(true, nil)
             } catch {
                 handler(false, error)
             }
         }
         
-        let progressPanel = ProgressPanel(message: "Exporting Timelapse".localized)
-        rootView.node.show(progressPanel)
+        let exportingView = ExportingView(type: .timelapse, name: ioResult.name)
+        rootAction.hudView.append(exportingView)
         do {
             try ioResult.remove()
             
-            let task = Task.detached(priority: .high) {
-                await export(progressHandler: { (progress, isStop) in
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
+                await export(from: renderings,
+                             progressHandler: { (progress, isStop) in
                     if Task.isCancelled {
                         isStop = true
                         return
                     }
                     Task { @MainActor in
-                        progressPanel.progress = progress
+                        exportingView.progress = progress
                     }
                 }, completionHandler: { (stop, error) in
                     Task { @MainActor in
-                        if !stop {
-                            if let error {
-                                self.rootView.node.show(error)
-                            } else {
-                                do {
-                                    try ioResult.setAttributes()
-                                } catch {
-                                    self.rootView.node.show(error)
-                                }
-                            }
+                        if !stop, let error {
+                            self.rootView.node.show(error)
                         }
-                        progressPanel.closePanel()
-                        self.end()
+                        exportingView.close()
                     }
                 })
             }
-            progressPanel.cancelHandler = { task.cancel() }
+            exportingView.cancelHandler = { task.cancel() }
         } catch {
             rootView.node.show(error)
-            progressPanel.closePanel()
-            end()
+            exportingView.close()
         }
     }
 }

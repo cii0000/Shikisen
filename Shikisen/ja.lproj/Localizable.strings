@@ -172,39 +172,13 @@
 
 "Import..." = "読み込む...";
 
-"Export as Image..." = "画像として書き出す...";
-"Export as 4K Image..." = "4K画像として書き出す...";
-"Export as PDF..." = "PDFとして書き出す...";
-"Export as GIF..." = "GIFとして書き出す...";
-
-"Export as Movie..." = "動画として書き出す...";
-"Export as 4K Movie..." = "4K動画として書き出す...";
-"Export as Sound..." = "サウンドとして書き出す...";
-"Export as Linear PCM..." = "リニアPCMとして書き出す...";
-"Export as Caption..." = "キャプションとして書き出す...";
-"Export as Timelapse..." = "タイムラプスとして書き出す...";
-
-"Export as Document..." = "書類として書き出す...";
-"Export as Document with History..." = "履歴付き書類として書き出す...";
+"Export as %@..." = "%@として書き出す...";
+"Export as %@" = "%@として書き出す";
+"Exporting %1$@ \"%2$@\"" = "%1$@「%2$@」を書き出し中";
 
 "Clear History..." = "履歴を消去...";
 
 "Show About Run" = "実行について表示";
-
-"Export as Image" = "画像として書き出す";
-"Export as 4K Image" = "4K画像として書き出す";
-"Export as PDF" = "PDFとして書き出す";
-"Export as GIF" = "GIFとして書き出す";
-
-"Export as Movie" = "動画として書き出す";
-"Export as 4K Movie" = "4K動画として書き出す";
-"Export as Sound" = "サウンドとして書き出す";
-"Export as Linear PCM" = "リニアPCMとして書き出す";
-"Export as Caption" = "キャプションとして書き出す";
-"Export as Timelapse" = "タイムラプスとして書き出す";
-
-"Export as Document" = "書類として書き出す";
-"Export as Document with History" = "履歴付き書類として書き出す";
 
 "Do you want to replace the \"%2$@\" written on the %1$d sheets with the \"%3$@\"?" = "%1$d枚のシートに書き込まれた「%2$@」を「%3$@」に置換えますか？";
 "Do you want to change the tempo of %1$d sheets to %2$@?" = "%1$d枚のシートのテンポを %2$@ に変更しますか？";
@@ -218,25 +192,26 @@
 "Export As" = "書き出し名";
 "Save" = "保存";
 "Format" = "フォーマット";
+"Image" = "画像";
+"4K Image" = "4K画像";
+"Images" = "連番画像";
+"4K Images" = "4K連番画像";
 "PNGs" = "連番PNG";
+"Movie" = "動画";
+"4K Movie" = "4K動画";
+"Sound" = "サウンド";
+"Linear PCM" = "リニアPCM";
+"Caption" = "キャプション";
+"Timelapse" = "タイムラプス";
+"Document" = "書類";
+"Document with History" = "履歴付き書類";
+
 "Document" = "書類";
 "%1$@ Document" = "%1$@書類";
 "%1$@ Document with History" = "%1$@履歴付き書類";
 "File Size" = "ファイルサイズ";
 "All File Size" = "合計ファイルサイズ";
 "Calculating Size" = "サイズを計算中";
-"Exporting Images" = "画像を書き出し中";
-"Exporting 4K Images" = "4K画像を書き出し中";
-"Exporting PDF" = "PDFを書き出し中";
-"Exporting GIF" = "GIFを書き出し中";
-"Exporting Movie" = "動画を書き出し中";
-"Exporting 4K Movie" = "4K動画を書き出し中";
-"Exporting Sound" = "サウンドを書き出し中";
-"Exporting Linear PCM" = "リニアPCMを書き出し中";
-"Exporting Caption" = "キャプションを書き出し中";
-"Exporting Timelapse" = "タイムラプスを書き出し中";
-"Exporting Document" = "書類を書き出し中";
-"Exporting Document with History" = "履歴付き書類を書き出し中";
 
 "Enable the run button" = "実行ボタンを有効にする";
 "Disable the run button" = "実行ボタンを有効にしない";

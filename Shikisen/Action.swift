@@ -49,9 +49,11 @@ protocol InputTextEventAction: Action {
 
 final class RootAction: Action {
     var rootView: RootView
+    var hudView: HUDView
     
-    init(_ rootView: RootView) {
+    init(_ rootView: RootView, _ hudView: HUDView) {
         self.rootView = rootView
+        self.hudView = hudView
         
         rootView.updateNodeNotifications.append { [weak self] _ in
             self?.updateActionNode()

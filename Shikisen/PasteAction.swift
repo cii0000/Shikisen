@@ -3648,6 +3648,28 @@ final class APasteAction: Action {
         }
     }
     
+    func cutHUD(at p: Point, atScreen sp: Point) -> Bool {
+        if rootAction.hudView.containsActionList(at: sp) {
+            rootAction.hudView.isHiddenActionList = true
+            return true
+        }
+        if let exportingView = rootAction.hudView.exportingView(at: sp) {
+            exportingView.cancel()
+            return true
+        }
+        for runAction in rootAction.runActions {
+            if runAction.containsCalculating(p) {
+                Pasteboard.shared.copiedObjects = [.string(runAction.calculatingString)]
+                runAction.cancel()
+                return true
+            }
+        }
+        if rootView.containsLookingUp(at: p) {
+            rootView.closeLookingUp()
+            return true
+        }
+        return false
+    }
     func cut(with event: InputKeyEvent) {
         guard isEditingSheet else {
             cutSheet(with: event)
@@ -3659,17 +3681,7 @@ final class APasteAction: Action {
         case .began:
             rootView.cursor = .arrow
             
-            for runAction in rootAction.runActions {
-                if runAction.containsCalculating(p) {
-                    Pasteboard.shared.copiedObjects = [.string(runAction.calculatingString)]
-                    runAction.cancel()
-                    return
-                }
-            }
-            if rootView.containsLookingUp(at: p) {
-                rootView.closeLookingUp()
-                return
-            }
+            if cutHUD(at: p, atScreen: event.screenPoint) { return }
             
             type = .cut
             editingSP = event.screenPoint
@@ -3909,10 +3921,13 @@ final class APasteAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            let p = rootView.convertScreenToWorld(event.screenPoint)
+            
+            if cutHUD(at: p, atScreen: event.screenPoint) { return }
+            
             type = .cut
             editingSP = event.screenPoint
             editingP = rootView.convertScreenToWorld(event.screenPoint)
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             updateWithCopySheet(at: p, isSelected: isSelected, from: values)
             if !values.isEmpty {

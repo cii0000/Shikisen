@@ -19,6 +19,338 @@ import Dispatch
 import struct Foundation.Data
 import struct Foundation.URL
 import struct Foundation.UUID
+import struct Foundation.Date
+import class Foundation.Timer
+import class Foundation.DateFormatter
+
+struct HUDItem {
+    let node = Node()
+    private(set) var size: Size
+    
+    init(string: String) {
+        let (node, b) = Self.node(string: string)
+        self.node.children = [node]
+        self.node.path = .init(b)
+        self.size = b.size
+    }
+    
+    var string = "" {
+        didSet {
+            updateWithString()
+        }
+    }
+    mutating func updateWithString() {
+        let (node, b) = Self.node(string: string)
+        self.node.children = [node]
+        self.node.path = .init(b)
+        self.size = b.size
+    }
+    static func node(string: String) -> (node: Node, bounds: Rect) {
+        let fontSize = 12.0
+        let padding = fontSize / 2, lineWidth = 1.0, cornerRadius = 8.0
+        let margin = fontSize / 2 + 1.0, imagePadding = 3.0
+        
+        func textNode(with string: String, color: Color = .content) -> (size: Size, node: Node)? {
+            let typesetter = Text(string: string, size: fontSize).typesetter
+            let paddingSize = Size(square: imagePadding)
+            guard let b = typesetter.typoBounds else { return nil }
+            let nb = b.outset(by: paddingSize).integral
+            let backColor = Color(lightness: color.lightness, opacity: 0)
+            guard let texture = typesetter.texture(with: nb, fillColor: color,
+                                                   backgroundColor: backColor) else { return nil }
+            return (b.integral.size, Node(path: Path(nb), fillType: .texture(texture)))
+        }
+        
+        var children = [Node]()
+        
+        var w = 0.0, h = margin
+        let color = Color.content
+        if let (nts, nNode) = textNode(with: string, color: color) {
+            nNode.attitude.position = Point((margin + imagePadding).rounded(), h + fontSize / 2 - imagePadding)
+            w = max(w, nts.width + margin * 2)
+            children.append(nNode)
+            h += fontSize + padding
+            
+            h += -padding + margin
+        }
+        
+        let f = Rect(x: 0, y: 0, width: w, height: h)
+        return (Node(children: children,
+                        path: Path(f, cornerRadius: cornerRadius),
+                        lineWidth: lineWidth, lineType: .color(.subBorder),
+                        fillType: .color(.transparentDisabled)), f)
+    }
+    
+    func contains(_ p: Point) -> Bool {
+        node.path.contains(node.convertFromWorld(p))
+    }
+}
+
+struct Exporting {
+    enum ExportType {
+        case image, image4K, images, images4K, pdf, gif, movie, movie4K,
+             sound, linearPCM, document, documentWithHistory, caption, timelapse
+        var isDocument: Bool {
+            self == .document || self == .documentWithHistory
+        }
+        var is4K: Bool {
+            self == .image4K || self == .movie4K
+        }
+        
+        var displayName: String {
+            switch self {
+            case .image: "Image".localized
+            case .image4K: "4K Image".localized
+            case .images: "Images".localized
+            case .images4K: "4K Images".localized
+            case .pdf: "PDF"
+            case .gif: "GIF"
+            case .movie: "Movie".localized
+            case .movie4K: "4K Movie".localized
+            case .sound: "Sound".localized
+            case .linearPCM: "Linear PCM".localized
+            case .caption: "Caption".localized
+            case .timelapse: "Timelapse".localized
+            case .document: "Document".localized
+            case .documentWithHistory: "Document with History".localized
+            }
+        }
+    }
+}
+final class ExportingView: View, @unchecked Sendable {
+    typealias Model = Exporting
+    var model = Model()
+    
+    var hudItem: HUDItem
+    let node: Node
+    let type: Exporting.ExportType, name: String
+    
+    init(type: Exporting.ExportType, name: String) {
+        self.type = type
+        self.name = name
+        hudItem = .init(string: String(format: "Exporting %1$@ \"%2$@\"".localized + ": %3$3d%%",
+                                       type.displayName, name, Int(progress)))
+        node = hudItem.node
+    }
+    
+    var progress = 0.0 {
+        didSet {
+            guard progress != oldValue else { return }
+            hudItem.string = String(format: "Exporting %1$@ \"%2$@\"".localized + ": %3$3d%%",
+                                    type.displayName, name, Int(progress * 100))
+        }
+    }
+    
+    var isCanceled = false, isClosed = false
+    var cancelHandler: (() -> ())?
+    var closeHandler: ((ExportingView) -> ())?
+    func cancel() {
+        close()
+        guard !isCanceled else { return }
+        isCanceled = true
+        cancelHandler?()
+    }
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        node.removeFromParent()
+        closeHandler?(self)
+    }
+}
+
+final class DateView: View, @unchecked Sendable {
+    typealias Model = Date
+    var model = Model() {
+        didSet {
+            guard model != oldValue else { return }
+            hudItem.string = dateFormatter.string(from: model)
+        }
+    }
+    
+    var hudItem: HUDItem
+    let node: Node
+    let dateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("MMMMdEEE HHmmss")
+        return formatter
+    } ()
+    
+    private var clockTimer: Timer?
+    
+    init(_ date: Date) {
+        hudItem = .init(string: dateFormatter.string(from: date))
+        node = hudItem.node
+        
+        let nowDate = Date()
+        let nextSec = ceil(nowDate.timeIntervalSince1970)
+        let delay = nextSec - nowDate.timeIntervalSince1970
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.model = date
+            
+            self?.clockTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+                let date = timer.fireDate
+                Task { @MainActor in
+                    self?.model = date
+                }
+            }
+        }
+    }
+    
+    func cancelTasks() {
+        clockTimer?.invalidate()
+        clockTimer = nil
+    }
+}
+
+struct HUD {}
+final class HUDView: View, @unchecked Sendable {
+    typealias Model = HUD
+    var model: Model
+    
+    let node = Node()
+    private(set) var dateView: DateView?
+    
+    let padding = 7.0
+    
+    init(hud: HUD = .init()) {
+        model = hud
+    }
+    
+    func cancelTasks() {
+        dateView?.cancelTasks()
+        exportingViews.forEach { $0.cancel() }
+    }
+    
+    var screenBounds = Rect() {
+        didSet {
+            updateDateWithScreenBounds()
+            updateActionListWithScreenBounds()
+        }
+    }
+    func updateDateWithScreenBounds() {
+        if isShownDate, let dateView {
+            let sb = screenBounds
+            let size = dateView.hudItem.size
+            let dx = if !isHiddenActionList, let actionNode,
+               let b = actionNode.bounds, size.height >= (sb.height - b.height) / 2 {
+                
+                sb.height < b.maxY && b.maxY > 0 ?
+                -b.width * (sb.height / b.maxY) : -b.width
+            } else {
+                0.0
+            }
+            dateView.node.attitude.position = Point(sb.maxX - size.width + dx - padding, sb.maxY - size.height - padding)
+        }
+    }
+    func updateActionListWithScreenBounds() {
+        if !isHiddenActionList, let actionNode {
+            if let b = actionNode.bounds {
+                let sb = screenBounds
+                if sb.height < b.maxY, b.maxY > 0 {
+                    let scale = sb.height / b.maxY
+                    let x = sb.maxX - b.maxX * scale
+                    let y = 0.0
+                    actionNode.attitude.scale = .init(square: scale)
+                    actionNode.attitude.position = Point(x, y)
+                } else {
+                    let x = sb.maxX - b.maxX
+                    let y = sb.midY - b.midY
+                    actionNode.attitude.scale = .init(square: 1)
+                    actionNode.attitude.position = Point(x, y)
+                }
+            }
+        }
+    }
+    func updateExportingsWithScreenBounds() {
+        guard !exportingViews.isEmpty else { return }
+        let sb = screenBounds
+        var p = sb.maxXMaxYPoint
+        if let b = actionNode?.bounds {
+            p.x += sb.height < b.maxY && b.maxY > 0 ?
+            -b.width * (sb.height / b.maxY) : -b.width
+        }
+        p.x -= padding
+        if isShownDate, let dateView {
+            p.y -= padding + dateView.hudItem.size.height
+        }
+        p.y -= padding
+        for exportingView in exportingViews {
+            exportingView.node.attitude.position
+            = .init(p.x - exportingView.hudItem.size.width,
+                    p.y - exportingView.hudItem.size.height)
+            p.y -= exportingView.hudItem.size.height + padding
+        }
+    }
+    
+    var isShownDate = false {
+        didSet {
+            guard isShownDate != oldValue else { return }
+            if isShownDate {
+                let dateView = DateView(Date())
+                node.append(child: dateView.node)
+                self.dateView = dateView
+            } else {
+                dateView?.node.removeFromParent()
+                dateView = nil
+            }
+        }
+    }
+    
+    private(set) var actionNode: Node?
+    var didChengeIsHiddenActionListClosure: (HUDView) -> () = { _ in }
+    var isHiddenActionList = true {
+        didSet {
+            guard isHiddenActionList != oldValue else { return }
+            updateActionList()
+            didChengeIsHiddenActionListClosure(self)
+        }
+    }
+    private func updateActionList() {
+        if isHiddenActionList {
+            actionNode?.removeFromParent()
+            actionNode = nil
+        } else if actionNode == nil {
+            let actionNode = ActionList.default.node()
+            self.actionNode = actionNode
+            updateActionListWithScreenBounds()
+            node.append(child: actionNode)
+        }
+        updateDateWithScreenBounds()
+        updateExportingsWithScreenBounds()
+    }
+    func containsActionList(at sp: Point) -> Bool {
+        guard !isHiddenActionList, let actionNode else { return false }
+        return actionNode.path.contains(actionNode.convertFromWorld(sp))
+    }
+    
+//    func show(_ error: any Error) {
+//        "Error".localized + ": " + error.localizedDescription
+//    }
+    
+    private(set) var exportingViews = [ExportingView]()
+    func append(_ exportingView: ExportingView) {
+        exportingView.closeHandler = { [weak self] view in
+            guard let self else { return }
+            if let i = self.exportingViews.firstIndex(of: view) {
+                self.exportingViews.remove(at: i)
+            }
+            self.updateExportingsWithScreenBounds()
+        }
+        exportingViews.append(exportingView)
+        node.append(child: exportingView.node)
+        updateExportingsWithScreenBounds()
+    }
+    func exportingView(at sp: Point) -> ExportingView? {
+        for exportingView in exportingViews {
+            if exportingView.hudItem.contains(sp) {
+                return exportingView
+            }
+        }
+        return nil
+    }
+}
 
 final class RootView: View, @unchecked Sendable {
     typealias Model = Root
