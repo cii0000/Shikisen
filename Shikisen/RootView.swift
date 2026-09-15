@@ -867,7 +867,7 @@ final class RootView: View, @unchecked Sendable {
                             progressHandler: (Double, inout Bool) -> ()) throws {
         var isStop = false
         for (j, shp) in shps.enumerated() {
-            Task { @MainActor in
+            Task { @MainActor [self] in
                 if let sheetView = self.sheetViewValues[shp]?.sheetView {
                     clearHistory(from: sheetView)
                 } else if let sid = self.sheetID(at: shp),
@@ -1537,7 +1537,7 @@ final class RootView: View, @unchecked Sendable {
                 let task = Task.detached(priority: .high) {
                     let progress = ActorProgress(total: shps.count)
                     for shp in shps {
-                        Task { @MainActor in
+                        Task { @MainActor [self] in
                             if let sheetView = self.sheetViewValues[shp]?.sheetView {
                                 _ = make(sheetView)
                             } else if let sid = self.sheetID(at: shp),
@@ -1695,7 +1695,7 @@ final class RootView: View, @unchecked Sendable {
                 let task = Task.detached(priority: .high) {
                     let progress = ActorProgress(total: shps.count)
                     for shp in shps {
-                        Task { @MainActor in
+                        Task { @MainActor [self] in
                             if let sheetView = self.sheetViewValues[shp]?.sheetView {
                                 _ = make(sheetView)
                             } else if let sid = self.sheetID(at: shp),
@@ -2550,7 +2550,8 @@ final class RootView: View, @unchecked Sendable {
             let block = try Texture.block(from: thumbnailRecord, isMipmapped: true)
             try Task.checkCancellation()
             Task { @MainActor in
-                thumbnailNode.fillType = .texture(try .init(block: block))
+                guard let texture = try? Texture(block: block) else { return }
+                thumbnailNode.fillType = .texture(texture)
             }
         }
         
@@ -2654,7 +2655,7 @@ final class RootView: View, @unchecked Sendable {
             let frame = self.sheetFrame(with: shp)
             
             Task.detached(priority: .high) {
-                try await Task.sleep(sec: 1.5)
+                try? await Task.sleep(sec: 1.5)
                 Task { @MainActor in
                     if self.sheetViewValues[shp]?.isLoading ?? false {
                         let node = Node(path: .init(frame), fillType: .color(.loading))
@@ -2693,7 +2694,7 @@ final class RootView: View, @unchecked Sendable {
                         let block = try Texture.block(from: thumbnail, isMipmapped: true)
                         try Task.checkCancellation()
                         Task { @MainActor in
-                            sheetView.node.cacheTexture = try .init(block: block)
+                            sheetView.node.cacheTexture = try? .init(block: block)
                         }
                     } catch {
     //                    sheetView.enableCache = true
@@ -2705,7 +2706,7 @@ final class RootView: View, @unchecked Sendable {
                     
                     try Task.checkCancellation()
                     
-                    Task { @MainActor in
+                    Task { @MainActor [self, sheetView, historyRecord] in
                         self.sheetViewValues[shp]?.isLoading = false
                         self.sheetViewValues[shp]?.loadingNode?.removeFromParent()
                         self.sheetViewValues[shp]?.loadingNode = nil
@@ -3681,8 +3682,8 @@ final class RootView: View, @unchecked Sendable {
         }
         
         let seq = Sequencer(tracks: seqTracks, type: .normal)
-        let buffer = try? seq?.buffer(sampleRate: sampleRate, headroomType: .none, limitLufs: nil,
-                                      isClip: false) { d, flag in }
+        let buffer = try? seq.buffer(sampleRate: sampleRate, headroomType: .none, limitLufs: nil,
+                                     isClip: false) { _ in }
         return buffer?.doubleSampless ?? []
     }
     

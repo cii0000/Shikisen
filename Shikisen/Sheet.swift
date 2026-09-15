@@ -3065,9 +3065,9 @@ extension Sheet {
     }
     var pcmBuffer: PCMBuffer? {
         let audiotrack = audiotrack
-        if !audiotrack.isEmpty,
-           let sequencer = Sequencer(audiotracks: [audiotrack], type: .normal) {
-            return try? sequencer.buffer(sampleRate: Audio.defaultSampleRate) { _, _ in }
+        if !audiotrack.isEmpty {
+            let sequencer = Sequencer(audiotracks: [audiotrack], type: .normal)
+            return try? sequencer.buffer(sampleRate: Audio.defaultSampleRate) { _ in }
         }
         return nil
     }

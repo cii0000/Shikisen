@@ -390,9 +390,9 @@ final class IOAction: Action {
                                           name: name, origin: rootView.roundedPoint(from: np))
                     if content.type == .movie {
                         Task.detached(priority: .userInitiated) {
-                            if let size = try? await Movie.size(from: content.url),
-                               let durSec = try? await Movie.durSec(from: content.url),
-                               let frameRate = try? await Movie.frameRate(from: content.url) {
+                            if let size = try? await MovieEncoder.size(from: content.url),
+                               let durSec = try? await MovieEncoder.durSec(from: content.url),
+                               let frameRate = try? await MovieEncoder.frameRate(from: content.url) {
                                 
                                 Task { @MainActor in
                                     var content = content
@@ -897,7 +897,7 @@ final class IOAction: Action {
         case .image4K, .images4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
-        case .movie, .movie4K, .timelapse: isAlphaChannel ? Movie.FileType.mov : Movie.FileType.mp4
+        case .movie, .movie4K, .timelapse: isAlphaChannel ? MovieEncoder.FileType.mov : MovieEncoder.FileType.mp4
         case .sound: Content.FileType.m4a
         case .linearPCM: Content.FileType.wav
         case .caption: Caption.FileType.itt
@@ -1042,22 +1042,19 @@ final class IOAction: Action {
                 try ioResult.makeDirectory()
                 
                 @Sendable func export(from renderings: [Rendering],
-                                      progressHandler: (Double, inout Bool) -> ()) throws {
-                    var isStop = false
-                    for (j, rendering) in renderings.enumerated() {
+                                      progressHandler: (Double) -> ()) throws {
+                    for (ri, rendering) in renderings.enumerated() {
                         if let node = rendering.renderableMainSheetNode() {
                             if let image = node.image(in: rendering.bounds, to: size,
                                                       colorSpace) {
-                                let subIOResult = ioResult.sub(name: "\(j).png")
+                                let subIOResult = ioResult.sub(name: "\(ri).png")
                                 try image.write(.png, to: subIOResult.url)
                                 try subIOResult.setAttributes()
                             }
                         }
-                        progressHandler(Double(j + 1) / Double(renderings.count), &isStop)
-                        if isStop { break }
-                    }
-                    if isStop {
-                        try? ioResult.remove()
+                        
+                        progressHandler(Double(ri + 1) / Double(renderings.count))
+                        try Task.checkCancellation()
                     }
                 }
                 
@@ -1069,23 +1066,21 @@ final class IOAction: Action {
                     defer { renderings.forEach { $0.resetTemps() } }
                     
                     do {
-                        try export(from: renderings) { (progress, isStop) in
-                            if Task.isCancelled {
-                                isStop = true
-                                return
-                            }
+                        try export(from: renderings) { (progress) in
                             Task { @MainActor in
                                 exportingView.progress = progress
                             }
                         }
-                        Task { @MainActor in
-                            exportingView.close()
-                        }
                     } catch {
-                        Task { @MainActor in
-                            self.rootView.node.show(error)
-                            exportingView.close()
+                        try ioResult.remove()
+                        if !(error is CancellationError) {
+                            Task { @MainActor in
+                                self.rootView.node.show(error)
+                            }
                         }
+                    }
+                    Task { @MainActor in
+                        exportingView.close()
                     }
                 }
                 exportingView.cancelHandler = { task.cancel() }
@@ -1098,31 +1093,26 @@ final class IOAction: Action {
     
     func exportPDF(from renderings: [Rendering], size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> ()) throws {
-            var isStop = false
+                              progressHandler: (Double) -> ()) throws {
             let pdf = try PDF(url: ioResult.url, mediaBox: Rect(size: size))
-            
-            for (i, rendering) in renderings.enumerated() {
+            for (ri, rendering) in renderings.enumerated() {
                 if let node = rendering.renderableMainSheetNode() {
                     pdf.newPage { pdf in
                         node.render(in: rendering.bounds, to: size, in: pdf)
                     }
                 }
                 
-                progressHandler(Double(i + 1) / Double(renderings.count), &isStop)
-                if isStop { break }
+                progressHandler(Double(ri + 1) / Double(renderings.count))
+                try Task.checkCancellation()
             }
-            if !isStop {
-                pdf.finish()
-                try ioResult.setAttributes()
-            } else {
-                try? ioResult.remove()
-            }
+            pdf.finish()
+            try ioResult.setAttributes()
         }
         
         if renderings.count == 1 {
             do {
-                try export(from: renderings) { (_, isStop) in }
+                try export(from: renderings) { (_) in }
+            } catch is CancellationError {
             } catch {
                 rootView.node.show(error)
             }
@@ -1141,23 +1131,21 @@ final class IOAction: Action {
                     defer { renderings.forEach { $0.resetTemps() } }
                     
                     do {
-                        try export(from: renderings) { (progress, isStop) in
-                            if Task.isCancelled {
-                                isStop = true
-                                return
-                            }
+                        try export(from: renderings) { (progress) in
                             Task { @MainActor in
                                 exportingView.progress = progress
                             }
                         }
-                        Task { @MainActor in
-                            exportingView.close()
-                        }
                     } catch {
-                        Task { @MainActor in
-                            self.rootView.node.show(error)
-                            exportingView.close()
+                        try ioResult.remove()
+                        if !(error is CancellationError) {
+                            Task { @MainActor in
+                                self.rootView.node.show(error)
+                            }
                         }
+                    }
+                    Task { @MainActor in
+                        exportingView.close()
                     }
                 }
                 exportingView.cancelHandler = { task.cancel() }
@@ -1171,52 +1159,40 @@ final class IOAction: Action {
     func exportGIF(from renderings: [Rendering], _ colorSpace: ColorSpace,
                    size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> ()) throws {
+                              progressHandler: (Double) -> ()) throws {
             var images = [(image: Image, time: Rational)]()
-            var isStop = false, t = 0.0
-            let allC = renderings.count + 1
-            
-            for rendering in renderings {
+            for (ri, rendering) in renderings.enumerated() {
                 if let sheet = rendering.mainItem.decodedSheet() {
-                    let ot = t
                     var sec = Rational(0)
-                    for (i, _) in sheet.animation.keyframes.enumerated() {
+                    for (ki, _) in sheet.animation.keyframes.enumerated() {
                         let node = sheet.node(isBorder: false, atSec: sec,
                                               enabledCaption: false,
                                               attitude: .init(position: rendering.mainItem.frame.origin),
                                               in: rendering.bounds)
-                        let durBeat = sheet.animation.rendableKeyframeDurBeat(at: i)
+                        let durBeat = sheet.animation.rendableKeyframeDurBeat(at: ki)
                         let durSec = sheet.animation.sec(fromBeat: durBeat)
                         if let image = node.image(in: rendering.bounds, to: size, colorSpace) {
                             images.append((image, durSec))
                         }
                         sec += durSec
-                        let d = Double(i + 1) / Double(sheet.animation.keyframes.count)
-                        t = ot + d / Double(allC)
-                        progressHandler(t, &isStop)
+                        let dt = Double(ki + 1) / Double(sheet.animation.keyframes.count)
+                        
+                        progressHandler((Double(ri) + dt) / Double(renderings.count))
+                        try Task.checkCancellation()
                     }
                 } else {
-                    let ot = t
                     if let node = renderings[0].renderableMainSheetNode(),
                        let image = node.image(in: renderings[0].bounds, to: size,
                                                                    colorSpace) {
                         images.append((image, Keyframe.defaultDurBeat))
-                        t = ot + 1 / Double(allC)
-                        progressHandler(t, &isStop)
+                        
+                        progressHandler(Double(ri + 1) / Double(renderings.count))
+                        try Task.checkCancellation()
                     }
                 }
-                
-                if isStop { break }
             }
-            if !isStop {
-                try Image.writeGIF(images, to: ioResult.url)
-                progressHandler(1, &isStop)
-                if !isStop {
-                    try ioResult.setAttributes()
-                } else {
-                    try? ioResult.remove()
-                }
-            }
+            try Image.writeGIF(images, to: ioResult.url)
+            try ioResult.setAttributes()
         }
         
         let exportingView = ExportingView(type: .gif, name: ioResult.name)
@@ -1232,23 +1208,21 @@ final class IOAction: Action {
                 defer { renderings.forEach { $0.resetTemps() } }
                 
                 do {
-                    try export(from: renderings) { (progress, isStop) in
-                        if Task.isCancelled {
-                            isStop = true
-                            return
-                        }
+                    try export(from: renderings) { (progress) in
                         Task { @MainActor in
                             exportingView.progress = progress
                         }
                     }
-                    Task { @MainActor in
-                        exportingView.close()
-                    }
                 } catch {
-                    Task { @MainActor in
-                        self.rootView.node.show(error)
-                        exportingView.close()
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
+                            self.rootView.node.show(error)
+                        }
                     }
+                }
+                Task { @MainActor in
+                    exportingView.close()
                 }
             }
             exportingView.cancelHandler = { task.cancel() }
@@ -1262,105 +1236,111 @@ final class IOAction: Action {
                      _ colorSpace: ColorSpace,
                      size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> (),
-                              completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
-            do {
-                var isStop = false
-                var durSecs = [Int: Rational](), allDurSec: Rational = 0
-                struct Track {
-                    var captions: [Caption]
-                    var sheets: [(sheet: Sheet, sheetBounds: Rect)]
-                    var secRange: Range<Rational>
-                    var sheetOrigin: Point
-                    var sheetBounds: Rect
-                    var renderBounds: Rect
-                    var backgroundColor: Color
-                    
-                    func frameRange(frameRate: Int) -> Range<Int> {
-                        Animation.frame(fromSec: secRange.start, frameRate: frameRate)
-                        ..< Animation.frame(fromSec: secRange.end, frameRate: frameRate)
-                    }
+                              progressHandler: (Double) -> ()) async throws {
+            struct Track {
+                var captions: [Caption]
+                var sheets: [(sheet: Sheet, sheetBounds: Rect)]
+                var secRange: Range<Rational>
+                var sheetOrigin: Point
+                var sheetBounds: Rect
+                var renderBounds: Rect
+                var backgroundColor: Color
+                
+                func frameRange(frameRate: Int) -> Range<Int> {
+                    Animation.frame(fromSec: secRange.start, frameRate: frameRate)
+                    ..< Animation.frame(fromSec: secRange.end, frameRate: frameRate)
                 }
-                var filledIDs = Set<UUID>()
-                var tracks = [Track](), isEnabledAudio = false
-                for (i, rendering) in renderings.enumerated() {
-                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
-                    filledIDs.insert(rendering.mainItem.id)
+            }
+            var allDurSec: Rational = 0
+            var audiotracks = [Audiotrack]()
+            var filledIDs = Set<UUID>()
+            var tracks = [Track](), isEnabledAudio = false
+            for (ri, rendering) in renderings.enumerated() {
+                guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                filledIDs.insert(rendering.mainItem.id)
+                
+                var maxEndSec: Rational = 0
+                if let sheet = rendering.mainItem.decodedSheet() {
+                    var audiotrack: Audiotrack?
+                    audiotrack += sheet.audiotrack
+                    var captions = sheet.captions
                     
-                    var maxEndSec: Rational = 0
-                    if let sheet = rendering.mainItem.decodedSheet() {
-                        var captions = sheet.captions
+                    var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
+                    for item in rendering.bottomItems {
+                        filledIDs.insert(item.id)
+                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
                         
-                        if sheet.isEnabledAudio {
-                            isEnabledAudio = true
+                        audiotrack += sheet.audiotrack
+                        captions += sheet.captions
+                        if sheet.enabledAnimation {
+                            sheets.append((sheet, item.frame.bounds))
+                            maxEndSec = max(sheet.allEndSec, maxEndSec)
                         }
-                        var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
-                        for item in rendering.bottomItems {
-                            filledIDs.insert(item.id)
-                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            if sheet.isEnabledAudio {
-                                isEnabledAudio = true
-                            }
-                            captions += sheet.captions
-                            if sheet.enabledAnimation {
-                                sheets.append((sheet, item.frame.bounds))
-                                maxEndSec = max(sheet.allEndSec, maxEndSec)
-                            }
-                        }
-                        sheets.reverse()
-                        
-                        let sheetBounds = rendering.mainItem.frame.bounds
-                        sheets.append((sheet, sheetBounds))
-                        maxEndSec = max(sheet.allEndSec, maxEndSec)
-                        
-                        for item in rendering.topItems {
-                            filledIDs.insert(item.id)
-                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            if sheet.isEnabledAudio {
-                                isEnabledAudio = true
-                            }
-                            captions += sheet.captions
-                            if sheet.enabledAnimation {
-                                sheets.append((sheet, item.frame.bounds))
-                                maxEndSec = max(sheet.allEndSec, maxEndSec)
-                            }
-                        }
-                        
-                        let origin = rendering.mainItem.frame.origin
-                        let b = rendering.bounds
-                        tracks.append(.init(captions: captions, sheets: sheets,
-                                            secRange: allDurSec ..< (allDurSec + maxEndSec),
-                                            sheetOrigin: origin, sheetBounds: sheetBounds,
-                                            renderBounds: b,
-                                            backgroundColor: sheet.backgroundUUColor.value))
-                    } else {
-                        maxEndSec = Animation.sec(fromBeat: Keyframe.defaultDurBeat,
-                                                  tempo: Music.defaultTempo)
-                        
-                        let origin = rendering.mainItem.frame.origin
-                        tracks.append(.init(captions: [], sheets: [(.init(), rendering.bounds)],
-                                            secRange: allDurSec ..< (allDurSec + maxEndSec),
-                                            sheetOrigin: origin,
-                                            sheetBounds: rendering.bounds,
-                                            renderBounds: rendering.bounds,
-                                            backgroundColor: .background))
                     }
-                    durSecs[i] = maxEndSec
-                    allDurSec += maxEndSec
+                    sheets.reverse()
                     
-                    progressHandler(.init(i) / .init(renderings.count) * 0.1, &isStop)
-                    if isStop { break }
+                    let sheetBounds = rendering.mainItem.frame.bounds
+                    sheets.append((sheet, sheetBounds))
+                    maxEndSec = max(sheet.allEndSec, maxEndSec)
+                    
+                    for item in rendering.topItems {
+                        filledIDs.insert(item.id)
+                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        
+                        audiotrack += sheet.audiotrack
+                        captions += sheet.captions
+                        if sheet.enabledAnimation {
+                            sheets.append((sheet, item.frame.bounds))
+                            maxEndSec = max(sheet.allEndSec, maxEndSec)
+                        }
+                    }
+                    
+                    audiotrack?.durSec = maxEndSec
+                    if !(audiotrack?.values.isEmpty ?? true) {
+                        isEnabledAudio = true
+                    }
+                    audiotracks.append(audiotrack ?? .init(values: [], durSec: maxEndSec))
+                    
+                    let origin = rendering.mainItem.frame.origin
+                    let b = rendering.bounds
+                    tracks.append(.init(captions: captions, sheets: sheets,
+                                        secRange: allDurSec ..< (allDurSec + maxEndSec),
+                                        sheetOrigin: origin, sheetBounds: sheetBounds,
+                                        renderBounds: b,
+                                        backgroundColor: sheet.backgroundUUColor.value))
+                } else {
+                    maxEndSec = Animation.sec(fromBeat: Keyframe.defaultDurBeat,
+                                              tempo: Music.defaultTempo)
+                    
+                    audiotracks.append(.init(values: [], durSec: maxEndSec))
+                    
+                    let origin = rendering.mainItem.frame.origin
+                    tracks.append(.init(captions: [], sheets: [(.init(), rendering.bounds)],
+                                        secRange: allDurSec ..< (allDurSec + maxEndSec),
+                                        sheetOrigin: origin,
+                                        sheetBounds: rendering.bounds,
+                                        renderBounds: rendering.bounds,
+                                        backgroundColor: .background))
                 }
                 
-                let frameRate = Sheet.standardFrameRate(from: tracks.flatMap { $0.sheets.map { $0.sheet }})
-                let movie = try Movie(url: ioResult.url, renderSize: size,
-                                      isAlphaChannel: isAlphaChannel,
-                                      isLinearPCM: is4K, colorSpace, frameRate: frameRate)
+                allDurSec += maxEndSec
+                
+                progressHandler(.init(ri + 1) / .init(renderings.count) * 0.1)
+                try Task.checkCancellation()
+            }
+            
+            let frameRate = Sheet.standardFrameRate(from: tracks.flatMap { $0.sheets.map { $0.sheet }})
+            let movieEncoder = try MovieEncoder(url: ioResult.url, renderSize: size,
+                                                isAlphaChannel: isAlphaChannel,
+                                                colorSpace, frameRate: frameRate,
+                                                isEnabledAudio: isEnabledAudio,
+                                                isLinearPCM: is4K)
+            do {
                 let frameCount = Int(allDurSec * Rational(frameRate).rounded(.up))
                 var oldImage: Image?, oldCaptionNodes = [CPUNode](), oldCaptions = [Caption]()
                 var oldTrackI: Int?, oldSheetNodes = [(oki: Int?, oldNode: CPUNode?)]()
-                for i in frameCount.range {
-                    let trackI = tracks.firstIndex { $0.frameRange(frameRate: frameRate).contains(i) } ?? tracks.count - 1
+                for fi in frameCount.range {
+                    let trackI = tracks.firstIndex { $0.frameRange(frameRate: frameRate).contains(fi) } ?? tracks.count - 1
                     if trackI != oldTrackI {
                         oldTrackI = trackI
                         
@@ -1377,7 +1357,7 @@ final class IOAction: Action {
                     for si in track.sheets.count.range {
                         let (sheet, sheetBounds) = track.sheets[si]
                         let (oki, oldNode) = oldSheetNodes[si]
-                        let ki = sheet.animation.indexInBeatRange(atFrame: i,
+                        let ki = sheet.animation.indexInBeatRange(atFrame: fi,
                                                                   startSec: track.secRange.start,
                                                                   frameRate: frameRate)
                         if oki != ki {
@@ -1392,7 +1372,7 @@ final class IOAction: Action {
                         }
                     }
                     
-                    let captions = Caption.captions(atFrame: i, frameRate: frameRate,
+                    let captions = Caption.captions(atFrame: fi, frameRate: frameRate,
                                                     startSec: track.secRange.start,
                                                     in: track.captions)
                     let captionNodes: [CPUNode]
@@ -1415,74 +1395,27 @@ final class IOAction: Action {
                     } else {
                         image = oldImage
                     }
+                    guard let image else { throw MovieEncoder.exportingError }
                     
-                    guard let image else { throw Movie.exportError }
-                    let isAppend = movie.write(image, duration: 1, timeScale: frameRate) { (stop) in
-                        progressHandler(.init(i) / .init(frameCount) * (isEnabledAudio ? 0.8 : 0.9) + 0.1, &isStop)
-                        if isStop {
-                            stop = true
-                        }
-                    }
-                    if isStop || !isAppend { break }
+                    try await movieEncoder.write(image, duration: 1, timeScale: frameRate)
+                    
+                    progressHandler(.init(fi + 1) / .init(frameCount) * (isEnabledAudio ? 0.8 : 0.9) + 0.1)
+                    try Task.checkCancellation()
                 }
                 
-                var audiotracks = [Audiotrack]()
-                
-                if !isStop {
-                    var filledIDs = Set<UUID>()
-                    for (i, rendering) in renderings.enumerated() {
-                        guard !filledIDs.contains(rendering.mainItem.id),
-                              let durSec = durSecs[i] else { continue }
-                        filledIDs.insert(rendering.mainItem.id)
-                        
-                        var audiotrack: Audiotrack?
-                        if let sheet = rendering.mainItem.decodedSheet() {
-                            audiotrack += sheet.audiotrack
-                        }
-                        for item in rendering.bottomItems {
-                            filledIDs.insert(item.id)
-                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            audiotrack += sheet.audiotrack
-                        }
-                        for item in rendering.topItems {
-                            filledIDs.insert(item.id)
-                            guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
-                            audiotrack += sheet.audiotrack
-                        }
-                        audiotrack?.durSec = durSec
-                        if let audiotrack {
-                            audiotracks.append(audiotrack)
-                        }
-                        
-                        let t = (Double(i) / Double(renderings.count)) * 0.05 + 0.9
-                        progressHandler(t, &isStop)
-                        if isStop { break }
-                    }
-                    if !isStop {
-                        if let sequencer = Sequencer(audiotracks: audiotracks, type: .normal) {
-                            try movie.writeAudio(from: sequencer) { t, stop in
-                                progressHandler(t * 0.05 + 0.95, &isStop)
-                                if isStop {
-                                    stop = true
-                                }
-                            }
-                        }
+                if isEnabledAudio {
+                    let sequencer = Sequencer(audiotracks: audiotracks, type: .normal)
+                    try await movieEncoder.writeAudio(from: sequencer) { t in
+                        progressHandler(t * 0.1 + 0.9)
+                        try Task.checkCancellation()
                     }
                 }
                 
-                do {
-                    let isStop = try await movie.finish()
-                    if !isStop {
-                        try ioResult.setAttributes()
-                    } else {
-                        try? ioResult.remove()
-                    }
-                    handler(isStop, nil)
-                } catch {
-                    handler(true, error)
-                }
+                try await movieEncoder.finish()
+                try ioResult.setAttributes()
             } catch {
-                handler(false, error)
+                movieEncoder.cancel()
+                throw error
             }
         }
         
@@ -1498,22 +1431,23 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
-                await export(from: renderings, progressHandler: { (progress, isStop) in
-                    if Task.isCancelled {
-                        isStop = true
-                        return
+                do {
+                    try await export(from: renderings) { (progress) in
+                        Task { @MainActor in
+                            exportingView.progress = progress
+                        }
                     }
-                    Task { @MainActor in
-                        exportingView.progress = progress
-                    }
-                }, completionHandler: { (stop, error) in
-                    Task { @MainActor in
-                        if !stop, let error {
+                } catch {
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
                             self.rootView.node.show(error)
                         }
-                        exportingView.close()
                     }
-                })
+                }
+                Task { @MainActor in
+                    exportingView.close()
+                }
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
@@ -1524,21 +1458,18 @@ final class IOAction: Action {
     
     func exportSound(from renderings: [Rendering], isLinearPCM: Bool, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> (),
-                    completionHandler handler: @escaping ((any Error)?) -> ()) {
-            do {
-                var audiotracks = [Audiotrack]()
+                              progressHandler: (Double) -> ()) async throws {
+            var audiotracks = [Audiotrack]()
+            
+            var filledIDs = Set<UUID>()
+            for (ri, rendering) in renderings.enumerated() {
+                guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                filledIDs.insert(rendering.mainItem.id)
                 
-                var filledIDs = Set<UUID>()
-                var isStop = false
-                for (i, rendering) in renderings.enumerated() {
-                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
-                    filledIDs.insert(rendering.mainItem.id)
-                    
+                if let sheet = rendering.mainItem.decodedSheet() {
                     var audiotrack: Audiotrack?
-                    if let sheet = rendering.mainItem.decodedSheet() {
-                        audiotrack += sheet.audiotrack
-                    }
+                    audiotrack += sheet.audiotrack
+                    
                     for item in rendering.bottomItems {
                         filledIDs.insert(item.id)
                         guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
@@ -1552,33 +1483,20 @@ final class IOAction: Action {
                     if let audiotrack {
                         audiotracks.append(audiotrack)
                     }
-                    
-                    let t = 0.2 * Double(i) / Double(renderings.count)
-                    progressHandler(t, &isStop)
-                    if isStop { break }
-                }
-                if !isStop {
-                    if let sequencer = Sequencer(audiotracks: audiotracks, type: .normal) {
-                        try sequencer.export(url: ioResult.url,
-                                             sampleRate: Audio.defaultSampleRate,
-                                             isLinearPCM: isLinearPCM) { (t, stop) in
-                            progressHandler(t * 0.8 + 0.2, &isStop)
-                            if isStop {
-                                stop = true
-                            }
-                        }
-                        if !isStop {
-                            try ioResult.setAttributes()
-                        } else {
-                            try? ioResult.remove()
-                        }
-                    }
                 }
                 
-                handler(nil)
-            } catch {
-                handler(error)
+                progressHandler(Double(ri + 1) / Double(renderings.count) * 0.2)
+                try Task.checkCancellation()
             }
+            
+            let sequencer = Sequencer(audiotracks: audiotracks, type: .normal)
+            try sequencer.export(url: ioResult.url,
+                                 sampleRate: Audio.defaultSampleRate,
+                                 isLinearPCM: isLinearPCM) { (t) in
+                progressHandler(t * 0.8 + 0.2)
+                try Task.checkCancellation()
+            }
+            try ioResult.setAttributes()
         }
         
         let exportingView = ExportingView(type: isLinearPCM ? .linearPCM : .sound,
@@ -1594,22 +1512,23 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
-                export(from: renderings, progressHandler: { (progress, isStop) in
-                    if Task.isCancelled {
-                        isStop = true
-                        return
+                do {
+                    try await export(from: renderings) { (progress) in
+                        Task { @MainActor in
+                            exportingView.progress = progress
+                        }
                     }
-                    Task { @MainActor in
-                        exportingView.progress = progress
-                    }
-                }, completionHandler: { error in
-                    Task { @MainActor in
-                        if let error {
+                } catch {
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
                             self.rootView.node.show(error)
                         }
-                        exportingView.close()
                     }
-                })
+                }
+                Task { @MainActor in
+                    exportingView.close()
+                }
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
@@ -1620,9 +1539,8 @@ final class IOAction: Action {
     
     func exportCaption(from renderings: [Rendering], at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> ()) async throws -> Bool {
-            var isStop = false,
-                sheets = [Sheet](), currentSec: Rational = 0, captions = [Caption]()
+                              progressHandler: (Double) -> ()) async throws {
+            var sheets = [Sheet](), currentSec: Rational = 0, captions = [Caption]()
             for (ri, rendering) in renderings.enumerated() {
                 if let sheet = rendering.mainItem.decodedSheet() {
                     var maxEndSec: Rational = 0
@@ -1650,11 +1568,8 @@ final class IOAction: Action {
                     currentSec += maxEndSec
                 }
                 
-                let t = Double(ri) / Double(renderings.count)
-                progressHandler(t * 0.7, &isStop)
-                if isStop {
-                    return true
-                }
+                progressHandler(Double(ri + 1) / Double(renderings.count) * 0.7)
+                try Task.checkCancellation()
             }
             
             captions.sort { $0.secRange.start < $1.secRange.start }
@@ -1676,21 +1591,18 @@ final class IOAction: Action {
             }
             
             let frameRate = Sheet.standardFrameRate(from: sheets)
-            let renderer = try CaptionRenderer(url: ioResult.url, frameRate: frameRate)
-            renderer.write(captions: nCaptions, duration: currentSec,
-                           progressHandler: { (t, stop) in
-                progressHandler(t * 0.3 + 0.7, &isStop)
-                if isStop {
-                    stop = true
+            let encoder = try CaptionEncoder(url: ioResult.url, frameRate: frameRate)
+            do {
+                try await encoder.write(captions: nCaptions, duration: currentSec) { (t) in
+                    progressHandler(t * 0.3 + 0.7)
+                    try Task.checkCancellation()
                 }
-            })
-            try await renderer.finish()
-            if !isStop {
+                try await encoder.finish()
                 try ioResult.setAttributes()
-            } else {
-                try? ioResult.remove()
+            } catch {
+                encoder.cancel()
+                throw error
             }
-            return isStop
         }
         
         let exportingView = ExportingView(type: .caption, name: ioResult.name)
@@ -1706,24 +1618,21 @@ final class IOAction: Action {
                 defer { renderings.forEach { $0.resetTemps() } }
                 
                 do {
-                    _ = try await export(from: renderings,
-                                         progressHandler: { (progress, isStop) in
-                        if Task.isCancelled {
-                            isStop = true
-                            return
-                        }
+                    try await export(from: renderings) { (progress) in
                         Task { @MainActor in
                             exportingView.progress = progress
                         }
-                    })
-                    Task { @MainActor in
-                        exportingView.close()
                     }
                 } catch {
-                    Task { @MainActor in
-                        self.rootView.node.show(error)
-                        exportingView.close()
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
+                            self.rootView.node.show(error)
+                        }
                     }
+                }
+                Task { @MainActor in
+                    exportingView.close()
                 }
             }
             exportingView.cancelHandler = { task.cancel() }
@@ -1849,14 +1758,14 @@ final class IOAction: Action {
                          _ colorSpace: ColorSpace,
                          size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double, inout Bool) -> (),
-                              completionHandler handler: @escaping (Bool, (any Error)?) -> ()) async {
+                              progressHandler: (Double) -> ()) async throws {
+            var filledIDs = Set<UUID>()
+            let movie = try MovieEncoder(url: ioResult.url, renderSize: size,
+                                         isAlphaChannel: isAlphaChannel,
+                                         colorSpace, frameRate: 60,
+                                         isEnabledAudio: false, isLinearPCM: false)
             do {
-                var isStop = false, filledIDs = Set<UUID>()
-                let movie = try Movie(url: ioResult.url, renderSize: size,
-                                      isAlphaChannel: isAlphaChannel,
-                                      isLinearPCM: false, colorSpace, frameRate: 60)
-                for (i, rendering) in renderings.enumerated() {
+                for (ri, rendering) in renderings.enumerated() {
                     guard !filledIDs.contains(rendering.mainItem.id) else { continue }
                     filledIDs.insert(rendering.mainItem.id)
                     
@@ -1875,19 +1784,23 @@ final class IOAction: Action {
                                 .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
                                         $0.element) }
                         }
+                        
                         allGroups.sort { $0.group.date < $1.group.date }
+                        if let currentVersion = history.currentVersion,
+                           allGroups.last?.group.date != history.currentDate {
+                            allGroups.append((currentVersion, history[currentVersion]))
+                        }
                         let frameCount = allGroups.count
                         let vs = [nil] + allGroups.map { $0.version }
                         for (vi, version) in vs.enumerated() {
-                            try sheetView.history.move(to: version) { yIndexPath in
+                            try await sheetView.history.move(to: version) { yIndexPath in
                                 sheetView.history.set(indexPath: yIndexPath)
                             } topIHandler: { topIndex in
                                 sheetView.undo(to: topIndex, isMakeRect: false, isSleep: false)
+                                
                                 if vi == 0 && topIndex != 0 {
-                                    progressHandler(.init(vi) / .init(frameCount) * 0.6 + 0.1, &isStop)
-                                    if isStop {
-                                        throw CancellationError()
-                                    }
+                                    progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
+                                    try Task.checkCancellation()
                                     return
                                 }
                                 
@@ -1901,40 +1814,24 @@ final class IOAction: Action {
                                                 attitude: .init(position: origin),
                                                 path: Path(sheetBounds),
                                                 fillType: .color(backgroundColor))
-                                guard let image = node.renderedTexture(in: b, to: size, backgroundColor: backgroundColor)?.image else { throw Movie.exportError }
-                                let isAppend = movie.write(image, duration: 1, timeScale: 60) { (stop) in
-                                    progressHandler(.init(vi) / .init(frameCount) * 0.6 + 0.1, &isStop)
-                                    if isStop {
-                                        stop = true
-                                    }
-                                }
-                                if isStop || !isAppend {
-                                    throw CancellationError()
-                                }
+                                guard let image = node.renderedTexture(in: b, to: size,
+                                                                       backgroundColor: backgroundColor)?.image
+                                        else { throw MovieEncoder.exportingError }
+                                
+                                try await movie.write(image, duration: 1, timeScale: 60)
+                                
+                                progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
+                                try Task.checkCancellation()
                             }
                         }
                     }
-                    
-                    progressHandler(.init(i) / .init(renderings.count) * 0.1, &isStop)
-                    if isStop { break }
                 }
                 
-                do {
-                    let isStop = try await movie.finish()
-                    if !isStop {
-                        try ioResult.setAttributes()
-                    } else {
-                        try? ioResult.remove()
-                    }
-                    handler(isStop, nil)
-                } catch {
-                    handler(true, error)
-                }
-            } catch is CancellationError {
-                try? ioResult.remove()
-                handler(true, nil)
+                try await movie.finish()
+                try ioResult.setAttributes()
             } catch {
-                handler(false, error)
+                movie.cancel()
+                throw error
             }
         }
         
@@ -1950,23 +1847,23 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
-                await export(from: renderings,
-                             progressHandler: { (progress, isStop) in
-                    if Task.isCancelled {
-                        isStop = true
-                        return
+                do {
+                    try await export(from: renderings) { (progress) in
+                        Task { @MainActor in
+                            exportingView.progress = progress
+                        }
                     }
-                    Task { @MainActor in
-                        exportingView.progress = progress
-                    }
-                }, completionHandler: { (stop, error) in
-                    Task { @MainActor in
-                        if !stop, let error {
+                } catch {
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
                             self.rootView.node.show(error)
                         }
-                        exportingView.close()
                     }
-                })
+                }
+                Task { @MainActor in
+                    exportingView.close()
+                }
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
@@ -1987,11 +1884,11 @@ final class ToMP4MovieAction: InputKeyEventAction {
     func flow(with event: InputKeyEvent) {
         Task { @MainActor in
             let result = await URL.load(prompt: "Import".localized,
-                                        fileTypes: [Movie.FileType.mp4, Movie.FileType.mov])
+                                        fileTypes: [MovieEncoder.FileType.mp4, MovieEncoder.FileType.mov])
             switch result {
             case .complete(let ioResult0s):
                 let result = await URL.export(name: "",
-                                              fileType: Movie.FileType.mp4,
+                                              fileType: MovieEncoder.FileType.mp4,
                                               fileSizeHandler: { return nil })
                 switch result {
                 case .complete(let ioResult1):
@@ -1999,7 +1896,7 @@ final class ToMP4MovieAction: InputKeyEventAction {
                     let toURL = ioResult1.url
                     Task {
                         do {
-                            try await Movie.toMP4(from: fromURL, to: toURL)
+                            try await MovieEncoder.toMP4(from: fromURL, to: toURL)
                         } catch {
                             rootView.node.show(error)
                         }

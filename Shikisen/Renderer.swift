@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 @preconcurrency import MetalKit
 import MetalPerformanceShaders
 import Accelerate.vImage
@@ -544,8 +544,6 @@ extension Node {
         let blitCommandEncoder = commandBuffer.makeBlitCommandEncoder()
         if mipmapped {
             blitCommandEncoder?.generateMipmaps(for: mtlTexture)
-        } else {
-            blitCommandEncoder?.synchronize(resource: mtlTexture)
         }
         blitCommandEncoder?.endEncoding()
         
@@ -1014,7 +1012,7 @@ extension MTLDevice {
         let size = values.count * MemoryLayout<Float>.stride
         if let mtlBuffer = makeBuffer(bytes: values,
                                       length: size,
-                                      options: .storageModeManaged) {
+                                      options: .storageModeShared) {
             return Buffer(mtl: mtlBuffer)
         } else {
             return nil
@@ -1024,7 +1022,7 @@ extension MTLDevice {
         let size = values.count * MemoryLayout<RGBA>.stride
         if let mtlBuffer = makeBuffer(bytes: values,
                                       length: size,
-                                      options: .storageModeManaged) {
+                                      options: .storageModeShared) {
             return Buffer(mtl: mtlBuffer)
         } else {
             return nil
@@ -1035,7 +1033,7 @@ extension MTLDevice {
         let size = MemoryLayout<RGBA>.stride
         if let mtlBuffer = makeBuffer(bytes: &value,
                                       length: size,
-                                      options: .storageModeManaged) {
+                                      options: .storageModeShared) {
             return Buffer(mtl: mtlBuffer)
         } else {
             return nil

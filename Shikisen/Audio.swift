@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import Accelerate.vecLib.vDSP
 @preconcurrency import AVFAudio
 //#elseif os(linux) && os(windows)
@@ -86,9 +86,7 @@ final class NotePlayer {
     struct NotePlayerError: Error {}
     
     init(notes: [Note.PitResult]) throws {
-        guard let sequencer = Sequencer(audiotracks: [], type: .loopNote) else {
-            throw NotePlayerError()
-        }
+        let sequencer = Sequencer(audiotracks: [], type: .loopNote)
         self.aNotes = notes
         self.sequencer = sequencer
         scoreNoder = sequencer.append(ScoreTrackItem(rendnoteManagers: [], sampleRate: Audio.defaultSampleRate,
@@ -445,7 +443,9 @@ final class PCMNoder: ObjectHashable {
             
             return noErr
         }
-        try? node.auAudioUnit.outputBusses[0].setFormat(format)
+        node.withAUAudioUnit { au in
+            try? au.outputBusses[0].setFormat(format)
+        }
         
         self.stereo = pcmTrackItem.stereo
     }
@@ -979,7 +979,9 @@ final class ScoreNoder: ObjectHashable {
             
             return noErr
         }
-        try? node.auAudioUnit.outputBusses[0].setFormat(format)
+        node.withAUAudioUnit { au in
+            try? au.outputBusses[0].setFormat(format)
+        }
     }
 }
 
@@ -1030,10 +1032,10 @@ final class Sequencer {
         case normal, loop, loopNote
     }
     
-    convenience init?(audiotracks: [Audiotrack],
-                      tapHandler: (@Sendable ([[Double]], Double) -> ())? = nil,
-                      type: RenderType,
-                      sampleRate: Double = Audio.defaultSampleRate) {
+    convenience init(audiotracks: [Audiotrack],
+                     tapHandler: (@Sendable ([[Double]], Double) -> ())? = nil,
+                     type: RenderType,
+                     sampleRate: Double = Audio.defaultSampleRate) {
         let audiotracks = audiotracks.filter { !$0.isEmpty }
         
         var tracks = [Track]()
@@ -1059,8 +1061,8 @@ final class Sequencer {
         self.init(tracks: tracks, type: type, tapHandler: tapHandler)
     }
     
-    init?(tracks: [Track], type: RenderType,
-          tapHandler: (@Sendable ([[Double]], Double) -> ())? = nil) {
+    init(tracks: [Track], type: RenderType,
+         tapHandler: (@Sendable ([[Double]], Double) -> ())? = nil) {
         self.type = type
         
         let engine = AVAudioEngine()
@@ -1083,8 +1085,8 @@ final class Sequencer {
                 scoreNoders.insert(scoreNoder)
                 
                 engine.attach(scoreNoder.node)
-                engine.connect(scoreNoder.node, to: mixerNode,
-                               format: scoreNoder.node.outputFormat(forBus: 0))
+                try? engine.connectNode(scoreNoder.node, to: mixerNode,
+                                        format: scoreNoder.node.outputFormat(forBus: 0))
             }
             for pcmTrackItem in track.pcmTrackItems {
                 guard pcmTrackItem.durSec > 0 else { continue }
@@ -1095,8 +1097,8 @@ final class Sequencer {
                 pcmNoders.insert(pcmNoder)
                 
                 engine.attach(pcmNoder.node)
-                engine.connect(pcmNoder.node, to: mixerNode,
-                               format: pcmNoder.node.outputFormat(forBus: 0))
+                try? engine.connectNode(pcmNoder.node, to: mixerNode,
+                                        format: pcmNoder.node.outputFormat(forBus: 0))
             }
             
             sSec += Double(durSec)
@@ -1106,8 +1108,8 @@ final class Sequencer {
         self.pcmNoders = pcmNoders
         
         if let tapHandler {
-            mixerNode.installTap(onBus: 0, bufferSize: 1024,
-                                 format: mixerNode.outputFormat(forBus: 0)) { @Sendable buffer, time in
+            try? mixerNode.installAudioTap(onBus: 0, bufferSize: 1024,
+                                           format: mixerNode.outputFormat(forBus: 0)) { @Sendable buffer, time in
                 guard !buffer.isEmpty else { return }
                 tapHandler(buffer.doubleSampless, buffer.sampleRate)
             }
@@ -1118,10 +1120,10 @@ final class Sequencer {
         engine.attach(limiterNode)
         self.limiterNode = limiterNode
         
-        engine.connect(mixerNode, to: limiterNode,
-                       format: limiterNode.inputFormat(forBus: 0))
-        engine.connect(limiterNode, to: engine.mainMixerNode,
-                       format: limiterNode.outputFormat(forBus: 0))
+        try? engine.connectNode(mixerNode, to: limiterNode,
+                                format: limiterNode.inputFormat(forBus: 0))
+        try? engine.connectNode(limiterNode, to: engine.mainMixerNode,
+                                format: limiterNode.outputFormat(forBus: 0))
         
         self.engine = engine
         
@@ -1161,8 +1163,8 @@ extension Sequencer {
         scoreNoders.insert(scoreNoder)
         
         engine.attach(scoreNoder.node)
-        engine.connect(scoreNoder.node, to: mixerNode,
-                       format: scoreNoder.node.outputFormat(forBus: 0))
+        try? engine.connectNode(scoreNoder.node, to: mixerNode,
+                                format: scoreNoder.node.outputFormat(forBus: 0))
         
         scoreNoder.sequencer = self
         return scoreNoder
@@ -1205,8 +1207,8 @@ extension Sequencer {
                 scoreNoders.insert(scoreNoder)
                 
                 engine.attach(scoreNoder.node)
-                engine.connect(scoreNoder.node, to: mixerNode,
-                               format: scoreNoder.node.outputFormat(forBus: 0))
+                try? engine.connectNode(scoreNoder.node, to: mixerNode,
+                                        format: scoreNoder.node.outputFormat(forBus: 0))
             }
             for pcmTrackItem in track.pcmTrackItems {
                 guard pcmTrackItem.durSec > 0 else { continue }
@@ -1217,8 +1219,8 @@ extension Sequencer {
                 pcmNoders.insert(pcmNoder)
                 
                 engine.attach(pcmNoder.node)
-                engine.connect(pcmNoder.node, to: mixerNode,
-                               format: pcmNoder.node.outputFormat(forBus: 0))
+                try? engine.connectNode(pcmNoder.node, to: mixerNode,
+                                        format: pcmNoder.node.outputFormat(forBus: 0))
             }
             
             sSec += Double(durSec)
@@ -1260,10 +1262,6 @@ extension Sequencer {
     }
 }
 extension Sequencer {
-    private var clippingAudioUnit: ClippingAudioUnit {
-        limiterNode.auAudioUnit as! ClippingAudioUnit
-    }
-    
     struct ExportError: Error {}
     
     static func audioSettings(isLinearPCM: Bool, channelCount: Int,
@@ -1293,13 +1291,13 @@ extension Sequencer {
                 limitLufs: Double? = Audio.limitLufs,
                 isLinearPCM: Bool,
                 isClip: Bool = true,
-                progressHandler: (Double, inout Bool) -> ()) throws {
-        guard let buffer = try buffer(sampleRate: sampleRate,
-                                      headroomType: headroomType,
-                                      headroomAmp: headroomAmp,
-                                      waveclip: waveclip,
-                                      limitLufs: limitLufs,
-                                      progressHandler: progressHandler) else { return }
+                progressHandler: (Double) throws -> ()) throws {
+        let buffer = try buffer(sampleRate: sampleRate,
+                                headroomType: headroomType,
+                                headroomAmp: headroomAmp,
+                                waveclip: waveclip,
+                                limitLufs: limitLufs,
+                                progressHandler: progressHandler)
         
         let settings = Self.audioSettings(isLinearPCM: isLinearPCM,
                                           channelCount: buffer.channelCount,
@@ -1314,13 +1312,13 @@ extension Sequencer {
                waveclip: Waveclip? = .default,
                limitLufs: Double? = Audio.limitLufs,
                isClip: Bool = true,
-               progressHandler: (Double, inout Bool) -> ()) throws -> Audio? {
-        guard let buffer = try buffer(sampleRate: sampleRate,
-                                      headroomType: headroomType,
-                                      headroomAmp: headroomAmp,
-                                      waveclip: waveclip,
-                                      limitLufs: limitLufs,
-                                      progressHandler: progressHandler) else { return nil }
+               progressHandler: (Double) throws -> ()) throws -> Audio {
+        let buffer = try buffer(sampleRate: sampleRate,
+                                headroomType: headroomType,
+                                headroomAmp: headroomAmp,
+                                waveclip: waveclip,
+                                limitLufs: limitLufs,
+                                progressHandler: progressHandler)
         return Audio(pcmData: buffer.pcmData)
     }
     func buffer(sampleRate: Double,
@@ -1329,14 +1327,14 @@ extension Sequencer {
                 waveclip: Waveclip? = .default,
                 limitLufs: Double? = Audio.limitLufs,
                 isClip: Bool = true,
-                progressHandler: (Double, inout Bool) -> ()) throws -> AVAudioPCMBuffer? {
-        let oldHeadroomAmp = clippingAudioUnit.headroomAmp
-        let oldEnabledAttack = clippingAudioUnit.enabledAttack
-        clippingAudioUnit.headroomAmp = nil
-        clippingAudioUnit.enabledAttack = false
+                progressHandler: (Double) throws -> ()) throws -> AVAudioPCMBuffer {
+        limiterNode.withAUAudioUnit { au in
+            (au as! ClippingAudioUnit).enabledHeadroomAndAttack = false
+        }
         defer {
-            clippingAudioUnit.headroomAmp = oldHeadroomAmp
-            clippingAudioUnit.enabledAttack = oldEnabledAttack
+            limiterNode.withAUAudioUnit { au in
+                (au as! ClippingAudioUnit).enabledHeadroomAndAttack = true
+            }
         }
         
         guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -1362,7 +1360,6 @@ extension Sequencer {
             throw ExportError()
         }
         
-        var isStop = false
         while engine.manualRenderingSampleTime < length {
             do {
                 let mrst = engine.manualRenderingSampleTime
@@ -1372,13 +1369,11 @@ extension Sequencer {
                 switch status {
                 case .success:
                     allBuffer.append(buffer)
-                    progressHandler(Double(mrst) / Double(length), &isStop)
-                    if isStop { return nil }
+                    try progressHandler(Double(mrst) / Double(length))
                 case .insufficientDataFromInputNode:
                     throw ExportError()
                 case .cannotDoInCurrentContext:
-                    progressHandler(Double(mrst) / Double(length), &isStop)
-                    if isStop { return nil }
+                    try progressHandler(Double(mrst) / Double(length))
                     Thread.sleep(forTimeInterval: 0.1)
                 case .error: throw ExportError()
                 @unknown default: throw ExportError()
@@ -1408,8 +1403,7 @@ extension Sequencer {
             allBuffer.clip(amp: Float(headroomAmp))
         }
         
-        progressHandler(1, &isStop)
-        if isStop { return nil }
+        try progressHandler(1)
         
         return allBuffer
     }
@@ -1486,7 +1480,7 @@ extension AVAudioPCMBuffer {
         return nBuffer
     }
     
-    var cmSampleBuffer: CMSampleBuffer? {
+    func cmSampleBuffer() -> sending CMSampleBuffer? {
         let audioBufferList = mutableAudioBufferList
         let asbd = format.streamDescription
         var format: CMFormatDescription? = nil
@@ -2120,6 +2114,27 @@ final class EQ {
         vDSP_biquadm_ResetState(setup)
     }
 }
+extension AVReadOnlyAudioPCMBuffer {
+    var isEmpty: Bool {
+        frameCapacity == 0 || frameLength == 0 || format.channelCount == 0
+    }
+    var sampleRate: Double {
+        format.sampleRate
+    }
+    var doubleSampless: [[Double]] {
+        Int(format.channelCount).range.map {
+            switch channelData($0) {
+            case .float(let samples):
+                samples.count.range.map { Double(samples[$0]) }
+            case .int16(let samples):
+                samples.count.range.map { Double(samples[$0]) / Double(Int16.max) }
+            case .int32(let samples):
+                samples.count.range.map { Double(samples[$0]) / Double(Int32.max) }
+            @unknown default: fatalError()
+            }
+        }
+    }
+}
 
 extension AVAudioUnitEffect {
     static func limiter() -> AVAudioUnitEffect {
@@ -2158,8 +2173,20 @@ final class ClippingAudioUnit: AUAudioUnit {
     
     private var pcmBuffer: AVAudioPCMBuffer?
     
-    var headroomAmp: Float? = Float(Audio.floatHeadroomAmp)
-    var enabledAttack = true
+    private var headroomAmp: Float? = Audio.floatHeadroomAmp
+    private var enabledAttack = true
+    var enabledHeadroomAndAttack = true {
+        didSet {
+            guard enabledHeadroomAndAttack != oldValue else { return }
+            if enabledHeadroomAndAttack {
+                headroomAmp = Audio.floatHeadroomAmp
+                enabledAttack = true
+            } else {
+                headroomAmp = nil
+                enabledAttack = false
+            }
+        }
+    }
     
     struct SError: Error {}
 

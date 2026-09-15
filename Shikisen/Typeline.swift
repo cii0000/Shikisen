@@ -21,7 +21,7 @@ import class Foundation.NSMutableAttributedString
 import struct Foundation.NSRange
 public import struct CoreFoundation.CFRange
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import CoreText
 //#elseif os(linux) && os(windows)
 //#endif

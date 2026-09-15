@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif

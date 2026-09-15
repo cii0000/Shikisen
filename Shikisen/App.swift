@@ -20,7 +20,7 @@ import MetalKit
 //#elseif os(iOS) && os(watchOS) && os(tvOS) && os(visionOS) && os(linux) && os(windows)
 //#endif
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import UniformTypeIdentifiers
 //#elseif os(linux) && os(windows)
 //#endif
@@ -2550,33 +2550,17 @@ extension Node {
             CGDisplayMoveCursorToPoint(0, CGPoint(x: np.x, y: h - np.y))
         }
     }
-    @MainActor func show(definition: String, font: Font, orientation: Orientation, at p: Point) {
-        if let owner = owner as? SubMTKView {
-            let attributes = Typobute(font: font,
-                                      orientation: orientation).attributes()
-            let attString = NSAttributedString(string: definition,
-                                               attributes: attributes)
-            let screenP = owner.rootView.convertWorldToScreen(convertToWorld(p))
-            owner.showDefinition(for: attString, at: screenP.cg)
-        }
-    }
     
     @MainActor func show(_ error: any Error) {
         guard let window = (owner as? SubMTKView)?.window else { return }
         NSAlert(error: error).beginSheetModal(for: window,
                                               completionHandler: { _ in })
     }
-    
-    @MainActor func show(message: String = "", infomation: String = "", isCaution: Bool = false) {
+    @MainActor func show(_ progressPanel: ProgressPanel) {
         guard let window = (owner as? SubMTKView)?.window else { return }
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.informativeText = infomation
-        if isCaution {
-            alert.alertStyle = .critical
-            alert.window.defaultButtonCell = nil
-        }
-        alert.beginSheetModal(for: window) { _ in }
+        progressPanel.topWindow = window
+        progressPanel.begin()
+        window.beginSheet(progressPanel.window) { _ in }
     }
     
     enum AlertResult {
@@ -2609,34 +2593,6 @@ extension Node {
         case .alertFirstButtonReturn: .ok
         default: .cancel
         }
-    }
-    
-    @MainActor func show(message: String, infomation: String, titles: [String]) async -> Int? {
-        guard let window = (owner as? SubMTKView)?.window else { return nil }
-        let alert = NSAlert()
-        for title in titles {
-            alert.addButton(withTitle: title)
-        }
-        alert.messageText = message
-        alert.informativeText = infomation
-        return await alert.beginSheetModal(for: window).rawValue
-    }
-    
-    @MainActor func show(message: String, infomation: String) async {
-        guard let window = (owner as? SubMTKView)?.window else { return }
-        let alert = NSAlert()
-        alert.addButton(withTitle: "Done".localized)
-        alert.messageText = message
-        alert.informativeText = infomation
-        
-        _ = await alert.beginSheetModal(for: window)
-    }
-    
-    @MainActor func show(_ progressPanel: ProgressPanel) {
-        guard let window = (owner as? SubMTKView)?.window else { return }
-        progressPanel.topWindow = window
-        progressPanel.begin()
-        window.beginSheet(progressPanel.window) { _ in }
     }
 }
 

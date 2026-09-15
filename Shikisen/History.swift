@@ -906,7 +906,7 @@ extension History {
     }
     func move(to toVersion: Version?,
               yIndexPathHandler: ([Int]) -> (),
-              topIHandler: (Int) throws -> ()) rethrows {
+              topIHandler: (Int) async throws -> ()) async rethrows {
         let fromVersion = currentVersion
         if let toVersion {
             if let fromVersion {
@@ -923,11 +923,11 @@ extension History {
                             yIndexPathHandler(toVersion.indexPath)
                         }
                         for i in fromTopI + 1 ... toTopI {
-                            try topIHandler(i)
+                            try await topIHandler(i)
                         }
                     } else {
                         for i in (toTopI ..< fromTopI).reversed() {
-                            try topIHandler(i)
+                            try await topIHandler(i)
                         }
                     }
                 } else {
@@ -936,22 +936,22 @@ extension History {
                                                groupIndex: branch(from: nFromIndexPath).groups.count - 1)
                     let nFromTopI = topIndex(from: nFromVersion)
                     for i in (nFromTopI ..< fromTopI).reversed() {
-                        try topIHandler(i)
+                        try await topIHandler(i)
                     }
                     yIndexPathHandler(toVersion.indexPath)
                     for i in nFromTopI + 1 ... toTopI {
-                        try topIHandler(i)
+                        try await topIHandler(i)
                     }
                 }
             } else {
                 yIndexPathHandler(toVersion.indexPath)
                 for i in 1 ... topIndex(from: toVersion) {
-                    try topIHandler(i)
+                    try await topIHandler(i)
                 }
             }
         } else if let fromVersion {
             for i in (0 ..< topIndex(from: fromVersion)).reversed() {
-                try topIHandler(i)
+                try await topIHandler(i)
             }
         }
     }

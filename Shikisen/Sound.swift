@@ -18,7 +18,7 @@
 import struct Foundation.UUID
 import struct Foundation.Data
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif
@@ -2110,8 +2110,7 @@ extension Score {
     }
     var renderedPCMBuffer: PCMBuffer? {
         let seq = Sequencer(audiotracks: [.init(values: [.score(self)])], type: .normal)
-        return try? seq?.buffer(sampleRate: Audio.defaultSampleRate,
-                                progressHandler: { _, _ in })
+        return try? seq.buffer(sampleRate: Audio.defaultSampleRate, progressHandler: { _ in })
     }
     
     var endLoopDurBeat: Rational {

@@ -17,7 +17,7 @@
 
 import ComplexModule
 
-//#if os(macOS) && os(iOS) && os(watchOS) && os(tvOS) && os(visionOS)
+//#if anyAppleOS
 import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif
