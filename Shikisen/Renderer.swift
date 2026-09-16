@@ -23,6 +23,8 @@ import UniformTypeIdentifiers
 //#elseif os(linux) && os(windows)
 //#endif
 
+struct RendererError: Error {}
+
 final class Renderer {
     let device: any MTLDevice
     let library: any MTLLibrary
@@ -37,21 +39,17 @@ final class Renderer {
     
     nonisolated(unsafe) static let shared = try! Renderer()
     
-    static var metalError: any Error {
-        NSError(domain: NSCocoaErrorDomain, code: 0)
-    }
-    
     init() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         self.device = device
         guard let library = device.makeDefaultLibrary() else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         self.library = library
         guard let commandQueue = device.makeCommandQueue() else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         self.commandQueue = commandQueue
         
@@ -246,7 +244,7 @@ final class Renderstate {
         invertDepthStencilD.backFaceStencil = invertStencilD
         invertDepthStencilD.frontFaceStencil = invertStencilD
         guard let ss = device.makeDepthStencilState(descriptor: invertDepthStencilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         invertDepthStencilState = ss
         
@@ -257,7 +255,7 @@ final class Renderstate {
         zeroDepthStencilD.backFaceStencil = zeroStencilD
         zeroDepthStencilD.frontFaceStencil = zeroStencilD
         guard let zs = device.makeDepthStencilState(descriptor: zeroDepthStencilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         zeroDepthStencilState = zs
         
@@ -268,7 +266,7 @@ final class Renderstate {
         replaceDepthStencilD.backFaceStencil = replaceStencilD
         replaceDepthStencilD.frontFaceStencil = replaceStencilD
         guard let rs = device.makeDepthStencilState(descriptor: replaceDepthStencilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         replaceDepthStencilState = rs
         
@@ -280,7 +278,7 @@ final class Renderstate {
         clippingDepthStecilD.backFaceStencil = clippingStencilD
         clippingDepthStecilD.frontFaceStencil = clippingStencilD
         guard let cs = device.makeDepthStencilState(descriptor: clippingDepthStecilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         clippingDepthStencilState = cs
         
@@ -292,13 +290,13 @@ final class Renderstate {
         reversedClippingDepthStecilD.backFaceStencil = reversedClippingStencilD
         reversedClippingDepthStecilD.frontFaceStencil = reversedClippingStencilD
         guard let rcs = device.makeDepthStencilState(descriptor: reversedClippingDepthStecilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         reversedClippingDepthStencilState = rcs
         
         let normalDepthStencilD = MTLDepthStencilDescriptor()
         guard let ncs = device.makeDepthStencilState(descriptor: normalDepthStencilD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         normalDepthStencilState = ncs
         
@@ -306,7 +304,7 @@ final class Renderstate {
         cacheSamplerD.minFilter = .nearest
         cacheSamplerD.magFilter = .linear
         guard let ncss = device.makeSamplerState(descriptor: cacheSamplerD) else {
-            throw Renderer.metalError
+            throw RendererError()
         }
         cacheSamplerState = ncss
     }
@@ -1853,7 +1851,7 @@ extension Image {
     func write(_ type: FileType, size: Size, to url: URL) throws {
         guard let v = size == self.size ?
                 self : resize(with: size) else {
-            throw URL.writeError
+            throw URL.WriteError()
         }
         try v.write(type, to: url)
     }
@@ -1863,7 +1861,7 @@ extension Image {
     static func writeGIF(_ images: [(image: Image, time: Rational)], to url: URL) throws {
         guard !images.isEmpty,
               let d = CGImageDestinationCreateWithURL(url as CFURL, UniformTypeIdentifiers.UTType.gif.identifier as CFString, images.count, nil) else {
-            throw URL.writeError
+            throw URL.WriteError()
         }
         let properties = [(kCGImagePropertyGIFDictionary as String):
                             [(kCGImagePropertyGIFLoopCount as String): 0]]
@@ -1874,7 +1872,7 @@ extension Image {
             CGImageDestinationAddImage(d, image.cg, properties as CFDictionary)
         }
         if !CGImageDestinationFinalize(d) {
-            throw URL.writeError
+            throw URL.WriteError()
         }
     }
     func convertRGBA() -> Image? {
@@ -1906,7 +1904,7 @@ extension Image {
     func write(_ type: FileType, to url: URL,
                metadata: [String: Any]) throws {
         guard let des = CGImageDestinationCreateWithURL(url as CFURL, type.utType.uti.identifier as CFString, 1, nil) else {
-            throw URL.writeError
+            throw URL.WriteError()
         }
         CGImageDestinationAddImage(des, cg, metadata as CFDictionary)
         CGImageDestinationFinalize(des)
@@ -2006,7 +2004,7 @@ final class PDF {
         guard let dc = CGDataConsumer(data: data as CFMutableData),
               let ctx = CGContext(consumer: dc, mediaBox: &mb, nil) else {
             
-            throw URL.writeError
+            throw URL.WriteError()
         }
         self.ctx = ctx
     }
@@ -2014,7 +2012,7 @@ final class PDF {
         let cfURL = url as CFURL
         var mb = mediaBox.cg
         guard let ctx = CGContext(cfURL, mediaBox: &mb, nil) else {
-            throw URL.writeError
+            throw URL.WriteError()
         }
         self.ctx = ctx
     }

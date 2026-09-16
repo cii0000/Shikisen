@@ -977,6 +977,7 @@ final class LineAction: Action {
             rootView.cursor = rootView.defaultCursor
             
             DragEvent.disableMouseCoalescing()
+            rootView.node.owner?.displaySyncEnabled = false
             
             updateClipBoundsAndIndexRange(at: p)
             let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
@@ -1079,6 +1080,7 @@ final class LineAction: Action {
                                         phase: .changed))
         case .ended:
             rootView.cursor = rootView.defaultCursor
+            rootView.node.owner?.displaySyncEnabled = true
             
             drawLineTimer?.cancel()
             

@@ -163,6 +163,8 @@ extension AVFileType: FileTypeProtocol {
 }
 
 final class MovieEncoder {
+    struct ExportingError: Error {}
+    
     enum FileType: FileTypeProtocol, CaseIterable {
         case mov, mp4
         var name: String {
@@ -192,9 +194,6 @@ final class MovieEncoder {
         }
     }
     
-    static let exportingError = NSError(domain: AVFoundationErrorDomain,
-                                        code: AVError.Code.exportFailed.rawValue)
-    
     let url: URL
     let fileType: AVFileType, codec: AVVideoCodecType
     let renderSize: Size, isHDR: Bool
@@ -203,8 +202,7 @@ final class MovieEncoder {
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
     private let audioInput: AVAssetWriterInput?
-    private let pbReceiver: AVAssetWriterInput.PixelBufferReceiver
-    private let audioSBReceiver: AVAssetWriterInput.SampleBufferReceiver?
+    private let pbAdaptor: AVAssetWriterInputPixelBufferAdaptor
     let isEnabledAudio, isAlphaChannel: Bool
     
     private var isAppend = true, isStop = false
@@ -224,7 +222,7 @@ final class MovieEncoder {
         
          guard let colorSpace = isHDR ?
                 CGColorSpace.itur2020HLGColorSpace : CGColorSpace.sRGBColorSpace,
-              let colorSpaceProfile = colorSpace.copyICCData() else { throw Self.exportingError }
+              let colorSpaceProfile = colorSpace.copyICCData() else { throw ExportingError() }
         self.colorSpace = colorSpace
         self.colorSpaceProfile = colorSpaceProfile
         self.isAlphaChannel = isAlphaChannel
@@ -252,42 +250,44 @@ final class MovieEncoder {
                AVVideoCompressionPropertiesKey: [AVVideoExpectedSourceFrameRateKey: frameRate]]
         
         videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: setting)
+        videoInput.expectsMediaDataInRealTime = true
+        writer.add(videoInput)
         
         if isEnabledAudio {
             let audioSettings = Sequencer.audioSettings(isLinearPCM: isLinearPCM,
                                                         channelCount: audioChannelCount,
                                                         sampleRate: sampleRate)
             let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            audioInput.expectsMediaDataInRealTime = true
             audioInput.languageCode = nil
             self.audioInput = audioInput
+            writer.add(audioInput)
         } else {
             audioInput = nil
         }
         
-        let pixelBufferAttributes = isHDR ?
-        CVPixelBufferCreationAttributes(pixelFormatType: .init(rawValue: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange),
-                                        size: .init(width: width, height: height)) :// AVFondation or Core Image bug?: height % 2 == 0 ? height + 1 : height
-        CVPixelBufferCreationAttributes(pixelFormatType: .init(rawValue: kCVPixelFormatType_32ARGB),
-                                        size: .init(width: width, height: height),
-                                        compatibility: [.cgBitmapContext])
-        if isEnabledAudio, let audioInput {
-            (pbReceiver, _) = writer.inputPixelBufferReceiverRequestingMultiPass(for: videoInput,
-                                                                                 pixelBufferAttributes: pixelBufferAttributes)
-            (audioSBReceiver, _) = writer.inputReceiverRequestingMultiPass(for: audioInput)
-        } else {
-            pbReceiver = writer.inputPixelBufferReceiver(for: videoInput,
-                                                         pixelBufferAttributes: pixelBufferAttributes)
-            audioSBReceiver = nil
-        }
+        let attributes: [String: Any] = isHDR ?
+           [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange),
+            String(kCVPixelBufferWidthKey): width,
+            String(kCVPixelBufferHeightKey): height % 2 == 0 ? height + 1 : height//AVFondation or Core Image bug?
+            ] :
+            [String(kCVPixelBufferPixelFormatTypeKey): Int(kCVPixelFormatType_32ARGB),
+             String(kCVPixelBufferWidthKey): width,
+             String(kCVPixelBufferHeightKey): height,
+             String(kCVPixelBufferCGBitmapContextCompatibilityKey): true]
+        pbAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput,
+                                                       sourcePixelBufferAttributes: attributes)
         
-        try writer.start()
+        if !writer.startWriting() { throw ExportingError() }
         writer.startSession(atSourceTime: .zero)
     }
     
     func write(_ image: Image, duration: Int, timeScale: Int) async throws {
-        guard let bufferPool = pbReceiver.pixelBufferPool else { throw Self.exportingError }
-        let pixelBuffer = try bufferPool.makeMutablePixelBuffer()
-        pixelBuffer.withUnsafeBuffer { pb in
+        guard let bufferPool = pbAdaptor.pixelBufferPool else { throw ExportingError() }
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,
+                                           bufferPool, &pixelBuffer)
+        if let pb = pixelBuffer {
             if isAlphaChannel {
                 CVBufferSetAttachment(pb,
                                       kCVImageBufferAlphaChannelModeKey,
@@ -327,21 +327,26 @@ final class MovieEncoder {
             
             CVPixelBufferUnlockBaseAddress(pb,
                                            CVPixelBufferLockFlags(rawValue: CVOptionFlags(0)))
+            
+            if currentTime.value == 0 {
+                currentTime = .init(value: 0, timescale: .init(timeScale))
+            }
+            while !videoInput.isReadyForMoreMediaData {
+                try await Task.sleep(sec: 0.1)
+                try Task.checkCancellation()
+            }
+            if !pbAdaptor.append(pb, withPresentationTime: currentTime) { throw ExportingError() }
+            
+            currentTime = currentTime + .init(value: .init(duration), timescale: .init(timeScale))
         }
-        if currentTime.value == 0 {
-            currentTime = .init(value: 0, timescale: .init(timeScale))
-        }
-        try await pbReceiver.append(.init(pixelBuffer), with: currentTime)
-        
-        currentTime = currentTime + .init(value: .init(duration), timescale: .init(timeScale))
     }
     
     func writeAudio(from seq: Sequencer,
                     progressHandler: (Double) throws -> ()) async throws {
-        guard let audioSBReceiver else { throw Self.exportingError }
+        guard let audioInput else { throw ExportingError() }
         let buffer = try seq.buffer(sampleRate: sampleRate, progressHandler: progressHandler)
-        guard let cmBuffer = buffer.cmSampleBuffer() else { throw Self.exportingError }
-        try await audioSBReceiver.append(.init(unsafeBuffer: cmBuffer))
+        guard let cmBuffer = buffer.cmSampleBuffer() else { throw ExportingError() }
+        if !audioInput.append(cmBuffer) { throw ExportingError() }
     }
     
     func cancel() {
@@ -372,10 +377,12 @@ extension Caption {
 }
 
 final class CaptionEncoder {
+    struct ExportingError: Error {}
+    
     let url: URL, frameRate: Int
     private let writer: AVAssetWriter,
                 captionInput: AVAssetWriterInput,
-                captionReceiver: AVAssetWriterInput.CaptionReceiver
+                captionAdaptor: AVAssetWriterInputCaptionAdaptor
     private var currentSec = Rational()
     
     init(url: URL, frameRate: Int) throws {
@@ -388,9 +395,11 @@ final class CaptionEncoder {
         captionInput = AVAssetWriterInput(mediaType: .text,
                                           outputSettings: [AVCaptionSettingsKey.timeCodeFrameDuration.rawValue: CMTime(value: 1, timescale: CMTimeScale(frameRate))])
         captionInput.languageCode = Locale.current.language.languageCode?.identifier
-        captionReceiver = writer.inputCaptionReceiver(for: captionInput)
+        writer.add(captionInput)
         
-        try writer.start()
+        captionAdaptor = AVAssetWriterInputCaptionAdaptor(assetWriterInput: captionInput)
+        
+        if !writer.startWriting() { throw ExportingError() }
         writer.startSession(atSourceTime: .zero)
     }
     
@@ -399,7 +408,7 @@ final class CaptionEncoder {
         let avCaptions = Caption.avCaptions(from: captions, frameRate: frameRate,
                                             deltaSec: currentSec)
         for (i, avCaption) in avCaptions.enumerated() {
-            try await captionReceiver.append(avCaption)
+            if !captionAdaptor.append(avCaption) { throw ExportingError() }
             try progressHandler(Double(i + 1) / Double(avCaptions.count))
         }
         currentSec += duration
@@ -408,8 +417,8 @@ final class CaptionEncoder {
         writer.cancelWriting()
     }
     func finish() async throws {
-        captionInput.markAsFinished()
         writer.endSession(atSourceTime: currentSec.cm(timescale: CMTimeScale(frameRate)))
+        captionInput.markAsFinished()
         await writer.finishWriting()
         if let error = writer.error { throw error }
     }
@@ -451,7 +460,7 @@ extension MovieEncoder {
         let asset = AVURLAsset(url: fromUrl)
         guard let session = AVAssetExportSession(asset: asset,
                                                  presetName: AVAssetExportPresetPassthrough)
-        else { throw Self.exportingError }
+        else { throw ExportingError() }
         try await session.export(to: toUrl, as: .m4a)
         if isRemoveFromUrl {
             try fileManager.removeItem(at: fromUrl)
@@ -499,14 +508,14 @@ extension MovieEncoder {
         let asset = AVURLAsset(url: url)
         
         let mTracks = try await asset.loadTracks(withMediaType: .video)
-        guard !mTracks.isEmpty else { throw Self.exportingError }
+        guard !mTracks.isEmpty else { throw ExportingError() }
         let aTracks = try await asset.loadTracks(withMediaType: .audio)
         
         let comp = AVMutableComposition()
         
         guard let nmTrack = comp.addMutableTrack(withMediaType: .video,
                                                  preferredTrackID: kCMPersistentTrackID_Invalid)
-        else { throw Self.exportingError }
+        else { throw ExportingError() }
         
         for mTrack in mTracks {
             guard let timeRange = try? await mTrack.load(.timeRange) else { continue }
@@ -523,7 +532,7 @@ extension MovieEncoder {
         
         guard let session = AVAssetExportSession(asset: comp,
                                                  presetName: AVAssetExportPresetHighestQuality)
-        else { throw Self.exportingError }
+        else { throw ExportingError() }
         try await session.export(to: outputURL, as: .mp4)
         try FileManager.default.removeItem(at: url)
     }
@@ -542,28 +551,27 @@ final class MoviePlayer {
         let outputSettings = [String(kCVPixelBufferPixelFormatTypeKey): NSNumber(value: kCVPixelFormatType_32ARGB)]
         let readerTrackOutput = AVAssetReaderTrackOutput(track: videoTrack,
                                                          outputSettings: outputSettings)
-        let (arop, rac) = reader.outputProviderWithRandomAccess(for: readerTrackOutput)
-        try reader.start()
+        readerTrackOutput.alwaysCopiesSampleData = false
+        readerTrackOutput.supportsRandomAccess = true
+        
+        reader.add(readerTrackOutput)
+        reader.startReading()
         
         var time = 0.0
-        while let sampleBuffer = try await arop.next() {
-            switch sampleBuffer.content {
-            case .pixelBuffer(let rpb):
-                rpb.withUnsafeBuffer { pb in
-                    let ciImage = CIImage(cvPixelBuffer: pb)
-                    let b = CGRect(x: 0, y: 0,
-                                   width: CVPixelBufferGetWidth(pb),
-                                   height: CVPixelBufferGetHeight(pb))
-                    let ctx = CIContext()
-                    if let cgImage = ctx.createCGImage(ciImage, from: b) {
-                        handler(time, cgImage)
-                    }
+        while let sampleBuffer = readerTrackOutput.copyNextSampleBuffer() {
+            if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                let ciImage = CIImage(cvPixelBuffer: pb)
+                let b = CGRect(x: 0, y: 0,
+                               width: CVPixelBufferGetWidth(pb),
+                               height: CVPixelBufferGetHeight(pb))
+                let ctx = CIContext()
+                if let cgImage = ctx.createCGImage(ciImage, from: b) {
+                    handler(time, cgImage)
                 }
-            default: break
             }
             time += 1 / fps
         }
-        rac.markConfigurationAsFinal()
+        readerTrackOutput.markConfigurationAsFinal()
         reader.cancelReading()
     }
 }

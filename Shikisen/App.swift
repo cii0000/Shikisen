@@ -530,6 +530,15 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         hudView.cancelTasks()
     }
     
+    var displaySyncEnabled: Bool {
+        get {
+            (layer as? CAMetalLayer)?.displaySyncEnabled ?? false
+        }
+        set {
+            (layer as? CAMetalLayer)?.displaySyncEnabled = newValue
+        }
+    }
+    
     override func viewDidChangeEffectiveAppearance() {
         updateWithAppearance()
     }
@@ -754,7 +763,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
             progressHandler(0.5, &stop)
             if stop { return }
             
-            guard toURL != url else { throw URL.readError }
+            guard toURL != url else { throw URL.ReadError() }
             let fm = FileManager.default
             if fm.fileExists(atPath: toURL.path) {
                 try fm.trashItem(at: toURL, resultingItemURL: nil)
@@ -846,7 +855,7 @@ final class SubMTKView: MTKView, MTKViewDelegate,
                     progressHandler(0.5, &stop)
                     if stop { return }
                     
-                    guard url != ioResult.url else { throw URL.readError }
+                    guard url != ioResult.url else { throw URL.ReadError() }
                     let fm = FileManager.default
                     if fm.fileExists(atPath: ioResult.url.path) {
                         try fm.removeItem(at: ioResult.url)
@@ -2844,12 +2853,8 @@ extension URL {
         }
         return fileSize
     }
-    static var readError: any Error {
-        NSError(domain: NSCocoaErrorDomain, code: NSFileReadUnknownError)
-    }
-    static var writeError: any Error {
-        NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError)
-    }
+    struct ReadError: Error {}
+    struct WriteError: Error {}
 }
 extension FileManager {
     func removeItemIfFileExists(_ url: URL) throws {
@@ -3549,7 +3554,7 @@ extension CGImage {
     func write(_ fileType: Image.FileType, to url: URL) throws {
         let cfURL = url as CFURL, cfFileType = fileType.utType.uti.identifier as CFString
         guard let idn = CGImageDestinationCreateWithURL(cfURL, cfFileType, 1, nil) else {
-            throw URL.writeError
+            throw URL.WriteError()
         }
         if fileType == .jpeg {
             CGImageDestinationAddImage(idn, self, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
@@ -3557,7 +3562,7 @@ extension CGImage {
             CGImageDestinationAddImage(idn, self, nil)
         }
         if !CGImageDestinationFinalize(idn) {
-            throw URL.writeError
+            throw URL.WriteError()
         }
     }
 }

@@ -1395,7 +1395,7 @@ final class IOAction: Action {
                     } else {
                         image = oldImage
                     }
-                    guard let image else { throw MovieEncoder.exportingError }
+                    guard let image else { throw MovieEncoder.ExportingError() }
                     
                     try await movieEncoder.write(image, duration: 1, timeScale: frameRate)
                     
@@ -1816,7 +1816,7 @@ final class IOAction: Action {
                                                 fillType: .color(backgroundColor))
                                 guard let image = node.renderedTexture(in: b, to: size,
                                                                        backgroundColor: backgroundColor)?.image
-                                        else { throw MovieEncoder.exportingError }
+                                        else { throw MovieEncoder.ExportingError() }
                                 
                                 try await movie.write(image, duration: 1, timeScale: 60)
                                 

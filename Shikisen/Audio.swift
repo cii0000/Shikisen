@@ -443,9 +443,7 @@ final class PCMNoder: ObjectHashable {
             
             return noErr
         }
-        node.withAUAudioUnit { au in
-            try? au.outputBusses[0].setFormat(format)
-        }
+        try? node.auAudioUnit.outputBusses[0].setFormat(format)
         
         self.stereo = pcmTrackItem.stereo
     }
@@ -979,9 +977,7 @@ final class ScoreNoder: ObjectHashable {
             
             return noErr
         }
-        node.withAUAudioUnit { au in
-            try? au.outputBusses[0].setFormat(format)
-        }
+        try? node.auAudioUnit.outputBusses[0].setFormat(format)
     }
 }
 
@@ -1085,8 +1081,8 @@ final class Sequencer {
                 scoreNoders.insert(scoreNoder)
                 
                 engine.attach(scoreNoder.node)
-                try? engine.connectNode(scoreNoder.node, to: mixerNode,
-                                        format: scoreNoder.node.outputFormat(forBus: 0))
+                engine.connect(scoreNoder.node, to: mixerNode,
+                               format: scoreNoder.node.outputFormat(forBus: 0))
             }
             for pcmTrackItem in track.pcmTrackItems {
                 guard pcmTrackItem.durSec > 0 else { continue }
@@ -1097,8 +1093,8 @@ final class Sequencer {
                 pcmNoders.insert(pcmNoder)
                 
                 engine.attach(pcmNoder.node)
-                try? engine.connectNode(pcmNoder.node, to: mixerNode,
-                                        format: pcmNoder.node.outputFormat(forBus: 0))
+                engine.connect(pcmNoder.node, to: mixerNode,
+                               format: pcmNoder.node.outputFormat(forBus: 0))
             }
             
             sSec += Double(durSec)
@@ -1108,8 +1104,8 @@ final class Sequencer {
         self.pcmNoders = pcmNoders
         
         if let tapHandler {
-            try? mixerNode.installAudioTap(onBus: 0, bufferSize: 1024,
-                                           format: mixerNode.outputFormat(forBus: 0)) { @Sendable buffer, time in
+            mixerNode.installTap(onBus: 0, bufferSize: 1024,
+                                 format: mixerNode.outputFormat(forBus: 0)) { @Sendable buffer, time in
                 guard !buffer.isEmpty else { return }
                 tapHandler(buffer.doubleSampless, buffer.sampleRate)
             }
@@ -1120,10 +1116,10 @@ final class Sequencer {
         engine.attach(limiterNode)
         self.limiterNode = limiterNode
         
-        try? engine.connectNode(mixerNode, to: limiterNode,
-                                format: limiterNode.inputFormat(forBus: 0))
-        try? engine.connectNode(limiterNode, to: engine.mainMixerNode,
-                                format: limiterNode.outputFormat(forBus: 0))
+        engine.connect(mixerNode, to: limiterNode,
+                       format: limiterNode.inputFormat(forBus: 0))
+        engine.connect(limiterNode, to: engine.mainMixerNode,
+                       format: limiterNode.outputFormat(forBus: 0))
         
         self.engine = engine
         
@@ -1163,8 +1159,8 @@ extension Sequencer {
         scoreNoders.insert(scoreNoder)
         
         engine.attach(scoreNoder.node)
-        try? engine.connectNode(scoreNoder.node, to: mixerNode,
-                                format: scoreNoder.node.outputFormat(forBus: 0))
+        engine.connect(scoreNoder.node, to: mixerNode,
+                       format: scoreNoder.node.outputFormat(forBus: 0))
         
         scoreNoder.sequencer = self
         return scoreNoder
@@ -1207,8 +1203,8 @@ extension Sequencer {
                 scoreNoders.insert(scoreNoder)
                 
                 engine.attach(scoreNoder.node)
-                try? engine.connectNode(scoreNoder.node, to: mixerNode,
-                                        format: scoreNoder.node.outputFormat(forBus: 0))
+                engine.connect(scoreNoder.node, to: mixerNode,
+                               format: scoreNoder.node.outputFormat(forBus: 0))
             }
             for pcmTrackItem in track.pcmTrackItems {
                 guard pcmTrackItem.durSec > 0 else { continue }
@@ -1219,8 +1215,8 @@ extension Sequencer {
                 pcmNoders.insert(pcmNoder)
                 
                 engine.attach(pcmNoder.node)
-                try? engine.connectNode(pcmNoder.node, to: mixerNode,
-                                        format: pcmNoder.node.outputFormat(forBus: 0))
+                engine.connect(pcmNoder.node, to: mixerNode,
+                               format: pcmNoder.node.outputFormat(forBus: 0))
             }
             
             sSec += Double(durSec)
@@ -1328,13 +1324,9 @@ extension Sequencer {
                 limitLufs: Double? = Audio.limitLufs,
                 isClip: Bool = true,
                 progressHandler: (Double) throws -> ()) throws -> AVAudioPCMBuffer {
-        limiterNode.withAUAudioUnit { au in
-            (au as! ClippingAudioUnit).enabledHeadroomAndAttack = false
-        }
+        (limiterNode.auAudioUnit as! ClippingAudioUnit).enabledHeadroomAndAttack = false
         defer {
-            limiterNode.withAUAudioUnit { au in
-                (au as! ClippingAudioUnit).enabledHeadroomAndAttack = true
-            }
+            (limiterNode.auAudioUnit as! ClippingAudioUnit).enabledHeadroomAndAttack = true
         }
         
         guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -2112,27 +2104,6 @@ final class EQ {
     
     func reset() {
         vDSP_biquadm_ResetState(setup)
-    }
-}
-extension AVReadOnlyAudioPCMBuffer {
-    var isEmpty: Bool {
-        frameCapacity == 0 || frameLength == 0 || format.channelCount == 0
-    }
-    var sampleRate: Double {
-        format.sampleRate
-    }
-    var doubleSampless: [[Double]] {
-        Int(format.channelCount).range.map {
-            switch channelData($0) {
-            case .float(let samples):
-                samples.count.range.map { Double(samples[$0]) }
-            case .int16(let samples):
-                samples.count.range.map { Double(samples[$0]) / Double(Int16.max) }
-            case .int32(let samples):
-                samples.count.range.map { Double(samples[$0]) / Double(Int32.max) }
-            @unknown default: fatalError()
-            }
-        }
     }
 }
 

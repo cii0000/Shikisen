@@ -21,6 +21,7 @@ protocol NodeOwner: AnyObject {
     func update()
     func viewportBounds(from: Transform, bounds: Rect) -> Rect
     var viewportBounds: Rect { get }
+    var displaySyncEnabled: Bool { get set }
 }
 final class Node: @unchecked Sendable {
     weak var owner: (any NodeOwner)?

@@ -6,7 +6,7 @@
 <br>
 
 ## 動作環境
-macOS 27.0 以降<br>
+macOS 15.6 以降、Apple Siliconのみ対応<br>
 Mac内蔵のトラックパッドまたは Magic Trackpad 必須<br>
 滑らかな線を引く場合、ペンタブレット必須
 
