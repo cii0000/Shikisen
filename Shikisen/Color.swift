@@ -163,6 +163,9 @@ extension Color {
     static let mainFrame = Color(white: 0, opacity: 0.75)
     static let content = Color(lightness: 10)
     
+    static let lightPoint = Color(white: 0.4)
+    static let darkPoint = Color(white: 0.2)
+    
     static let interpolated = Color(white: 0.5)
     static let subInterpolated = Color(white: 0.75, opacity: 0.25)
     static let warning = Color(red: 1, green: 0.5, blue: 0)

@@ -453,7 +453,7 @@ private extension NSMenu {
     }
 }
 
-final class SubMTKView: MTKView, MTKViewDelegate,
+final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenuRequestor,
                         @preconcurrency NSTextInputClient, NSMenuItemValidation, NSMenuDelegate {
     static let enabledAnimationKey = "enabledAnimation"
     static let isHiddenActionListKey = "isHiddenActionList"
@@ -586,6 +586,79 @@ final class SubMTKView: MTKView, MTKViewDelegate,
         } else {
             return []
         }
+    }
+    
+    private weak var validRequestorSheetView: SheetView?, validRequestorTextView: SheetTextView?
+    private var validRequestorTextI: Int?, validRequestorReplacedRange: Range<Int>?
+    override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?,
+                                 returnType: NSPasteboard.PasteboardType?) -> Any? {
+        if sendType?.isRequestorString ?? false {
+            if returnType == nil || returnType?.isRequestorString ?? false {
+                let sp = screenPointFromCursor.my
+                let p = rootView.convertScreenToWorld(sp)
+                if let sheetView = rootView.sheetView(at: p),
+                   let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p),
+                                                                  scale: rootView.screenToWorldScale) {
+                    let range = textView.selectedRange(at: textView.convertFromWorld(p))
+                    ?? textView.model.string.allRange
+                    validRequestorSheetView = sheetView
+                    validRequestorTextView = textView
+                    validRequestorTextI = ti
+                    validRequestorReplacedRange = textView.model.string.intRange(from: range)
+                }
+                return self
+            }
+        }
+        return super.validRequestor(forSendType: sendType, returnType: returnType)
+    }
+    func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        func string() -> String? {
+            if let str = validRequestorTextView?.model.string,
+               let range = validRequestorReplacedRange,
+                range.startIndex >= 0 && range.endIndex <= str.count {
+                
+                return .init(str[str.range(fromInt: range)])
+            }
+            return nil
+        }
+        if let string = string() {
+            for type in types {
+                if type == .string {
+                    pboard.setString(string, forType: .string)
+                } else if type.isRequestorString {
+                    pboard.setString(string, forType: type)
+                }
+            }
+            return true
+        }
+        return false
+    }
+    func readSelection(from pboard: NSPasteboard) -> Bool {
+        guard let string = pboard.string(forType: .string)
+                ?? pboard.string(forType: .init("public.utf8-plain-text"))
+                ?? pboard.string(forType: .init("NSStringPboardType")) else { return false }
+        if let sheetView = validRequestorSheetView, let textView = validRequestorTextView,
+           sheetView.textsView.elementViews.contains(textView),
+           let ti = validRequestorTextI, ti < sheetView.textsView.elementViews.count,
+           let range = validRequestorReplacedRange,
+           range.startIndex >= 0 && range.endIndex <= textView.model.string.count {
+            
+            let tv = TextValue(string: string,
+                               replacedRange: range,
+                               origin: nil, size: nil,
+                               widthCount: nil)
+            sheetView.newUndoGroup()
+            if !sheetView.selection.isEmpty {
+                sheetView.doSet(.empty)
+            }
+            sheetView.replace(IndexValue(value: tv, index: ti))
+            
+            validRequestorSheetView = nil
+            validRequestorTextView = nil
+            validRequestorTextI = nil
+            validRequestorReplacedRange = nil
+        }
+        return true
     }
     
     func setupRootView() {
@@ -3053,6 +3126,13 @@ extension NSPasteboard {
             clearContents()
             writeObjects(items)
         }
+    }
+}
+extension NSPasteboard.PasteboardType {
+    var isRequestorString: Bool {
+        self == .string
+        || rawValue == "public.utf8-plain-text"
+        || rawValue == "NSStringPboardType"
     }
 }
 

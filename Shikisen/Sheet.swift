@@ -2768,9 +2768,9 @@ extension Sheet {
         }
         return Double(tempo).string(digitsCount: 2) + " bpm" + fpbName
     }
-    static func fpbPrime(fromTempo tempo: Rational, fps: Int) -> (two: Int, three: Int) {
+    static func fpbPrime(fromTempo tempo: Rational, fps: Int) -> (two: Int, three: Int)? {
         let v = Rational(60 * fps) / tempo
-        guard v.isInteger else { return (0, 0) }
+        guard v.isInteger else { return nil }
         var i = v.integralPart, two = 0, three = 0
         for _ in 7.range {
             if i % 2 != 0 { break }
@@ -2786,8 +2786,12 @@ extension Sheet {
         let fpb48 = fpbPrime(fromTempo: tempo, fps: 48)
         let fpb50 = fpbPrime(fromTempo: tempo, fps: 50)
         let fpb60 = fpbPrime(fromTempo: tempo, fps: 60)
-        let (two, three) = [fpb48, fpb50, fpb60].max { $0.two < $1.two }!
-        return two == 0 ? nil : 2 ** two * 3 ** three
+        if let (two, three) = [fpb48, fpb50, fpb60]
+            .compactMap({ $0 }).max(by: { $0.two < $1.two }) {
+            return 2 ** two * 3 ** three
+        } else {
+            return nil
+        }
     }
     
     var mainLineUUColor: UUColor? {

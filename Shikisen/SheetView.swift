@@ -64,7 +64,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     func pointNodes() -> [Node] {
         if case .line(let line) = node.path.pathlines.first?.elements.first,
            case .color(let color) = node.lineType {
-            let pointColor: Color = color.lightness < 50 ? .subBorder : .content
+            let pointColor: Color = color.lightness < 30 ? .lightPoint : .darkPoint
             return line.mainControlSequence.map {
                 let pointNode = Node.point.clone
                 pointNode.attitude.position = $0.point
@@ -86,7 +86,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
                                 uuColor.value)
         
         if case .color(let color) = node.lineType {
-            let pointColor: Color = color.lightness < 50 ? .subBorder : .content
+            let pointColor: Color = color.lightness < 30 ? .lightPoint : .darkPoint
             pointNode.children.forEach { $0.fillType = .color(pointColor) }
         }
     }
