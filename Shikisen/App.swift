@@ -593,7 +593,7 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
     override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?,
                                  returnType: NSPasteboard.PasteboardType?) -> Any? {
         if sendType?.isRequestorString ?? false {
-            if returnType == nil || returnType?.isRequestorString ?? false {
+            if returnType == nil || returnType!.isRequestorString {
                 let sp = screenPointFromCursor.my
                 let p = rootView.convertScreenToWorld(sp)
                 if let sheetView = rootView.sheetView(at: p),
@@ -605,8 +605,8 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
                     validRequestorTextView = textView
                     validRequestorTextI = ti
                     validRequestorReplacedRange = textView.model.string.intRange(from: range)
+                    return self
                 }
-                return self
             }
         }
         return super.validRequestor(forSendType: sendType, returnType: returnType)

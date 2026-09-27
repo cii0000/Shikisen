@@ -671,13 +671,13 @@ final class APasteAction: Action {
             
             let lineNodes = sheetView.keyframeView.selectedLineIs.map {
                 let line = sheetView.model.picture.lines[$0]
-                return Node(path: Path(sheetView.convertToWorld(line)),
+                return Node(path: Path(sheetView.animationView.convertToWorld(line)),
                             lineWidth: line.size * 1.5,
                             lineType: .color(.selected))
             }
             let planeNodes = sheetView.keyframeView.selectedPlaneIs.map {
                 let node = sheetView.keyframeView.planesView.elementViews[$0].node.clone
-                node.attitude *= sheetView.node.worldTransform
+                node.attitude *= sheetView.animationView.node.worldTransform
                 node.fillType = .color(sheetView.model.picture.planes[$0].uuColor.value + .subSelected)
                 return node
             }
@@ -846,7 +846,7 @@ final class APasteAction: Action {
                                                      enabledPlane: true,
                                                      scale: 1 / rootView.worldToScreenScale)?.lineView {
             let t = Transform(translation: -sheetView.convertFromWorld(p))
-            let ssv = SheetValue(lines: [lineView.model],
+            let ssv = SheetValue(lines: [sheetView.animationView.convert(lineView.model, to: sheetView.node)],
                                  planes: [], texts: [],
                                  origin: sheetView.convertFromWorld(p),
                                  id: sheetView.id,
@@ -858,7 +858,7 @@ final class APasteAction: Action {
             
             let scale = 1 / rootView.worldToScreenScale
             let lw = Line.defaultLineWidth
-            let selectedNode = Node(path: lineView.node.path * sheetView.node.localTransform,
+            let selectedNode = Node(path: sheetView.animationView.convertToWorld(lineView.node.path),
                                     lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
                                     lineType: .color(.selected))
             if sheetView.model.enabledAnimation {
@@ -1184,7 +1184,7 @@ final class APasteAction: Action {
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = Sheet.mainFrameLineWidth * 1.5
             if let sheetView {
-                selectingLineNode.path = Path([Pathline(sheetView.convertToWorld(mainFrame.outset(by: 3)))])
+                selectingLineNode.path = Path([Pathline(sheetView.animationView.convertToWorld(mainFrame.outset(by: 3)))])
             } else {
                 selectingLineNode.path = Path([Pathline(mainFrame.outset(by: 3))])
             }
@@ -1197,7 +1197,7 @@ final class APasteAction: Action {
                     let sheetP = fco.sheetView.convertFromWorld(p)
                     if let pi = fco.sheetView.planesView.firstIndex(at: sheetP) {
                         let planeView = fco.sheetView.planesView.elementViews[pi]
-                        mainPlanePath = planeView.node.path
+                        mainPlanePath = fco.sheetView.animationView.convert(planeView.node.path, to: fco.sheetView.node)
                         
                         let sheetValue = SheetValue(planes: [planeView.model],
                                                     origin: sheetP,
@@ -1247,6 +1247,9 @@ final class APasteAction: Action {
     func cut(at p: Point) -> Bool {
         if rootAction.textAction.editingTextView != nil {
             rootAction.textAction.cut(at: p)
+            return true
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.containsKeyframeAttitude(sheetView.convertFromWorld(p)) {
+            sheetView.keyframeAttitude = .init()
             return true
         } else if let sheetView = rootView.sheetView(at: p),
            sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
@@ -1484,7 +1487,7 @@ final class APasteAction: Action {
             
             let sheetP = sheetView.convertFromWorld(p)
             let t = Transform(translation: -sheetP)
-            let ssv = SheetValue(lines: [lineView.model],
+            let ssv = SheetValue(lines: [sheetView.animationView.convert(lineView.model, to: sheetView.node)],
                                  planes: [], texts: [],
                                  origin: sheetP,
                                  id: sheetView.id,
@@ -2566,7 +2569,7 @@ final class APasteAction: Action {
         }
         func transform(in frame: Rect, at p: Point) -> Transform {
             if firstScale != screenScale
-                || firstRotation != rootView.pov.rotation{
+                || firstRotation != rootView.pov.rotation {
                 let t = Transform(scale: 1.0 * firstScale / screenScale)
                     .rotated(by: rootView.pov.rotation - firstRotation)
                 return t.translated(by: p - frame.minXMinYPoint)
@@ -2609,6 +2612,7 @@ final class APasteAction: Action {
                                 if idSet.contains(l.interID) {
                                     nLines[i].interID = UUID()
                                 }
+                                nLines[i] = sheetView.animationView.convert(nLines[i], from: sheetView.node)
                             }
                             if isNew {
                                 isRootNewUndoGroup = false
@@ -2661,6 +2665,7 @@ final class APasteAction: Action {
                             .madeSheetViewIsNew(at: nshp,
                                                 isNewUndoGroup:
                                                     isRootNewUndoGroup) {
+                            let nPlanes = nPlanes.map { sheetView.animationView.convert($0, from: sheetView.node) }
                             if isNew {
                                 isRootNewUndoGroup = false
                             }
@@ -3017,6 +3022,7 @@ final class APasteAction: Action {
                             if idSet.contains(l.interID) {
                                 nLines[i].interID = UUID()
                             }
+                            nLines[i] = sheetView.animationView.convert(nLines[i], from: sheetView.node)
                         }
                         
                         return IndexValue(value: nLines, index: ki)
@@ -3037,8 +3043,9 @@ final class APasteAction: Action {
                         let nPlanes = Sheet.clipped(oldPlanes.map { $0 * t },
                                                     in: Rect(size: frame.size))
                         guard !nPlanes.isEmpty else { return nil }
+                        let nnPlanes = nPlanes.map { sheetView.animationView.convert($0, from: sheetView.node) }
                         
-                        return IndexValue(value: nPlanes, index: ki)
+                        return IndexValue(value: nnPlanes, index: ki)
                     }
                 }
                 

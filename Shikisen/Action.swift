@@ -89,29 +89,45 @@ final class RootAction: Action {
         textAction.moveEndInputKey(isStopFromMarkedText: true)
     }
     
-    private(set) var oldPinchEvent: PinchEvent?, zoomAction: ZoomAction?
+    private func pinchAction(with gesture: Gesture) -> (any PinchEventAction) {
+        switch gesture {
+        case .interZoom: InterZoomAction(self)
+        case .zoom: ZoomAction(self)
+        default: ZoomAction(self)
+        }
+    }
+    private(set) var oldPinchEvent: PinchEvent?, pinchAction: (any PinchEventAction)?
     func pinch(with event: PinchEvent) {
         switch event.phase {
         case .began:
-            zoomAction = ZoomAction(self)
-            zoomAction?.flow(with: event)
+            let gesture = Gesture(modifier: modifierKeys, .pinch)
+            pinchAction = pinchAction(with: gesture)
+            pinchAction?.flow(with: event)
             oldPinchEvent = event
         case .changed:
-            zoomAction?.flow(with: event)
+            pinchAction?.flow(with: event)
             oldPinchEvent = event
         case .ended:
             oldPinchEvent = nil
-            zoomAction?.flow(with: event)
-            zoomAction = nil
+            pinchAction?.flow(with: event)
+            pinchAction = nil
         }
     }
     
-    private(set) var oldScrollEvent: ScrollEvent?, scrollAction: ScrollAction?
+    private func scrollAction(with gesture: Gesture) -> (any ScrollEventAction) {
+        switch gesture {
+        case .interScroll: InterScrollAction(self)
+        case .scroll: ScrollAction(self)
+        default: ScrollAction(self)
+        }
+    }
+    private(set) var oldScrollEvent: ScrollEvent?, scrollAction: (any ScrollEventAction)?
     func scroll(with event: ScrollEvent) {
         textAction.moveEndInputKey()
         switch event.phase {
         case .began:
-            scrollAction = ScrollAction(self)
+            let gesture = Gesture(modifier: modifierKeys, .scroll)
+            scrollAction = scrollAction(with: gesture)
             scrollAction?.flow(with: event)
             oldScrollEvent = event
         case .changed:
@@ -465,11 +481,11 @@ final class RootAction: Action {
         modifierKeys = []
     }
     func stopPinchEvent() {
-        if var event = oldPinchEvent, let zoomAction {
+        if var event = oldPinchEvent, let pinchAction {
             event.phase = .ended
-            self.zoomAction = nil
+            self.pinchAction = nil
             oldPinchEvent = nil
-            zoomAction.flow(with: event)
+            pinchAction.flow(with: event)
         }
     }
     func stopScrollEvent() {
@@ -517,7 +533,7 @@ final class RootAction: Action {
         }
     }
     func updateActionNode() {
-        zoomAction?.updateNode()
+        pinchAction?.updateNode()
         scrollAction?.updateNode()
         swipeAction?.updateNode()
         dragAction?.updateNode()
@@ -564,6 +580,20 @@ final class EmptyDragAction: DragEventAction {
     }
 }
 
+final class InterZoomAction: PinchEventAction {
+    let action: ZoomAction
+    
+    init(_ rootAction: RootAction) {
+        action = .init(rootAction)
+    }
+    
+    func flow(with event: PinchEvent) {
+        action.flow(with: event, isInter: true)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
 final class ZoomAction: PinchEventAction {
     let rootAction: RootAction, rootView: RootView
     
@@ -573,20 +603,39 @@ final class ZoomAction: PinchEventAction {
     }
     
     let correction = 3.25
+    private weak var sheetView: SheetView?
+    
     func flow(with event: PinchEvent) {
+        flow(with: event, isInter: false)
+    }
+    func flow(with event: PinchEvent, isInter: Bool) {
+        switch event.phase {
+        case .began:
+            if isInter {
+                sheetView = rootView.sheetView(at: rootView.convertScreenToWorld(event.screenPoint))
+            }
+        default: break
+        }
         guard event.magnification != 0 else { return }
         let oldIsEditingSheet = rootView.isEditingSheet
         
-        var transform = rootView.pov.transform
-        let p = event.screenPoint * rootView.screenToWorldTransform
+        guard var transform = isInter ? sheetView?.keyframeAttitude.transform : rootView.pov.transform else { return }
+        let worldP = rootView.convertScreenToWorld(event.screenPoint)
+        let p = isInter ? sheetView?.convertFromWorld(worldP) ?? worldP : worldP
         let log2Scale = transform.log2Scale
         let newLog2Scale = (log2Scale - (event.magnification * correction))
             .clipped(min: RootView.minPOVLog2Scale,
                      max: RootView.maxPOVLog2Scale) - log2Scale
         transform.translate(by: -p)
-        transform.scale(byLog2Scale: newLog2Scale)
+        transform.scale(byLog2Scale: isInter ? -newLog2Scale : newLog2Scale)
         transform.translate(by: p)
-        rootView.pov = RootView.clippedPOV(from: .init(transform))
+        
+        if isInter {
+            sheetView?.keyframeAttitude = .init(transform)
+            rootView.updateSelectedFrame()
+        } else {
+            rootView.pov = RootView.clippedPOV(from: .init(transform))
+        }
         
         if oldIsEditingSheet != rootView.isEditingSheet {
             rootAction.textAction.moveEndInputKey()
@@ -679,6 +728,20 @@ final class RotateAction: RotateEventAction {
     }
 }
 
+final class InterScrollAction: ScrollEventAction {
+    let action: ScrollAction
+    
+    init(_ rootAction: RootAction) {
+        action = ScrollAction(rootAction)
+    }
+    
+    func flow(with event: ScrollEvent) {
+        action.flow(with: event, isInter: true)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
 final class ScrollAction: ScrollEventAction {
     let rootAction: RootAction, rootView: RootView
     
@@ -694,8 +757,12 @@ final class ScrollAction: ScrollEventAction {
     private let updateSpeed = 1000.0
     private var isHighSpeed = false, oldTime = 0.0, oldDeltaPoint = Point()
     private var oldSpeedTime = 0.0, oldSpeedDistance = 0.0, oldSpeed = 0.0
+    private weak var sheetView: SheetView?
     
     func flow(with event: ScrollEvent) {
+        flow(with: event, isInter: false)
+    }
+    func flow(with event: ScrollEvent, isInter: Bool) {
         switch event.phase {
         case .began:
             oldTime = event.time
@@ -703,6 +770,10 @@ final class ScrollAction: ScrollEventAction {
             oldDeltaPoint = Point()
             oldSpeedDistance = 0.0
             oldSpeed = 0.0
+            
+            if isInter {
+                sheetView = rootView.sheetView(at: rootView.convertScreenToWorld(event.screenPoint))
+            }
         case .changed:
             guard !event.scrollDeltaPoint.isEmpty else { return }
             let dt = event.time - oldTime
@@ -716,14 +787,19 @@ final class ScrollAction: ScrollEventAction {
             let length = dp.length()
             let lengthDt = length / dt
             
-            var transform = rootView.pov.transform
+            guard var transform = isInter ? sheetView?.keyframeAttitude.transform : rootView.pov.transform else { return }
             let newPoint = dp * correction * transform.absXScale
             
             let oldPosition = transform.position
             let newP = RootView.clippedPOVPosition(from: oldPosition - newPoint) - oldPosition
             
-            transform.translate(by: newP)
-            rootView.pov = .init(transform)
+            transform.translate(by: isInter ? -newP : newP)
+            if isInter {
+                sheetView?.keyframeAttitude = .init(transform)
+                rootView.updateSelectedFrame()
+            } else {
+                rootView.pov = .init(transform)
+            }
             
             rootView.isUpdateWithCursorPosition = lengthDt < updateSpeed / 2
             rootView.updateWithCursorPosition()
@@ -1015,19 +1091,22 @@ final class SelectAction: Action {
                         }
                     }
                     
+                    let animationSheetRect = sheetView.animationView
+                        .convert(sheetRect, from: sheetView.node)
+                    
                     let ki = sheetView.model.animation.index
                     let oSelectedLineIs = selection.keyframeSelections[ki]?.lineIs ?? []
                     let nSelectedLineIs = sheetView.linesView.elementViews.enumerated().compactMap {
-                        $0.element.intersects(sheetRect) ? $0.offset : nil
+                        $0.element.intersects(animationSheetRect) ? $0.offset : nil
                     }
                     let selectedLineIs
                     = isUnselect ? oSelectedLineIs.subtracting(nSelectedLineIs) :
                         oSelectedLineIs.union(nSelectedLineIs)
                     
-                    let sheetRectPath = Path(sheetRect)
+                    let movedSheetRectPath = Path(animationSheetRect)
                     let oSelectedPlaneIs = selection.keyframeSelections[ki]?.planeIs ?? []
                     let nSelectedPlaneIs = sheetView.planesView.elementViews.enumerated().compactMap {
-                        sheetRectPath.contains($0.element.node.path) ? $0.offset : nil
+                        movedSheetRectPath.contains($0.element.node.path) ? $0.offset : nil
                     }
                     let selectedPlaneIs = isUnselect ? oSelectedPlaneIs.subtracting(nSelectedPlaneIs) :
                         oSelectedPlaneIs.union(nSelectedPlaneIs)
@@ -1042,6 +1121,7 @@ final class SelectAction: Action {
                         nSelection.keyframeSelections[ki] = nil
                     }
                     
+                    let sheetRectPath = Path(sheetRect)
                     let oSelectedContentIs = selection.contentIs
                     let nSelectedContentIs = sheetView.contentsView.elementViews.enumerated().compactMap { (ci, contentView) in
                         if let b = contentView.transformedBounds,

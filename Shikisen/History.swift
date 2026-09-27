@@ -859,6 +859,9 @@ extension History {
     mutating func error(_ result: UndoResult) {
         self[result.version].values[result.valueIndex].error()
     }
+    mutating func save(_ item: T, type: UndoType, with result: UndoResult) {
+        self[result.version].values[result.valueIndex].saveUndoItemValue?.set(item, type: type)
+    }
     mutating func setReverse(_ item: T, with result: UndoResult) {
         switch result.type {
         case .undo:

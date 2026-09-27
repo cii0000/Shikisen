@@ -3182,22 +3182,18 @@ extension Sheet {
         guard let uiv = history[result.version].values[result.valueIndex]
                 .undoItemValue else { return }
         
-        let isUndo = result.type == .undo
-        let reversedType: UndoType = isUndo ? .redo : .undo
-        
         func updateFirstReverse() {
-            if enabledAnimation {
-                if !history[result.version].isFirstReverse {
-                    history[result.version].isFirstReverse = true
-                }
+            if enabledAnimation, history[result.version].isFirstReverse {
                 if case .setRootKeyframeIndex? =  history[result.version].values.first?.loadedRedoItem()?.undoItem {
-                    
                 } else {
                     reverses[result.version] = animation.rootIndex
                     print("first reverse error")
                 }
             }
         }
+        
+        let isUndo = result.type == .undo
+        let reversedType: UndoType = isUndo ? .redo : .undo
         switch isUndo ? uiv.redoItem : uiv.undoItem {
         case .appendLine(let line):
             updateFirstReverse()
@@ -3207,7 +3203,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.appendLine(lastLine), type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .appendLines(let lines):
             updateFirstReverse()
@@ -3219,7 +3215,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.appendLines(lastLines), type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .appendPlanes(let planes):
             updateFirstReverse()
@@ -3232,7 +3228,7 @@ extension Sheet {
                                                 type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .removeLastLines:
             updateFirstReverse()
@@ -3249,7 +3245,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertLines(oldLIVS), type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .insertPlanes(let pivs):
             updateFirstReverse()
@@ -3262,7 +3258,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertPlanes(oldPIVS), type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .replaceLines(let livs):
             updateFirstReverse()
@@ -3284,10 +3280,9 @@ extension Sheet {
             }
         case .removeLines(let lineIndexes):
             updateFirstReverse()
-            let oldLIS = lineIndexes.filter { $0 < picture.lines.count + lineIndexes.count }.sorted()
-            if oldLIS != lineIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeLines(lineIndexes: oldLIS), type: reversedType)
+            let oLIs = lineIndexes.filter { $0 < picture.lines.count + lineIndexes.count }.sorted()
+            if oLIs != lineIndexes {
+                history.save(.removeLines(lineIndexes: oLIs), type: reversedType, with: result)
             }
         case .removePlanes(let planeIndexes):
             updateFirstReverse()
@@ -3298,10 +3293,6 @@ extension Sheet {
             }
         case .setPlaneValue(let planeValue):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             if planeValue.planes.count + planeValue.moveIndexValues.count
                 == picture.planes.count {
                 
@@ -3311,7 +3302,7 @@ extension Sheet {
                     if v.index < isArray.count {
                         isArray[v.index] = true
                     } else {
-                        error()
+                        history.error(result)
                     }
                 }
                 var i = 0
@@ -3320,14 +3311,14 @@ extension Sheet {
                         if i < planeValue.planes.count
                             && planeValue.planes[i] != picture.planes[j] {
                             
-                            error()
+                            history.error(result)
                             break
                         }
                         i += 1
                     }
                 }
             } else {
-                error()
+                history.error(result)
             }
         case .changeToDraft:
             updateFirstReverse()
@@ -3415,8 +3406,7 @@ extension Sheet {
         case .replaceString(let tuiv):
             updateFirstReverse()
             guard tuiv.index < texts.count else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 break
             }
             let text = texts[tuiv.index]
@@ -3450,42 +3440,37 @@ extension Sheet {
                         .saveUndoItemValue?.set(.replaceString(nTUIV), type: reversedType)
                 }
             } else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             }
         case .changedColors(let colorUndoValue):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             
             if !colorUndoValue.planeIndexes.isEmpty {
                 let maxPISI = colorUndoValue.planeIndexes.max { $0 < $1 }
                 if let maxPISI = maxPISI, maxPISI < picture.planes.count {
                     for i in colorUndoValue.planeIndexes {
                         if picture.planes[i].uuColor != colorUndoValue.uuColor {
-                            error()
+                            history.error(result)
                             break
                         }
                     }
                 } else {
-                    error()
+                    history.error(result)
                 }
             } else if !colorUndoValue.planeAnimationIndexes.isEmpty {
                 loop: for k in colorUndoValue.planeAnimationIndexes {
                     if k.index >= animation.keyframes.count {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     let planes = animation.keyframes[k.index].picture.planes
                     for pi in k.value {
                         if pi >= planes.count {
-                            error()
+                            history.error(result)
                             break loop
                         }
                         if planes[pi].uuColor != colorUndoValue.uuColor {
-                            error()
+                            history.error(result)
                             break loop
                         }
                     }
@@ -3497,27 +3482,27 @@ extension Sheet {
                 if let maxLISI, maxLISI < picture.lines.count {
                     for i in colorUndoValue.lineIndexes {
                         if picture.lines[i].uuColor != colorUndoValue.uuColor {
-                            error()
+                            history.error(result)
                             break
                         }
                     }
                 } else {
-                    error()
+                    history.error(result)
                 }
             } else if !colorUndoValue.lineAnimationIndexes.isEmpty {
                 loop: for k in colorUndoValue.lineAnimationIndexes {
                     if k.index >= animation.keyframes.count {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     let lines = animation.keyframes[k.index].picture.lines
                     for li in k.value {
                         if li >= lines.count {
-                            error()
+                            history.error(result)
                             break loop
                         }
                         if lines[li].uuColor != colorUndoValue.uuColor {
-                            error()
+                            history.error(result)
                             break loop
                         }
                     }
@@ -3525,7 +3510,7 @@ extension Sheet {
             }
             
             if colorUndoValue.isBackground && backgroundUUColor != colorUndoValue.uuColor {
-                error()
+                history.error(result)
             }
         case .insertBorders(let bivs):
             updateFirstReverse()
@@ -3538,8 +3523,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertBorders(oldBIVS), type: reversedType)
                 }
             } else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             }
         case .removeBorders(let borderIndexes):
             updateFirstReverse()
@@ -3559,8 +3543,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertKeyframes(oldKIVS), type: reversedType)
                 }
             } else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             }
         case .removeKeyframes(let indexes):
             let oldKIS = indexes.filter { $0 < animation.keyframes.count + indexes.count }.sorted()
@@ -3576,8 +3559,7 @@ extension Sheet {
                 }
             }
             if isError {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             } else {
                 let okoivs = koivs.map {
                     IndexValue(value: animation.keyframes[$0.index].option,
@@ -3592,13 +3574,9 @@ extension Sheet {
             
         case .insertKeyLines(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
@@ -3607,65 +3585,53 @@ extension Sheet {
                     let oldLIVS = k.value.map { IndexValue(value: lines[$0.index],
                                                            index: $0.index) }
                     if oldLIVS != k.value {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 } else {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
         case .replaceKeyLines(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
                 for liv in k.value {
                     if liv.index >= lines.count {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     if liv.value != lines[liv.index] {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 }
             }
         case .removeKeyLines(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
                 let oldLIS = k.value.filter { $0 < lines.count + k.value.count }.sorted()
                 if oldLIS != k.value {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertKeyPlanes(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].picture.planes
@@ -3674,65 +3640,53 @@ extension Sheet {
                     let oldPIVS = k.value.map { IndexValue(value: planes[$0.index],
                                                            index: $0.index) }
                     if oldPIVS != k.value {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 } else {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
         case .replaceKeyPlanes(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].picture.planes
                 for piv in k.value {
                     if piv.index >= planes.count {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     if piv.value != planes[piv.index] {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 }
             }
         case .removeKeyPlanes(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].picture.planes
                 let oldPIS = k.value.filter { $0 < planes.count + k.value.count }.sorted()
                 if oldPIS != k.value {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertDraftKeyLines(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].draftPicture.lines
@@ -3741,42 +3695,34 @@ extension Sheet {
                     let oldLIVS = k.value.map { IndexValue(value: lines[$0.index],
                                                            index: $0.index) }
                     if oldLIVS != k.value {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 } else {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
         case .removeDraftKeyLines(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].draftPicture.lines
                 let oldLIS = k.value.filter { $0 < lines.count + k.value.count }.sorted()
                 if oldLIS != k.value {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertDraftKeyPlanes(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].draftPicture.planes
@@ -3785,52 +3731,44 @@ extension Sheet {
                     let oldPIVS = k.value.map { IndexValue(value: planes[$0.index],
                                                            index: $0.index) }
                     if oldPIVS != k.value {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 } else {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
         case .removeDraftKeyPlanes(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].draftPicture.planes
                 let oldPIS = k.value.filter { $0 < planes.count + k.value.count }.sorted()
                 if oldPIS != k.value {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .setLineIDs(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
                 for liv in k.value {
                     if liv.index >= lines.count {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     if liv.value != lines[liv.index].interOption {
-                        error()
+                        history.error(result)
                         break loop
                     }
                 }
@@ -3855,23 +3793,18 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertNotes(oldNIVS), type: reversedType)
                 }
             } else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             }
         case .replaceNotes(let nivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             let notes = score.notes
             for niv in nivs {
                 if niv.index >= notes.count {
-                    error()
+                    history.error(result)
                     break
                 }
                 if niv.value != notes[niv.index] {
-                    error()
+                    history.error(result)
                     break
                 }
             }
@@ -3893,7 +3826,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertDraftNotes(oldNIVS), type: reversedType)
                 }
             } else {
-                history[result.version].values[result.valueIndex].error()
+                history.error(result)
             }
         case .removeDraftNotes(let noteIndexes):
             updateFirstReverse()
@@ -3913,8 +3846,7 @@ extension Sheet {
                         .saveUndoItemValue?.set(.insertContents(oldCIVS), type: reversedType)
                 }
             } else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             }
         case .replaceContents(let civs):
             updateFirstReverse()
@@ -4229,8 +4161,7 @@ extension Sheet {
         case .replaceString(var tuiv):
             updateFirstReverse()
             guard !texts.isEmpty else {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 break
             }
             var isChanged = false
@@ -4297,8 +4228,7 @@ extension Sheet {
                 }
             } else if !colorUndoValue.planeAnimationIndexes.isEmpty {
                 func error() {
-                    history[result.version]
-                        .values[result.valueIndex].error()
+                    history.error(result)
                     isError = true
                 }
                 loop: for k in colorUndoValue.planeAnimationIndexes {
@@ -4478,8 +4408,7 @@ extension Sheet {
                 return false
             } ()
             if isError {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
             } else {
                 let okoivs = koivs.map {
                     IndexValue(value: animation.keyframes[$0.index].option,
@@ -4497,20 +4426,16 @@ extension Sheet {
             
         case .insertKeyLines(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
                 var linesCount = lines.count
                 for liv in k.value {
                     if liv.index > linesCount {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     linesCount += 1
@@ -4520,8 +4445,7 @@ extension Sheet {
             updateFirstReverse()
             var isError = false
             func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 isError = true
             }
             var oldKVs = [IndexValue<[IndexValue<Line>]>]()
@@ -4554,39 +4478,31 @@ extension Sheet {
             }
         case .removeKeyLines(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].picture.lines
                 let lis = k.value.filter { $0 < lines.count }.sorted()
                 if k.value != lis {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertKeyPlanes(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].picture.planes
                 var planesCount = planes.count
                 for piv in k.value {
                     if piv.index > planesCount {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     planesCount += 1
@@ -4596,8 +4512,7 @@ extension Sheet {
             updateFirstReverse()
             var isError = false
             func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 isError = true
             }
             var oldKVs = [IndexValue<[IndexValue<Plane>]>]()
@@ -4630,39 +4545,31 @@ extension Sheet {
             }
         case .removeKeyPlanes(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].picture.planes
                 let pis = k.value.filter { $0 < planes.count }.sorted()
                 if k.value != pis {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertDraftKeyLines(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].draftPicture.lines
                 var linesCount = lines.count
                 for liv in k.value {
                     if liv.index > linesCount {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     linesCount += 1
@@ -4670,39 +4577,31 @@ extension Sheet {
             }
         case .removeDraftKeyLines(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let lines = animation.keyframes[k.index].draftPicture.lines
                 let lis = k.value.filter { $0 < lines.count }.sorted()
                 if k.value != lis {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
             
         case .insertDraftKeyPlanes(let kvs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in kvs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].draftPicture.planes
                 var planesCount = planes.count
                 for piv in k.value {
                     if piv.index > planesCount {
-                        error()
+                        history.error(result)
                         break loop
                     }
                     planesCount += 1
@@ -4710,19 +4609,15 @@ extension Sheet {
             }
         case .removeDraftKeyPlanes(let iivs):
             updateFirstReverse()
-            func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
-            }
             loop: for k in iivs {
                 if k.index >= animation.keyframes.count {
-                    error()
+                    history.error(result)
                     break loop
                 }
                 let planes = animation.keyframes[k.index].draftPicture.planes
                 let pis = k.value.filter { $0 < planes.count }.sorted()
                 if k.value != pis {
-                    error()
+                    history.error(result)
                     break loop
                 }
             }
@@ -4731,8 +4626,7 @@ extension Sheet {
             updateFirstReverse()
             var isError = false
             func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 isError = true
             }
             var oldKvs = [IndexValue<[IndexValue<InterOption>]>]()
@@ -4795,8 +4689,7 @@ extension Sheet {
             updateFirstReverse()
             var isError = false
             func error() {
-                history[result.version]
-                    .values[result.valueIndex].error()
+                history.error(result)
                 isError = true
             }
             let notes = score.notes

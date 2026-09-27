@@ -750,7 +750,61 @@ final class InsertAction: InputKeyEventAction {
                             if isNewUndoGroup {
                                 sheetView.newUndoGroup(enabledKeyframeIndex: false)
                             }
-                            sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
+                            
+                            if animation.keyframes.count > 1 {
+                                var vs = [ClosedRange<Int>: [UUID]]()
+                                let nextI = i + 1 < animation.keyframes.count ? i + 1 : 0
+                                loop: for line in animation.keyframes[i].picture.lines {
+                                    guard line.interType != .none else { continue }
+                                    
+                                    func isKey(at ki: Int) -> Bool? {
+                                        guard let type = animation.keyframes[ki].picture.lines
+                                            .first(where: { $0.interType != .none
+                                                && $0.interID == line.interID })?
+                                                .interType else { return nil }
+                                        return type == .key
+                                    }
+                                    
+                                    var nRKI = i
+                                    var ni = nextI
+                                    while ni != i {
+                                        if let isKey = isKey(at: ni) {
+                                            nRKI += 1
+                                            ni = ni + 1 < animation.keyframes.count ? ni + 1 : 0
+                                            if isKey { break }
+                                        } else { continue loop }
+                                    }
+                                    nRKI += 1
+                                    
+                                    var oRKI = i
+                                    if line.interType != .key {
+                                        ni = ni - 1 >= 0 ? ni - 1 : animation.keyframes.count - 1
+                                        while ni != i {
+                                            if let isKey = isKey(at: ni) {
+                                                oRKI -= 1
+                                                ni = ni - 1 >= 0 ? ni - 1 : animation.keyframes.count - 1
+                                                if isKey { break }
+                                            } else { continue loop }
+                                        }
+                                    }
+                                    
+                                    if vs[oRKI...nRKI] != nil {
+                                        vs[oRKI...nRKI]?.append(line.interID)
+                                    } else {
+                                        vs[oRKI...nRKI] = [line.interID]
+                                    }
+                                }
+                                
+                                sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
+                                for v in vs {
+                                    sheetView.interpolation(v.value.map { ($0, [$0]) },
+                                                            oldRootKeyframeIndex: v.key.lowerBound,
+                                                            newRootKeyframeIndex: v.key.upperBound,
+                                                            isNewUndoGroup: false)
+                                }
+                            } else {
+                                sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
+                            }
                         } else if !animation.keyframes[i].isKey {
                             let idivs: [IndexValue<InterOption>] = (0 ..< animation.keyframes[i].picture.lines.count).compactMap {
                                 
@@ -1059,7 +1113,7 @@ final class InterpolateAction: InputKeyEventAction {
                     sheetView.removeLines(at: [li0, li1].sorted())
                     sheetView.insert([.init(value: line, index: li0 < li1 ? li0 : li0 - 1)])
                     
-                    let nLine = sheetView.convertToWorld(line)
+                    let nLine = sheetView.animationView.convertToWorld(line)
                     let p0 = nLine.mainPoint(at: line0.controls.count - 1)
                     let p1 = nLine.mainPoint(at: line0.controls.count)
                     let size0 = nLine.size(atMain: line0.controls.count - 1)
@@ -1139,7 +1193,7 @@ final class InterpolateAction: InputKeyEventAction {
                                                      animationColors: [])
                                 sheetView.set(cv, oldColorValue: ocv)
                                 
-                                let value = sheetView.colorPathValue(with: cv, toColor: nil,
+                                let value = sheetView.worldColorPathValue(with: cv, toColor: nil,
                                                                      color: .selected,
                                                                      subColor: .subSelected)
                                 nodes += value.paths.map {
@@ -1315,9 +1369,7 @@ final class InterpolateAction: InputKeyEventAction {
                     nKI = sheetView.model.animation.index
                     nRootKI = sheetView.model.animation.rootIndex
                 } else {
-                    lis = []
-                    nKI = 0
-                    nRootKI = 0
+                    return
                 }
                 
                 let maxCount = min(ios.count, lis.count)
@@ -1356,7 +1408,7 @@ final class InterpolateAction: InputKeyEventAction {
                         let scale = 1 / rootView.worldToScreenScale
                         let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
                         let line = animationView.model.keyframes[nKI].picture.lines[li]
-                        let nLine = sheetView.convertToWorld(line)
+                        let nLine = sheetView.animationView.convertToWorld(line)
                         noNodes.append(Node(attitude: .init(position: pnP),
                                             path: Path(nLine),
                                             lineWidth: blw,
@@ -1366,16 +1418,17 @@ final class InterpolateAction: InputKeyEventAction {
                 let nidivs = idivs.filter { idiv in
                     let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                     let idLines = animationView.model.keyframes[nKI].picture.lines.filter { $0.interID == idiv.value.id }
-                    if (!animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI)
-                        && idLines.isEmpty)
-                        || idLines.count == 1 && idLines[0] == line {
+                    let isInterpolated = animationView.isInterpolated(atLineI: idiv.index,
+                                                                      atKeyframeI: nKI)
+                    if (!isInterpolated && idLines.isEmpty)
+                        || (idLines.count == 1 && idLines[0] == line
+                            && !(oRootKI == nRootKI && !isInterpolated)) {
                         return true
-                    } else if idLines.isEmpty
-                                && animationView.isInterpolated(atLineI: idiv.index, atKeyframeI: nKI) {
+                    } else if idLines.isEmpty && isInterpolated {
                         let lw = Line.defaultLineWidth
                         let scale = 1 / rootView.worldToScreenScale
                         let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
-                        let nLine = sheetView.convertToWorld(line)
+                        let nLine = sheetView.animationView.convertToWorld(line)
                         noNodes.append(Node(attitude: .init(position: pnP),
                                             path: Path(nLine),
                                             lineWidth: blw,
@@ -1385,7 +1438,7 @@ final class InterpolateAction: InputKeyEventAction {
                         let lw = Line.defaultLineWidth
                         let scale = 1 / rootView.worldToScreenScale
                         let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
-                        let nLine = sheetView.convertToWorld(line)
+                        let nLine = sheetView.animationView.convertToWorld(line)
                         noNodes.append(Node(attitude: .init(position: pnP),
                                             path: Path(nLine),
                                             lineWidth: blw,
@@ -1411,10 +1464,12 @@ final class InterpolateAction: InputKeyEventAction {
                     let scale = 1 / rootView.worldToScreenScale
                     let lw = Line.defaultLineWidth
                     let nodes = lis.map {
-                        Node(attitude: .init(position: pnP),
-                             path: sheetView.animationView.elementViews[nKI].linesView.elementViews[$0].node.path * sheetView.node.localTransform,
-                             lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
-                             lineType: .color(.selected))
+                        let linePath = sheetView.animationView.elementViews[nKI]
+                            .linesView.elementViews[$0].node.path
+                        return Node(attitude: .init(position: pnP),
+                                    path: sheetView.animationView.convertToWorld(linePath),
+                                    lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
+                                    lineType: .color(.selected))
                     }
                     
                     let idivLines = sheetView.model.animation
@@ -1422,8 +1477,6 @@ final class InterpolateAction: InputKeyEventAction {
                     if idivs.contains(where: {
                         idivLines[$0.index].interOption != $0.value
                     }) {
-                        updateUndoGroup()
-                        
                         var vs = [Int: [IndexValue<InterOption>]]()
                         vs[nKI] = idivs
                         idivs.forEach { idiv in
@@ -1468,6 +1521,7 @@ final class InterpolateAction: InputKeyEventAction {
                         let nnidivs = vs
                             .sorted { $0.key < $1.key }
                             .map { IndexValue(value: $0.value, index: $0.key) }
+                        updateUndoGroup()
                         sheetView.set(nnidivs)
                     }
                     
@@ -1522,9 +1576,11 @@ final class InterpolateAction: InputKeyEventAction {
                         if let nli, nli != idiv.index {
                             let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                             if nKI == animationView.model.index {
+                                updateUndoGroup()
                                 sheetView.removeLines(at: [idiv.index])
                                 sheetView.insert([.init(value: line, index: nli > idiv.index ? nli - 1 : nli)])
                             } else {
+                                updateUndoGroup()
                                 sheetView.removeKeyLines([.init(value: [idiv.index], index: nKI)])
                                 sheetView.insertKeyLines([.init(value: [.init(value: line, index: nli > idiv.index ? nli - 1 : nli)], index: nKI)])
                             }
@@ -1541,8 +1597,6 @@ final class InterpolateAction: InputKeyEventAction {
                                                                   oldRootKeyframeIndex: oRootKI,
                                                                   newRootKeyframeIndex: nRootKI)
                     linesNode.children = iNodes + nodes + noNodes
-                    
-                    sheetView.setRootKeyframeIndex(rootKeyframeIndex: animationView.rootKeyframeIndex)
                     
                     animationView.updateTimeline()
                 } else {
@@ -1592,7 +1646,7 @@ extension SheetView {
             }
             
             guard keyAndIs.count > 1 else {
-                if var l = keyAndIs.first?.key.value {
+                if oldRootKeyframeIndex != rki, var l = keyAndIs.first?.key.value {
                     l.interType = .interpolated
                     
                     let li = kts[lki].keyframe.picture.lines.firstIndex(where: { $0.interID == id })!
@@ -2075,13 +2129,13 @@ final class DisconnectAction: InputKeyEventAction {
                             nLines = [nLine]
                         }
                         
-                        let line = sheetView.convertToWorld(keyframe.picture.lines[mli])
+                        let line = sheetView.animationView.convertToWorld(keyframe.picture.lines[mli])
                         nodes.append(Node(path: Path(line),
                                           lineWidth: 1,
                                           lineType: .color(.removing)))
                         
                         for nLine in nLines {
-                            let nnLine = sheetView.convertToWorld(nLine)
+                            let nnLine = sheetView.animationView.convertToWorld(nLine)
                             nodes.append(Node(path: Path(nnLine),
                                               lineWidth: 1,
                                               lineType: .color(.selected)))
@@ -2162,7 +2216,7 @@ final class DisconnectAction: InputKeyEventAction {
                                     .compactMap { $0.element.interID == id ? $0.offset : nil }
                                 if !lis.isEmpty {
                                     for i in lis {
-                                        let line = sheetView
+                                        let line = sheetView.animationView
                                             .convertToWorld(keyframe.picture.lines[i])
                                         nodes.append(Node(path: Path(line),
                                                           lineWidth: 1,

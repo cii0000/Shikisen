@@ -94,23 +94,21 @@ extension Task where Success == Void, Failure == any Error {
         precondition(interval > .zero)
         return Self(priority: .high) {
             let clock = ContinuousClock()
-            let startClock = clock.now
-            var allDur = executeImmediately ? Duration.zero : interval
-            var nextClock = startClock + allDur
+            let startTime = clock.now
+            var allDur = executeImmediately ? .zero : interval
+            var nextTime = startTime + allDur
             while !Task<Never, Never>.isCancelled {
-                if nextClock > clock.now {
-                    do {
-                        try await clock.sleep(until: nextClock)
-                    } catch { break }
+                if nextTime > clock.now {
+                    try await clock.sleep(until: nextTime)
                 }
                 guard !Task<Never, Never>.isCancelled else { break }
                 await operation(allDur)
                 guard !Task<Never, Never>.isCancelled else { break }
                 allDur += interval
-                nextClock = startClock + allDur
-                while nextClock <= clock.now {
+                nextTime = startTime + allDur
+                while nextTime <= clock.now {
                     allDur += interval
-                    nextClock = startClock + allDur
+                    nextTime = startTime + allDur
                 }
             }
         }

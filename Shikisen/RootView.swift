@@ -981,13 +981,13 @@ final class RootView: View, @unchecked Sendable {
             pov.scale = Size(square: s)
         }
         
-        let logScale = pov.logScale
+        let logScale = pov.log2Scale
         if logScale.isNaN {
-            pov.logScale = 0
+            pov.log2Scale = 0
         } else if logScale < minPOVLog2Scale {
-            pov.logScale = minPOVLog2Scale
+            pov.log2Scale = minPOVLog2Scale
         } else if logScale > maxPOVLog2Scale {
-            pov.logScale = maxPOVLog2Scale
+            pov.log2Scale = maxPOVLog2Scale
         }
         return pov
     }
@@ -1075,7 +1075,7 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func updateWithEditGrid(in sheetView: SheetView) {
-        let editGrid = EditGrid(logScale: pov.logScale)
+        let editGrid = EditGrid(logScale: pov.log2Scale)
         sheetView.textsView.elementViews.forEach { $0.editGrid = editGrid }
         sheetView.contentsView.elementViews.forEach { $0.editGrid = editGrid }
         sheetView.scoreView.editGrid = editGrid
@@ -1083,7 +1083,7 @@ final class RootView: View, @unchecked Sendable {
     }
     
     var sheetLineWidth: Double { Line.defaultLineWidth }
-    var sheetTextSize: Double { pov.logScale > 2 ? 100.0 : Font.defaultSize }
+    var sheetTextSize: Double { pov.log2Scale > 2 ? 100.0 : Font.defaultSize }
     
     var runningNodes = [(origin: Point, node: Node)]()
     var runningsNode: Node?
@@ -3263,13 +3263,13 @@ final class RootView: View, @unchecked Sendable {
             || nb.bottomEdge.distanceSquared(from: p) < dSq ?
             (mainFrame, nil) : nil
         }
-        let sheetP = sheetView.convertFromWorld(p)
+        let animationP = sheetView.animationView.convertFromWorld(p)
         let nb = sheetView.mainFrame != Sheet.defaultBounds ?
         sheetView.mainFrame.intersection(sheetView.bounds)?.outset(by: Sheet.mainFrameLineWidth / 2) ?? sheetView.bounds : sheetView.bounds
-        return nb.topEdge.distanceSquared(from: sheetP) < dSq
-        || nb.rightEdge.distanceSquared(from: sheetP) < dSq
-        || nb.leftEdge.distanceSquared(from: sheetP) < dSq
-        || nb.bottomEdge.distanceSquared(from: sheetP) < dSq ?
+        return nb.topEdge.distanceSquared(from: animationP) < dSq
+        || nb.rightEdge.distanceSquared(from: animationP) < dSq
+        || nb.leftEdge.distanceSquared(from: animationP) < dSq
+        || nb.bottomEdge.distanceSquared(from: animationP) < dSq ?
         (sheetView.mainFrame, sheetView) : nil
     }
     func border(at p: Point) -> (border: Border, index: Int,
@@ -3692,7 +3692,7 @@ final class RootView: View, @unchecked Sendable {
     }
     
     var editGrid: EditGrid {
-        .init(logScale: pov.logScale)
+        .init(logScale: pov.log2Scale)
     }
     var currentBeatInterval: Rational {
         editGrid.beatInterval

@@ -386,6 +386,9 @@ extension Gesture {
     static let rotate = Self(.rotate)
     static let keyRotate = Self(modifier: [.shift, .control, .option, .command], .drag)
     
+    static let interScroll = Self(modifier: [.shift], .scroll)
+    static let interZoom = Self(modifier: [.shift], .pinch)
+    
     static let selectByRange = Self(.drag)
     static let unselectByRange = Self(.subDrag)
     

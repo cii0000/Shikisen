@@ -538,7 +538,7 @@ final class LineAction: Action {
     private static func revision(pressure: Double, tiltAngle: Double,
                                  minPressure: Double = 0.5,
                                  targetPressure: Double = 0.325,
-                                 revisonMinPressure: Double = 0.1875) -> Double {
+                                 revisonMinPressure: Double = 0.125) -> Double {
         ((pressure / targetPressure) * tiltAngle.clipped(min: .pi * 0.3, max: .pi * 0.35,
                                                          newMin: 1, newMax: 0))
         .clipped(min: minPressure, max: 1, newMin: revisonMinPressure, newMax: 1)
@@ -1000,7 +1000,10 @@ final class LineAction: Action {
                 }
             }
             
-            snapLines = sheetView?.model.picture.lines ?? []
+            snapLines = if let sheetView {
+                sheetView.model.picture.lines
+                    .map { sheetView.animationView.convert($0, to: sheetView.node) }
+            } else { [] }
             
             beganTime = event.time
             
@@ -1125,6 +1128,7 @@ final class LineAction: Action {
             if centerBounds.contains(lb),
                let sheetView = rootView.madeSheetView(at: centerSHP) {
                 
+                let tempLine = sheetView.animationView.convert(tempLine, from: sheetView.node)
                 if sheetView.model.enabledAnimation, sheetView.id == beganSheetID,
                    beganAnimationRootIndex != sheetView.model.animation.rootIndex {
                     
@@ -1153,7 +1157,7 @@ final class LineAction: Action {
                     if lb.intersects(b),
                        let sheetView = rootView.madeSheetView(at: shp, isNewUndoGroup: isWorldNewUndoGroup) {
                         isWorldNewUndoGroup = false
-                        let nLine = tempLine * Transform(translation: -b.origin)
+                        let nLine = sheetView.animationView.convert(tempLine * Transform(translation: -b.origin), from: sheetView.node)
                         if let b = sheetView.node.bounds {
                             let nLines = Sheet.clipped([nLine], in: b).filter {
                                 if let b = $0.bounds {
@@ -1449,8 +1453,8 @@ final class LineAction: Action {
         if centerBounds.contains(lb),
            let sheetView = rootView.sheetView(at: centerSHP) {
             
-            let nLine = tempLine * Transform(translation: -centerBounds.origin)
-            let d = distance  * rootView.screenToWorldScale
+            let nLine = sheetView.animationView.convert(tempLine * Transform(translation: -centerBounds.origin), from: sheetView.node)
+            let d = distance * rootView.screenToWorldScale
             if let value = sheetView.lassoErase(with: Lasso(line: nLine),
                                                 isRemove: isRemove,
                                                 isEnableLine: isEnableLine,
@@ -1459,7 +1463,7 @@ final class LineAction: Action {
                                                 isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView),
                                                 distance: d) {
                 let np = sheetView.convertFromWorld(p)
-                let t = Transform(translation: -np)
+                let t = sheetView.animationView.node.localTransform * Transform(translation: -np)
                 var nValue = value * t
                 nValue.origin = np
                 if let s = nValue.string {
@@ -1475,7 +1479,7 @@ final class LineAction: Action {
                 if lb.intersects(b),
                    let sheetView = rootView.sheetView(at: shp) {
                     
-                    let nLine = tempLine * Transform(translation: -b.origin)
+                    let nLine = sheetView.animationView.convert(tempLine * Transform(translation: -b.origin), from: sheetView.node)
                     if let aValue
                         = sheetView.lassoErase(with: Lasso(line: nLine),
                                                isRemove: isRemove,
@@ -1483,7 +1487,8 @@ final class LineAction: Action {
                                                isEnablePlane: isEnablePlane,
                                                isEnableText: isEnableText,
                                                isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView)) {
-                        let t = Transform(translation: -sheetView.convertFromWorld(p))
+                        let t = sheetView.animationView.node.localTransform
+                        * Transform(translation: -sheetView.convertFromWorld(p))
                         value += aValue * t
                     }
                 }

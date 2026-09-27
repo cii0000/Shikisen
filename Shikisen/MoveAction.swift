@@ -2347,6 +2347,7 @@ final class MoveSheetAction: DragEventAction {
     private var oldLines = [Line](), oldPlanes = [Plane](),
                 oldTexts = [Text](), oldContents = [Content](), oldStr: String?
     private var sheetOrigin = Point(), containsSelectedLastLine = false
+    private var dTransform = Transform.identity, drTransform = Transform.identity
     private let node = Node()
 
     func flow(with event: DragEvent) {
@@ -2429,7 +2430,7 @@ final class MoveSheetAction: DragEventAction {
                     if let (lineView, _) = sheetView.lineTuple(at: sheetP,
                                                                 scale: rootView.screenToWorldScale) {
                         let line = lineView.model
-                        let d = line.minDistanceSquared(at: sheetP).squareRoot()
+                        let d = line.minDistanceSquared(at: sheetView.animationView.convertFromWorld(p)).squareRoot()
                         if d > 20 * rootView.screenToWorldScale,
                            let rect = sheetView.selectedFrame(scale: rootView.screenToWorldScale) {
                             
@@ -2437,6 +2438,19 @@ final class MoveSheetAction: DragEventAction {
                             type = .warp
                         }
                     }
+                } else {
+                    let fdp = switch type {
+                    case .move, .warp: fatalError()
+                    case .scale: typeRect.centerPoint
+                    case .scaleLeft: typeRect.maxXMidYPoint
+                    case .scaleRight: typeRect.minXMidYPoint
+                    case .scaleTop: typeRect.midXMinYPoint
+                    case .scaleBottom: typeRect.midXMaxYPoint
+                    case .rotate: typeRect.centerPoint
+                    }
+                    dTransform = sheetView.animationView.node.worldTransform
+                            .translated(by: -fdp)
+                    drTransform = dTransform.inverted()
                 }
             }
         case .changed:
@@ -2450,39 +2464,27 @@ final class MoveSheetAction: DragEventAction {
                 case .scale:
                     v = typeRect.centerPoint.distance(oldP) == 0 ? 0 :
                     typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP)
-                    transform = .init(translation: -typeRect.centerPoint + sheetOrigin)
-                    .scaled(by: v)
-                    .translated(by: typeRect.centerPoint - sheetOrigin)
+                    transform = dTransform.scaled(by: v) * drTransform
                 case .scaleLeft:
                     v = oldP.x - typeRect.maxX == 0 ? 0 :
                     (p.x - typeRect.maxX) / (oldP.x - typeRect.maxX)
-                    transform = .init(translation: -typeRect.maxXMidYPoint + sheetOrigin)
-                    .scaledBy(x: v, y: 1)
-                    .translated(by: typeRect.maxXMidYPoint - sheetOrigin)
+                    transform = dTransform.scaledBy(x: v, y: 1) * drTransform
                 case .scaleRight:
                     v = oldP.x - typeRect.minX == 0 ? 0 :
                     (p.x - typeRect.minX) / (oldP.x - typeRect.minX)
-                    transform = .init(translation: -typeRect.minXMidYPoint + sheetOrigin)
-                    .scaledBy(x: v, y: 1)
-                    .translated(by: typeRect.minXMidYPoint - sheetOrigin)
+                    transform = dTransform.scaledBy(x: v, y: 1) * drTransform
                 case .scaleBottom:
                     v = oldP.y - typeRect.minY == 0 ? 0 :
                     (p.y - typeRect.maxY) / (oldP.y - typeRect.maxY)
                     transform = oldP.y - typeRect.minY == 0 ? .init() :
-                    .init(translation: -typeRect.midXMaxYPoint + sheetOrigin)
-                    .scaledBy(x: 1, y: v)
-                    .translated(by: typeRect.midXMaxYPoint - sheetOrigin)
+                    dTransform.scaledBy(x: 1, y: v) * drTransform
                 case .scaleTop:
                     v = oldP.y - typeRect.maxY == 0 ? 0 :
                     (p.y - typeRect.minY) / (oldP.y - typeRect.minY)
-                    transform = .init(translation: -typeRect.midXMinYPoint + sheetOrigin)
-                    .scaledBy(x: 1, y: v)
-                    .translated(by: typeRect.midXMinYPoint - sheetOrigin)
+                    transform = dTransform.scaledBy(x: 1, y: v) * drTransform
                 case .rotate:
                     v = Point.differenceAngle(oldP, typeRect.centerPoint, p) - .pi
-                    transform = .init(translation: -typeRect.centerPoint + sheetOrigin)
-                    .rotated(by: v)
-                    .translated(by: typeRect.centerPoint - sheetOrigin)
+                    transform = dTransform.rotated(by: v) * drTransform
                 }
                 if type == .warp {
                     for (li, oldLine) in zip(lineIs, oldLines) {
@@ -2526,7 +2528,6 @@ final class MoveSheetAction: DragEventAction {
                         oldStr = str
                     }
                 } else if type == .move {
-                    
                     let str = "(\(dp.x.string(digitsCount: 2)) \(dp.y.string(digitsCount: 2)))"
                     if str != oldStr {
                         rootView.cursor = rootView.cursor(from: str,
@@ -2593,7 +2594,7 @@ final class MoveLineAction: DragEventAction {
     }
     
     private var sheetView: SheetView?, lineIndex = 0, pointIndex = 0, rootKeyframeIndex = 0
-    private var beganLine = Line(), beganMainP = Point(), beganSheetP = Point(),
+    private var beganLine = Line(), beganMainP = Point(), beganAnimationP = Point(),
                 isSnappable = true,
                 lastSnapTime: Double?, snapP = Point(), snapDP = Point(), isEnabledFeedback = true
     private var lineView: SheetLineView?, lastSnapStraightTime: Double?, nsd = Point()
@@ -2632,7 +2633,16 @@ final class MoveLineAction: DragEventAction {
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            if let sheetView = rootView.sheetView(at: p) {
+            if let sheetView = rootView.sheetView(at: p),
+               let (lineView, li) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
+                                                        scale: rootView.screenToWorldScale),
+               let pi = lineView.model.mainPointSequence
+                .nearestIndex(at:sheetView.animationView.convertFromWorld(p)) {
+                
+                isEnabledFeedback = false
+                
+                let animationP = sheetView.animationView.convertFromWorld(p)
+                
                 self.sheetView = sheetView
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
@@ -2641,97 +2651,90 @@ final class MoveLineAction: DragEventAction {
                     rootView.updateSelectedFrame()
                 }
                 
-                let sheetP = sheetView.convertFromWorld(p)
+                let line = lineView.model
+                beganLine = line
+                lineIndex = li
+                pointIndex = pi
+                beganMainP = line.mainPoint(at: pi)
+                beganAnimationP = animationP
                 
-                isEnabledFeedback = false
-                if let (lineView, li) = sheetView.lineTuple(at: sheetP,
-                                                            scale: rootView.screenToWorldScale) {
-                    if let pi = lineView.model.mainPointSequence.nearestIndex(at: sheetP) {
-                        let line = lineView.model
-                        beganLine = line
-                        lineIndex = li
-                        pointIndex = pi
-                        beganMainP = line.mainPoint(at: pi)
-                        beganSheetP = sheetP
-                        
-                        let d = line.minDistanceSquared(at: sheetP).squareRoot()
-                        type = if d < line.size + 0.5 * rootView.screenToWorldScale {
-                            line.controls.count == 2 ? .straight : .point
-                        } else {
-                            line.controls.count == 2 ? .straight : .warp
-                        }
-                        
-                        switch type {
-                        case .point:
-                            node.children = line.mainControlSequence.flatMap {
-                                let p = sheetView.convertToWorld($0.point)
-                                return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
-                                                         position: p),
-                                             fillType: .color(.content)),
-                                        Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
-                                                         position: p),
-                                             fillType: .color(.background))]
-                            }
-                            rootView.node.append(child: node)
-                        case .warp:
-                            let niv = line.nearestIndexValue(at: sheetP)
-                            
-                            let length = line.length()
-                            if length > 0 {
-                                if line.length(with: .init(startIndexValue: line.firstIndexValue,
-                                                                endIndexValue: niv)) / length < 0.25 {
-                                    pointIndex = 0
-                                } else if line.length(with: .init(startIndexValue: niv,
-                                                                       endIndexValue: line.lastIndexValue)) / length < 0.25 {
-                                    pointIndex = line.mainPointCount - 1
-                                }
-                            }
-                        case .straight:
-                            self.lineView = lineView
-                            let fp = sheetView.convertToWorld(pointIndex == 0 ?
-                                                              line.lastPoint : line.firstPoint)
-                            isSnapStraight = line.firstPoint.x == line.lastPoint.x
-                            || line.firstPoint.y == line.lastPoint.y
-                            let lw = Line.defaultLineWidth
-                            let wb = rootView.worldBoundsInScreen
-                            let b0 = Rect(x: fp.x - lw / 2, y: wb.minY, width: lw, height: wb.height)
-                            let b1 = Rect(x: wb.minX, y: fp.y - lw / 2, width: wb.width, height: lw)
-                            let paths = [Path(b0), Path(b1)]
-                            node.children = paths.map {
-                                Node(path: $0, fillType: .color(.subSelected))
-                            }
-                            rootView.node.append(child: node)
-                        }
-                        
-                        var lines = sheetView.keyframeView.linesView.model
-                        lines.remove(at: lineIndex)
-                        
-                        let nnp = pointIndex == 0 || pointIndex == beganLine.mainPointCount - 1 ?
-                        LineAction.snap(pointIndex == 0 ? .first : .last, beganLine,
-                                        isSnapSelf: true,
-                                        distanceScale: 2,
-                                        screenToWorldScale: rootView.screenToWorldScale,
-                                        from: lines)?.point :
-                        nil
-                        if nnp != nil {
-                            lastSnapTime = event.time
-                            snapP = nnp!
+                let d = line.minDistanceSquared(at: animationP).squareRoot()
+                type = if d < line.size + 0.5 * rootView.screenToWorldScale {
+                    line.controls.count == 2 ? .straight : .point
+                } else {
+                    line.controls.count == 2 ? .straight : .warp
+                }
+                
+                switch type {
+                case .point:
+                    node.children = line.mainControlSequence.flatMap {
+                        let p = sheetView.animationView.convertToWorld($0.point)
+                        return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
+                                     fillType: .color(.content)),
+                                Node(path: .init(circleRadius: 0.35 * max(line.size * $0.pressure, 0.5),
+                                                 position: p),
+                                     fillType: .color(.background))]
+                    }
+                    rootView.node.append(child: node)
+                case .warp:
+                    let niv = line.nearestIndexValue(at: animationP)
+                    
+                    let length = line.length()
+                    if length > 0 {
+                        if line.length(with: .init(startIndexValue: line.firstIndexValue,
+                                                   endIndexValue: niv)) / length < 0.25 {
+                            pointIndex = 0
+                        } else if line.length(with: .init(startIndexValue: niv,
+                                                          endIndexValue: line.lastIndexValue)) / length < 0.25 {
+                            pointIndex = line.mainPointCount - 1
                         }
                     }
+                case .straight:
+                    self.lineView = lineView
+                    let fp = sheetView.animationView
+                        .convertToWorld(pointIndex == 0 ? line.lastPoint : line.firstPoint)
+                    isSnapStraight = line.firstPoint.x == line.lastPoint.x
+                    || line.firstPoint.y == line.lastPoint.y
+                    let lw = Line.defaultLineWidth
+                    let wb = rootView.worldBoundsInScreen
+                    let b0 = Rect(x: fp.x - lw / 2, y: wb.minY, width: lw, height: wb.height)
+                    let b1 = Rect(x: wb.minX, y: fp.y - lw / 2, width: wb.width, height: lw)
+                    let paths = [Path(b0), Path(b1)]
+                    node.children = paths.map {
+                        Node(path: $0, fillType: .color(.subSelected))
+                    }
+                    rootView.node.append(child: node)
                 }
+                
+                var lines = sheetView.keyframeView.linesView.model
+                lines.remove(at: lineIndex)
+                
+                let nnp = pointIndex == 0 || pointIndex == beganLine.mainPointCount - 1 ?
+                LineAction.snap(pointIndex == 0 ? .first : .last, beganLine,
+                                isSnapSelf: true,
+                                distanceScale: 2,
+                                screenToWorldScale: rootView.screenToWorldScale,
+                                from: lines)?.point :
+                nil
+                if nnp != nil {
+                    lastSnapTime = event.time
+                    snapP = nnp!
+                }
+                
+                isEnabledFeedback = true
             }
-            isEnabledFeedback = true
         case .changed:
             if let sheetView {
                 if lineIndex < sheetView.linesView.elementViews.count {
                     let lineView = sheetView.linesView.elementViews[lineIndex]
+                    let animationP = sheetView.animationView.convertFromWorld(p)
                     
                     switch type {
                     case .point:
                         var line = lineView.model
                         if pointIndex < line.mainPointCount {
-                            let sheetP = sheetView.convertFromWorld(p)
-                            let op = sheetP - beganSheetP + beganMainP
+                            let op = animationP - beganAnimationP + beganMainP
                             let np = line.mainPoint(withMainCenterPoint: op,
                                                     at: pointIndex)
                             
@@ -2775,7 +2778,7 @@ final class MoveLineAction: DragEventAction {
                             lineView.model = line
                             
                             node.children = line.mainControlSequence.flatMap {
-                                let p = sheetView.convertToWorld($0.point)
+                                let p = sheetView.animationView.convertToWorld($0.point)
                                 return [Node(path: .init(circleRadius: 0.35 * 1.5 * max(line.size * $0.pressure, 0.5),
                                                          position: p),
                                              fillType: .color(.content)),
@@ -2786,8 +2789,7 @@ final class MoveLineAction: DragEventAction {
                         }
                     case .warp:
                         var line = beganLine
-                        let sheetP = sheetView.convertFromWorld(p)
-                        var dp = sheetP - beganSheetP
+                        var dp = animationP - beganAnimationP
                         let np = pointIndex == 0 ? line.firstPoint + dp : (pointIndex == line.mainPointCount - 1 ? line.lastPoint + dp : nil)
                         var lines = sheetView.keyframeView.linesView.model
                         lines.remove(at: lineIndex)
@@ -2854,8 +2856,7 @@ final class MoveLineAction: DragEventAction {
                         var lines = sheetView.keyframeView.linesView.model
                         lines.remove(at: lineIndex)
                         
-                        let np = beganLine.controls[fol1].point
-                        + sheetView.convertFromWorld(p) - beganSheetP
+                        let np = beganLine.controls[fol1].point + animationP - beganAnimationP
                         
                         var nLine = beganLine
                         nLine.controls[fol1].point = np
@@ -3121,7 +3122,7 @@ final class MoveMainFrameAction: DragEventAction {
     }
     
     private var sheetView: SheetView?, beganOption = SheetOption(), type = MoveType.corner
-    private var beganSP = Point(), beganSheetP = Point()
+    private var beganSP = Point(), beganAnimationP = Point()
     private var isNewUndoGroup = true
     
     func flow(with event: DragEvent) {
@@ -3140,49 +3141,50 @@ final class MoveMainFrameAction: DragEventAction {
                 self.sheetView = sheetView
                 sheetView.unselect(isNewUndoGroup: &isNewUndoGroup)
                 
-                let sheetP = sheetView.convertFromWorld(p)
+                let animationP = sheetView.animationView.convertFromWorld(p)
                 beganSP = event.screenPoint
-                beganSheetP = sheetP
+                beganAnimationP = animationP
                 beganOption = sheetView.model.option
                 
                 var minDSq = Double.infinity
                 let nb = sheetView.mainFrame != Sheet.defaultBounds ?
                 sheetView.mainFrame.intersection(sheetView.bounds)?.outset(by: 2) ?? sheetView.bounds : sheetView.bounds
-                let topDSq = nb.topEdge.distanceSquared(from: sheetP)
+                let topDSq = nb.topEdge.distanceSquared(from: animationP)
                 if topDSq < minDSq {
                     type = .top
                     minDSq = topDSq
                 }
-                let rightDSq = nb.rightEdge.distanceSquared(from: sheetP)
+                let rightDSq = nb.rightEdge.distanceSquared(from: animationP)
                 if rightDSq < minDSq {
                     type = .right
                     minDSq =  rightDSq
                 }
-                let leftDSq = nb.leftEdge.distanceSquared(from: sheetP)
+                let leftDSq = nb.leftEdge.distanceSquared(from: animationP)
                 if leftDSq < minDSq {
                     type = .left
                     minDSq = leftDSq
                 }
-                let bottomDSq = nb.bottomEdge.distanceSquared(from: sheetP)
+                let bottomDSq = nb.bottomEdge.distanceSquared(from: animationP)
                 if bottomDSq < minDSq {
                     type = .bottom
                     minDSq = bottomDSq
                 }
                 let maxDSq = (10 * rootView.screenToWorldScale).squared
-                if nb.minXMinYPoint.distanceSquared(sheetP) < maxDSq
-                    || nb.minXMaxYPoint.distanceSquared(sheetP) < maxDSq
-                    || nb.maxXMinYPoint.distanceSquared(sheetP) < maxDSq
-                    || nb.maxXMaxYPoint.distanceSquared(sheetP) < maxDSq {
+                if nb.minXMinYPoint.distanceSquared(animationP) < maxDSq
+                    || nb.minXMaxYPoint.distanceSquared(animationP) < maxDSq
+                    || nb.maxXMinYPoint.distanceSquared(animationP) < maxDSq
+                    || nb.maxXMaxYPoint.distanceSquared(animationP) < maxDSq {
                     type = .corner
                 }
             }
         case .changed:
             if let sheetView {
                 let oldFrame = sheetView.mainFrame, db = Sheet.defaultBounds
-                let sheetP = sheetView.convertFromWorld(p), cp = sheetView.bounds.centerPoint
-                let dp = beganSheetP - beganOption.mainFrame.centerPoint
-                let nx = (sheetP.x - beganSheetP.x) * dp.x.signValue + beganOption.mainFrame.width / 2
-                let ny = (sheetP.y - beganSheetP.y) * dp.y.signValue + beganOption.mainFrame.height / 2
+                let animationP = sheetView.animationView.convertFromWorld(p),
+                    cp = sheetView.bounds.centerPoint
+                let dp = beganAnimationP - beganOption.mainFrame.centerPoint
+                let nx = (animationP.x - beganAnimationP.x) * dp.x.signValue + beganOption.mainFrame.width / 2
+                let ny = (animationP.y - beganAnimationP.y) * dp.y.signValue + beganOption.mainFrame.height / 2
                 let rect = switch type {
                 case .corner:
                     Rect(cp,

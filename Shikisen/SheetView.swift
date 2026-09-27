@@ -391,7 +391,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     let previousNextNode = Node()
     let captionNode = Node()
     let timelineNode = Node()
-    let boundsNode = Node(lineWidth: 1, lineType: .color(.content))
     let clippingNode = Node(isHidden: true, lineWidth: 4, lineType: .color(.warning))
     
     var isPlaying = false
@@ -1117,20 +1116,17 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     
-    var clippableBounds: Rect? {
-        transformedPaddingTimelineBounds
-    }
     func updateClippingNode() {
         var parent: Node?
-        node.allParents { node, stop in
+        timelineNode.allParents { node, stop in
             if node.bounds != nil {
                 parent = node
                 stop = true
             }
         }
         if let parent,
-            let pb = parent.bounds, let b = clippableBounds {
-            let edges = convert(pb, from: parent).intersectionEdges(b)
+            let pb = parent.bounds, let b = transformedPaddingTimelineBounds {
+            let edges = timelineNode.convert(pb, from: parent).intersectionEdges(b)
             
             if !edges.isEmpty {
                 clippingNode.isHidden = false
@@ -1347,8 +1343,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         let knobW = Sheet.knobWidth, knobH = Sheet.knobHeight
         let iKnobW = width(atDurBeat: Rational(1, frameRate)),
             iKnobH = Sheet.interpolatedKnobHeight
-        let nb = bounds.insetBy(dx: Sheet.textPadding.width, dy: 0)
-        let kfY = nb.minY + timelineY
         
         var selectedPathlines = [Pathline]()
         
@@ -1360,22 +1354,22 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             
             let pathline = nLines.contains(where: { $0.interType == .key }) ?
                 Pathline(Rect(x: kx - knobW / 2,
-                              y: kfY - knobH / 2,
+                              y: -knobH / 2,
                               width: knobW, height: knobH)) :
                 Pathline(Rect(x: kx - iKnobW / 2,
-                              y: kfY - iKnobH / 2,
+                              y: -iKnobH / 2,
                               width: iKnobW, height: iKnobH))
             selectedPathlines.append(pathline)
             
             if !keyframe.draftPicture.isEmpty {
                 let pathline = Pathline(Rect(x: kx - knobW / 2,
-                                             y: kfY + knobH / 2 + knobW,
+                                             y: knobH / 2 + knobW,
                                              width: knobW, height: knobW))
                  selectedPathlines.append(pathline)
             }
         }
         
-        return [Node(path: convertToWorld(Path(selectedPathlines)),
+        return [Node(path: timelineNode.convertToWorld(Path(selectedPathlines)),
                      fillType: .color(.selected))]
     }
     func interporatedKeyLineIs(from ids: [UUID]) -> [Int] {
@@ -1564,6 +1558,7 @@ final class SheetView: View, @unchecked Sendable {
     let bordersView: ArrayView<SheetBorderView>
     
     let mainFrameNode = Node()
+    let keyframeAttitudeNode = Node()
     
     var notePlayer: NotePlayer?
     let tempoNode = Node()
@@ -1665,7 +1660,8 @@ final class SheetView: View, @unchecked Sendable {
                                textsView.node,
                                bordersView.node,
                                animationView.timelineNode,
-                               animationView.captionNode])
+                               animationView.captionNode,
+                               keyframeAttitudeNode])
         
         updateBackground()
         updateWithKeyframeIndex()
@@ -1679,6 +1675,29 @@ final class SheetView: View, @unchecked Sendable {
                 self?.updateSelection(from: ranges, textView)
             }
         }
+    }
+    
+    var keyframeAttitude = Attitude() {
+        didSet {
+            otherBottomNode.attitude = keyframeAttitude
+            animationView.node.attitude = keyframeAttitude
+            otherTopNode.attitude = keyframeAttitude
+            animationView.previousNextNode.attitude = keyframeAttitude
+            mainFrameNode.attitude = keyframeAttitude
+            if keyframeAttitude == .init() {
+                keyframeAttitudeNode.path = .init()
+            } else {
+                let typesetter = Text(string: "x: \(keyframeAttitude.position.x.string(digitsCount: 2)), y: \(keyframeAttitude.position.y.string(digitsCount: 2)), scale: \(keyframeAttitude.log2Scale.string(digitsCount: 2))").typesetter
+                keyframeAttitudeNode.path = .init(typesetter, isPolygon: false)
+                keyframeAttitudeNode.attitude = .init(position: .init(bounds.width - typesetter.width - 5, bounds.height - typesetter.height / 2 - 5))
+                keyframeAttitudeNode.fillType = .color(.content)
+            }
+            updateSelectedFrame()
+        }
+    }
+    func containsKeyframeAttitude(_ p: Point) -> Bool {
+        keyframeAttitudeNode.bounds?.outset(by: 5)
+            .contains(keyframeAttitudeNode.convert(p, from: node)) ?? false
     }
     
     func updateSelection(from ranges: [Range<String.Index>], _ textView: SheetTextView) {
@@ -1864,6 +1883,10 @@ final class SheetView: View, @unchecked Sendable {
         keyframeView.selectedPlaneIs.forEach {
             rect += keyframeView.planesView.elementViews[$0].node.bounds
         }
+        if keyframeAttitude != .init(), let nRect = rect {
+            rect = animationView.convert(nRect, to: node)
+        }
+        
         selectedTextIs.forEach {
             let textView = textsView.elementViews[$0], text = textView.model
             if textView.selectedRanges.count == 1 &&
@@ -1939,8 +1962,8 @@ final class SheetView: View, @unchecked Sendable {
             return removedText
         }
         
-        let ssValue = SheetValue(lines: keyframeView.selectedLineIs.map { sheet.picture.lines[$0] },
-                                 planes: keyframeView.selectedPlaneIs.map { sheet.picture.planes[$0] },
+        let ssValue = SheetValue(lines: keyframeView.selectedLineIs.map { animationView.convert(sheet.picture.lines[$0], to: node) },
+                                 planes: keyframeView.selectedPlaneIs.map { animationView.convert(sheet.picture.planes[$0], to: node) },
                                  texts: texts,
                                  contents: selectedContentIs.map { sheet.contents[$0] },
                                  id: id, rootKeyframeIndex: model.animation.rootIndex,
@@ -2020,7 +2043,8 @@ final class SheetView: View, @unchecked Sendable {
         && lineTuple(at: p, isSelectedOnly: true, scale: scale) != nil
     }
     func containsSelectedPlane(_ p: Point) -> Bool {
-        !keyframeView.selectedPlaneIs.isEmpty
+        let p = animationView.convert(p, from: node)
+        return !keyframeView.selectedPlaneIs.isEmpty
         && keyframeView.selectedPlaneIs.contains { keyframeView.planesView.elementViews[$0].node.path.contains(p) }
     }
     func containsSelectedText(_ p: Point, scale: Double) -> Bool {
@@ -3142,12 +3166,12 @@ final class SheetView: View, @unchecked Sendable {
             backgroundUUColor = colorValue.uuColor
         }
     }
-    func colorPathValue(with colorValue: ColorValue,
-                        toColor: Color?,
-                        color: Color, subColor: Color) -> ColorPathValue {
+    func worldColorPathValue(with colorValue: ColorValue,
+                             toColor: Color?,
+                             color: Color, subColor: Color) -> ColorPathValue {
         if !colorValue.planeIndexes.isEmpty {
             var paths = colorValue.planeIndexes.map {
-                planesView.elementViews[$0].node.path * node.localTransform
+                animationView.convertToWorld(planesView.elementViews[$0].node.path)
             }
             if colorValue.isBackground, let b = node.bounds {
                 let path = Path([Pathline(b)]) * node.localTransform
@@ -3168,8 +3192,7 @@ final class SheetView: View, @unchecked Sendable {
                 if v.index == model.animation.index {
                     let planes = model.animation.keyframes[v.index].picture.planes
                     for i in v.value {
-                        let path = planes[i].node.path * node.localTransform
-                        paths.append(path)
+                        paths.append(animationView.convertToWorld(planes[i].node.path))
                     }
                 }
             }
@@ -3332,7 +3355,7 @@ final class SheetView: View, @unchecked Sendable {
     func sheetColorOwnerFromPlane(at p: Point,
                                   enabledAlwaysAnimation: Bool = false,
                                   scale: Double) -> SheetColorOwner {
-        if let pi = planesView.firstIndex(at: p) {
+        if let pi = planesView.firstIndex(at: animationView.convert(p, from: node)) {
             if model.enabledAnimation {
                 if containsSelectedKeyframe(p, scale: scale) || enabledAlwaysAnimation {
                     let uuColor = model.picture.planes[pi].uuColor
@@ -3501,8 +3524,8 @@ final class SheetView: View, @unchecked Sendable {
             let lineView = appendNode(line)
             lineView.isHiddenPoints = animationView.editGrid != .full
             animationView.updateTimelineAtCurrentKeyframe()
-            if isMakeRect {
-                return (lineView.node.bounds, [])
+            if isMakeRect, let b = lineView.node.bounds {
+                return (animationView.convert(b, to: node), [])
             }
         case .appendLines(let lines):
             stop()
@@ -3514,7 +3537,11 @@ final class SheetView: View, @unchecked Sendable {
             animationView.updateTimelineAtCurrentKeyframe()
             if isMakeRect {
                 let rect = linesView.elementViews[(linesView.elementViews.count - lines.count)...]
-                    .reduce(into: Rect?.none) { $0 += $1.node.bounds }
+                    .reduce(into: Rect?.none) {
+                        if let b = $1.node.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                    }
                 return (rect, [])
             }
         case .appendPlanes(let planes):
@@ -3522,14 +3549,22 @@ final class SheetView: View, @unchecked Sendable {
             appendNode(planes)
             if isMakeRect {
                 let rect = planesView.elementViews[(planesView.elementViews.count - planes.count)...]
-                    .reduce(into: Rect?.none) { $0 += $1.node.bounds }
+                    .reduce(into: Rect?.none) {
+                        if let b = $1.node.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                    }
                 return (rect, [])
             }
         case .removeLastLines(let count):
             stop()
             if isMakeRect {
                 let rect = linesView.elementViews[(linesView.elementViews.count - count)...]
-                    .reduce(into: Rect?.none) { $0 += $1.node.bounds }
+                    .reduce(into: Rect?.none) {
+                        if let b = $1.node.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                    }
                 removeLastsLineNode(count: count)
                 animationView.updateTimelineAtCurrentKeyframe()
                 return (rect, [])
@@ -3541,7 +3576,11 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             if isMakeRect {
                 let rect = planesView.elementViews[(planesView.elementViews.count - count)...]
-                    .reduce(into: Rect?.none) { $0 += $1.node.bounds }
+                    .reduce(into: Rect?.none) {
+                        if let b = $1.node.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                    }
                 removeLastsPlaneNode(count: count)
                 return (rect, [])
             } else {
@@ -3558,7 +3597,9 @@ final class SheetView: View, @unchecked Sendable {
             animationView.updateTimelineAtCurrentKeyframe()
             if isMakeRect {
                 let rect = livs.reduce(into: Rect?.none) {
-                    $0 += linesView.elementViews[$1.index].node.bounds
+                    if let b = linesView.elementViews[$1.index].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             }
@@ -3567,7 +3608,9 @@ final class SheetView: View, @unchecked Sendable {
             insertNode(pivs)
             if isMakeRect {
                 let rect = pivs.reduce(into: Rect?.none) {
-                    $0 += planesView.elementViews[$1.index].node.bounds
+                    if let b = planesView.elementViews[$1.index].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             }
@@ -3578,7 +3621,9 @@ final class SheetView: View, @unchecked Sendable {
                 for liv in livs {
                     binder[keyPath: keyPath].picture.lines[liv.index] = liv.value
                     linesView.elementViews[liv.index].updateWithModel()
-                    rect += linesView.elementViews[liv.index].node.bounds
+                    if let b = linesView.elementViews[liv.index].node.bounds {
+                        rect += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             } else {
@@ -3594,7 +3639,9 @@ final class SheetView: View, @unchecked Sendable {
                 for piv in pivs {
                     binder[keyPath: keyPath].picture.planes[piv.index] = piv.value
                     planesView.elementViews[piv.index].updateWithModel()
-                    rect += planesView.elementViews[piv.index].node.bounds
+                    if let b = planesView.elementViews[piv.index].node.bounds {
+                        rect += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             } else {
@@ -3607,7 +3654,9 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             if isMakeRect {
                 let rect = lineIndexes.reduce(into: Rect?.none) {
-                    $0 += linesView.elementViews[$1].node.bounds
+                    if let b = linesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 removeLinesNode(at: lineIndexes)
                 animationView.updateTimelineAtCurrentKeyframe()
@@ -3620,7 +3669,9 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             if isMakeRect {
                 let rect = planeIndexes.reduce(into: Rect?.none) {
-                    $0 += planesView.elementViews[$1].node.bounds
+                    if let b = planesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 removePlanesNode(at: planeIndexes)
                 return (rect, [])
@@ -3635,7 +3686,11 @@ final class SheetView: View, @unchecked Sendable {
             setNode(planeValue.planes)
             if isMakeRect {
                 let rect = planesView.elementViews
-                    .reduce(into: Rect?.none) { $0 += $1.node.bounds }
+                    .reduce(into: Rect?.none) {
+                        if let b = $1.node.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                    }
                 insertNode(planeIndexes)
                 return (rect, [])
             } else {
@@ -3679,7 +3734,9 @@ final class SheetView: View, @unchecked Sendable {
             updateTimeline()
             if isMakeRect {
                 let rect = livs.reduce(into: Rect?.none) {
-                    $0 += draftLinesView.elementViews[$1.index].node.bounds
+                    if let b = draftLinesView.elementViews[$1.index].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             }
@@ -3689,7 +3746,9 @@ final class SheetView: View, @unchecked Sendable {
             updateTimeline()
             if isMakeRect {
                 let rect = pivs.reduce(into: Rect?.none) {
-                    $0 += draftPlanesView.elementViews[$1.index].node.bounds
+                    if let b = draftPlanesView.elementViews[$1.index].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             }
@@ -3697,7 +3756,9 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             if isMakeRect {
                 let rect = lineIndexes.reduce(into: Rect?.none) {
-                    $0 += draftLinesView.elementViews[$1].node.bounds
+                    if let b = draftLinesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 removeDraftLinesNode(at: lineIndexes)
                 updateTimeline()
@@ -3710,7 +3771,9 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             if isMakeRect {
                 let rect = planeIndexes.reduce(into: Rect?.none) {
-                    $0 += draftPlanesView.elementViews[$1].node.bounds
+                    if let b = draftPlanesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 removeDraftPlanesNode(at: planeIndexes)
                 updateTimeline()
@@ -3828,9 +3891,13 @@ final class SheetView: View, @unchecked Sendable {
             
             if isMakeRect {
                 let rect = colorValue.planeIndexes.reduce(into: Rect?.none) {
-                    $0 += planesView.elementViews[$1].node.bounds
+                    if let b = planesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 } + colorValue.lineIndexes.reduce(into: Rect?.none) {
-                    $0 += linesView.elementViews[$1].node.bounds
+                    if let b = linesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
                 }
                 return (rect, [])
             }
@@ -3937,7 +4004,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.lineType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -3968,7 +4035,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.lineType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -3997,7 +4064,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1].node.clone
                         node.lineType = .color(.removing)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4028,7 +4095,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.fillType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4057,7 +4124,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.fillType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4086,7 +4153,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1].node.clone
                         node.fillType = .color(.removing)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4117,7 +4184,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.lineType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                     }
                 }
@@ -4143,7 +4210,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1].node.clone
                         node.lineType = .color(.removing)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4176,7 +4243,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1.index].node.clone
                         node.fillType = .color(.selected)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4203,7 +4270,7 @@ final class SheetView: View, @unchecked Sendable {
                             .elementViews[$1].node.clone
                         node.fillType = .color(.removing)
                         if let b = node.bounds {
-                            $0 += b
+                            $0 += animationView.convert(b, to: node)
                         }
                         nodes.append(node)
                     }
@@ -4241,7 +4308,7 @@ final class SheetView: View, @unchecked Sendable {
                                 .elementViews[$1.offset].node.clone
                             node.lineType = .color(.selected)
                             if let b = node.bounds {
-                                $0 += b
+                                $0 += animationView.convert(b, to: node)
                             }
                             nodes.append(node)
                         }
@@ -5535,6 +5602,7 @@ final class SheetView: View, @unchecked Sendable {
             40 * scale
         }
         
+        let p = animationView.convert(p, from: node)
         var minI: Int?, minDSq = Double.infinity
         for (i, line) in model.picture.lines.enumerated().reversed() {
             guard !isSelectedOnly || keyframeView.linesView.elementViews[i].isSelected else { continue }
@@ -5647,7 +5715,6 @@ final class SheetView: View, @unchecked Sendable {
                     isUpdatedNewUndoGroup: Bool = false,
                     distance d: Double = 0) -> SheetValue? {
         guard let nlb = lasso.bounds else { return nil }
-        guard node.bounds?.intersects(nlb) ?? false else { return nil }
         
         var isUpdatedNewUndoGroup = isUpdatedNewUndoGroup
         func updateUndoGroup() {
@@ -6125,9 +6192,9 @@ final class SheetColorOwner {
     }
     func colorPathValue(toColor: Color?,
                         color: Color, subColor: Color) -> ColorPathValue {
-        sheetView.colorPathValue(with: colorValue,
-                                 toColor: toColor,
-                                 color: color, subColor: subColor)
+        sheetView.worldColorPathValue(with: colorValue,
+                                      toColor: toColor,
+                                      color: color, subColor: subColor)
     }
     
     func moveLine(with uuColor: UUColor, old oldUUColor: UUColor) {

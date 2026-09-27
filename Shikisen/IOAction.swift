@@ -1791,6 +1791,9 @@ final class IOAction: Action {
                             allGroups.append((currentVersion, history[currentVersion]))
                         }
                         let frameCount = allGroups.count
+                        var kImages = [Image]()
+                        guard var nImage = Image(size: size,
+                                                 color: .disabled) else { throw MovieEncoder.ExportingError() }
                         let vs = [nil] + allGroups.map { $0.version }
                         for (vi, version) in vs.enumerated() {
                             try await sheetView.history.move(to: version) { yIndexPath in
@@ -1818,7 +1821,51 @@ final class IOAction: Action {
                                                                        backgroundColor: backgroundColor)?.image
                                         else { throw MovieEncoder.ExportingError() }
                                 
-                                try await movie.write(image, duration: 1, timeScale: 60)
+                                let kCount = sheetView.model.animation.keyframes.count
+                                if kCount > 1 {
+                                    var isRedraw = false
+                                    if kCount > kImages.count {
+                                        for _ in (kCount - kImages.count).range {
+                                            guard let kImage = Image(size: size,
+                                                                     color: backgroundColor) else { throw MovieEncoder.ExportingError() }
+                                            kImages.append(kImage)
+                                        }
+                                        isRedraw = true
+                                    } else if kCount < kImages.count {
+                                        kImages = .init(kImages[..<kCount])
+                                        isRedraw = true
+                                    }
+                                    
+                                    kImages[sheetView.model.animation.index] = image
+                                    
+                                    let columnCount = Int(Double(kCount).squareRoot().rounded(.up))
+                                    let cellWidth = size.width / Double(columnCount)
+                                    let cellheight = b.height * cellWidth / b.width
+                                    func draw(_ image: Image, at ki: Int) {
+                                        let columnI = ki % columnCount
+                                        let rowI = ki / columnCount
+                                        let rect = Rect(x: sheetBounds.minX + .init(columnI) * cellWidth,
+                                                        y: sheetBounds.minY + .init(rowI) * cellheight,
+                                                        width: cellWidth, height: cellheight).inset(by: 1)
+                                        
+                                        if let nnImage = nImage.drawn(image, in: rect) {
+                                            nImage = nnImage
+                                        }
+                                    }
+                                    if isRedraw {
+                                        guard let nnImage = Image(size: size,
+                                                                 color: .disabled) else { throw MovieEncoder.ExportingError() }
+                                        nImage = nnImage
+                                        for (ki, image) in kImages.enumerated() {
+                                            draw(image, at: ki)
+                                        }
+                                    } else {
+                                        draw(image, at: sheetView.model.animation.index)
+                                    }
+                                    try await movie.write(nImage, duration: 1, timeScale: 60)
+                                } else {
+                                    try await movie.write(image, duration: 1, timeScale: 60)
+                                }
                                 
                                 progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
                                 try Task.checkCancellation()
