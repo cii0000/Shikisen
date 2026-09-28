@@ -950,7 +950,8 @@ final class IOAction: Action {
         }
         
         let message = String(format: "Export as %@".localized, type.displayName)
-        let name = name(from: nvs.map { $0.shp }) + (type.is4K ? "_4k" : "")
+        let name = name(from: nvs.map { $0.shp })
+        + (type == .timelapse ? "_tl" : "") + (type.is4K ? "_4k" : "")
         
         Task { @MainActor in
             let result = await URL.export(message: message,
@@ -1760,124 +1761,207 @@ final class IOAction: Action {
         @Sendable func export(from renderings: [Rendering],
                               progressHandler: (Double) -> ()) async throws {
             var filledIDs = Set<UUID>()
-            let movie = try MovieEncoder(url: ioResult.url, renderSize: size,
-                                         isAlphaChannel: isAlphaChannel,
-                                         colorSpace, frameRate: 60,
-                                         isEnabledAudio: false, isLinearPCM: false)
+            let movieEncoder = try MovieEncoder(url: ioResult.url, renderSize: size,
+                                                isAlphaChannel: isAlphaChannel,
+                                                colorSpace, frameRate: 60,
+                                                isEnabledAudio: false, isLinearPCM: false)
             do {
                 for (ri, rendering) in renderings.enumerated() {
                     guard !filledIDs.contains(rendering.mainItem.id) else { continue }
                     filledIDs.insert(rendering.mainItem.id)
                     
-                    if let url = rendering.mainItem.url,
+                    guard let url = rendering.mainItem.url,
                        let sheet = rendering.mainItem.decodedSheet(),
-                       let history = rendering.mainItem.decodedSheetHistory() {
+                       let history = rendering.mainItem.decodedSheetHistory()
+                    else { throw MovieEncoder.ExportingError() }
                         
-                        let sheetBinder = RecordBinder(value: sheet, record: Record(url: url))
-                        let sheetView = SheetView(binder: sheetBinder,
-                                                  keyPath: \SheetBinder.value,
-                                                  history: history)
-                        var allGroups = [(version: Version,
-                                          group: UndoGroup<SheetUndoItem>)]()
-                        history.allGroups { indexPath, groups in
-                            allGroups += groups.enumerated()
-                                .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
-                                        $0.element) }
-                        }
-                        
-                        allGroups.sort { $0.group.date < $1.group.date }
-                        if let currentVersion = history.currentVersion,
-                           allGroups.last?.group.date != history.currentDate {
-                            allGroups.append((currentVersion, history[currentVersion]))
-                        }
-                        let frameCount = allGroups.count
-                        var kImages = [Image]()
-                        guard var nImage = Image(size: size,
-                                                 color: .disabled) else { throw MovieEncoder.ExportingError() }
-                        let vs = [nil] + allGroups.map { $0.version }
-                        for (vi, version) in vs.enumerated() {
-                            try await sheetView.history.move(to: version) { yIndexPath in
-                                sheetView.history.set(indexPath: yIndexPath)
-                            } topIHandler: { topIndex in
-                                sheetView.undo(to: topIndex, isMakeRect: false, isSleep: false)
-                                
-                                if vi == 0 && topIndex != 0 {
-                                    progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
-                                    try Task.checkCancellation()
-                                    return
+                    let sheetBinder = RecordBinder(value: sheet, record: Record(url: url))
+                    let sheetView = SheetView(binder: sheetBinder,
+                                              keyPath: \SheetBinder.value,
+                                              history: history)
+                    var allGroups = [(version: Version,
+                                      group: UndoGroup<SheetUndoItem>)]()
+                    history.allGroups { indexPath, groups in
+                        allGroups += groups.enumerated()
+                            .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
+                                    $0.element) }
+                    }
+                    
+                    allGroups.sort { $0.group.date < $1.group.date }
+                    if let currentVersion = history.currentVersion,
+                       allGroups.last?.group.date != history.currentDate {
+                        allGroups.append((currentVersion, history[currentVersion]))
+                    }
+                    let frameCount = allGroups.count + 1
+                    
+                    guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
+                                                     height: .init(size.height),
+                                                     colorSpace: .sRGB)
+                    else { throw MovieEncoder.ExportingError() }
+                    bitmap.set(fillColor: .disabled)
+                    bitmap.fill(Rect(size: size))
+                    let inB = Rect(size: size).inset(by: 2)
+                    
+                    let backgroundColor = sheetView.model.backgroundUUColor.value
+                    guard let fkImage = Image(size: size,
+                                             color: backgroundColor) else { throw MovieEncoder.ExportingError() }
+                    var kImages = [fkImage]
+                    
+                    let vs = [nil] + allGroups.map { $0.version }
+                    for (vi, version) in vs.enumerated() {
+                        try await sheetView.history.move(to: version) { yIndexPath in
+                            sheetView.history.set(indexPath: yIndexPath)
+                        } topIHandler: { topIndex in
+                            var isRedraw = false
+                            var kiSet = Set<Int>()
+                            let results = sheetView.history.undoAndResults(to: topIndex)
+                            var reverses = [Version: Int]()
+                            for result in results {
+                                guard let uiv = sheetView.model
+                                    .undoItemValue(with: result, reverses: &reverses,
+                                                   in: &sheetView.history) else { continue }
+                                let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
+                                let item = result.undoItem(with: uiv)
+                                _ = sheetView.set(item, isMakeRect: false, isSleep: false)
+                                switch item {
+                                case .insertDraftKeyLines(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .insertDraftKeyPlanes(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .insertKeyLines(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .insertKeyPlanes(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .removeDraftKeyLines(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .removeDraftKeyPlanes(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .removeKeyLines(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .removeKeyPlanes(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .replaceKeyLines(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .replaceKeyPlanes(let kvs):
+                                    kiSet.formUnion(kvs.map { $0.index })
+                                case .setRootKeyframeIndex(let rootKeyframeIndex):
+                                    kiSet.insert(sheetView.model.animation.index(atRoot: rootKeyframeIndex))
+                                case .insertKeyframes(let kvs):
+                                    for kv in kvs {
+                                        kImages.insert(fkImage, at: kv.index)
+                                    }
+                                    isRedraw = true
+                                case .removeKeyframes(let kis):
+                                    if kis.allSatisfy({ $0 < kImages.count }) {
+                                        kImages.remove(at: kis)
+                                    }
+                                    isRedraw = true
+                                case .setSelection(let selection):
+                                    kiSet.formUnion(oldSelectionKIS.symmetricDifference(selection.keyframeSelections.map { $0.key }))
+                                default: kiSet.insert(sheetView.model.animation.index)
                                 }
-                                
-                                let children = [sheetView.node]
-                                let backgroundColor = sheetView.model.backgroundUUColor.value
-                                let origin = rendering.mainItem.frame.origin
-                                let b = rendering.bounds
-                                let sheetBounds = rendering.mainItem.frame.bounds
-                                
-                                let node = Node(children: children,
-                                                attitude: .init(position: origin),
-                                                path: Path(sheetBounds),
-                                                fillType: .color(backgroundColor))
-                                guard let image = node.renderedTexture(in: b, to: size,
-                                                                       backgroundColor: backgroundColor)?.image
-                                        else { throw MovieEncoder.ExportingError() }
-                                
-                                let kCount = sheetView.model.animation.keyframes.count
-                                if kCount > 1 {
-                                    var isRedraw = false
-                                    if kCount > kImages.count {
-                                        for _ in (kCount - kImages.count).range {
-                                            guard let kImage = Image(size: size,
-                                                                     color: backgroundColor) else { throw MovieEncoder.ExportingError() }
-                                            kImages.append(kImage)
-                                        }
-                                        isRedraw = true
-                                    } else if kCount < kImages.count {
-                                        kImages = .init(kImages[..<kCount])
-                                        isRedraw = true
-                                    }
-                                    
-                                    kImages[sheetView.model.animation.index] = image
-                                    
-                                    let columnCount = Int(Double(kCount).squareRoot().rounded(.up))
-                                    let cellWidth = size.width / Double(columnCount)
-                                    let cellheight = b.height * cellWidth / b.width
-                                    func draw(_ image: Image, at ki: Int) {
-                                        let columnI = ki % columnCount
-                                        let rowI = ki / columnCount
-                                        let rect = Rect(x: sheetBounds.minX + .init(columnI) * cellWidth,
-                                                        y: sheetBounds.minY + .init(rowI) * cellheight,
-                                                        width: cellWidth, height: cellheight).inset(by: 1)
-                                        
-                                        if let nnImage = nImage.drawn(image, in: rect) {
-                                            nImage = nnImage
-                                        }
-                                    }
-                                    if isRedraw {
-                                        guard let nnImage = Image(size: size,
-                                                                 color: .disabled) else { throw MovieEncoder.ExportingError() }
-                                        nImage = nnImage
-                                        for (ki, image) in kImages.enumerated() {
-                                            draw(image, at: ki)
-                                        }
-                                    } else {
-                                        draw(image, at: sheetView.model.animation.index)
-                                    }
-                                    try await movie.write(nImage, duration: 1, timeScale: 60)
-                                } else {
-                                    try await movie.write(image, duration: 1, timeScale: 60)
-                                }
-                                
+                            }
+                            for (version, index) in reverses {
+                                let item = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: index)
+                                let uiv = UndoItemValue(undoItem: item, redoItem: item)
+                                let udv = UndoDataValue(save: uiv)
+                                sheetView.history[version].values.insert(udv, at: 0)
+                            }
+                            let kis = kiSet.sorted()
+                            
+                            if vi == 0 && topIndex != 0 {
                                 progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
                                 try Task.checkCancellation()
+                                return
                             }
+                            
+                            let origin = rendering.mainItem.frame.origin
+                            let b = rendering.bounds
+                            let sb = rendering.mainItem.frame.bounds
+                            
+                            let kCount = sheetView.model.animation.keyframes.count
+                            if kCount > 1 {
+                                let columnCount = Int(Double(kCount).squareRoot().rounded(.up))
+                                let cellWidth = inB.width / Double(columnCount)
+                                let cellheight = inB.height * cellWidth / inB.width
+                                func rect(at ki: Int) -> Rect {
+                                    let columnI = ki % columnCount
+                                    let rowI = ki / columnCount
+                                    return Rect(x: inB.minX + .init(columnI) * cellWidth,
+                                                y: inB.maxY - .init(rowI + 1) * cellheight,
+                                                width: cellWidth,
+                                                height: cellheight)
+                                }
+                                func draw(_ image: Image, at ki: Int,
+                                          borderColor: Color? = nil) {
+                                    let rect = rect(at: ki).inset(by: 2)
+                                    bitmap.draw(image, in: rect, isHighQuality: true)
+                                }
+                            
+                                for ki in kis {
+                                    if ki >= kImages.count { break }
+                                    let node = sheetView.animationView.elementViews[ki].node
+                                    guard let image = Node(children: [node],
+                                                           attitude: .init(position: origin),
+                                                           path: Path(sb),
+                                                           fillType: .color(backgroundColor))
+                                        .renderedTexture(in: b, to: size,
+                                                         backgroundColor: backgroundColor)?.image
+                                    else { throw MovieEncoder.ExportingError() }
+                                    kImages[ki] = image
+                                }
+                                
+                                if isRedraw {
+                                    bitmap.set(fillColor: .disabled)
+                                    bitmap.fill(Rect(size: size))
+                                    for (ki, image) in kImages.enumerated() {
+                                        draw(image, at: ki)
+                                    }
+                                } else {
+                                    for ki in kis {
+                                        draw(kImages[ki], at: ki)
+                                    }
+                                }
+                                
+                                guard let nBitmap = bitmap.copy()
+                                else { throw MovieEncoder.ExportingError() }
+                                nBitmap.set(lineColor: .content)
+                                nBitmap.set(lineWidth: 4)
+                                for ki in kis {
+                                    nBitmap.stroke(rect(at: ki))
+                                }
+                                
+                                guard let image = nBitmap.image
+                                else { throw MovieEncoder.ExportingError() }
+                                
+                                try await movieEncoder.write(image, duration: 1, timeScale: 60)
+                                
+                                if vi + 1 == frameCount {
+                                    guard let image = bitmap.image
+                                    else { throw MovieEncoder.ExportingError() }
+                                    try await movieEncoder.write(image, duration: 1, timeScale: 60)
+                                }
+                            } else {
+                                guard let image = Node(children: [sheetView.node],
+                                                       attitude: .init(position: origin),
+                                                       path: Path(sb),
+                                                       fillType: .color(backgroundColor))
+                                    .renderedTexture(in: b, to: size,
+                                                     backgroundColor: backgroundColor)?.image
+                                else { throw MovieEncoder.ExportingError() }
+                                try await movieEncoder.write(image, duration: 1, timeScale: 60)
+                            }
+                            
+                            progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
+                            try Task.checkCancellation()
                         }
                     }
                 }
                 
-                try await movie.finish()
+                try await movieEncoder.finish()
                 try ioResult.setAttributes()
             } catch {
-                movie.cancel()
+                movieEncoder.cancel()
                 throw error
             }
         }

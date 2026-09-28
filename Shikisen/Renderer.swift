@@ -1788,12 +1788,15 @@ struct Image {
         return Image(cgImage: nCGImage.takeRetainedValue())
     }
     
-    func drawn(_ image: Image, in rect: Rect) -> Image? {
+    func drawn(_ image: Image, in rect: Rect, isHighQuality: Bool = false) -> Image? {
         guard let ctx = CGContext(data: nil,
                                   width: cg.width, height: cg.height,
                                   bitsPerComponent: cg.bitsPerComponent, bytesPerRow: cg.bytesPerRow,
                                   space: cg.colorSpace ?? .default,
                                   bitmapInfo: cg.bitmapInfo.rawValue) else { return nil }
+        if isHighQuality {
+            ctx.interpolationQuality = .high
+        }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
         ctx.draw(image.cg, in: rect.cg)
         guard let nImage = ctx.makeImage() else { return nil }
@@ -2034,6 +2037,18 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
         case grayscale
         case sRGB
         case sRGBLinear
+        
+        init?(_ cg: CGColorSpace) {
+            if cg == CGColorSpaceCreateDeviceGray() {
+                self = .grayscale
+            } else if cg == .sRGBColorSpace! {
+                self = .sRGB
+            } else if cg == .sRGBLinearColorSpace! {
+                self = .sRGBLinear
+            } else {
+                return nil
+            }
+        }
         var cg: CGColorSpace {
             switch self {
             case .grayscale: CGColorSpaceCreateDeviceGray()
@@ -2065,6 +2080,16 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
         self.height = ctx.height
     }
     
+    func copy() -> Self? {
+        guard let cgColorSpace = ctx.colorSpace,
+              let colorSpace = ColorSpace(cgColorSpace),
+              let image,
+              let bitmap = Self(width: width, height: height,
+                                colorSpace: colorSpace) else { return nil }
+        bitmap.draw(image, in: .init(width: Double(width), height: Double(height)))
+        return bitmap
+    }
+    
     subscript(_ x: Int, _ y: Int) -> Value {
         get {
             data[offsetPerRow * y + x]
@@ -2086,7 +2111,10 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
             ctx.draw(cgImage, in: rect.cg)
         }
     }
-    func draw(_ image: Image, in rect: Rect) {
+    func draw(_ image: Image, in rect: Rect, isHighQuality: Bool = false) {
+        if isHighQuality {
+            ctx.interpolationQuality = .high
+        }
         ctx.draw(image.cg, in: rect.cg)
     }
     
@@ -2122,6 +2150,9 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
         ctx.move(to: edge.p0.cg)
         ctx.addLine(to: edge.p1.cg)
         ctx.strokePath()
+    }
+    func stroke(_ rect: Rect) {
+        ctx.stroke(rect.cg)
     }
     
     var image: Image? {

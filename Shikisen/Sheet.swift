@@ -4659,16 +4659,7 @@ extension Sheet {
             }
             
         case .setAnimationOption:
-            let oldOption = animation.option
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setAnimationOption(oldOption)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setAnimationOption(oldOption)
-            }
-            
+            history.setReverse(.setAnimationOption(animation.option), with: result)
         case .insertNotes(var nivs):
             updateFirstReverse()
             var isChanged = false, notesCount = score.notes.count
@@ -4792,25 +4783,9 @@ extension Sheet {
                                     isReversed: isUndo)
             }
         case .setScoreOption:
-            let oldOption = score.option
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setScoreOption(oldOption)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setScoreOption(oldOption)
-            }
+            history.setReverse(.setScoreOption(score.option), with: result)
         case .setSheetOption:
-            let oldOption = self.option
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setSheetOption(oldOption)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setSheetOption(oldOption)
-            }
+            history.setReverse(.setSheetOption(self.option), with: result)
         case .setSelection(let selection):
             if checkConsistency(selection) {
                 history.setReverse(.setSelection(self.selection), with: result)
