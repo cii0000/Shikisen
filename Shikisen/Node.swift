@@ -1117,6 +1117,15 @@ extension Node {
         }
         return value * transform.inverted()
     }
+    func convertFromWorldScale(_ value: Double) -> Double {
+        var v = 1.0
+        selfAndAllParents { (node, _) in
+            if node.parent != nil {
+                v *= node.localScale
+            }
+        }
+        return value / v
+    }
     
     func convert<T: AppliableTransform>(_ value: T,
                                         to node: Node) -> T {
@@ -1146,6 +1155,9 @@ extension Node {
     }
     func convertToWorld<T: AppliableTransform>(_ value: T) -> T {
         parent?.convertToWorld(value * localTransform) ?? value
+    }
+    func convertToWorldScale(_ value: Double) -> Double {
+        parent?.convertToWorldScale(value * localScale) ?? value
     }
 }
 extension Node: Equatable {

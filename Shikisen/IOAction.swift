@@ -1794,6 +1794,8 @@ final class IOAction: Action {
                     }
                     let frameCount = allGroups.count + 1
                     
+                    let isEnabledAnimation = sheetView.model.enabledAnimation
+                    
                     guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
                                                      height: .init(size.height),
                                                      colorSpace: .sRGB)
@@ -1812,6 +1814,7 @@ final class IOAction: Action {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
                         } topIHandler: { topIndex in
+                            let isFirst = vi == 0 && topIndex != 0
                             var isRedraw = false
                             var kiSet = Set<Int>()
                             let results = sheetView.history.undoAndResults(to: topIndex)
@@ -1823,42 +1826,47 @@ final class IOAction: Action {
                                 let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
                                 let item = result.undoItem(with: uiv)
                                 _ = sheetView.set(item, isMakeRect: false, isSleep: false)
-                                switch item {
-                                case .insertDraftKeyLines(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .insertDraftKeyPlanes(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .insertKeyLines(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .insertKeyPlanes(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .removeDraftKeyLines(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .removeDraftKeyPlanes(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .removeKeyLines(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .removeKeyPlanes(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .replaceKeyLines(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .replaceKeyPlanes(let kvs):
-                                    kiSet.formUnion(kvs.map { $0.index })
-                                case .setRootKeyframeIndex(let rootKeyframeIndex):
-                                    kiSet.insert(sheetView.model.animation.index(atRoot: rootKeyframeIndex))
-                                case .insertKeyframes(let kvs):
-                                    for kv in kvs {
-                                        kImages.insert(fkImage, at: kv.index)
+                                
+                                if !isFirst && isEnabledAnimation {
+                                    switch item {
+                                    case .insertDraftKeyLines(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .insertDraftKeyPlanes(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .insertKeyLines(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .insertKeyPlanes(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .removeDraftKeyLines(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .removeDraftKeyPlanes(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .removeKeyLines(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .removeKeyPlanes(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .replaceKeyLines(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .replaceKeyPlanes(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .setRootKeyframeIndex(let rootKeyframeIndex):
+                                        kiSet.insert(sheetView.model.animation.index(atRoot: rootKeyframeIndex))
+                                    case .insertKeyframes(let kvs):
+                                        for kv in kvs {
+                                            if kv.index <= kImages.count {
+                                                kImages.insert(fkImage, at: kv.index)
+                                            }
+                                        }
+                                        isRedraw = true
+                                    case .removeKeyframes(let kis):
+                                        if kis.allSatisfy({ $0 < kImages.count }) {
+                                            kImages.remove(at: kis)
+                                        }
+                                        isRedraw = true
+                                    case .setSelection(let selection):
+                                        kiSet.formUnion(oldSelectionKIS.symmetricDifference(selection.keyframeSelections.map { $0.key }))
+                                    default: kiSet.insert(sheetView.model.animation.index)
                                     }
-                                    isRedraw = true
-                                case .removeKeyframes(let kis):
-                                    if kis.allSatisfy({ $0 < kImages.count }) {
-                                        kImages.remove(at: kis)
-                                    }
-                                    isRedraw = true
-                                case .setSelection(let selection):
-                                    kiSet.formUnion(oldSelectionKIS.symmetricDifference(selection.keyframeSelections.map { $0.key }))
-                                default: kiSet.insert(sheetView.model.animation.index)
                                 }
                             }
                             for (version, index) in reverses {
@@ -1869,7 +1877,7 @@ final class IOAction: Action {
                             }
                             let kis = kiSet.sorted()
                             
-                            if vi == 0 && topIndex != 0 {
+                            if isFirst {
                                 progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
                                 try Task.checkCancellation()
                                 return
@@ -1880,7 +1888,7 @@ final class IOAction: Action {
                             let sb = rendering.mainItem.frame.bounds
                             
                             let kCount = sheetView.model.animation.keyframes.count
-                            if kCount > 1 {
+                            if isEnabledAnimation && kCount > 1 {
                                 let columnCount = Int(Double(kCount).squareRoot().rounded(.up))
                                 let cellWidth = inB.width / Double(columnCount)
                                 let cellheight = inB.height * cellWidth / inB.width

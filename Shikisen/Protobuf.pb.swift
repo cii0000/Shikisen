@@ -2492,6 +2492,8 @@ nonisolated struct PBSheetValue: Sendable {
   /// Clears the value of `origin`. Subsequent reads from it will return its default value.
   mutating func clearOrigin() {self._origin = nil}
 
+  var scale: Double = 0
+
   var id: PBUUID {
     get {_id ?? PBUUID()}
     set {_id = newValue}
@@ -7499,7 +7501,7 @@ nonisolated extension PBTextValueIndexValue: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheetValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lines\0\u{1}planes\0\u{1}texts\0\u{1}origin\0\u{1}id\0\u{1}rootKeyframeIndex\0\u{1}keyframes\0\u{1}keyframeBeganIndex\0\u{1}contents\0\u{1}isSelected\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lines\0\u{1}planes\0\u{1}texts\0\u{1}origin\0\u{1}id\0\u{1}rootKeyframeIndex\0\u{1}keyframes\0\u{1}keyframeBeganIndex\0\u{1}contents\0\u{1}isSelected\0\u{1}scale\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7517,6 +7519,7 @@ nonisolated extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.keyframeBeganIndex) }()
       case 9: try { try decoder.decodeRepeatedMessageField(value: &self.contents) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.isSelected) }()
+      case 11: try { try decoder.decodeSingularDoubleField(value: &self.scale) }()
       default: break
       }
     }
@@ -7557,6 +7560,9 @@ nonisolated extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if self.isSelected != false {
       try visitor.visitSingularBoolField(value: self.isSelected, fieldNumber: 10)
     }
+    if self.scale.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.scale, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7566,6 +7572,7 @@ nonisolated extension PBSheetValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.texts != rhs.texts {return false}
     if lhs.contents != rhs.contents {return false}
     if lhs._origin != rhs._origin {return false}
+    if lhs.scale != rhs.scale {return false}
     if lhs._id != rhs._id {return false}
     if lhs.rootKeyframeIndex != rhs.rootKeyframeIndex {return false}
     if lhs.keyframes != rhs.keyframes {return false}

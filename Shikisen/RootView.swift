@@ -227,6 +227,7 @@ final class HUDView: View, @unchecked Sendable {
         didSet {
             updateDateWithScreenBounds()
             updateActionListWithScreenBounds()
+            updateExportingsWithScreenBounds()
         }
     }
     func updateDateWithScreenBounds() {
@@ -1301,6 +1302,11 @@ final class RootView: View, @unchecked Sendable {
                 findingChildNodes.append(findingChildNode)
             }
         }
+        if finding.isLine, UUID(uuidString: finding.string) != nil {
+            let findingChildNode = Node()
+            findingChildrenNodeDic[sheetPosition(at: finding.worldPosition)] = findingChildNode
+            findingChildNodes.append(findingChildNode)
+        }
         
         self.findingChildNodeDic = findingChildrenNodeDic
         findingNode?.removeFromParent()
@@ -1409,6 +1415,9 @@ final class RootView: View, @unchecked Sendable {
                             let ppp = nSheetView.convertToWorld(pp)
                             nodes.append(Node(path: Path([Pathline([p,
                                                                     ppp])]),
+                                              lineWidth: l,
+                                              lineType: .color(.selected)))
+                            nodes.append(Node(path: Path(nSheetView.convertToWorld(lineView.model)),
                                               lineWidth: l,
                                               lineType: .color(.selected)))
                         }

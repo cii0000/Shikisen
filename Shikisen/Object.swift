@@ -5641,15 +5641,10 @@ extension O {
         
         if l.controls.count >= 2 {
             let l = l.controls.count > 10000 ? Line(controls: Array(l.controls[0 ..< 10000])) : l
-            let b = sheet.bounds
-            let newLines = Sheet.clipped([l],
-                                         in: b.inset(by: Line.defaultLineWidth))
-            if !newLines.isEmpty {
-                sheet.append(newLines)
-                return O(sheet)
-            }
+            sheet.append(l)
+            return O(sheet)
         }
-        return O(OError("Line is out of bounds".localized))
+        return O(OError("Line points count >= 2"))
     }
     static func drawText(_ ao: O, _ t: Text) -> O {
         guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }

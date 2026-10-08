@@ -2438,20 +2438,19 @@ final class MoveSheetAction: DragEventAction {
                             type = .warp
                         }
                     }
-                } else {
-                    let fdp = switch type {
-                    case .move, .warp: fatalError()
-                    case .scale: typeRect.centerPoint
-                    case .scaleLeft: typeRect.maxXMidYPoint
-                    case .scaleRight: typeRect.minXMidYPoint
-                    case .scaleTop: typeRect.midXMinYPoint
-                    case .scaleBottom: typeRect.midXMaxYPoint
-                    case .rotate: typeRect.centerPoint
-                    }
-                    dTransform = sheetView.animationView.node.worldTransform
-                            .translated(by: -fdp)
-                    drTransform = dTransform.inverted()
                 }
+                let fdp = switch type {
+                case .move, .warp: p
+                case .scale: typeRect.centerPoint
+                case .scaleLeft: typeRect.maxXMidYPoint
+                case .scaleRight: typeRect.minXMidYPoint
+                case .scaleTop: typeRect.midXMinYPoint
+                case .scaleBottom: typeRect.midXMaxYPoint
+                case .rotate: typeRect.centerPoint
+                }
+                dTransform = sheetView.animationView.node.worldTransform
+                        .translated(by: -fdp)
+                drTransform = dTransform.inverted()
             }
         case .changed:
             if let sheetView {
@@ -2460,7 +2459,7 @@ final class MoveSheetAction: DragEventAction {
                 switch type {
                 case .move, .warp:
                     v = 0
-                    transform = .init(translation: dp)
+                    transform = dTransform.translated(by: dp) * drTransform
                 case .scale:
                     v = typeRect.centerPoint.distance(oldP) == 0 ? 0 :
                     typeRect.centerPoint.distance(p) / typeRect.centerPoint.distance(oldP)
@@ -2468,29 +2467,46 @@ final class MoveSheetAction: DragEventAction {
                 case .scaleLeft:
                     v = oldP.x - typeRect.maxX == 0 ? 0 :
                     (p.x - typeRect.maxX) / (oldP.x - typeRect.maxX)
-                    transform = dTransform.scaledBy(x: v, y: 1) * drTransform
+                    let d = abs(dp.y) - 50 * rootView.screenToWorldScale
+                    transform = d > 0 ?
+                    dTransform.sheared(byY: d * -dp.y.signValue / typeRect.height)
+                        .scaledBy(x: v, y: 1) * drTransform :
+                    dTransform.scaledBy(x: v, y: 1) * drTransform
                 case .scaleRight:
                     v = oldP.x - typeRect.minX == 0 ? 0 :
                     (p.x - typeRect.minX) / (oldP.x - typeRect.minX)
-                    transform = dTransform.scaledBy(x: v, y: 1) * drTransform
+                    let d = abs(dp.y) - 50 * rootView.screenToWorldScale
+                    transform = d > 0 ?
+                    dTransform.sheared(byY: d * dp.y.signValue / typeRect.height)
+                        .scaledBy(x: v, y: 1) * drTransform :
+                    dTransform.scaledBy(x: v, y: 1) * drTransform
                 case .scaleBottom:
                     v = oldP.y - typeRect.minY == 0 ? 0 :
                     (p.y - typeRect.maxY) / (oldP.y - typeRect.maxY)
+                    let d = abs(dp.x) - 50 * rootView.screenToWorldScale
                     transform = oldP.y - typeRect.minY == 0 ? .init() :
-                    dTransform.scaledBy(x: 1, y: v) * drTransform
+                    (d > 0 ?
+                     dTransform.sheared(byX: d * -dp.x.signValue / typeRect.width)
+                        .scaledBy(x: 1, y: v) * drTransform : dTransform.scaledBy(x: 1, y: v) * drTransform)
                 case .scaleTop:
                     v = oldP.y - typeRect.maxY == 0 ? 0 :
                     (p.y - typeRect.minY) / (oldP.y - typeRect.minY)
-                    transform = dTransform.scaledBy(x: 1, y: v) * drTransform
+                    let d = abs(dp.x) - 50 * rootView.screenToWorldScale
+                    transform = d > 0 ?
+                    dTransform.sheared(byX: d * dp.x.signValue / typeRect.width)
+                        .scaledBy(x: 1, y: v) * drTransform :
+                    dTransform.scaledBy(x: 1, y: v) * drTransform
                 case .rotate:
                     v = Point.differenceAngle(oldP, typeRect.centerPoint, p) - .pi
                     transform = dTransform.rotated(by: v) * drTransform
                 }
                 if type == .warp {
+                    let dp = dp * sheetView.animationView.convertFromWorldScale(1)
+                    let oldP = sheetView.animationView.convertFromWorld(oldP)
+                    let maxD = sheetView.animationView.convertFromWorldScale(max(typeRect.width, typeRect.height))
                     for (li, oldLine) in zip(lineIs, oldLines) {
                         sheetView.linesView.elementViews[li].model
-                        = oldLine.warpedWith(deltaPoint: dp, at: sheetView.convertFromWorld(oldP),
-                                             maxD: max(typeRect.width, typeRect.height))
+                        = oldLine.warpedWith(deltaPoint: dp, at: oldP, maxD: maxD)
                     }
                 } else {
                     for (li, oldLine) in zip(lineIs, oldLines) {

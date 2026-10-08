@@ -180,7 +180,8 @@ final class LookUpAction: InputKeyEventAction {
                               + "\n\t\("File Size".localized): \(string)"
                               + "\n\t\("Update Date".localized): \(updateDate?.defaultString ?? "N/A")"
                               + "\n\t\("Created Date".localized): \(createdDate?.defaultString ?? "N/A")"
-                              + "\n\t\("Position".localized): \(shp.x)_\(shp.y)", at: p)
+                              + "\n\t\("Position".localized): \(shp.x)_\(shp.y)"
+                              + "\n\tID: \(sid.uuidString)", at: p)
             } else {
                 rootView.show("Root".localized, at: p)
             }
@@ -206,7 +207,7 @@ final class LookUpAction: InputKeyEventAction {
                 let beat = sheetView.model.animation.keyframes[ki].beat
                 let beatStr = sheetView.timeString(fromBeat: beat) + (fpb == nil || !(Rational(fpb!) * beat).isInteger ? " (" + "Rounding error".localized + ")" : "")
                 rootView.show("Keyframe".localized
-                              + "\n\t\("Beat".localized): \(beatStr)",
+                              + "\n\t\("Beat".localized): \(beatStr)" + "\n\t\("Index".localized): \(ki)",
                               at: p)
             }
         } else if let sheetView = rootView.sheetView(at: p),
@@ -240,7 +241,14 @@ final class LookUpAction: InputKeyEventAction {
                   let (lineView, li) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
                                                      enabledPlane: true,
                                                      scale: 1 / rootView.worldToScreenScale) {
-            rootView.show((lineView.model.controls.count == 2 ? "Straight Line".localized : "Line".localized) + "\n\t\("Length".localized):  \(lineView.model.length().string(digitsCount: 4))\n\t\("Index".localized): \(li)", at: p)
+            let line = lineView.model
+            let interStr = if line.interType != .none {
+                "\n\t\("Interpolation ID".localized): \(line.interID.uuidString)"
+                + "\n\t\("Interpolation Type".localized): \(line.interType == .key ? "Key".localized : "Interpolated".localized)"
+            } else {
+                ""
+            }
+            rootView.show((line.controls.count == 2 ? "Straight Line".localized : "Line".localized) + "\n\t\("Length".localized):  \(line.length().string(digitsCount: 4))\n\t\("Index".localized): \(li)" + interStr, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (textView, _, i, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             

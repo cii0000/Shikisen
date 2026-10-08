@@ -969,6 +969,7 @@ final class LineAction: Action {
     private var drawLineEvents = [DrawLineEvent](), drawLineEventsCount = 0, snapLines = [Line]()
     var textView: SheetTextView?
     private(set) var beganLineColor: Color?, beganSheetID: UUID?, beganAnimationRootIndex = 0
+    var lineWidth = 1.0
     
     func drawLine(with event: DragEvent, isStraight: Bool) {
         let p = rootView.convertScreenToWorld(event.screenPoint)
@@ -980,15 +981,6 @@ final class LineAction: Action {
             rootView.node.owner?.displaySyncEnabled = false
             
             updateClipBoundsAndIndexRange(at: p)
-            let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
-                                    path: Path(),
-                                    lineWidth: rootView.sheetLineWidth,
-                                    lineType: .color(Line.defaultUUColor.value))
-            self.tempLineNode = tempLineNode
-            rootView.node.insert(child: tempLineNode,
-                                     at: rootView.accessoryNodeIndex)
-            
-            let sheetView = rootView.sheetView(at: centerSHP)
             
             rootView.unselectAndNewUndoGroupIfNeeded()
             for sheetValue in rootView.sheetViewValues {
@@ -999,6 +991,18 @@ final class LineAction: Action {
                     isUpdatedNewUndoGroupSheetViews.insert(sheetView)
                 }
             }
+            
+            let sheetView = rootView.sheetView(at: centerSHP)
+            lineWidth = rootView.sheetLineWidth
+            * (sheetView?.keyframeAttitude.scale.width ?? 1)
+            
+            let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
+                                    path: Path(),
+                                    lineWidth: lineWidth,
+                                    lineType: .color(Line.defaultUUColor.value))
+            self.tempLineNode = tempLineNode
+            rootView.node.insert(child: tempLineNode,
+                                     at: rootView.accessoryNodeIndex)
             
             snapLines = if let sheetView {
                 sheetView.model.picture.lines
@@ -1045,7 +1049,7 @@ final class LineAction: Action {
                     let events = self.drawLineEvents
                     self.oldDrawLineEventsCount = events.count
                     let snapLines = self.snapLines, clipBounds = self.clipBounds,
-                        enabledPressure = self.enabledPressure
+                        enabledPressure = self.enabledPressure, lineWidth = self.lineWidth
                     
                     DispatchQueue.global().async { [weak self] in
                         let (tempLine, isSnapStraight) = Self.line(from: events,
@@ -1055,7 +1059,7 @@ final class LineAction: Action {
                                                                    clipBounds: clipBounds,
                                                                    isStraight: isStraight)
                         let path = Path(tempLine)
-                        let (linePathData, linePathBufferVertexCounts) = path.linePointsDataWith(lineWidth: tempLine.size)
+                        let (linePathData, linePathBufferVertexCounts) = path.linePointsDataWith(lineWidth: lineWidth)
                         
                         DispatchQueue.main.async { [weak self] in
                             guard let self, !(self.drawLineTimer?.isCancelled ?? true) else { return }
@@ -1157,16 +1161,13 @@ final class LineAction: Action {
                     if lb.intersects(b),
                        let sheetView = rootView.madeSheetView(at: shp, isNewUndoGroup: isWorldNewUndoGroup) {
                         isWorldNewUndoGroup = false
-                        let nLine = sheetView.animationView.convert(tempLine * Transform(translation: -b.origin), from: sheetView.node)
+                        let nLine = tempLine * Transform(translation: -b.origin)
                         if let b = sheetView.node.bounds {
-                            let nLines = Sheet.clipped([nLine], in: b).filter {
-                                if let b = $0.bounds {
-                                    return max(b.width, b.height)
-                                    > rootView.worldLineWidth * 4
-                                } else {
-                                    return true
-                                }
-                            }
+                            let oLines = Sheet.clipped([nLine], in: b,
+                                                       minSplitLineWidth: rootView.worldLineWidth * 4)
+                            let nLines = sheetView.animationView.convert(oLines,
+                                                                         from: sheetView.node)
+                            
                             if !nLines.isEmpty {
                                 if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
                                     sheetView.newUndoGroup()

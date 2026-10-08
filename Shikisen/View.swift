@@ -31,6 +31,12 @@ protocol View: ObjectHashable {
     var node: Node { get }
 }
 extension View {
+    func convertFromWorldScale(_ value: Double) -> Double {
+        node.convertFromWorldScale(value)
+    }
+    func convertToWorldScale(_ value: Double) -> Double {
+        node.convertToWorldScale(value)
+    }
     func convertFromWorld<T: AppliableTransform>(_ value: T) -> T {
         node.convertFromWorld(value)
     }

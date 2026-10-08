@@ -505,6 +505,7 @@ message PBSheetValue {
     repeated PBText texts = 3;
     repeated PBContent contents = 9;
     PBPoint origin = 4;
+    double scale = 11;
     PBUUID id = 5;
     int64 rootKeyframeIndex = 6;
     repeated PBKeyframe keyframes = 7;

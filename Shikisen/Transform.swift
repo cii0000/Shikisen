@@ -265,6 +265,27 @@ extension Transform {
         self *= Transform(rotation: rotation)
     }
     
+    func sheared(byX shear: Double) -> Self {
+        self * Self.init(1, 0, 0,
+                         shear, 1, 0,
+                         0, 0, 1)
+    }
+    mutating func shear(byX shear: Double) {
+        self *= Self.init(1, 0, 0,
+                          shear, 1, 0,
+                          0, 0, 1)
+    }
+    func sheared(byY shear: Double) -> Self {
+        self * Self.init(1, shear, 0,
+                         0, 1, 0,
+                         0, 0, 1)
+    }
+    mutating func shear(byY shear: Double) {
+        self *= Self.init(1, shear, 0,
+                          0, 1, 0,
+                          0, 0, 1)
+    }
+    
     var position: Point {
         Point(self[0][2], self[1][2])
     }
@@ -337,6 +358,11 @@ protocol AppliableTransform {
 extension AppliableTransform {
     static func *= (lhs: inout Self, rhs: Transform) {
         lhs = lhs * rhs
+    }
+}
+extension Array: AppliableTransform where Element: AppliableTransform {
+    static func * (lhs: Self, rhs: Transform) -> Self {
+        lhs.map { $0 * rhs }
     }
 }
 

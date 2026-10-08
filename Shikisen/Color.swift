@@ -273,6 +273,11 @@ extension Color {
         color.opacity = opacity
         return color
     }
+    func with(multiplyOpacity: Double) -> Self {
+        var color = self
+        color.opacity *= multiplyOpacity
+        return color
+    }
     func with(_ nColorSpace: ColorSpace) -> Self {
         if self.colorSpace != nColorSpace {
             var n = self

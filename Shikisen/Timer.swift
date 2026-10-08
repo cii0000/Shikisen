@@ -89,13 +89,13 @@ extension DispatchSource {
 }
 
 extension Task where Success == Void, Failure == any Error {
-    static func timer(interval: Duration, executeImmediately: Bool = false,
+    static func timer(interval: Duration, isEnableNow: Bool = false,
                       operation: sending @escaping @isolated(any) (Duration) async -> Success) -> Self {
         precondition(interval > .zero)
         return Self(priority: .high) {
             let clock = ContinuousClock()
             let startTime = clock.now
-            var allDur = executeImmediately ? .zero : interval
+            var allDur = isEnableNow ? .zero : interval
             var nextTime = startTime + allDur
             while !Task<Never, Never>.isCancelled {
                 if nextTime > clock.now {

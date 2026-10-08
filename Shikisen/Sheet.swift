@@ -157,6 +157,7 @@ extension TextValue: Protobuf {
 struct SheetValue {
     var lines = [Line](), planes = [Plane](),
         texts = [Text](), contents = [Content](), origin = Point()
+    var scale = 1.0
     var id = UUID(), rootKeyframeIndex = 0
     var keyframes = [Keyframe]()
     var keyframeBeganIndex = 0
@@ -190,6 +191,7 @@ extension SheetValue: Protobuf {
         texts = try pb.texts.map { try Text($0) }
         contents = try pb.contents.map { try Content($0) }
         origin = try Point(pb.origin)
+        scale = pb.scale == 0 ? 1 : pb.scale
         id = try UUID(pb.id)
         rootKeyframeIndex = Int(pb.rootKeyframeIndex)
         keyframes = try pb.keyframes.map { try Keyframe($0) }
@@ -204,6 +206,7 @@ extension SheetValue: Protobuf {
             $0.texts = texts.map { $0.pb }
             $0.contents = contents.map { $0.pb }
             $0.origin = origin.pb
+            $0.scale = scale
             $0.id = id.pb
             $0.rootKeyframeIndex = Int64(rootKeyframeIndex)
             $0.keyframes = keyframes.map { $0.pb }
@@ -220,6 +223,7 @@ extension SheetValue: AppliableTransform {
                    texts: lhs.texts.map { $0 * rhs },
                    contents: lhs.contents.map { $0 * rhs },
                    origin: lhs.origin,
+                   scale: lhs.scale,
                    id: lhs.id,
                    rootKeyframeIndex: lhs.rootKeyframeIndex,
                    keyframes: lhs.keyframes.map { $0 * rhs },
@@ -1495,6 +1499,11 @@ extension Line {
         .init(path: .init(self),
               lineWidth: size,
               lineType: .color(color))
+    }
+    func node(withScale scale: Double) -> Node {
+        .init(path: .init(self),
+              lineWidth: size * scale,
+              lineType: .color(uuColor.value))
     }
     var cpuNode: CPUNode {
         .init(path: .init(self),
@@ -2835,7 +2844,8 @@ extension Sheet {
         return (aabb.rect, false)
     }
     
-    static func clipped(_ lines: [Line], in bounds: Rect) -> [Line] {
+    static func clipped(_ lines: [Line], in bounds: Rect,
+                        minSplitLineWidth: Double) -> [Line] {
         let lassoLine = Line(controls:
                                 [.init(point: bounds.minXMinYPoint),
                                  .init(point: bounds.minXMinYPoint),
@@ -2852,6 +2862,15 @@ extension Sheet {
                 case .around(let line):
                     $0.append(line)
                 case .split((var inLines, _)):
+                    inLines = inLines.filter {
+                        if let b = $0.bounds {
+                            return max(b.width, b.height)
+                            > minSplitLineWidth
+                        } else {
+                            return true
+                        }
+                    }
+                    
                     if !inLines.isEmpty {
                         let idI: Int
                         if inLines.count == 1 {

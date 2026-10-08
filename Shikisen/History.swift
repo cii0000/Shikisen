@@ -339,6 +339,11 @@ private final class _Branch<T: UndoItem>: @unchecked Sendable {
         self.selectedChildIndex = selectedChildIndex
         self.childrenCount = children.count
     }
+    private init(groups: [UndoGroup<T>], childrenCount: Int, selectedChildIndex: Int?) {
+        self.groups = groups
+        self.childrenCount = childrenCount
+        self.selectedChildIndex = selectedChildIndex
+    }
     
     deinit {
         var count = 0
@@ -454,8 +459,8 @@ extension _Branch {
         }
     }
     
-    func copy() -> Self {
-        .init(groups: groups, children: children.map { $0.copy() },
+    func coderCopy() -> Self {
+        .init(groups: groups, childrenCount: children.count,
               selectedChildIndex: selectedChildIndex)
     }
 }
@@ -640,7 +645,9 @@ extension History: Codable {
 extension History {
     private mutating func copyIfShared() {
         if isKnownUniquelyReferenced(&rootBranch) { return }
-        rootBranch = rootBranch.copy()
+        let coder = BranchCoder(rootBranch: rootBranch)
+        let copiedAllBranches = coder.allBranches.map { $0.coderCopy() }
+        rootBranch = BranchCoder.rootBranch(from: copiedAllBranches)
     }
     
     mutating func newBranch() {

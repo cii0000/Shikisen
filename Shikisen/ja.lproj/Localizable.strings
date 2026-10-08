@@ -125,6 +125,11 @@
 "File Size" = "ファイルサイズ";
 "Rounding error" = "丸め誤差あり";
 
+"Interpolation ID" = "補間ID";
+"Interpolation Type" = "補間タイプ";
+"Key" = "キー";
+"Interpolated" = "補間済み";
+
 "Music Scale" = "音階";
 "Major" = "メジャー";
 "Minor" = "マイナー";
@@ -225,7 +230,7 @@
 "Do you want to clear history of this sheet?" = "このシートの履歴を消去しますか？";
 "Do you want to clear %d historys?" = "%d個のシートの履歴を消去しますか？";
 "Do you want to clear root history?" = "全体履歴を消去しますか？";
-"You can’t undo this action. \nHistory is what is used in \"Undo\", \"Redo\" or \"Select Version\", and if you clear it, you will not be able to return to the previous work." = "この操作は取り消せません。\n履歴は「取り消す」や「やり直す」や「バージョンを選択」で使用されるものであり、消去すると過去の作業に戻れなくなります。";
+"You can’t undo this action. \nHistory is what is used in \"Undo\", \"Redo\" or \"Select Version\" or \"Export as Timelapse\", and if you clear it, you will not be able to return to the previous work." = "この操作は取り消せません。\n履歴は「取り消す」や「やり直す」や「バージョンを選択」や「タイムラプスを書き出す」で使用されるものであり、消去すると過去の作業に戻れなくなります。";
 "You can’t undo this action. \nRoot history is what is used in \"Undo\", \"Redo\" or \"Select Version\" when in root operation, and if you clear it, you will not be able to return to the previous work." = "この操作は取り消せません。\n全体履歴は全体操作時に「取り消す」や「やり直す」や「バージョンを選択」で使用されるものであり、消去すると過去の作業に戻れなくなります。";
 "Clear History" = "履歴を消去";
 "Clearing Historys" = "履歴を消去中";

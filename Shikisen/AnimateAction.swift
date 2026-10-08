@@ -413,14 +413,25 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                                             node.lineType = .color(.background)
                                             return node
                                         }
+                                        let planeNodes = keyframeView.planesView.elementViews.map {
+                                            let node = $0.node.clone
+                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
+                                            return node
+                                        }
                                         let dNodes = keyframeView.draftLinesView.elementViews.map {
                                             let node = $0.node.clone
                                             node.lineType = .color(.background)
                                             return node
                                         }
-                                        let node = Node(children: [Node(children: dNodes, isClippingChildrenLines: true,
-                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: 0.125))),
-                                                                   Node(children: nodes, isClippingChildrenLines: true,
+                                        let dPlaneNodes = keyframeView.draftPlanesView.elementViews.map {
+                                            let node = $0.node.clone
+                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
+                                            return node
+                                        }
+                                        let node = Node(children: dPlaneNodes + [Node(children: dNodes, isClippingChildrenLines: true,
+                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: 0.125)))] + planeNodes +
+                                                                   
+                                                                   [Node(children: nodes, isClippingChildrenLines: true,
                                                                                path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.125)))])
                                         
                                         let isBottom = nShp.y < shp.y
@@ -753,38 +764,36 @@ final class InsertAction: InputKeyEventAction {
                             
                             if animation.keyframes.count > 1 {
                                 var vs = [ClosedRange<Int>: [UUID]]()
-                                let nextI = i + 1 < animation.keyframes.count ? i + 1 : 0
                                 loop: for line in animation.keyframes[i].picture.lines {
                                     guard line.interType != .none else { continue }
                                     
                                     func isKey(at ki: Int) -> Bool? {
                                         guard let type = animation.keyframes[ki].picture.lines
-                                            .first(where: { $0.interType != .none
-                                                && $0.interID == line.interID })?
+                                            .first(where: { $0.interID == line.interID && $0.interType != .none })?
                                                 .interType else { return nil }
                                         return type == .key
                                     }
                                     
-                                    var nRKI = i
-                                    var ni = nextI
+                                    var nRKI = i + 1
+                                    var ni = i + 1 < animation.keyframes.count ? i + 1 : 0
                                     while ni != i {
-                                        if let isKey = isKey(at: ni) {
-                                            nRKI += 1
-                                            ni = ni + 1 < animation.keyframes.count ? ni + 1 : 0
-                                            if isKey { break }
-                                        } else { continue loop }
+                                        guard let isKey = isKey(at: ni) else { continue loop }
+                                        if isKey { break }
+                                        nRKI += 1
+                                        ni = ni + 1 < animation.keyframes.count ? ni + 1 : 0
                                     }
                                     nRKI += 1
                                     
                                     var oRKI = i
+                                    ni = i
                                     if line.interType != .key {
+                                        oRKI -= 1
                                         ni = ni - 1 >= 0 ? ni - 1 : animation.keyframes.count - 1
                                         while ni != i {
-                                            if let isKey = isKey(at: ni) {
-                                                oRKI -= 1
-                                                ni = ni - 1 >= 0 ? ni - 1 : animation.keyframes.count - 1
-                                                if isKey { break }
-                                            } else { continue loop }
+                                            guard let isKey = isKey(at: ni) else { continue loop }
+                                            if isKey { break }
+                                            oRKI -= 1
+                                            ni = ni - 1 >= 0 ? ni - 1 : animation.keyframes.count - 1
                                         }
                                     }
                                     
@@ -797,9 +806,9 @@ final class InsertAction: InputKeyEventAction {
                                 
                                 sheetView.insert([IndexValue(value: keyframe, index: i + 1)])
                                 for v in vs {
-                                    sheetView.interpolation(v.value.map { ($0, [$0]) },
-                                                            oldRootKeyframeIndex: v.key.lowerBound,
-                                                            newRootKeyframeIndex: v.key.upperBound,
+                                    sheetView.interpolation(v.value,
+                                                            fromRoot: v.key.lowerBound,
+                                                            toRoot: v.key.upperBound,
                                                             isNewUndoGroup: false)
                                 }
                             } else {
@@ -825,9 +834,9 @@ final class InsertAction: InputKeyEventAction {
                             sheetView.set([IndexValue(value: idivs, index: i)])
                             
                             let ids = idivs.map { $0.value.id }
-                            sheetView.interpolation(ids.map { ($0, [$0]) },
-                                                    oldRootKeyframeIndex: i,
-                                                    newRootKeyframeIndex: i,
+                            sheetView.interpolation(ids,
+                                                    fromRoot: i - animation.keyframes.count,
+                                                    toRoot: i,
                                                     isNewUndoGroup: false)
                             animationView.updateTimeline()
                         }
@@ -1082,6 +1091,9 @@ final class InterpolateAction: InputKeyEventAction {
                    case .sheetValue(let v) = co, v.lines.count == 1,
                     sheetView.id == v.id,
                    sheetView.model.animation.rootIndex == v.rootKeyframeIndex,
+                   !(sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
+                                                  scale: rootView.screenToWorldScale)
+                     && sheetView.keyframeView.selectedLineIs.count >= 2),
                    let li0 = sheetView.model.animation.keyframe(atRoot: v.rootKeyframeIndex).picture.lines
                     .firstIndex(where: { $0.interID == v.lines[0].interID }),
                    let (lineView, li1) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
@@ -1474,12 +1486,12 @@ final class InterpolateAction: InputKeyEventAction {
                     
                     let idivLines = sheetView.model.animation
                         .keyframes[nKI].picture.lines
-                    if idivs.contains(where: {
+                    if nidivs.contains(where: {
                         idivLines[$0.index].interOption != $0.value
                     }) {
                         var vs = [Int: [IndexValue<InterOption>]]()
-                        vs[nKI] = idivs
-                        idivs.forEach { idiv in
+                        vs[nKI] = nidivs
+                        nidivs.forEach { idiv in
                             let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                             let oldID = line.interOption.id
                             let newID = idiv.value.id
@@ -1530,7 +1542,7 @@ final class InterpolateAction: InputKeyEventAction {
                         var fromUUColor, toUUColor: UUColor
                     }
                     var colorValuesDic = [UUKey: ColorValue]()
-                    for idiv in idivs {
+                    for idiv in nidivs {
                         let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                         if let oldLine = oldLineDic[line.interID], oldLine.uuColor != line.uuColor {
                             let uuKey = UUKey(fromUUColor: line.uuColor, toUUColor: oldLine.uuColor)
@@ -1569,28 +1581,31 @@ final class InterpolateAction: InputKeyEventAction {
                     }
                     
                     let oldKeyframe = animationView.model.keyframe(atRoot: oRootKI)
-                    for idiv in idivs {
+                    for idiv in nidivs {
                         guard let li = oldKeyframe.picture.lines.firstIndex(where: { $0.interID == idiv.value.id }) else { continue }
                         let upperLineIDs = Set(oldKeyframe.picture.lines[(li + 1)...].map { $0.interID })
                         let nli = animationView.model.keyframes[nKI].picture.lines.firstIndex { upperLineIDs.contains($0.interID) }
                         if let nli, nli != idiv.index {
                             let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
-                            if nKI == animationView.model.index {
-                                updateUndoGroup()
-                                sheetView.removeLines(at: [idiv.index])
-                                sheetView.insert([.init(value: line, index: nli > idiv.index ? nli - 1 : nli)])
-                            } else {
-                                updateUndoGroup()
-                                sheetView.removeKeyLines([.init(value: [idiv.index], index: nKI)])
-                                sheetView.insertKeyLines([.init(value: [.init(value: line, index: nli > idiv.index ? nli - 1 : nli)], index: nKI)])
+                            if line.uuColor != Line.defaultUUColor {
+                                let nnli = nli > idiv.index ? nli - 1 : nli
+                                if nKI == animationView.model.index {
+                                    updateUndoGroup()
+                                    sheetView.removeLines(at: [idiv.index])
+                                    sheetView.insert([.init(value: line, index: nnli)])
+                                } else {
+                                    updateUndoGroup()
+                                    sheetView.removeKeyLines([.init(value: [idiv.index], index: nKI)])
+                                    sheetView.insertKeyLines([.init(value: [.init(value: line, index: nnli)], index: nKI)])
+                                }
                             }
                         }
                     }
                     
-                    let nids = idivs.map { $0.value.id }
-                    sheetView.interpolation(nids.enumerated().map { (i, v) in (v, [v]) },
-                                            oldRootKeyframeIndex: oRootKI,
-                                            newRootKeyframeIndex: nRootKI,
+                    sheetView.updateNode(from: sheetView.selection, old: sheetView.selection)
+                    
+                    let nids = nidivs.map { $0.value.id }
+                    sheetView.interpolation(nids, fromRoot: oRootKI, toRoot: nRootKI,
                                             isNewUndoGroup: isNewUndoGroup)
                     
                     let iNodes = animationView.interpolationNodes(from: nids, scale: scale,
@@ -1615,259 +1630,176 @@ final class InterpolateAction: InputKeyEventAction {
     }
 }
 extension SheetView {
-    func interpolation(_ ids: [(mainID: UUID, replaceIDs: [UUID])],
-                       oldRootKeyframeIndex: Int, newRootKeyframeIndex rki: Int,
+    func interpolation(_ ids: [UUID], fromRoot fromRKI: Int, toRoot toRKI: Int,
                        isNewUndoGroup: Bool) {
-        var insertLIVs = [Int: [IndexValue<Line>]]()
-        var repLIVs = [Int: [IndexValue<Line>]]()
+        var interOptionIVs = [Int: [IndexValue<InterOption>]](),
+            repLIVs = [Int: [IndexValue<Line>]](),
+            insertLIVs = [Int: [IndexValue<Line>]]()
+        func set(_ interOption: InterOption, atLine li: Int, at ki: Int) {
+            let iv = IndexValue(value: interOption, index: li)
+            if interOptionIVs[ki] == nil {
+                interOptionIVs[ki] = [iv]
+            } else {
+                interOptionIVs[ki]?.append(iv)
+            }
+        }
+        func replace(_ line: Line, atLine li: Int, at ki: Int) {
+            let iv = IndexValue(value: line, index: li)
+            if repLIVs[ki] == nil {
+                repLIVs[ki] = [iv]
+            } else {
+                repLIVs[ki]?.append(iv)
+            }
+        }
+        func insert(_ line: Line, atLine li: Int, at ki: Int) {
+            if insertLIVs[ki] == nil {
+                insertLIVs[ki] = [.init(value: line, index: li)]
+            } else {
+                let count = insertLIVs[ki]!.count
+                insertLIVs[ki]?.append(.init(value: line, index: li + count))
+            }
+        }
         
-        let kts: [(keyframe: Keyframe, time: Rational)] = model.animation.keyframes.map { ($0, $0.beat) }
+        let isUp = fromRKI <= toRKI
+        let kts: [(keyframe: Keyframe, time: Rational)]
+        = model.animation.keyframes.map { ($0, $0.beat) }
         let duration = model.animation.beatRange.length
-        let lki = model.animation.index(atRoot: rki)
+        let fromKI = model.animation.index(atRoot: fromRKI)
+        let toKI = model.animation.index(atRoot: toRKI)
         
-        for (id, repIDs) in ids {
-            let repIDSet = Set(repIDs)
+        for id in ids {
+            let idLIKs = kts.map { $0.keyframe.picture.lines.firstIndex { $0.interID == id } }
+            guard idLIKs[fromKI] != nil, let toLI = idLIKs[toKI] else { continue }
             
-            var keyAndIs = [(i: Int, key: Interpolation<Line>.Key)]()
-            var keyIDic = [Int: Int]()
-            for (i, kt) in kts.enumerated() {
-                var nLine: Line?
-                for line in kt.keyframe.picture.lines {
-                    if line.interID == id && line.interType != .interpolated {
-                        nLine = line
-                        break
-                    }
-                }
-                if let nLine {
-                    let key = Interpolation.Key(value: nLine, time: Double(kt.time), type: .spline)
-                    keyAndIs.append((i, key))
-                    keyIDic[i] = keyAndIs.count - 1
-                }
+            var (fki, lki) = isUp ? (fromKI, toKI) : (toKI, fromKI)
+            
+            var enabledKIs = Set<Int>()
+            var eki = fki
+            if fromRKI != toRKI {
+                repeat {
+                    enabledKIs.insert(eki)
+                    eki = eki + 1 >= kts.count ? 0 : eki + 1
+                } while eki != lki
             }
             
-            guard keyAndIs.count > 1 else {
-                if oldRootKeyframeIndex != rki, var l = keyAndIs.first?.key.value {
-                    l.interType = .interpolated
-                    
-                    let li = kts[lki].keyframe.picture.lines.firstIndex(where: { $0.interID == id })!
-                    let upperLineIDs = Set(kts[lki].keyframe.picture.lines[(li + 1)...].map { $0.interID })
-                    
-                    for (i, kt) in kts.enumerated() {
-                        guard i != lki else { continue }
-                        var isRep = false
-                        for (li, line) in kt.keyframe.picture.lines.enumerated() {
-                            if line.interID == id {
-                                if line != l {
-                                    let iv = IndexValue(value: l, index: li)
-                                    if repLIVs[i] == nil {
-                                        repLIVs[i] = [iv]
-                                    } else {
-                                        repLIVs[i]?.append(iv)
-                                    }
-                                }
-                                isRep = true
-                                break
-                            }
-                        }
-                        if !isRep {
-                            let ii = kt.keyframe.picture.lines.firstIndex { upperLineIDs.contains($0.interID) }
-                            ?? kt.keyframe.picture.lines.count
-                            
-                            if insertLIVs[i] == nil {
-                                insertLIVs[i] = [IndexValue(value: l, index: ii)]
-                            } else {
-                                let count = insertLIVs[i]!.count
-                                insertLIVs[i]?.append(.init(value: l, index: ii + count))
-                            }
-                        }
-                    }
+            var aki = fki, count = 0, isLoop = false
+            repeat {
+                aki = aki - 1 < 0 ? kts.count - 1 : aki - 1
+                guard let li = idLIKs[aki] else { break }
+                if kts[aki].keyframe.picture.lines[li].interType != .interpolated {
+                    fki = aki
+                    count += 1
+                    if count >= 3 { break }
                 }
-                continue
-            }
-            
-            var fki = 0
-            for (i, k) in keyAndIs.enumerated().reversed() {
-                if lki >= k.i {
-                    fki = i
-                    break
-                }
-            }
-            
-            let loopI: Int, preFKI: Int
-            var firstI: Int
-            if oldRootKeyframeIndex > rki {
-                preFKI = fki + 1 < keyAndIs.count ? fki + 1 : 0
-                loopI = keyAndIs[preFKI].i
-                firstI = keyAndIs[fki].i
-            } else if oldRootKeyframeIndex < rki {
-                loopI = keyAndIs[fki].i
-                preFKI = fki - 1 >= 0 ? fki - 1 : keyAndIs.count - 1
-                firstI = keyAndIs[preFKI].i
+                if count < 2 { enabledKIs.insert(aki) }
+            } while aki != lki
+            if count > 0 && aki == lki {
+                isLoop = true
             } else {
-                preFKI = fki
-                loopI = keyAndIs[fki].i
-                firstI = keyAndIs[preFKI].i
-            }
-            var j = firstI - 1 >= 0 ? firstI - 1 : kts.count - 1
-            while j != loopI {
-                guard let line = kts[j].keyframe.picture.lines.first(where: { $0.interID == id }) else { break }
-                if line.interType != .interpolated {
-                    firstI = j
+                aki = lki
+                count = 0
+                repeat {
+                    aki = aki + 1 >= kts.count ? 0 : aki + 1
+                    guard let li = idLIKs[aki] else { break }
+                    if kts[aki].keyframe.picture.lines[li].interType != .interpolated {
+                        lki = aki
+                        count += 1
+                        if count >= 3 { break }
+                    }
+                    if count < 2 { enabledKIs.insert(aki) }
+                } while aki != fki
+                if aki == fki {
+                    isLoop = true
                 }
-                j = j - 1 >= 0 ? j - 1 : kts.count - 1
             }
             
-            let li = kts[firstI].keyframe.picture.lines.firstIndex(where: { $0.interID == id })!
-            let upperLineIDs = Set(kts[firstI].keyframe.picture.lines[(li + 1)...].map { $0.interID })
-            
-            var di = 0
-            let ranges: [Range<Int>]
-            func moveToFirst(count: Int) {
-                di += 1
-                if keyAndIs.count >= count {
-                    var k = keyAndIs[keyAndIs.count - count]
-                    k.key.time -= Double(duration)
-                    keyAndIs.insert(k, at: 0)
-                }
+            let fli = idLIKs[fki]!
+            if kts[fki].keyframe.picture.lines[fli].interType != .key {
+                set(.init(id: id, interType: .key), atLine: fli, at: fki)
             }
-            func moveToLast(count: Int) {
-                if keyAndIs.count >= count {
-                    var k = keyAndIs[count - 1]
-                    k.key.time += Double(duration)
-                    keyAndIs.append(k)
-                }
-            }
-            if j == loopI {
-                moveToFirst(count: 1)
-                moveToFirst(count: 2)
-                moveToLast(count: 3)
-                moveToLast(count: 4)
-                ranges = [0 ..< kts.count]
-            } else {
-                var lastI = loopI
-                var j = loopI + 1 < kts.count ? loopI + 1 : 0
-                while j != loopI {
-                    guard let line =  kts[j].keyframe.picture.lines.first(where: { $0.interID == id }) else { break }
-                    if line.interType != .interpolated {
-                        lastI = j
+            var keys = [Interpolation.Key(value: kts[fki].keyframe.picture.lines[fli],
+                                          time: 0, type: .spline)]
+            var fromKeyI = 0, ki = fki, dur: Rational = 0
+            var kiAndTimes = [(ki: Int, time: Rational)](), isLastKey = true
+            repeat {
+                let oldTime = kts[ki].time
+                ki = ki + 1 >= kts.count ? 0 : ki + 1
+                dur += ki == 0 ? duration - oldTime : kts[ki].time - oldTime
+                
+                if let li = idLIKs[ki],
+                   kts[ki].keyframe.picture.lines[li].interType != .interpolated
+                    || ki == fromKI || ki == toKI {
+                    
+                    if kts[ki].keyframe.picture.lines[li].interType != .key {
+                        set(.init(id: id, interType: .key), atLine: li, at: ki)
                     }
-                    j = j + 1 < kts.count ? j + 1 : 0
-                }
-                let firstKI = keyIDic[firstI]!, lastKI = keyIDic[lastI]!
-                if lastI < firstI {
-                    var c = 1
-                    moveToFirst(count: c)
-                    if keyAndIs.count - firstKI > 1 {
-                        c += 1
-                        moveToFirst(count: c)
+                    if isLastKey {
+                        keys[.last].type = .step
                     }
-                    c += 1
-                    moveToLast(count: c)
-                    if lastKI >= 1 {
-                        c += 1
-                        moveToLast(count: c)
+                    isLastKey = true
+                    keys.append(.init(value: kts[ki].keyframe.picture.lines[li],
+                                      time: Double(dur), type: .spline))
+                    if ki == fromKI {
+                        fromKeyI = keys.count - 1
                     }
-                    ranges = [0 ..< (lastI + 1),
-                              firstI ..< kts.count]
                 } else {
-                    ranges = [firstI ..< (lastI + 1)]
-                }
-                for (ki, v) in keyAndIs.enumerated() {
-                    if v.i == lastI {
-                        keyAndIs[ki].key.type = .step
+                    if enabledKIs.contains(ki) {
+                        kiAndTimes.append((ki, dur))
                     }
+                    isLastKey = false
                 }
+            } while ki != lki
+
+            var line = keys[fromKeyI].value
+            for i in fromKeyI + 1 ..< keys.count {
+                let nLine = keys[i].value.noCrossLine(line)
+                keys[i].value = nLine
+                line = nLine
+            }
+            line = keys[fromKeyI].value
+            for i in (0 ..< fromKeyI).reversed() {
+                let nLine = keys[i].value.noCrossLine(line)
+                keys[i].value = nLine
+                line = nLine
             }
             
-            for (ki, v) in keyAndIs.enumerated() {
-                let nextKI = ki + 1 >= keyAndIs.count ? 0 : ki + 1
-                let dki = keyAndIs[nextKI].i - v.i
-                if dki > 0 ?
-                    dki <= 1 :
-                    kts.count - v.i + keyAndIs[nextKI].i <= 1 {
-                    keyAndIs[ki].key.type = .step
-                }
-            }
-            
-            var line = keyAndIs[.last].key.value
-            for (i, key) in keyAndIs.enumerated() {
-                let nLine = key.key.value
-                let nnLine = nLine.noCrossLine(line)
-                keyAndIs[i].key.value = nnLine
-                line = nnLine
-            }
-            
-            let interpolation = Interpolation(keys: keyAndIs.map { $0.key },
-                                              duration: Double(duration))
-            for range in ranges {
-                for i in range {
-                    let kt = kts[i]
+            let upperLineIDs = Set(kts[toKI].keyframe.picture.lines[(toLI + 1)...].map { $0.interID })
+            let interpolation = Interpolation(keys: keys, duration: Double(dur))
+            for (ki, time) in kiAndTimes {
+                let kt = kts[ki]
+                if var nLine = interpolation.monoValue(withTime: Double(time),
+                                                       isLoop: isLoop) {
+                    nLine.interID = id
+                    nLine.interType = .interpolated
                     
-                    if let oki = keyIDic[i] {
-                        let ki = oki + di
-                        if let li = kt.keyframe.picture.lines
-                            .firstIndex(where: { $0.interID == id }) {
-                            let oLine = kt.keyframe.picture.lines[li]
-                            var kLine = keyAndIs[ki].key.value
-                            kLine.interID = id
-                            kLine.interType = .key
-                            if oLine != kLine {
-                                let iv = IndexValue(value: kLine,
-                                                    index: li)
-                                if repLIVs[i] == nil {
-                                    repLIVs[i] = [iv]
-                                } else {
-                                    repLIVs[i]?.append(iv)
-                                }
-                            }
+                    if let li = idLIKs[ki] {
+                        if kt.keyframe.picture.lines[li] != nLine {
+                            replace(nLine, atLine: li, at: ki)
                         }
-                        continue
-                    }
-                    
-                    if var line = interpolation.monoValue(withTime: Double(kt.time)) {
-                        line.interID = id
-                        line.interType = .interpolated
-                        
-                        if let li = kt.keyframe.picture.lines
-                            .firstIndex(where: { repIDSet.contains($0.interID) }) {
-                            if kt.keyframe.picture.lines[li] != line {
-                                let iv = IndexValue(value: line,
-                                                    index: li)
-                                if repLIVs[i] == nil {
-                                    repLIVs[i] = [iv]
-                                } else {
-                                    repLIVs[i]?.append(iv)
-                                }
-                            }
-                        } else {
-                            let ii = kt.keyframe.picture.lines.firstIndex { upperLineIDs.contains($0.interID) }
-                            ?? kt.keyframe.picture.lines.count
-                            
-                            if insertLIVs[i] == nil {
-                                insertLIVs[i] = [IndexValue(value: line, index: ii)]
-                            } else {
-                                let count = insertLIVs[i]!.count
-                                insertLIVs[i]?.append(.init(value: line, index: ii + count))
-                            }
-                        }
+                    } else {
+                        let li = kt.keyframe.picture.lines.firstIndex { upperLineIDs.contains($0.interID) }
+                        ?? kt.keyframe.picture.lines.count
+                        insert(nLine, atLine: li, at: ki)
                     }
                 }
             }
+        }
+        
+        let interOptionValues = interOptionIVs.sorted(by: { $0.key < $1.key }).map {
+            IndexValue(value: $0.value.sorted(by: { $0.index < $1.index }), index: $0.key)
+        }
+        let repValues = repLIVs.sorted(by: { $0.key < $1.key }).map {
+            IndexValue(value: $0.value.sorted(by: { $0.index < $1.index }), index: $0.key)
         }
         let insertValues = insertLIVs.sorted(by: { $0.key < $1.key }).map {
             IndexValue(value: $0.value, index: $0.key)
         }
-        
-        let repValues = repLIVs.sorted(by: { $0.key < $1.key }).map {
-            IndexValue(value: $0.value.sorted(by: { $0.index < $1.index }), index: $0.key)
-        }.filter {
-            let lines = model.animation.keyframes[$0.index].picture.lines
-            return $0.value.contains { lines[$0.index] != $0.value }
-        }
-        
-        if !insertValues.isEmpty || !repValues.isEmpty {
+        if !interOptionValues.isEmpty || !repValues.isEmpty || !insertValues.isEmpty {
             if isNewUndoGroup {
                 newUndoGroup()
+            }
+            if !interOptionValues.isEmpty {
+                self.set(interOptionValues)
             }
             if !repValues.isEmpty {
                 replaceKeyLines(repValues)

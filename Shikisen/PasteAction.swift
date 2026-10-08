@@ -621,10 +621,22 @@ final class APasteAction: Action {
     
     @discardableResult
     func updateWithCopy(for p: Point, isSendPasteboard: Bool) -> Bool {
-        if let sheetView = rootView.sheetView(at: p),
-           sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
-           let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
-                                                          scale: rootView.screenToWorldScale) {
+        if rootView.containsLookingUp(at: p),
+           !rootView.lookingUpString.isEmpty,
+           let path = rootView.lookingUpBoundsNode?.path {
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
+            }
+            selectingLineNode.children =
+            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
+                  lineWidth: Line.defaultLineWidth * 1.5,
+                  lineType: .color(.selected),
+                  fillType: .color(.subSelected))]
+            return true
+        } else if let sheetView = rootView.sheetView(at: p),
+                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale),
+                  let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
+                                                                 scale: rootView.screenToWorldScale) {
             
             let animationView = sheetView.animationView
             
@@ -659,6 +671,7 @@ final class APasteAction: Action {
             let t = Transform(translation: -sheetP)
             var sheetValue = sheetValue * t
             sheetValue.origin = sheetP
+            sheetValue.scale = sheetView.animationView.convertToWorldScale(1)
             if isSendPasteboard {
                 if let s = sheetValue.string {
                     Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue), .string(s)]
@@ -672,7 +685,7 @@ final class APasteAction: Action {
             let lineNodes = sheetView.keyframeView.selectedLineIs.map {
                 let line = sheetView.model.picture.lines[$0]
                 return Node(path: Path(sheetView.animationView.convertToWorld(line)),
-                            lineWidth: line.size * 1.5,
+                            lineWidth: sheetView.animationView.convertToWorldScale(line.size * 1.5),
                             lineType: .color(.selected))
             }
             let planeNodes = sheetView.keyframeView.selectedPlaneIs.map {
@@ -687,7 +700,7 @@ final class APasteAction: Action {
                             lineWidth: lw,
                             lineType: .color(.selected),
                             fillType: .color(.subSelected))
-            }
+                }
             let contentNodes: [Node] = sheetView.selectedContentIs.compactMap {
                 guard let f = sheetView.contentsView.elementViews[$0].imageFrame else { return nil }
                 return Node(path: Path(sheetView.convertToWorld(f)),
@@ -721,7 +734,7 @@ final class APasteAction: Action {
                 let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: r * 0.5,
                                                                position: $0) }),
-                                fillType: .color(.background))
+                                  fillType: .color(.background))
                 selectingLineNode.children = [node, inNode]
             }
             
@@ -785,29 +798,17 @@ final class APasteAction: Action {
                 .map { Path(scoreView.pointline(at: $0).controls
                     .map { scoreView.convertToWorld($0.point) }) }
                 .map {
-                Node(path: $0,
-                     lineWidth: 1.5 * 2,
-                     lineType: .color(.selected))
-            } + [Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8, position: $0) }),
-                      fillType: .color(.selected)),
-                 Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
-                      path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
-                                                   position: $0) }),
-                      fillType: .color(.background))] + selectedFrameNodes
+                    Node(path: $0,
+                         lineWidth: 1.5 * 2,
+                         lineType: .color(.selected))
+                } + [Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                          path: Path(ps.map { Pathline(circleRadius: 0.25 * 8, position: $0) }),
+                          fillType: .color(.selected)),
+                     Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                          path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
+                                                       position: $0) }),
+                          fillType: .color(.background))] + selectedFrameNodes
             
-            return true
-        } else if rootView.containsLookingUp(at: p),
-                  !rootView.lookingUpString.isEmpty,
-                    let path = rootView.lookingUpBoundsNode?.path {
-            if isSendPasteboard {
-                Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
-            }
-            selectingLineNode.children =
-            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
-                  lineWidth: Line.defaultLineWidth * 1.5,
-                  lineType: .color(.selected),
-                  fillType: .color(.subSelected))]
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let tempo = sheetView.tempo(at: sheetView.convertFromWorld(p),
@@ -849,6 +850,7 @@ final class APasteAction: Action {
             let ssv = SheetValue(lines: [sheetView.animationView.convert(lineView.model, to: sheetView.node)],
                                  planes: [], texts: [],
                                  origin: sheetView.convertFromWorld(p),
+                                 scale: sheetView.animationView.convertToWorldScale(1),
                                  id: sheetView.id,
                                  rootKeyframeIndex: sheetView.model.animation.rootIndex,
                                  isSelected: false) * t
@@ -859,7 +861,7 @@ final class APasteAction: Action {
             let scale = 1 / rootView.worldToScreenScale
             let lw = Line.defaultLineWidth
             let selectedNode = Node(path: sheetView.animationView.convertToWorld(lineView.node.path),
-                                    lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
+                                    lineWidth: sheetView.animationView.convertToWorldScale(max(lw * 1.5, lw * 2.5 * scale, 1 * scale)),
                                     lineType: .color(.selected))
             if sheetView.model.enabledAnimation {
                 selectingLineNode.children = [selectedNode]
@@ -994,7 +996,7 @@ final class APasteAction: Action {
                 let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: r * 0.5,
                                                                position: $0) }),
-                                fillType: .color(.background))
+                                  fillType: .color(.background))
                 selectingLineNode.children = [node, inNode]
             }
             
@@ -1048,11 +1050,11 @@ final class APasteAction: Action {
                         pitIs.flatMap { pitI in
                             let pit = note.pits[pitI]
                             return pit.tone.id == tone.id ?
-                                [scoreView.pitPosition(atPit: pitI, from: note)]
-                                + pit.tone.spectlope.sprols.count.range.map {
-                                    scoreView.sprolPosition(atSprol: $0, atPit: pitI,
-                                                            from: note, atY: f.minY)
-                                } : []
+                            [scoreView.pitPosition(atPit: pitI, from: note)]
+                            + pit.tone.spectlope.sprols.count.range.map {
+                                scoreView.sprolPosition(atSprol: $0, atPit: pitI,
+                                                        from: note, atY: f.minY)
+                            } : []
                         }
                     }
                 }
@@ -1089,7 +1091,7 @@ final class APasteAction: Action {
                 let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: 0.125 * 2 * 0.5,
                                                                position: $0) }),
-                                fillType: .color(.background))
+                                  fillType: .color(.background))
                 let node = Node(path: Path(pathlines), fillType: .color(.selected))
                 selectingLineNode.children = [node, inNode]
             case .spectlopeHeight:
@@ -1192,24 +1194,25 @@ final class APasteAction: Action {
         } else if !rootView.isDefaultUUColor(at: p) {
             let colorOwners = rootView.readColorOwners(at: p)
             if let fco = colorOwners.first {
-                var mainPlanePath: Path?
+                var mainPlanePath: Path?, mainLineWidth: Double?
                 if isSendPasteboard {
                     let sheetP = fco.sheetView.convertFromWorld(p)
                     if let pi = fco.sheetView.planesView.firstIndex(at: sheetP) {
                         let planeView = fco.sheetView.planesView.elementViews[pi]
                         mainPlanePath = fco.sheetView.animationView.convert(planeView.node.path, to: fco.sheetView.node)
+                        mainLineWidth = fco.sheetView.animationView.convertToWorldScale(Line.defaultLineWidth * 2 * rootView.screenToWorldScale)
                         
                         let sheetValue = SheetValue(planes: [planeView.model],
                                                     origin: sheetP,
-                                          id: fco.sheetView.id,
+                                                    id: fco.sheetView.id,
                                                     rootKeyframeIndex: fco.sheetView.model.animation.rootIndex,
                                                     isSelected: false)
                         Pasteboard.shared.copiedObjects =
-                            [.uuColor(rootView.uuColor(at: p)),
-                             .sheetValue(sheetValue)]
+                        [.uuColor(rootView.uuColor(at: p)),
+                         .sheetValue(sheetValue)]
                     } else {
                         Pasteboard.shared.copiedObjects =
-                            [.uuColor(rootView.uuColor(at: p))]
+                        [.uuColor(rootView.uuColor(at: p))]
                     }
                 }
                 
@@ -1220,17 +1223,19 @@ final class APasteAction: Action {
                     []
                 }
                 
-                let scale = 1 / rootView.worldToScreenScale
                 selectingLineNode.children = colorOwners.reduce(into: [Node]()) {
                     let value = $1.colorPathValue(toColor: nil, color: .selected,
                                                   subColor: .subSelected)
+                    let sheetView = $1.sheetView
+                    let lineWidth = sheetView.animationView.convertToWorldScale(Line.defaultLineWidth * 2 * rootView.screenToWorldScale)
                     $0 += value.paths.map {
-                        Node(path: $0, lineWidth: Line.defaultLineWidth * 2 * scale,
-                             lineType: value.lineType, fillType: value.fillType)
+                        Node(path: $0,
+                             lineWidth: lineWidth, lineType: value.lineType,
+                             fillType: value.fillType)
                     }
-                } + (mainPlanePath != nil ? [
-                    Node(path: mainPlanePath!, lineWidth: Line.defaultLineWidth * 4 * scale,
-                         lineType: .color(.selected))
+                } + (mainPlanePath != nil && mainLineWidth != nil ? [
+                    Node(path: mainPlanePath!,
+                         lineWidth: mainLineWidth!, lineType: .color(.selected))
                 ] :  [])
                 + (fco.sheetView.model.enabledAnimation ?
                    fco.sheetView.interporatedTimelineNodes(fromColor: ids) : [])
@@ -1252,7 +1257,7 @@ final class APasteAction: Action {
             sheetView.keyframeAttitude = .init()
             return true
         } else if let sheetView = rootView.sheetView(at: p),
-           sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
+                  sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             
             if let ki = sheetView.animationView.keyframeIndex(at: sheetView.animationView.timelineNode.convertFromWorld(p),
                                                               scale: rootView.screenToWorldScale) {
@@ -1315,11 +1320,12 @@ final class APasteAction: Action {
             
             return true
         } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
-                    let sheetValue = sheetView.selectedSheetValue() {
+                  let sheetValue = sheetView.selectedSheetValue() {
             let sheetP = sheetView.convertFromWorld(p)
             let t = Transform(translation: -sheetP)
             var sheetValue = sheetValue * t
             sheetValue.origin = sheetP
+            sheetValue.scale = sheetView.animationView.convertToWorldScale(1)
             if let s = sheetValue.string {
                 Pasteboard.shared.copiedObjects = [.sheetValue(sheetValue), .string(s)]
             } else {
@@ -1481,15 +1487,16 @@ final class APasteAction: Action {
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let (lineView, li) = sheetView
-                    .lineTuple(at: sheetView.convertFromWorld(p),
-                               enabledPlane: true,
-                               scale: 1 / rootView.worldToScreenScale) {
+            .lineTuple(at: sheetView.convertFromWorld(p),
+                       enabledPlane: true,
+                       scale: 1 / rootView.worldToScreenScale) {
             
             let sheetP = sheetView.convertFromWorld(p)
             let t = Transform(translation: -sheetP)
             let ssv = SheetValue(lines: [sheetView.animationView.convert(lineView.model, to: sheetView.node)],
                                  planes: [], texts: [],
                                  origin: sheetP,
+                                 scale: sheetView.animationView.convertToWorldScale(1),
                                  id: sheetView.id,
                                  rootKeyframeIndex: sheetView.model.animation.rootIndex,
                                  isSelected: false) * t
@@ -1498,7 +1505,7 @@ final class APasteAction: Action {
             if sheetView.model.enabledAnimation {
                 let scale = 1 / rootView.worldToScreenScale
                 let nodes = sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale,
-                                                         removeLineIndex: li)
+                                                                       removeLineIndex: li)
                 if nodes.count > 1 {
                     selectingLineNode.children = nodes
                 }
@@ -1550,7 +1557,7 @@ final class APasteAction: Action {
                     let sb = sheetView.bounds.inset(by: Sheet.textPadding)
                     if let textFrame = text.frame,
                        !sb.contains(textFrame) {
-                       
+                        
                         let nFrame = sb.clipped(textFrame)
                         text.origin += nFrame.origin - textFrame.origin
                     }
@@ -1581,7 +1588,7 @@ final class APasteAction: Action {
                   let (ti, textView) = sheetView.textIndexAndView(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                   textView.containsTimeline(textView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                   let beatRange = textView.beatRange {
-                
+            
             Pasteboard.shared.copiedObjects = [.beatRange(beatRange)]
             
             var text = textView.model
@@ -1842,7 +1849,7 @@ final class APasteAction: Action {
             sheetView.unselect()
             sheetView.removeBorder(at: i)
             return true
-         } else if !rootView.isDefaultUUColor(at: p) {
+        } else if !rootView.isDefaultUUColor(at: p) {
             let colorOwners = rootView.colorOwners(at: p, enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)))
             if !colorOwners.isEmpty {
                 Pasteboard.shared.copiedObjects = [.uuColor(rootView.uuColor(at: p))]
@@ -1923,11 +1930,11 @@ final class APasteAction: Action {
             let scale = firstScale * rootView.screenToWorldScale
             if phase == .began {
                 let lineNodes = value.keyframes.isEmpty ?
-                    value.lines.map { $0.node } :
-                    value.keyframes[value.keyframeBeganIndex].picture.lines.map { $0.node }
+                value.lines.map { $0.node(withScale: value.scale) } :
+                value.keyframes[value.keyframeBeganIndex].picture.lines.map { $0.node(withScale: value.scale) }
                 let planeNodes = value.keyframes.isEmpty ?
-                    value.planes.map { $0.node } :
-                    value.keyframes[value.keyframeBeganIndex].picture.planes.map { $0.node }
+                value.planes.map { $0.node } :
+                value.keyframes[value.keyframeBeganIndex].picture.planes.map { $0.node }
                 let textNodes = value.texts.map { $0.node }
                 
                 let contentNodes: [Node] = value.contents.compactMap { content in
@@ -1951,43 +1958,42 @@ final class APasteAction: Action {
                 }
                 
                 let keyframesNodes = value.keyframes.isEmpty ?
-                    [] :
-                    [Text(string: "\(value.keyframeBeganIndex)", origin: Point(-10, 0)).node,
-                     Text(string: "\(value.keyframes.count - value.keyframeBeganIndex)", origin: Point(10, 0)).node]
+                [] :
+                [Text(string: "\(value.keyframeBeganIndex)", origin: Point(-10, 0)).node,
+                 Text(string: "\(value.keyframes.count - value.keyframeBeganIndex)", origin: Point(10, 0)).node]
                 let node0 = Node(children: planeNodes + lineNodes + keyframesNodes)
                 let node1 = Node(children: textNodes)
                 let node2 = Node(children: contentNodes)
                 let snapNode = Node(lineWidth: 1, lineType: .color(.background),
-                                    fillType: .color(.border))
+                                    fillType: .color(.subBorder))
                 selectingLineNode.children = [node0, node1, node2, snapNode]
-//                selectingLineNode.children = planeNodes + lineNodes + textNodes
+                //                selectingLineNode.children = planeNodes + lineNodes + textNodes
             }
             if !selectingLineNode.path.isEmpty {
                 selectingLineNode.path = Path()
             }
             
             let nSnapP: Point?, np: Point
-            if !(sheetView?.id == value.id && sheetView?.rootKeyframeIndex == value.rootKeyframeIndex) {
-                let snapP = value.origin + sheetFrame.origin
-                nSnapP = snapP
-                np = snapP.distance(p) < snapDistance * rootView.screenToWorldScale && firstScale == rootView.worldToScreenScale ?
-                    snapP : rootView.roundedPoint(from: p)
-                let isSnapped = np == snapP
-                if isSnapped {
-                    if oldFillSnapP != np {
-                        selectingLineNode.children.last?.fillType = .color(.selected)
+            let snapP = value.origin + sheetFrame.origin
+            nSnapP = snapP
+            np = snapP.distance(p) < snapDistance * rootView.screenToWorldScale && firstScale == rootView.worldToScreenScale ?
+            snapP : rootView.roundedPoint(from: p)
+            let isSnapped = np == snapP
+            if isSnapped {
+                if oldFillSnapP != np {
+                    selectingLineNode.children.last?.fillType = .color(.selected)
+                    selectingLineNode.children.last?.path = Path(circleRadius: 6)
+                    if phase != .began {
                         Feedback.performAlignment()
                     }
-                } else {
-                    if oldFillSnapP != np {
-                        selectingLineNode.children.last?.fillType = .color(.border)
-                    }
                 }
-                oldFillSnapP = np
             } else {
-                np = rootView.roundedPoint(from: p)
-                nSnapP = nil
+                if oldFillSnapP != np {
+                    selectingLineNode.children.last?.fillType = .color(.subBorder)
+                    selectingLineNode.children.last?.path = Path(circleRadius: 5)
+                }
             }
+            oldFillSnapP = np
             
             if selectingLineNode.children.count == 4 {
                 selectingLineNode.children[0].attitude = Attitude(position: np,
@@ -2011,7 +2017,7 @@ final class APasteAction: Action {
                 
                 if nSnapP != oldSnapP {
                     if let nSnapP {
-                        selectingLineNode.children[3].path = Path(circleRadius: isSnapped ? 6 : 4)
+                        selectingLineNode.children[3].path = Path(circleRadius: isSnapped ? 5 : 4)
                         selectingLineNode.children[3].attitude = Attitude(position: nSnapP, scale: Size(square: rootView.screenToWorldScale))
                     } else {
                         selectingLineNode.children[3].path = Path()
@@ -2080,8 +2086,8 @@ final class APasteAction: Action {
                 let np: Point
                 if let stb = textFrame {
                     let textFrame = stb
-                        * Attitude(position: p,
-                                   scale: Size(square: 1.0 * scale)).transform
+                    * Attitude(position: p,
+                               scale: Size(square: 1.0 * scale)).transform
                     let sb = sheetFrame.inset(by: Sheet.textPadding)
                     if !sb.intersects(textFrame) {
                         let nFrame = sb.moveOutline(textFrame)
@@ -2103,13 +2109,13 @@ final class APasteAction: Action {
                     for textView in sheetView.textsView.elementViews {
                         guard !textView.typesetter.typelines.isEmpty else { continue }
                         let fp0 = textView.model.origin
-                            + (textView.typesetter
-                                .firstEditReturnBounds?.centerPoint
-                                ?? Point())
+                        + (textView.typesetter
+                            .firstEditReturnBounds?.centerPoint
+                           ?? Point())
                         let lp0 = textView.model.origin
-                            + (textView.typesetter
-                                .lastEditReturnBounds?.centerPoint
-                                ?? Point())
+                        + (textView.typesetter
+                            .lastEditReturnBounds?.centerPoint
+                           ?? Point())
                         
                         if text.size.absRatio(textView.model.size) < 1.25 {
                             let d = 3.0 * rootView.screenToWorldScale
@@ -2139,8 +2145,8 @@ final class APasteAction: Action {
                     selectingLineNode.path = Path()
                 }
                 selectingLineNode.attitude
-                    = Attitude(position: np + snapDP,
-                               scale: Size(square: 1.0 * scale))
+                = Attitude(position: np + snapDP,
+                           scale: Size(square: 1.0 * scale))
                 
                 oldScale = s
             }
@@ -2173,8 +2179,8 @@ final class APasteAction: Action {
                 selectingLineNode.lineWidth = 0.5
                 return
             } else if let sheetView,
-                        sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
-                                                     scale: rootView.screenToWorldScale) {
+                      sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
+                                                   scale: rootView.screenToWorldScale) {
                 let scoreView = sheetView.scoreView
                 let scoreP = scoreView.convertFromWorld(p)
                 switch oldBorder.orientation {
@@ -2215,7 +2221,7 @@ final class APasteAction: Action {
                 let animationView = sheetView.animationView
                 let sheetP = sheetView.convertFromWorld(p)
                 let keyBeat = animationView.beat(atX: sheetP.x,
-                                             interval: rootView.currentBeatInterval)
+                                                 interval: rootView.currentBeatInterval)
                 isSnapped = keyBeat.isInteger
                 if !snapLineNode.children.isEmpty {
                     rootView.cursor = .arrow
@@ -2284,7 +2290,7 @@ final class APasteAction: Action {
         func updateIDs(_ ids: [InterOption]) {
             guard let sheetView else { return }
             let lis: [Int] = if sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
-                                                        scale: rootView.screenToWorldScale) {
+                                                               scale: rootView.screenToWorldScale) {
                 sheetView.keyframeView.selectedLineIs
             } else if let li = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
                                                    scale: rootView.screenToWorldScale)?.lineIndex {
@@ -2305,7 +2311,7 @@ final class APasteAction: Action {
             for keyframe in sheetView.model.animation.keyframes {
                 for line in keyframe.picture.lines {
                     let nLine = sheetView.convertToWorld(line)
-                        
+                    
                     nodes.append(Node(path: Path(nLine),
                                       lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale) * 0.25,
                                       lineType: .color(.selected)))
@@ -2438,11 +2444,11 @@ final class APasteAction: Action {
             oldPitch = pitch
             oldBeat = beat
             
-//            selectingLineNode.children = notes.map {
-//                let node = scoreView.noteNode(from: $0).node
-//                node.attitude = Attitude(position: sheetView.convertToWorld(Point()))
-//                return node
-//            }
+            //            selectingLineNode.children = notes.map {
+            //                let node = scoreView.noteNode(from: $0).node
+            //                node.attitude = Attitude(position: sheetView.convertToWorld(Point()))
+            //                return node
+            //            }
             
             rootView.cursor = .circle(string: Pitch(value: pitch)
                 .displayString(deltaPitch: pitch - deltaPitch))
@@ -2475,9 +2481,9 @@ final class APasteAction: Action {
                 .contains(sheetView.convertFromWorld(p)) ?? false,
                sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale),
-                let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
-                                                                              enabledLinePlane: false,
-                                                                              removingUUColor: uuColor) {
+               let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
+                                                                       enabledLinePlane: false,
+                                                                       removingUUColor: uuColor) {
                 let ownerDic = owners.reduce(into: [SheetView: [SheetColorOwner]]()) {
                     if $0[$1.sheetView] == nil {
                         $0[$1.sheetView] = [$1]
@@ -2499,8 +2505,8 @@ final class APasteAction: Action {
             } else if let _ = rootView.madeSheetView(at: shp) {
                 let colorOwners = rootView.madeColorOwnerWithFindingLine(at: p)
                 ?? rootView.madeColorOwner(at: p, enabledLine: false,
-                                                          enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
-                                                          removingUUColor: uuColor)
+                                           enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
+                                           removingUUColor: uuColor)
                 colorOwners.forEach {
                     if $0.uuColor != uuColor {
                         let oldUUColor = $0.uuColor
@@ -2602,7 +2608,8 @@ final class APasteAction: Action {
                         let frame = rootView.sheetFrame(with: nshp)
                         let t = transform(in: frame, at: p)
                         let oLines: [Line] = lines.map { $0 * t }
-                        var nLines = Sheet.clipped(oLines, in: Rect(size: frame.size))
+                        var nLines = Sheet.clipped(oLines, in: Rect(size: frame.size),
+                                                   minSplitLineWidth: rootView.worldLineWidth * 4)
                         if !nLines.isEmpty,
                            let (sheetView, isNew) = rootView
                             .madeSheetViewIsNew(at: nshp, isNewUndoGroup: isRootNewUndoGroup) {
@@ -2695,7 +2702,7 @@ final class APasteAction: Action {
             for text in texts {
                 let nshp = rootView.sheetPosition(at: (text * pt).origin)
                 guard ((shp.x - 1) ... (shp.x + 1)).contains(nshp.x)
-                    && ((shp.y - 1) ... (shp.y + 1)).contains(nshp.y) else {
+                        && ((shp.y - 1) ... (shp.y + 1)).contains(nshp.y) else {
                     
                     continue
                 }
@@ -2707,7 +2714,7 @@ final class APasteAction: Action {
                     let sb = sheetView.bounds.inset(by: Sheet.textPadding)
                     if let textFrame = nText.frame,
                        !sb.contains(textFrame) {
-                       
+                        
                         let nFrame = sb.clipped(textFrame)
                         nText.origin += nFrame.origin - textFrame.origin
                         
@@ -2734,7 +2741,7 @@ final class APasteAction: Action {
             }
         }
         func pasteText(_ text: Text, isSelected: Bool) {
-//            let pt = firstTransform()
+            //            let pt = firstTransform()
             let nshp = shp
             guard ((shp.x - 1) ... (shp.x + 1)).contains(nshp.x)
                     && ((shp.y - 1) ... (shp.y + 1)).contains(nshp.y),
@@ -2749,7 +2756,7 @@ final class APasteAction: Action {
                 
                 rootAction.textAction.endInputKey(isUnmarkText: true, isRemoveText: false)
                 if rootView.findingNode(at: p) != nil,
-                    rootView.finding.string != text.string {
+                   rootView.finding.string != text.string {
                     
                     rootView.replaceFinding(from: text.string)
                 } else {
@@ -2793,13 +2800,13 @@ final class APasteAction: Action {
                 for (i, textView) in sheetView.textsView.elementViews.enumerated() {
                     guard !textView.typesetter.typelines.isEmpty else { continue }
                     let fp0 = textView.model.origin
-                        + (textView.typesetter
-                            .firstEditReturnBounds?.centerPoint
-                            ?? Point())
+                    + (textView.typesetter
+                        .firstEditReturnBounds?.centerPoint
+                       ?? Point())
                     let lp0 = textView.model.origin
-                        + (textView.typesetter
-                            .lastEditReturnBounds?.centerPoint
-                            ?? Point())
+                    + (textView.typesetter
+                        .lastEditReturnBounds?.centerPoint
+                       ?? Point())
                     
                     if text.size.absRatio(textView.model.size) < 1.25 {
                         var str = text.string
@@ -2808,7 +2815,7 @@ final class APasteAction: Action {
                         if fp0.distance(lp1) < d {
                             str.append("\n")
                             let th = text.typesetter.height
-                                + text.typelineSpacing
+                            + text.typelineSpacing
                             switch textView.model.orientation {
                             case .horizontal: dp = Point(0, th)
                             case .vertical: dp = Point(th, 0)
@@ -2828,11 +2835,11 @@ final class APasteAction: Action {
                             nText.replaceSubrange(str, from: rRange,
                                                   clipFrame: sb)
                             let origin = textView.model.origin != nText.origin + dp ?
-                                nText.origin + dp : nil
+                            nText.origin + dp : nil
                             let size = textView.model.size != nText.size ?
-                                nText.size : nil
+                            nText.size : nil
                             let widthCount = textView.model.widthCount != nText.widthCount ?
-                                nText.widthCount : nil
+                            nText.widthCount : nil
                             let tv = TextValue(string: str,
                                                replacedRange: rRange,
                                                origin: origin, size: size,
@@ -2875,7 +2882,7 @@ final class APasteAction: Action {
             for content in contents {
                 let nshp = rootView.sheetPosition(at: (content * pt).origin)
                 guard ((shp.x - 1) ... (shp.x + 1)).contains(nshp.x)
-                    && ((shp.y - 1) ... (shp.y + 1)).contains(nshp.y) else {
+                        && ((shp.y - 1) ... (shp.y + 1)).contains(nshp.y) else {
                     
                     continue
                 }
@@ -2968,26 +2975,10 @@ final class APasteAction: Action {
                 sheetView.append(picture.planes)
             }
         case .sheetValue(let value):
-            let sheetView = rootView.sheetView(at: shp)
             let np: Point
-            if !(sheetView?.id == value.id && sheetView?.rootKeyframeIndex == value.rootKeyframeIndex) {
-                let snapP = value.origin + rootView.sheetFrame(with: shp).origin
-                np = snapP.distance(p) < snapDistance * rootView.screenToWorldScale && firstScale == rootView.worldToScreenScale ?
-                    snapP : rootView.roundedPoint(from: p)
-                let isSnapped = np == snapP
-                if isSnapped {
-                    if oldFillSnapP != np {
-                        selectingLineNode.children.last?.fillType = .color(.selected)
-                        Feedback.performAlignment()
-                    }
-                } else {
-                    if oldFillSnapP != np {
-                        selectingLineNode.children.last?.fillType = .color(.border)
-                    }
-                }
-            } else {
-                np = rootView.roundedPoint(from: p)
-            }
+            let snapP = value.origin + rootView.sheetFrame(with: shp).origin
+            np = snapP.distance(p) < snapDistance * rootView.screenToWorldScale && firstScale == rootView.worldToScreenScale ?
+            snapP : rootView.roundedPoint(from: p)
             
             if !value.keyframes.isEmpty {
                 guard let sheetView = rootView.madeSheetView(at: shp) else { return }
@@ -3014,7 +3005,8 @@ final class APasteAction: Action {
                             return l
                         }
                         var nLines = Sheet.clipped(oLines,
-                                                   in: Rect(size: frame.size))
+                                                   in: Rect(size: frame.size),
+                                                   minSplitLineWidth: rootView.worldLineWidth * 4)
                         guard !nLines.isEmpty else { return nil }
                         
                         let idSet = Set(oldLines.map { $0.interID })
@@ -3036,7 +3028,7 @@ final class APasteAction: Action {
                         guard ki < sheetView.model.animation.keyframes.count else { return nil }
                         
                         let oldPlanes = (isDraft ?
-                                        $0.draftPicture : $0.picture).planes
+                                         $0.draftPicture : $0.picture).planes
                         let pPlanes = oldPlanes.map { $0 * pt }
                         guard !pPlanes.isEmpty else { return nil }
                         let t = transform(in: frame, at: np)
@@ -3107,8 +3099,8 @@ final class APasteAction: Action {
                let (textView, ti, _, _) = sheetView.textTuple(at: sheetView.convertFromWorld(p), scale: rootView.screenToWorldScale),
                let x = textView.typesetter.warpCursorOffset(at: textView.convertFromWorld(p))?.offset {
                 let widthCount = textView.model.size == 0 ?
-                    Typobute.mainWidthCount :
-                    (x / textView.model.size)
+                Typobute.mainWidthCount :
+                (x / textView.model.size)
                     .clipped(min: Typobute.minWidthCount,
                              max: Typobute.mainWidthCount)
                 
@@ -3166,10 +3158,10 @@ final class APasteAction: Action {
             } else if border.orientation == .vertical,
                       let sheetView = rootView.sheetView(at: shp),
                       sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p),
-                                                   scale: rootView.screenToWorldScale) {
+                                                               scale: rootView.screenToWorldScale) {
                 let sheetP = sheetView.convertFromWorld(p)
                 let beat = sheetView.animationView.beat(atX: sheetP.x,
-                                                    interval: rootView.currentBeatInterval)
+                                                        interval: rootView.currentBeatInterval)
                 var option = sheetView.animationView.model.option
                 if !option.keyBeats.contains(beat) {
                     option.keyBeats.append(beat)
@@ -3208,9 +3200,9 @@ final class APasteAction: Action {
                sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
                                               scale: rootView.screenToWorldScale)
                 || sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)),
-                let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
-                                                                              enabledLinePlane: false,
-                                                                              removingUUColor: uuColor) {
+               let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
+                                                                       enabledLinePlane: false,
+                                                                       removingUUColor: uuColor) {
                 let ownerDic = owners.reduce(into: [SheetView: [SheetColorOwner]]()) {
                     if $0[$1.sheetView] == nil {
                         $0[$1.sheetView] = [$1]
@@ -3235,8 +3227,8 @@ final class APasteAction: Action {
             } else if let _ = rootView.madeSheetView(at: shp) {
                 let colorOwners = rootView.madeColorOwnerWithFindingLine(at: p)
                 ?? rootView.madeColorOwner(at: p, enabledLine: false,
-                                                          enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
-                                                          removingUUColor: uuColor)
+                                           enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
+                                           removingUUColor: uuColor)
                 colorOwners.forEach {
                     if $0.uuColor != uuColor {
                         let oldUUColor = $0.uuColor
@@ -3487,7 +3479,7 @@ final class APasteAction: Action {
                             
                             if scoreView.isStraightWithSelection(atPit: pitI, atNote: noteI),
                                pitI + 1 < note.pits.count,
-                                note.pits[pitI + 1].stereo != stereo {
+                               note.pits[pitI + 1].stereo != stereo {
                                 
                                 note.pits[pitI + 1].stereo = stereo
                             }
@@ -3602,7 +3594,7 @@ final class APasteAction: Action {
                             }
                             if scoreView.isStraightWithSelection(atPit: pitI, atNote: noteI),
                                pitI + 1 < note.pits.count,
-                                note.pits[pitI + 1].tone != tone {
+                               note.pits[pitI + 1].tone != tone {
                                 
                                 note.pits[pitI + 1].tone = tone
                                 isChanged = true
@@ -3708,6 +3700,23 @@ final class APasteAction: Action {
         }
     }
     
+    func copyHUD(at p: Point, atScreen sp: Point, isSendPasteboard: Bool = true) -> Bool {
+        if rootView.containsLookingUp(at: p),
+           !rootView.lookingUpString.isEmpty,
+           let path = rootView.lookingUpBoundsNode?.path {
+            
+            if isSendPasteboard {
+                Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
+            }
+            selectingLineNode.children =
+            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
+                  lineWidth: Line.defaultLineWidth * 1.5,
+                  lineType: .color(.selected),
+                  fillType: .color(.subSelected))]
+            return true
+        }
+        return false
+    }
     func copy(with event: InputKeyEvent) {
         guard isEditingSheet else {
             copySheet(with: event)
@@ -3718,10 +3727,16 @@ final class APasteAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            let p = rootView.convertScreenToWorld(event.screenPoint)
+            if copyHUD(at: p, atScreen: event.screenPoint) {
+                rootView.node.append(child: selectingLineNode)
+                return
+            }
+            
             type = .copy
             firstScale = rootView.worldToScreenScale
             editingSP = event.screenPoint
-            editingP = rootView.convertScreenToWorld(event.screenPoint)
+            editingP = p
             updateWithCopy(for: editingP, isSendPasteboard: true)
             rootView.node.append(child: selectingLineNode)
         case .changed:
@@ -3929,12 +3944,11 @@ final class APasteAction: Action {
             rootView.cursor = .arrow
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
-            
             if cutHUD(at: p, atScreen: event.screenPoint) { return }
             
             type = .cut
             editingSP = event.screenPoint
-            editingP = rootView.convertScreenToWorld(event.screenPoint)
+            editingP = p
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             updateWithCopySheet(at: p, isSelected: isSelected, from: values)
             if !values.isEmpty {
@@ -3961,14 +3975,19 @@ final class APasteAction: Action {
         case .began:
             rootView.cursor = .arrow
             
+            let p = rootView.convertScreenToWorld(event.screenPoint)
+            if copyHUD(at: p, atScreen: event.screenPoint) {
+                rootView.node.append(child: selectingLineNode)
+                return
+            }
+            
             type = .copy
             editingSP = event.screenPoint
-            editingP = rootView.convertScreenToWorld(event.screenPoint)
+            editingP = p
             selectingLineNode.fillType = .color(.subSelected)
             selectingLineNode.lineType = .color(.selected)
             selectingLineNode.lineWidth = rootView.worldLineWidth * 2
             
-            let p = rootView.convertScreenToWorld(event.screenPoint)
             let (isSelected, values) = rootView.sheetFramePositions(at: p)
             let roads = rootView.roads(fromMap: Set(values.map { $0.shp }))
             var roadPathlines = roads.compactMap {

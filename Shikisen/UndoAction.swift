@@ -594,7 +594,7 @@ final class ClearHistoryAction: InputKeyEventAction {
                 Task { @MainActor in
                     let result = await rootView.node
                         .show(message: mes,
-                              infomation: "You can’t undo this action. \nHistory is what is used in \"Undo\", \"Redo\" or \"Select Version\", and if you clear it, you will not be able to return to the previous work.".localized,
+                              infomation: "You can’t undo this action. \nHistory is what is used in \"Undo\", \"Redo\" or \"Select Version\" or \"Export as Timelapse\", and if you clear it, you will not be able to return to the previous work.".localized,
                               okTitle: "Clear History".localized,
                               isSaftyCheck: shps.count > 30)
                     switch result {

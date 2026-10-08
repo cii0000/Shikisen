@@ -5592,14 +5592,15 @@ final class SheetView: View, @unchecked Sendable {
                    isSelectedOnly: Bool = false,
                    removingUUColor: UUColor? = nil,
                    scale: Double) -> (lineView: SheetLineView, lineIndex: Int)? {
-        let isNoneDefaultColorPlane = !model.picture.planes.isEmpty
+        let isNoneDefaultColorPlane = enabledPlane
+        && !model.picture.planes.isEmpty
         && !isDefaultPlaneColor(at: p, scale: scale)
-        let ds = if enabledPlane && isNoneDefaultColorPlane {
+        let ds = if isNoneDefaultColorPlane {
             0.0
         } else if textTuple(at: p, scale: scale) != nil {
-            4 * scale
+            animationView.convertFromWorldScale(4 * scale)
         } else {
-            40 * scale
+            animationView.convertFromWorldScale(40 * scale)
         }
         
         let p = animationView.convert(p, from: node)
@@ -5613,7 +5614,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
             } else {
                 let (dSq, pressure) = line.minDistanceSquaredAndPressure(at: p)
-                let nd = line.size / 2 * pressure + ds
+                let nd = line.size / (isNoneDefaultColorPlane ? 4 : 2) * pressure + ds
                 let ldSq = nd * nd
                 if dSq < minDSq && dSq < ldSq {
                     minDSq = dSq
@@ -6058,7 +6059,9 @@ final class SheetView: View, @unchecked Sendable {
                 let ki = model.animation.index
                 let preKI = ki - 1 >= 0 ?ki - 1 : model.animation.keyframes.count - 1
                 let nextKI = ki + 1 < model.animation.keyframes.count ?ki + 1 : 0
-                return enabledPlanes(at: preKI) ?? enabledPlanes(at: nextKI)
+                return ki == 0 ?
+                enabledPlanes(at: nextKI) ?? enabledPlanes(at: preKI) :
+                enabledPlanes(at: preKI) ?? enabledPlanes(at: nextKI)
             }
             result = Picture.autoFill(fromOther: otherPlanes(),
                                       from: topolygons,
