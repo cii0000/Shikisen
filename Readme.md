@@ -8,7 +8,7 @@
 ## 動作環境
 macOS 15.6 以降、Apple Siliconのみ対応<br>
 Mac内蔵のトラックパッドまたは Magic Trackpad 必須<br>
-滑らかな線を引く場合、ペンタブレット必須
+滑らかな線を引く場合、ペンタブレット必須<br>
 動作確認済みペンタブレット： Wacom Intuos Pro (2013, 2025), XPPen Deco Pro (Gen2)<br>
 <br>
 ※ macOS以外への移植は今のところ予定しておりません。<br>
