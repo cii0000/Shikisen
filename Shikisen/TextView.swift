@@ -203,8 +203,8 @@ extension TextView {
     }
     
     func set(_ timeOption: TextTimeOption?, origin: Point) {
-        binder[keyPath: keyPath].timeOption = timeOption
-        binder[keyPath: keyPath].origin = origin
+        unupdateModel.timeOption = timeOption
+        unupdateModel.origin = origin
         node.attitude.position = origin
         updateTimeline()
         updateClippingNode()
@@ -212,7 +212,7 @@ extension TextView {
     var timeOption: TextTimeOption? {
         get { model.timeOption }
         set {
-            binder[keyPath: keyPath].timeOption = newValue
+            unupdateModel.timeOption = newValue
             updateTimeline()
             updateClippingNode()
         }
@@ -220,7 +220,7 @@ extension TextView {
     var origin: Point {
         get { model.origin }
         set {
-            binder[keyPath: keyPath].origin = newValue
+            unupdateModel.origin = newValue
             node.attitude.position = newValue
             updateClippingNode()
         }
@@ -231,7 +231,7 @@ extension TextView {
     var tempo: Rational {
         get { model.timeOption?.tempo ?? 0 }
         set {
-            binder[keyPath: keyPath].timeOption?.tempo = newValue
+            unupdateModel.timeOption?.tempo = newValue
             updateTimeline()
         }
     }
@@ -593,21 +593,20 @@ extension TextView {
         unmark()
         
         let oldRange = model.string.range(fromInt: textValue.replacedRange)
-        binder[keyPath: keyPath].string
-            .replaceSubrange(oldRange, with: textValue.string)
+        unupdateModel.string.replaceSubrange(oldRange, with: textValue.string)
         let nri = model.string.range(fromInt: textValue.newRange).upperBound
         selectedRange = nri ..< nri
         selectedRanges = []
         
         if let origin = textValue.origin {
-            binder[keyPath: keyPath].origin = origin
+            unupdateModel.origin = origin
             node.attitude.position = origin
         }
         if let size = textValue.size {
-            binder[keyPath: keyPath].size = size
+            unupdateModel.size = size
         }
         if let widthCount = textValue.widthCount {
-            binder[keyPath: keyPath].widthCount = widthCount
+            unupdateModel.widthCount = widthCount
         }
         
         updateTypesetter()
@@ -831,7 +830,7 @@ extension TextView {
         let iReplacedRange: Range<Int>? = replacedRange != nil ?
             model.string.intRange(from: replacedRange!) : nil
         let i = model.string.intIndex(from: range.lowerBound)
-        binder[keyPath: keyPath].string.removeSubrange(range)
+        unupdateModel.string.removeSubrange(range)
         let ni = model.string.index(fromInt: i)
         if let iMarkedRange = iMarkedRange {
             markedRange = model.string.range(fromInt: iMarkedRange)
@@ -874,7 +873,7 @@ extension TextView {
         TextInputContext.update()
         if str.isEmpty {
             let i = model.string.intIndex(from: rRange.lowerBound)
-            binder[keyPath: keyPath].string.removeSubrange(rRange)
+            unupdateModel.string.removeSubrange(rRange)
             let ni = model.string.index(fromInt: i)
             markedRange = nil
             replacedRange = nil
@@ -883,7 +882,7 @@ extension TextView {
         } else {
             let i = model.string.intIndex(from: rRange.lowerBound)
             let iMarkingRange = str.intRange(from: markingRange)
-            binder[keyPath: keyPath].string.replaceSubrange(rRange, with: str)
+            unupdateModel.string.replaceSubrange(rRange, with: str)
             let ni = model.string.index(fromInt: i)
             let di = model.string.index(ni, offsetBy: str.count)
             let imsi = model.string.index(fromInt: iMarkingRange.lowerBound + i)
@@ -915,7 +914,7 @@ extension TextView {
         TextInputContext.update()
         
         let irRange = model.string.intRange(from: rRange)
-        binder[keyPath: keyPath].string.replaceSubrange(rRange, with: str)
+        unupdateModel.string.replaceSubrange(rRange, with: str)
         let ei = model.string.index(model.string.startIndex,
                                     offsetBy: irRange.lowerBound + str.count)
         selectedRange = ei ..< ei

@@ -483,7 +483,7 @@ extension ScoreView {
     var timelineY: Double {
         get { model.timelineY }
         set {
-            binder[keyPath: keyPath].timelineY = newValue
+            unupdateModel.timelineY = newValue
             updateTimeline()
         }
     }
@@ -491,7 +491,7 @@ extension ScoreView {
     var tempo: Rational {
         get { model.tempo }
         set {
-            binder[keyPath: keyPath].tempo = newValue
+            unupdateModel.tempo = newValue
             updateTimeline()
             scoreTrackItem?.changeTempo(with: model)
         }
@@ -514,7 +514,7 @@ extension ScoreView {
         set {
             guard let newValue else { return }
             let oldDurBeat = model.endLoopDurBeat
-            binder[keyPath: keyPath].endLoopDurBeat = newValue
+            unupdateModel.endLoopDurBeat = newValue
             updateTimeline()
             if oldDurBeat != newValue {
                 scoreTrackItem?.loopDurSec = model.sec(fromBeat: model.loopDurBeat)
@@ -3135,7 +3135,7 @@ extension ScoreView {
         set {
             let oldValue = model.isShownSpectrogram
             if newValue != oldValue {
-                binder[keyPath: keyPath].isShownSpectrogram = newValue
+                unupdateModel.isShownSpectrogram = newValue
                 updateTimeline()
                 Sleep.start()
                 updateSpectrogram()

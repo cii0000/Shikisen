@@ -169,7 +169,7 @@ extension ContentView {
         let nBeat = (beat - frameBeat < 0 ? durBeat - frameBeat : beat - frameBeat)
             .interval(scale: frameBeat)
         
-        binder[keyPath: keyPath].beat = nBeat
+        unupdateModel.beat = nBeat
         updateTimeline()
         if model.type == .movie, let sec = model.rootSec {
             updateMovie(atSec: sec)
@@ -181,7 +181,7 @@ extension ContentView {
         let nBeat = (beat - frameBeat < 0 ? durBeat - frameBeat : beat - frameBeat)
             .interval(scale: frameBeat)
         
-        binder[keyPath: keyPath].beat = nBeat
+        unupdateModel.beat = nBeat
         updateTimeline()
         if model.type == .movie, let sec = model.rootSec {
             updateMovie(atSec: sec)
@@ -194,7 +194,7 @@ extension ContentView {
         let frameBeat = Rational(1, 12)
         let nBeat = (beat + frameBeat >= durBeat ? 0 : beat + frameBeat).interval(scale: frameBeat)
         
-        binder[keyPath: keyPath].beat = nBeat
+        unupdateModel.beat = nBeat
         updateTimeline()
         if model.type == .movie, let sec = model.rootSec {
             updateMovie(atSec: sec)
@@ -205,7 +205,7 @@ extension ContentView {
         let beat = model.beat, durBeat = timeOption.beatRange.length
         let nBeat = (beat + frameBeat >= durBeat ? 0 : beat + frameBeat).interval(scale: frameBeat)
         
-        binder[keyPath: keyPath].beat = nBeat
+        unupdateModel.beat = nBeat
         updateTimeline()
         if model.type == .movie, let sec = model.rootSec {
             updateMovie(atSec: sec)
@@ -215,7 +215,7 @@ extension ContentView {
     var beat: Rational {
         get { model.beat }
         set {
-            binder[keyPath: keyPath].beat = newValue
+            unupdateModel.beat = newValue
             updateTimeline()
             
             if model.type == .movie, let sec = model.rootSec {
@@ -249,7 +249,7 @@ extension ContentView {
     var timelineY: Double {
         get { model.origin.y }
         set {
-            binder[keyPath: keyPath].origin.y = newValue
+            unupdateModel.origin.y = newValue
             updateTimeline()
         }
     }
@@ -267,8 +267,8 @@ extension ContentView {
     }
     
     func set(_ timeOption: ContentTimeOption?, origin: Point) {
-        binder[keyPath: keyPath].timeOption = timeOption
-        binder[keyPath: keyPath].origin = origin
+        unupdateModel.timeOption = timeOption
+        unupdateModel.origin = origin
         node.attitude.position = origin
         updateTimeline()
         updateClippingNode()
@@ -282,7 +282,7 @@ extension ContentView {
     var timeOption: ContentTimeOption? {
         get { model.timeOption }
         set {
-            binder[keyPath: keyPath].timeOption = newValue
+            unupdateModel.timeOption = newValue
             updateTimeline()
             updateClippingNode()
             if let timeOption = model.timeOption {
@@ -296,7 +296,7 @@ extension ContentView {
     var origin: Point {
         get { model.origin }
         set {
-            binder[keyPath: keyPath].origin = newValue
+            unupdateModel.origin = newValue
             node.attitude.position = newValue
             updateClippingNode()
         }
@@ -304,7 +304,7 @@ extension ContentView {
     var stereo: Stereo {
         get { model.stereo }
         set {
-            binder[keyPath: keyPath].stereo = newValue
+            unupdateModel.stereo = newValue
             updateTimeline()
             pcmTrackItem?.stereo = newValue
         }
@@ -325,7 +325,7 @@ extension ContentView {
     var tempo: Rational {
         get { model.timeOption?.tempo ?? 0 }
         set {
-            binder[keyPath: keyPath].timeOption?.tempo = newValue
+            unupdateModel.timeOption?.tempo = newValue
             updateTimeline()
             
 //            if let spctrogram {
@@ -751,7 +751,7 @@ extension ContentView {
         set {
             let oldValue = model.isShownSpectrogram
             if newValue != oldValue {
-                binder[keyPath: keyPath].isShownSpectrogram = newValue
+                unupdateModel.isShownSpectrogram = newValue
                 updateTimeline()
                 updateSpectrogram()
             }

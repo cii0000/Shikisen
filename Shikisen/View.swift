@@ -161,7 +161,7 @@ final class ArrayView<T: BindableView>: BindableView {
     
     @discardableResult
     func append(_ modelElement: ModelElement) -> ElementView {
-        binder[keyPath: keyPath].append(modelElement)
+        unupdateModel.append(modelElement)
         let elementView
         = ElementView(binder: binder,
                       keyPath: keyPath.appending(path: \Model[model.count - 1]))
@@ -171,7 +171,7 @@ final class ArrayView<T: BindableView>: BindableView {
     }
     @discardableResult
     func insert(_ modelElement: ModelElement, at index: Int) -> ElementView {
-        binder[keyPath: keyPath].insert(modelElement, at: index)
+        unupdateModel.insert(modelElement, at: index)
         let elementView
         = ElementView(binder: binder,
                       keyPath: keyPath.appending(path: \Model[index]))
@@ -185,7 +185,7 @@ final class ArrayView<T: BindableView>: BindableView {
     }
     func insert(_ elementView: ElementView, _ modelElement: ModelElement,
                 at index: Int) {
-        binder[keyPath: keyPath].insert(modelElement, at: index)
+        unupdateModel.insert(modelElement, at: index)
         elementViews.insert(elementView, at: index)
         node.insert(child: elementView.node, at: index)
         
@@ -194,7 +194,7 @@ final class ArrayView<T: BindableView>: BindableView {
         }
     }
     func remove(at index: Int) {
-        binder[keyPath: keyPath].remove(at: index)
+        unupdateModel.remove(at: index)
         elementViews.remove(at: index)
         node.children[index].removeFromParent()
         
@@ -203,7 +203,7 @@ final class ArrayView<T: BindableView>: BindableView {
         }
     }
     func append(_ modelElements: [ModelElement]) {
-        binder[keyPath: keyPath] += modelElements
+        unupdateModel += modelElements
         
         for i in 0 ..< modelElements.count {
             let j = model.count - modelElements.count + i
@@ -219,7 +219,7 @@ final class ArrayView<T: BindableView>: BindableView {
         for iv in ivs {
             model.insert(iv.value, at: iv.index)
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         let nElementViews: [ElementView] = ivs.map { iv in
             ElementView(binder: binder,
@@ -240,7 +240,7 @@ final class ArrayView<T: BindableView>: BindableView {
         for iv in ivs {
             model.insert(iv.value.model, at: iv.index)
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         for iv in ivs {
             elementViews.insert(iv.value, at: iv.index)
@@ -252,13 +252,13 @@ final class ArrayView<T: BindableView>: BindableView {
         }
     }
     func append(_ elementViews: [ElementView], _ modelElements: [ModelElement]) {
-        binder[keyPath: keyPath] += modelElements
+        unupdateModel += modelElements
         self.elementViews += elementViews
         elementViews.forEach { node.append(child: $0.node) }
     }
     func removeLasts(count: Int) {
         let range = (model.count - count) ..< model.count
-        binder[keyPath: keyPath].removeLast(count)
+        unupdateModel.removeLast(count)
         elementViews.removeLast(count)
         range.reversed().forEach { node.children[$0].removeFromParent() }
     }
@@ -269,7 +269,7 @@ final class ArrayView<T: BindableView>: BindableView {
             elementViews.remove(at: index)
             node.children[index].removeFromParent()
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         elementViews.enumerated().forEach { (i, elementView) in
             elementView.keyPath = keyPath.appending(path: \Model[i])

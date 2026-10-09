@@ -98,7 +98,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     var uuColor: UUColor {
         get { model.uuColor }
         set {
-            binder[keyPath: keyPath].uuColor = newValue
+            unupdateModel.uuColor = newValue
             updateColor()
         }
     }
@@ -176,7 +176,7 @@ final class PlaneView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     var uuColor: UUColor {
         get { model.uuColor }
         set {
-            binder[keyPath: keyPath].uuColor = newValue
+            unupdateModel.uuColor = newValue
             updateColor()
         }
     }
@@ -406,7 +406,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     var timelineY: Double {
         get { model.timelineY }
         set {
-            binder[keyPath: keyPath].timelineY = newValue
+            unupdateModel.timelineY = newValue
             timelineNode.attitude.position.y = newValue
         }
     }
@@ -414,7 +414,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     var tempo: Rational {
         get { model.tempo }
         set {
-            binder[keyPath: keyPath].tempo = newValue
+            unupdateModel.tempo = newValue
             updateTimeline()
         }
     }
@@ -472,7 +472,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     
     @discardableResult
     func append(_ modelElement: ModelElement) -> ElementView {
-        binder[keyPath: keyPath].keyframes.append(modelElement)
+        unupdateModel.keyframes.append(modelElement)
         let elementView
             = ElementView(binder: binder,
                           keyPath: keyPath
@@ -482,7 +482,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     }
     @discardableResult
     func insert(_ modelElement: ModelElement, at index: Int) -> ElementView {
-        binder[keyPath: keyPath].keyframes.insert(modelElement, at: index)
+        unupdateModel.keyframes.insert(modelElement, at: index)
         let elementView
             = ElementView(binder: binder,
                           keyPath: keyPath.appending(path: \Model.keyframes[index]))
@@ -495,7 +495,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     }
     func insert(_ elementView: ElementView, _ modelElement: ModelElement,
                 at index: Int) {
-        binder[keyPath: keyPath].keyframes.insert(modelElement, at: index)
+        unupdateModel.keyframes.insert(modelElement, at: index)
         elementViews.insert(elementView, at: index)
         
         elementViews[(index + 1)...].enumerated().forEach { (i, aElementView) in
@@ -503,7 +503,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     func remove(at index: Int) {
-        binder[keyPath: keyPath].keyframes.remove(at: index)
+        unupdateModel.keyframes.remove(at: index)
         elementViews.remove(at: index)
         
         elementViews[index...].enumerated().forEach { (i, elementView) in
@@ -511,7 +511,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     func append(_ modelElements: [ModelElement]) {
-        binder[keyPath: keyPath].keyframes += modelElements
+        unupdateModel.keyframes += modelElements
         
         for i in 0 ..< modelElements.count {
             let j = model.keyframes.count - modelElements.count + i
@@ -526,7 +526,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         for iv in ivs {
             model.keyframes.insert(iv.value, at: iv.index)
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         let nElementViews: [ElementView] = ivs.map { iv in
             ElementView(binder: binder,
@@ -546,7 +546,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         for iv in ivs {
             model.keyframes.insert(iv.value.model, at: iv.index)
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         for iv in ivs {
             elementViews.insert(iv.value, at: iv.index)
@@ -557,11 +557,11 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         }
     }
     func append(_ elementViews: [ElementView], _ modelElements: [ModelElement]) {
-        binder[keyPath: keyPath].keyframes += modelElements
+        unupdateModel.keyframes += modelElements
         self.elementViews += elementViews
     }
     func removeLasts(count: Int) {
-        binder[keyPath: keyPath].keyframes.removeLast(count)
+        unupdateModel.keyframes.removeLast(count)
         elementViews.removeLast(count)
     }
     func remove(at indexes: [Int]) {
@@ -570,7 +570,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             model.keyframes.remove(at: index)
             elementViews.remove(at: index)
         }
-        binder[keyPath: keyPath] = model
+        unupdateModel = model
         
         elementViews.enumerated().forEach { (i, elementView) in
             elementView.keyPath = keyPath.appending(path: \Model.keyframes[i])
@@ -578,64 +578,64 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     }
     
     var rootBeat: Rational {
-        get { binder[keyPath: keyPath].rootBeat }
+        get { model.rootBeat }
         set {
-            binder[keyPath: keyPath].rootBeat = newValue
+            unupdateModel.rootBeat = newValue
             updateWithKeyframeIndex()
             updateTimeline()
         }
     }
     var rootBeatIndex: Animation.RootBeatIndex {
-        get { binder[keyPath: keyPath].rootBeatIndex }
+        get { model.rootBeatIndex }
         set {
-            binder[keyPath: keyPath].rootBeatIndex = newValue
+            unupdateModel.rootBeatIndex = newValue
             updateWithKeyframeIndex()
             updateTimeline()
         }
     }
     var rootBeatPosition: Animation.RootBeatPosition {
-        get { binder[keyPath: keyPath].rootBeatPosition }
+        get { model.rootBeatPosition }
         set {
-            binder[keyPath: keyPath].rootBeatPosition = newValue
+            unupdateModel.rootBeatPosition = newValue
             updateWithKeyframeIndex()
             updateTimeline()
         }
     }
     var rootKeyframeIndex: Int {
-        get { binder[keyPath: keyPath].rootIndex }
+        get { model.rootIndex }
         set {
-            binder[keyPath: keyPath].rootIndex = newValue
+            unupdateModel.rootIndex = newValue
             updateWithKeyframeIndex()
             updateTimeline()
         }
     }
     func goNext() {
-        binder[keyPath: keyPath].goNext()
+        unupdateModel.goNext()
         updateWithKeyframeIndex()
         updateTimeline()
     }
     func goPrevious() {
-        binder[keyPath: keyPath].goPrevious()
+        unupdateModel.goPrevious()
         updateWithKeyframeIndex()
         updateTimeline()
     }
     func goNextKey() {
-        binder[keyPath: keyPath].rootInterIndex
-        = binder[keyPath: keyPath].rootInterIndex.addingReportingOverflow(1).partialValue
+        unupdateModel.rootInterIndex
+        = model.rootInterIndex.addingReportingOverflow(1).partialValue
         updateWithKeyframeIndex()
         updateTimeline()
     }
     func goPreviousKey() {
-        binder[keyPath: keyPath].rootInterIndex
-        = binder[keyPath: keyPath].rootInterIndex.subtractingReportingOverflow(1).partialValue
+        unupdateModel.rootInterIndex
+        = model.rootInterIndex.subtractingReportingOverflow(1).partialValue
         updateWithKeyframeIndex()
         updateTimeline()
     }
     
     var currentKeyframe: Keyframe {
-        get { binder[keyPath: keyPath].currentKeyframe }
+        get { model.currentKeyframe }
         set {
-            binder[keyPath: keyPath].currentKeyframe = newValue
+            unupdateModel.currentKeyframe = newValue
             updateWithKeyframeIndex()
         }
     }
@@ -1420,7 +1420,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         get { model.beatRange }
         set {
             guard let newValue else { return }
-            binder[keyPath: keyPath].beatRange = newValue
+            unupdateModel.beatRange = newValue
             updateTimeline()
         }
     }
@@ -1433,7 +1433,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         get { model.endLoopDurBeat }
         set {
             guard let newValue else { return }
-            binder[keyPath: keyPath].endLoopDurBeat = newValue
+            unupdateModel.endLoopDurBeat = newValue
             updateTimeline()
         }
     }
@@ -1442,7 +1442,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         get { model.previousNext }
         set {
             guard newValue != previousNext else { return }
-            binder[keyPath: keyPath].previousNext = newValue
+            unupdateModel.previousNext = newValue
             updatePreviousNext()
             updateTimeline()
         }
@@ -1771,7 +1771,7 @@ final class SheetView: View, @unchecked Sendable {
     var backgroundUUColor: UUColor {
         get { model.backgroundUUColor }
         set {
-            binder.value.backgroundUUColor = newValue
+            unupdateModel.backgroundUUColor = newValue
             
             updateBackground()
         }
@@ -1798,7 +1798,7 @@ final class SheetView: View, @unchecked Sendable {
         get { model.option.mainFrame }
         set {
             if newValue != self.mainFrame {
-                binder[keyPath: keyPath].option.mainFrame = newValue
+                unupdateModel.option.mainFrame = newValue
                 updateMainFrame()
             }
         }
@@ -3097,7 +3097,7 @@ final class SheetView: View, @unchecked Sendable {
             for pi in colorValue.planeIndexes {
                 picture.planes[pi].uuColor = colorValue.uuColor
             }
-            binder.value.picture = picture
+            unupdateModel.picture = picture
             for pi in colorValue.planeIndexes {
                 planesView.elementViews[pi].updateColor()
             }
@@ -3119,7 +3119,7 @@ final class SheetView: View, @unchecked Sendable {
                     }
                 }
             }
-            binder.value.animation.keyframes = keyframes
+            unupdateModel.animation.keyframes = keyframes
             for v in colorValue.planeAnimationIndexes {
                 for i in v.value {
                     animationView.elementViews[v.index].planesView.elementViews[i].updateColor()
@@ -3132,7 +3132,7 @@ final class SheetView: View, @unchecked Sendable {
             for li in colorValue.lineIndexes {
                 picture.lines[li].uuColor = colorValue.uuColor
             }
-            binder.value.picture = picture
+            unupdateModel.picture = picture
             for li in colorValue.lineIndexes {
                 linesView.elementViews[li].updateColor()
             }
@@ -3154,7 +3154,7 @@ final class SheetView: View, @unchecked Sendable {
                     }
                 }
             }
-            binder.value.animation.keyframes = keyframes
+            unupdateModel.animation.keyframes = keyframes
             for v in colorValue.lineAnimationIndexes {
                 for i in v.value {
                     animationView.elementViews[v.index].linesView.elementViews[i].updateColor()
@@ -3619,7 +3619,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 var rect: Rect?
                 for liv in livs {
-                    binder[keyPath: keyPath].picture.lines[liv.index] = liv.value
+                    unupdateModel.picture.lines[liv.index] = liv.value
                     linesView.elementViews[liv.index].updateWithModel()
                     if let b = linesView.elementViews[liv.index].node.bounds {
                         rect += animationView.convert(b, to: node)
@@ -3628,7 +3628,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 for liv in livs {
-                    binder[keyPath: keyPath].picture.lines[liv.index] = liv.value
+                    unupdateModel.picture.lines[liv.index] = liv.value
                     linesView.elementViews[liv.index].updateWithModel()
                 }
             }
@@ -3637,7 +3637,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 var rect: Rect?
                 for piv in pivs {
-                    binder[keyPath: keyPath].picture.planes[piv.index] = piv.value
+                    unupdateModel.picture.planes[piv.index] = piv.value
                     planesView.elementViews[piv.index].updateWithModel()
                     if let b = planesView.elementViews[piv.index].node.bounds {
                         rect += animationView.convert(b, to: node)
@@ -3646,7 +3646,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 for piv in pivs {
-                    binder[keyPath: keyPath].picture.planes[piv.index] = piv.value
+                    unupdateModel.picture.planes[piv.index] = piv.value
                     planesView.elementViews[piv.index].updateWithModel()
                 }
             }
@@ -3809,7 +3809,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 var rect: Rect?
                 for tiv in tivs {
-                    binder[keyPath: keyPath].texts[tiv.index] = tiv.value
+                    unupdateModel.texts[tiv.index] = tiv.value
                     textsView.elementViews[tiv.index].updateWithModel()
                     rect += textsView.elementViews[tiv.index].node.transformedBounds
                 }
@@ -3819,7 +3819,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 for tiv in tivs {
-                    binder[keyPath: keyPath].texts[tiv.index] = tiv.value
+                    unupdateModel.texts[tiv.index] = tiv.value
                     textsView.elementViews[tiv.index].updateWithModel()
                 }
                 
@@ -3924,7 +3924,7 @@ final class SheetView: View, @unchecked Sendable {
         case .setRootKeyframeIndex(let rootKeyframeIndex):
             stop()
             if model.animation.rootIndex != rootKeyframeIndex {
-                binder[keyPath: keyPath].animation.rootIndex = rootKeyframeIndex
+                unupdateModel.animation.rootIndex = rootKeyframeIndex
                 updateWithKeyframeIndex()
                 updateTimeline()
                 node.draw()
@@ -3937,7 +3937,7 @@ final class SheetView: View, @unchecked Sendable {
             if !kivs.isEmpty {
                 animationView.insert(kivs)
                 
-                binder[keyPath: keyPath].animation.rootIndex = kivs.last?.index ?? 0
+                unupdateModel.animation.rootIndex = kivs.last?.index ?? 0
                 
                 updateWithKeyframeIndex()
                 updateTimeline()
@@ -3957,7 +3957,7 @@ final class SheetView: View, @unchecked Sendable {
                 
                 animationView.remove(at: indexes)
                 
-                binder[keyPath: keyPath].animation
+                unupdateModel.animation
                     .rootIndex = (indexes.first ?? 0) - 1
                 
                 updateWithKeyframeIndex()
@@ -3971,10 +3971,10 @@ final class SheetView: View, @unchecked Sendable {
             
             let rootBI = model.animation.rootBeatIndex
             
-            binder[keyPath: keyPath].animation.set(koivs)
+            unupdateModel.animation.set(koivs)
             
             if model.animation.rootBeatIndex != rootBI {
-                binder[keyPath: keyPath].animation.rootBeatIndex = rootBI
+                unupdateModel.animation.rootBeatIndex = rootBI
             }
             
             updateTimeline()
@@ -4025,7 +4025,7 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
                     for liv in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.lines[liv.index] = liv.value
                         animationView.elementViews[kv.index].linesView.elementViews[liv.index].updateWithModel()
                     }
@@ -4046,7 +4046,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 for kv in kvs {
                     for liv in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.lines[liv.index] = liv.value
                         animationView.elementViews[kv.index].linesView.elementViews[liv.index].updateWithModel()
                     }
@@ -4114,7 +4114,7 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
                     for liv in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.planes[liv.index] = liv.value
                         animationView.elementViews[kv.index].planesView.elementViews[liv.index].updateWithModel()
                     }
@@ -4135,7 +4135,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 for kv in kvs {
                     for piv in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.planes[piv.index] = piv.value
                         animationView.elementViews[kv.index].planesView.elementViews[piv.index].updateWithModel()
                     }
@@ -4294,7 +4294,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 for kv in kvs {
                     for iov in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.lines[iov.index].interOption = iov.value
                     }
                 }
@@ -4321,14 +4321,14 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 for kv in kvs {
                     for iov in kv.value {
-                        binder[keyPath: keyPath].animation.keyframes[kv.index]
+                        unupdateModel.animation.keyframes[kv.index]
                             .picture.lines[iov.index].interOption = iov.value
                     }
                 }
             }
         case .setAnimationOption(let option):
             stop()
-            binder[keyPath: keyPath].animation.option = option
+            unupdateModel.animation.option = option
             updateTimeline()
             updatePreviousNext()
             if isMakeRect {
@@ -4407,7 +4407,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 var rect: Rect?
                 for civ in civs {
-                    binder[keyPath: keyPath].contents[civ.index] = civ.value
+                    unupdateModel.contents[civ.index] = civ.value
                     contentsView.elementViews[civ.index].updateWithModel()
                     rect += contentsView.elementViews[civ.index].node.transformedBounds
                 }
@@ -4417,7 +4417,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 for civ in civs {
-                    binder[keyPath: keyPath].contents[civ.index] = civ.value
+                    unupdateModel.contents[civ.index] = civ.value
                     contentsView.elementViews[civ.index].updateWithModel()
                 }
                 
@@ -4444,7 +4444,7 @@ final class SheetView: View, @unchecked Sendable {
         case .setSheetOption(let option):
             stop()
             
-            binder[keyPath: keyPath].option = option
+            unupdateModel.option = option
             updateMainFrame()
             
             if isMakeRect {
@@ -4455,7 +4455,7 @@ final class SheetView: View, @unchecked Sendable {
             stop()
             
             let oldSelection = model.selection
-            binder[keyPath: keyPath].selection = selection
+            unupdateModel.selection = selection
             let rect = updateNode(from: selection, old: oldSelection)
             
             if isMakeRect {
@@ -4570,7 +4570,7 @@ final class SheetView: View, @unchecked Sendable {
         get { model.selection }
         set {
             let oldSelection = selection
-            binder[keyPath: keyPath].selection = newValue
+            unupdateModel.selection = newValue
             updateNode(from: newValue, old: oldSelection)
         }
     }
