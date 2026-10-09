@@ -3516,7 +3516,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     @discardableResult
     func set(_ item: SheetUndoItem,
-             isMakeRect: Bool = false, isSleep: Bool = true) -> (rect: Rect?, nodes: [Node]) {
+             isMakeRect: Bool = false, isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
         selectedTextView = nil
         switch item {
         case .appendLine(let line):

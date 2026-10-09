@@ -1413,52 +1413,55 @@ final class InterpolateAction: InputKeyEventAction {
                  sheetView.model.animation.currentKeyframe.nextPosition :
                  sheetView.model.animation.currentKeyframe.previousPosition) : .init()
                 
-                var noNodes = [Node]()
-                if idivs.isEmpty {
-                    for li in lis {
-                        let lw = Line.defaultLineWidth
-                        let scale = 1 / rootView.worldToScreenScale
-                        let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
-                        let line = animationView.model.keyframes[nKI].picture.lines[li]
-                        let nLine = sheetView.animationView.convertToWorld(line)
-                        noNodes.append(Node(attitude: .init(position: pnP),
-                                            path: Path(nLine),
-                                            lineWidth: blw,
-                                            lineType: .color(.removing)))
-                    }
+                let scale = rootView.screenToWorldScale
+                let lw = Line.defaultLineWidth
+                let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
+                var nodes = [Node](), noNodes = [Node]()
+                
+                let idivsLIs = Set(idivs.map { $0.index })
+                for li in lis.filter({ !idivsLIs.contains($0) }) {
+                    let linePath = sheetView.animationView.elementViews[nKI]
+                        .linesView.elementViews[li].node.path
+                    let worldLinePath = sheetView.animationView.convertToWorld(linePath)
+                    noNodes.append(Node(attitude: .init(position: pnP),
+                                        path: worldLinePath,
+                                        lineWidth: blw,
+                                        lineType: .color(.removing)))
                 }
                 let nidivs = idivs.filter { idiv in
                     let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                     let idLines = animationView.model.keyframes[nKI].picture.lines.filter { $0.interID == idiv.value.id }
                     let isInterpolated = animationView.isInterpolated(atLineI: idiv.index,
                                                                       atKeyframeI: nKI)
+                    let linePath = sheetView.animationView.elementViews[nKI]
+                        .linesView.elementViews[idiv.index].node.path
+                    let worldLinePath = sheetView.animationView.convertToWorld(linePath)
+                    
                     if (!isInterpolated && idLines.isEmpty)
-                        || (idLines.count == 1 && idLines[0] == line
-                            && !(oRootKI == nRootKI && !isInterpolated)) {
+                        || (idLines.count == 1 && idLines[0] == line) {
+                        
+                        let lwScale = (oRootKI == nRootKI && !isInterpolated ? 3.0 : 1.0)
+                        nodes.append(Node(attitude: .init(position: pnP),
+                                          path: worldLinePath,
+                                          lineWidth: blw * lwScale,
+                                          lineType: .color(.selected)))
                         return true
                     } else if idLines.isEmpty && isInterpolated {
-                        let lw = Line.defaultLineWidth
-                        let scale = 1 / rootView.worldToScreenScale
-                        let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
-                        let nLine = sheetView.animationView.convertToWorld(line)
                         noNodes.append(Node(attitude: .init(position: pnP),
-                                            path: Path(nLine),
+                                            path: worldLinePath,
                                             lineWidth: blw,
                                             lineType: .color(.warning)))
                         return true
                     } else {
-                        let lw = Line.defaultLineWidth
-                        let scale = 1 / rootView.worldToScreenScale
-                        let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
-                        let nLine = sheetView.animationView.convertToWorld(line)
                         noNodes.append(Node(attitude: .init(position: pnP),
-                                            path: Path(nLine),
+                                            path: worldLinePath,
                                             lineWidth: blw,
                                             lineType: .color(.removing)))
                         for line in idLines {
-                            let nLine = sheetView.convertToWorld(line)
+                            let linePath = Path(line)
+                            let worldLinePath = sheetView.animationView.convertToWorld(linePath)
                             noNodes.append(Node(attitude: .init(position: pnP),
-                                                path: Path(nLine),
+                                                path: worldLinePath,
                                                 lineWidth: blw,
                                                 lineType: .color(.removing)))
                         }
@@ -1473,17 +1476,6 @@ final class InterpolateAction: InputKeyEventAction {
                     }
                 }
                 if !nidivs.isEmpty {
-                    let scale = 1 / rootView.worldToScreenScale
-                    let lw = Line.defaultLineWidth
-                    let nodes = lis.map {
-                        let linePath = sheetView.animationView.elementViews[nKI]
-                            .linesView.elementViews[$0].node.path
-                        return Node(attitude: .init(position: pnP),
-                                    path: sheetView.animationView.convertToWorld(linePath),
-                                    lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
-                                    lineType: .color(.selected))
-                    }
-                    
                     let idivLines = sheetView.model.animation
                         .keyframes[nKI].picture.lines
                     if nidivs.contains(where: {
@@ -1671,6 +1663,28 @@ extension SheetView {
             let idLIKs = kts.map { $0.keyframe.picture.lines.firstIndex { $0.interID == id } }
             guard idLIKs[fromKI] != nil, let toLI = idLIKs[toKI] else { continue }
             
+            let upperLineIDs = Set(kts[toKI].keyframe.picture.lines[(toLI + 1)...].map { $0.interID })
+            if fromRKI == toRKI
+                && !animationView.isInterpolated(atLineI: toLI, atKeyframeI: toKI) {
+                
+                var nLine = kts[toKI].keyframe.picture.lines[toLI]
+                nLine.interID = id
+                nLine.interType = .interpolated
+                for (ki, kt) in kts.enumerated() {
+                    guard ki != toKI else { continue }
+                    if let li = idLIKs[ki] {
+                        if kt.keyframe.picture.lines[li] != nLine {
+                            replace(nLine, atLine: li, at: ki)
+                        }
+                    } else {
+                        let li = kt.keyframe.picture.lines.firstIndex { upperLineIDs.contains($0.interID) }
+                        ?? kt.keyframe.picture.lines.count
+                        insert(nLine, atLine: li, at: ki)
+                    }
+                }
+                continue
+            }
+            
             var (fki, lki) = isUp ? (fromKI, toKI) : (toKI, fromKI)
             
             var enabledKIs = Set<Int>()
@@ -1763,7 +1777,6 @@ extension SheetView {
                 line = nLine
             }
             
-            let upperLineIDs = Set(kts[toKI].keyframe.picture.lines[(toLI + 1)...].map { $0.interID })
             let interpolation = Interpolation(keys: keys, duration: Double(dur))
             for (ki, time) in kiAndTimes {
                 let kt = kts[ki]

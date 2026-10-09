@@ -106,9 +106,10 @@ extension Task where Success == Void, Failure == any Error {
                 guard !Task<Never, Never>.isCancelled else { break }
                 allDur += interval
                 nextTime = startTime + allDur
-                while nextTime <= clock.now {
+                let now = clock.now
+                if nextTime <= now {
                     allDur += interval
-                    nextTime = startTime + allDur
+                    * Int(((now - nextTime).sec / interval.sec).rounded(.up))
                 }
             }
         }
