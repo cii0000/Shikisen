@@ -89,7 +89,7 @@ struct HUDItem {
 struct Exporting {
     enum ExportType {
         case image, image4K, images, images4K, pdf, gif, movie, movie4K,
-             sound, linearPCM, document, documentWithHistory, caption, timelapse
+             sound, linearPCM, document, documentWithHistory, caption, timelapse, timelapse8
         var isDocument: Bool {
             self == .document || self == .documentWithHistory
         }
@@ -111,6 +111,7 @@ struct Exporting {
             case .linearPCM: "Linear PCM".localized
             case .caption: "Caption".localized
             case .timelapse: "Timelapse".localized
+            case .timelapse8: "Timelapse 1/8".localized
             case .document: "Document".localized
             case .documentWithHistory: "Document with History".localized
             }

@@ -415,7 +415,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                                         }
                                         let planeNodes = keyframeView.planesView.elementViews.map {
                                             let node = $0.node.clone
-                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
+                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.5))
                                             return node
                                         }
                                         let dNodes = keyframeView.draftLinesView.elementViews.map {
@@ -428,11 +428,12 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                                             node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
                                             return node
                                         }
+                                        let opacity = !planeNodes.isEmpty ? 0.5 : 0.125
                                         let node = Node(children: dPlaneNodes + [Node(children: dNodes, isClippingChildrenLines: true,
-                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: 0.125)))] + planeNodes +
+                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: opacity)))] + planeNodes +
                                                                    
                                                                    [Node(children: nodes, isClippingChildrenLines: true,
-                                                                               path: .init(bounds), fillType: .color(Color(white: 0, opacity: 0.125)))])
+                                                                               path: .init(bounds), fillType: .color(Color(white: 0, opacity: opacity)))])
                                         
                                         let isBottom = nShp.y < shp.y
                                         if isBottom {
@@ -733,7 +734,7 @@ final class InsertAction: InputKeyEventAction {
                     if beat < animation.keyframes.first?.beat ?? 0 {
                         let keyframe = Keyframe(beat: beat)
                         if isNewUndoGroup {
-                            sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                            sheetView.newUndoGroup()
                         }
                         sheetView.insert([IndexValue(value: keyframe, index: 0)])
                     } else if let (i, iBeat) = animation.indexAndInternalBeat(atRootBeat: beat) {
@@ -759,7 +760,7 @@ final class InsertAction: InputKeyEventAction {
                             let nBeat = animation.keyframes[i].beat + iBeat
                             let keyframe = Keyframe(beat: nBeat)
                             if isNewUndoGroup {
-                                sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                                sheetView.newUndoGroup()
                             }
                             
                             if animation.keyframes.count > 1 {
@@ -1189,20 +1190,12 @@ final class InterpolateAction: InputKeyEventAction {
                             let scale = 1 / rootView.worldToScreenScale
                             svs.forEach {
                                 let cv = ColorValue(uuColor: $0.uuColor,
-                                                    planeIndexes: [], lineIndexes: [],
-                                                    isBackground: false,
                                                     planeAnimationIndexes: [.init(value: $0.pis,
-                                                                                  index: $0.ki)],
-                                                    lineAnimationIndexes: [],
-                                                    animationColors: [])
+                                                                                  index: $0.ki)])
                                 let oldUUColor = sheetView.model.animation.keyframes[$0.ki].picture.planes[$0.pis.first!].uuColor
                                 let ocv = ColorValue(uuColor: oldUUColor,
-                                                     planeIndexes: [], lineIndexes: [],
-                                                     isBackground: false,
                                                      planeAnimationIndexes: [.init(value: $0.pis,
-                                                                                   index: $0.ki)],
-                                                     lineAnimationIndexes: [],
-                                                     animationColors: [])
+                                                                                   index: $0.ki)])
                                 sheetView.set(cv, oldColorValue: ocv)
                                 
                                 let value = sheetView.worldColorPathValue(with: cv, toColor: nil,

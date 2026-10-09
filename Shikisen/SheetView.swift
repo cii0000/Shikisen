@@ -3301,22 +3301,12 @@ final class SheetView: View, @unchecked Sendable {
                     return (true, sheetColorOwnerFromAnimation(with: uuColor, isLine: true))
                 } else {
                     let cv = ColorValue(uuColor: uuColor,
-                                        planeIndexes: [], lineIndexes: [],
-                                        isBackground: false,
-                                        planeAnimationIndexes: [],
                                         lineAnimationIndexes: [IndexValue(value: [li],
-                                                               index: model.animation.index)],
-                                        animationColors: [])
+                                                               index: model.animation.index)])
                     return (true, SheetColorOwner(sheetView: self, colorValue: cv))
                 }
             } else {
-                let cv = ColorValue(uuColor: uuColor,
-                                    planeIndexes: [],
-                                    lineIndexes: [li],
-                                    isBackground: false,
-                                    planeAnimationIndexes: [],
-                                    lineAnimationIndexes: [],
-                                    animationColors: [])
+                let cv = ColorValue(uuColor: uuColor, lineIndexes: [li])
                 return (true, SheetColorOwner(sheetView: self, colorValue: cv))
             }
         } else {
@@ -3345,11 +3335,8 @@ final class SheetView: View, @unchecked Sendable {
             }
         }
         let cv = ColorValue(uuColor: uuColor,
-                            planeIndexes: [], lineIndexes: [],
-                            isBackground: false,
                             planeAnimationIndexes: planeValue,
-                            lineAnimationIndexes: lineValue,
-                            animationColors: [])
+                            lineAnimationIndexes: lineValue)
         return SheetColorOwner(sheetView: self, colorValue: cv)
     }
     func sheetColorOwnerFromPlane(at p: Point,
@@ -3362,28 +3349,17 @@ final class SheetView: View, @unchecked Sendable {
                     return sheetColorOwnerFromAnimation(with: uuColor)
                 } else {
                     let cv = ColorValue(uuColor: model.picture.planes[pi].uuColor,
-                                        planeIndexes: [], lineIndexes: [],
-                                        isBackground: false,
                                         planeAnimationIndexes: [IndexValue(value: [pi],
-                                                           index: model.animation.index)],
-                                        lineAnimationIndexes: [],
-                                        animationColors: [])
+                                                           index: model.animation.index)])
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 }
             } else {
                 let cv = ColorValue(uuColor: model.picture.planes[pi].uuColor,
-                                    planeIndexes: [pi], lineIndexes: [],
-                                    isBackground: false,
-                                    planeAnimationIndexes: [], lineAnimationIndexes: [],
-                                    animationColors: [])
+                                    planeIndexes: [pi])
                 return SheetColorOwner(sheetView: self, colorValue: cv)
             }
         } else {
-            let cv = ColorValue(uuColor: model.backgroundUUColor,
-                                planeIndexes: [], lineIndexes: [],
-                                isBackground: true,
-                                planeAnimationIndexes: [], lineAnimationIndexes: [],
-                                animationColors: [])
+            let cv = ColorValue(uuColor: model.backgroundUUColor, isBackground: true)
             return SheetColorOwner(sheetView: self, colorValue: cv)
         }
     }
@@ -3400,21 +3376,11 @@ final class SheetView: View, @unchecked Sendable {
             return liDic.map {
                 if model.enabledAnimation {
                     let cv = ColorValue(uuColor: $0.key,
-                                        planeIndexes: [], lineIndexes: [],
-                                        isBackground: false,
-                                        planeAnimationIndexes: [],
                                         lineAnimationIndexes: [IndexValue(value: $0.value,
-                                                           index: model.animation.index)],
-                                        animationColors: [])
+                                                           index: model.animation.index)])
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 } else {
-                    let cv = ColorValue(uuColor: $0.key,
-                                        planeIndexes: [],
-                                        lineIndexes: $0.value,
-                                        isBackground: false,
-                                        planeAnimationIndexes: [],
-                                        lineAnimationIndexes: [],
-                                        animationColors: [])
+                    let cv = ColorValue(uuColor: $0.key, lineIndexes: $0.value)
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 }
             }
@@ -3430,20 +3396,14 @@ final class SheetView: View, @unchecked Sendable {
             return piDic.map {
                 if model.enabledAnimation {
                     let cv = ColorValue(uuColor: $0.key,
-                                        planeIndexes: [], lineIndexes: [],
                                         isBackground: false,
                                         planeAnimationIndexes: [IndexValue(value: $0.value,
-                                                           index: model.animation.index)],
-                                        lineAnimationIndexes: [],
-                                        animationColors: [])
+                                                           index: model.animation.index)])
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 } else {
                     let cv = ColorValue(uuColor: $0.key,
                                         planeIndexes: $0.value,
-                                        lineIndexes: [],
-                                        isBackground: false,
-                                        planeAnimationIndexes: [], lineAnimationIndexes: [],
-                                        animationColors: [])
+                                        isBackground: false)
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 }
             }
@@ -3476,10 +3436,8 @@ final class SheetView: View, @unchecked Sendable {
                 return nil
             }
             let cv = ColorValue(uuColor: uuColor,
-                                planeIndexes: [], lineIndexes: [],
                                 isBackground: isBackground,
-                                planeAnimationIndexes: iivs, lineAnimationIndexes: liivs,
-                                animationColors: [])
+                                planeAnimationIndexes: iivs, lineAnimationIndexes: liivs)
             return SheetColorOwner(sheetView: self, colorValue: cv)
         } else {
             let planeIndexes = model.picture.planes.enumerated().compactMap {
@@ -3495,15 +3453,13 @@ final class SheetView: View, @unchecked Sendable {
             let cv = ColorValue(uuColor: uuColor,
                                 planeIndexes: planeIndexes,
                                 lineIndexes: lineIndexes,
-                                isBackground: isBackground,
-                                planeAnimationIndexes: [], lineAnimationIndexes: [],
-                                animationColors: [])
+                                isBackground: isBackground)
             return SheetColorOwner(sheetView: self, colorValue: cv)
         }
     }
     
-    func newUndoGroup(enabledKeyframeIndex: Bool = true) {
-        if enabledKeyframeIndex && model.enabledAnimation {
+    func newUndoGroup() {
+        if model.enabledAnimation {
             history.newUndoGroup(firstItem: .setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex))
         } else {
             history.newUndoGroup()
@@ -3518,9 +3474,9 @@ final class SheetView: View, @unchecked Sendable {
     func set(_ item: SheetUndoItem,
              isMakeRect: Bool = false, isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
         selectedTextView = nil
+        stop()
         switch item {
         case .appendLine(let line):
-            stop()
             let lineView = appendNode(line)
             lineView.isHiddenPoints = animationView.editGrid != .full
             animationView.updateTimelineAtCurrentKeyframe()
@@ -3528,7 +3484,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (animationView.convert(b, to: node), [])
             }
         case .appendLines(let lines):
-            stop()
             appendNode(lines)
             for lineView in linesView.elementViews[(linesView.elementViews.count - lines.count)...] {
                 lineView.isHiddenPoints = animationView.editGrid != .full
@@ -3545,7 +3500,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .appendPlanes(let planes):
-            stop()
             appendNode(planes)
             if isMakeRect {
                 let rect = planesView.elementViews[(planesView.elementViews.count - planes.count)...]
@@ -3557,7 +3511,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .removeLastLines(let count):
-            stop()
             if isMakeRect {
                 let rect = linesView.elementViews[(linesView.elementViews.count - count)...]
                     .reduce(into: Rect?.none) {
@@ -3573,7 +3526,6 @@ final class SheetView: View, @unchecked Sendable {
                 animationView.updateTimelineAtCurrentKeyframe()
             }
         case .removeLastPlanes(let count):
-            stop()
             if isMakeRect {
                 let rect = planesView.elementViews[(planesView.elementViews.count - count)...]
                     .reduce(into: Rect?.none) {
@@ -3587,7 +3539,6 @@ final class SheetView: View, @unchecked Sendable {
                 removeLastsPlaneNode(count: count)
             }
         case .insertLines(let livs):
-            stop()
             insertNode(livs)
             for liv in livs {
                 let lineView = linesView.elementViews[liv.index]
@@ -3604,7 +3555,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .insertPlanes(let pivs):
-            stop()
             insertNode(pivs)
             if isMakeRect {
                 let rect = pivs.reduce(into: Rect?.none) {
@@ -3615,7 +3565,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .replaceLines(let livs):
-            stop()
             if isMakeRect {
                 var rect: Rect?
                 for liv in livs {
@@ -3633,7 +3582,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .replacePlanes(let pivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?
                 for piv in pivs {
@@ -3651,7 +3599,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .removeLines(let lineIndexes):
-            stop()
             if isMakeRect {
                 let rect = lineIndexes.reduce(into: Rect?.none) {
                     if let b = linesView.elementViews[$1].node.bounds {
@@ -3666,7 +3613,6 @@ final class SheetView: View, @unchecked Sendable {
                 animationView.updateTimelineAtCurrentKeyframe()
             }
         case .removePlanes(let planeIndexes):
-            stop()
             if isMakeRect {
                 let rect = planeIndexes.reduce(into: Rect?.none) {
                     if let b = planesView.elementViews[$1].node.bounds {
@@ -3679,7 +3625,6 @@ final class SheetView: View, @unchecked Sendable {
                 removePlanesNode(at: planeIndexes)
             }
         case .setPlaneValue(let planeValue):
-            stop()
             let planeIndexes = planeValue.moveIndexValues.map {
                 IndexValue(value: planesView.elementViews[$0.value].model, index: $0.index)
             }
@@ -3697,7 +3642,6 @@ final class SheetView: View, @unchecked Sendable {
                 insertNode(planeIndexes)
             }
         case .changeToDraft(let isReverse):
-            stop()
             if isReverse {
                 if linesView.model.isEmpty && planesView.model.isEmpty {
                     setNode(draftLinesView.model)
@@ -3721,7 +3665,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (node.bounds, [])
             }
         case .setPicture(let picture):
-            stop()
             setNode(picture.lines)
             setNode(picture.planes)
             animationView.updateTimelineAtCurrentKeyframe()
@@ -3729,7 +3672,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (node.bounds, [])
             }
         case .insertDraftLines(let livs):
-            stop()
             insertDraftNode(livs)
             updateTimeline()
             if isMakeRect {
@@ -3741,7 +3683,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .insertDraftPlanes(let pivs):
-            stop()
             insertDraftNode(pivs)
             updateTimeline()
             if isMakeRect {
@@ -3753,7 +3694,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .removeDraftLines(let lineIndexes):
-            stop()
             if isMakeRect {
                 let rect = lineIndexes.reduce(into: Rect?.none) {
                     if let b = draftLinesView.elementViews[$1].node.bounds {
@@ -3768,7 +3708,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .removeDraftPlanes(let planeIndexes):
-            stop()
             if isMakeRect {
                 let rect = planeIndexes.reduce(into: Rect?.none) {
                     if let b = draftPlanesView.elementViews[$1].node.bounds {
@@ -3783,7 +3722,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .setDraftPicture(let picture):
-            stop()
             setDraftNode(picture.lines)
             setDraftNode(picture.planes)
             updateTimeline()
@@ -3922,7 +3860,6 @@ final class SheetView: View, @unchecked Sendable {
                 removeBordersNode(at: borderIndexes)
             }
         case .setRootKeyframeIndex(let rootKeyframeIndex):
-            stop()
             if model.animation.rootIndex != rootKeyframeIndex {
                 unupdateModel.animation.rootIndex = rootKeyframeIndex
                 updateWithKeyframeIndex()
@@ -3933,7 +3870,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .insertKeyframes(let kivs):
-            stop()
             if !kivs.isEmpty {
                 animationView.insert(kivs)
                 
@@ -3949,7 +3885,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .removeKeyframes(let indexes):
-            stop()
             if !indexes.isEmpty {
                 let rect = isMakeRect ? indexes.reduce(into: Rect?.none) {
                     $0 += animationView.transformedKeyframeBounds(at: $1)
@@ -3967,8 +3902,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .setKeyframeOptions(let koivs):
-            stop()
-            
             let rootBI = model.animation.rootBeatIndex
             
             unupdateModel.animation.set(koivs)
@@ -3986,9 +3919,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
                 return (rect, [])
             }
-            
         case .insertKeyLines(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4020,7 +3951,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .replaceKeyLines(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4055,7 +3985,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .removeKeyLines(let iivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
@@ -4082,9 +4011,7 @@ final class SheetView: View, @unchecked Sendable {
                 updateWithKeyframeIndex()
                 updateTimeline()
             }
-            
         case .insertKeyPlanes(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4109,7 +4036,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateWithKeyframeIndex()
             }
         case .replaceKeyPlanes(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4144,7 +4070,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .removeKeyPlanes(let iivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
@@ -4169,9 +4094,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
                 updateWithKeyframeIndex()
             }
-            
         case .insertDraftKeyLines(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4201,7 +4124,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .removeDraftKeyLines(let iivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
@@ -4228,9 +4150,7 @@ final class SheetView: View, @unchecked Sendable {
                 updateWithKeyframeIndex()
                 updateTimeline()
             }
-            
         case .insertDraftKeyPlanes(let kvs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for kv in kvs {
@@ -4261,7 +4181,6 @@ final class SheetView: View, @unchecked Sendable {
                 updateTimeline()
             }
         case .removeDraftKeyPlanes(let iivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
@@ -4290,7 +4209,6 @@ final class SheetView: View, @unchecked Sendable {
             }
             
         case .setLineIDs(let kvs):
-            stop()
             if isMakeRect {
                 for kv in kvs {
                     for iov in kv.value {
@@ -4327,7 +4245,6 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
         case .setAnimationOption(let option):
-            stop()
             unupdateModel.animation.option = option
             updateTimeline()
             updatePreviousNext()
@@ -4335,7 +4252,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (animationView.transformedPaddingTimelineBounds ?? node.bounds, [])
             }
         case .insertNotes(let nivs):
-            stop()
             insertNode(nivs)
             if isMakeRect {
                 let rect = nivs.reduce(into: Rect?.none) {
@@ -4344,7 +4260,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .replaceNotes(let nivs):
-            stop()
             if isMakeRect {
                 var rect: Rect?
                 for niv in nivs {
@@ -4359,7 +4274,6 @@ final class SheetView: View, @unchecked Sendable {
                 replaceNode(nivs)
             }
         case .removeNotes(noteIndexes: let noteIndexes):
-            stop()
             if isMakeRect {
                 let rect = noteIndexes.reduce(into: Rect?.none) {
                     $0 += scoreView.transformedNoteFrame(at: $1)
@@ -4370,7 +4284,6 @@ final class SheetView: View, @unchecked Sendable {
                 removeNotesNode(at: noteIndexes)
             }
         case .insertDraftNotes(let nivs):
-            stop()
             insertDraftNode(nivs)
             if isMakeRect {
                 let rect = nivs.reduce(into: Rect?.none) {
@@ -4379,7 +4292,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .removeDraftNotes(noteIndexes: let noteIndexes):
-            stop()
             if isMakeRect {
                 let rect = noteIndexes.reduce(into: Rect?.none) {
                     $0 += scoreView.transformedDraftNoteFrame(at: $1)
@@ -4390,7 +4302,6 @@ final class SheetView: View, @unchecked Sendable {
                 removeDraftNotesNode(at: noteIndexes)
             }
         case .insertContents(let civs):
-            stop()
             insertNode(civs)
             
             civs.forEach { contentsView.elementViews[$0.index].updateClippingNode() }
@@ -4403,7 +4314,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             }
         case .replaceContents(let civs):
-            stop()
             if isMakeRect {
                 var rect: Rect?
                 for civ in civs {
@@ -4424,7 +4334,6 @@ final class SheetView: View, @unchecked Sendable {
                 civs.forEach { contentsView.elementViews[$0.index].updateClippingNode() }
             }
         case .removeContents(contentIndexes: let contentIndexes):
-            stop()
             if isMakeRect {
                 let rect = contentIndexes.reduce(into: Rect?.none) {
                     let contentView = contentsView.elementViews[$1]
@@ -4436,24 +4345,18 @@ final class SheetView: View, @unchecked Sendable {
                 removeContentsNode(at: contentIndexes)
             }
         case .setScoreOption(let option):
-            stop()
             scoreView.option = option
             if isMakeRect {
                 return (scoreView.transformedMainFrame, [])
             }
         case .setSheetOption(let option):
-            stop()
-            
             unupdateModel.option = option
             updateMainFrame()
             
             if isMakeRect {
                 return (option.mainFrame, [])
             }
-            
         case .setSelection(let selection):
-            stop()
-            
             let oldSelection = model.selection
             unupdateModel.selection = selection
             let rect = updateNode(from: selection, old: oldSelection)
@@ -5557,32 +5460,6 @@ final class SheetView: View, @unchecked Sendable {
         return n
     }
     
-    func currentColorValue(from cv: ColorValue) -> ColorValue {
-        var ncv = cv
-        if !cv.planeIndexes.isEmpty {
-            ncv.uuColor = model.picture.planes[cv.planeIndexes.first!].uuColor
-        } else if !cv.planeAnimationIndexes.isEmpty {
-            ncv.uuColor = model.animation
-                .keyframes[cv.planeAnimationIndexes.first!.index].picture
-                .planes[cv.planeIndexes.first!]
-                .uuColor
-        }
-        
-        if !cv.lineIndexes.isEmpty {
-            ncv.uuColor = model.picture.lines[cv.lineIndexes.first!].uuColor
-        } else if !cv.lineAnimationIndexes.isEmpty {
-            ncv.uuColor = model.animation
-                .keyframes[cv.lineAnimationIndexes.first!.index].picture
-                .lines[cv.lineIndexes.first!]
-                .uuColor
-        }
-        
-        if cv.isBackground {
-            ncv.uuColor = model.backgroundUUColor
-        }
-        return ncv
-    }
-    
     func isDefaultPlaneColor(at p: Point, scale: Double) -> Bool {
         let uuColor = sheetColorOwnerFromPlane(at: p, scale: scale).uuColor
         return uuColor == Sheet.defalutBackgroundUUColor
@@ -5623,25 +5500,6 @@ final class SheetView: View, @unchecked Sendable {
             }
         }
         return if let minI { (linesView.elementViews[minI], minI) } else { nil }
-    }
-    
-    func autoUUColor(with uuColors: [UUColor],
-                     baseUUColor: UUColor = UU(Color(lightness: 85)),
-                     lRanges: [ClosedRange<Double>] = [0.78 ... 0.8,
-                                                       0.82 ... 0.84,
-                                                       0.86 ... 0.88,
-                                                       0.9 ... 0.92]) -> UUColor {
-        var vs = Array(repeating: false, count: lRanges.count)
-        uuColors.forEach {
-            for (i, lRange) in lRanges.enumerated() {
-                if lRange.contains($0.value.lightness) {
-                    vs[i] = true
-                }
-            }
-        }
-        var uuColor = baseUUColor
-        uuColor.value.lightness = Double.random(in: lRanges[vs.firstIndex(of: false) ?? 0])
-        return uuColor
     }
     
     func capture(intRange: Range<Int>, subString: String,
@@ -6102,11 +5960,8 @@ final class SheetView: View, @unchecked Sendable {
                 if !model.picture.planes.isEmpty {
                     removePlanes(at: .init(model.picture.planes.count.range))
                 }
-                let cv = ColorValue(uuColor: uuColor, planeIndexes: [], lineIndexes: [],
-                                    isBackground: true,
-                                    planeAnimationIndexes: [], lineAnimationIndexes: [],
-                                    animationColors: [])
-                set(cv, oldColorValue: currentColorValue(from: cv))
+                let cv = ColorValue(uuColor: uuColor, isBackground: true)
+                set(cv, oldColorValue: model.currentColorValue(from: cv))
                 return true
             } else {
                 return false
@@ -6136,17 +5991,9 @@ final class SheetView: View, @unchecked Sendable {
             }
             if isRemoveBackground {
                 let ncv = ColorValue(uuColor: Sheet.defalutBackgroundUUColor,
-                                     planeIndexes: [], lineIndexes: [],
-                                     isBackground: true,
-                                     planeAnimationIndexes: [],
-                                     lineAnimationIndexes: [],
-                                     animationColors: [])
+                                     isBackground: true)
                 let ocv = ColorValue(uuColor: model.backgroundUUColor,
-                                     planeIndexes: [], lineIndexes: [],
-                                     isBackground: true,
-                                     planeAnimationIndexes: [],
-                                     lineAnimationIndexes: [],
-                                     animationColors: [])
+                                     isBackground: true)
                 backgroundUUColor = ncv.uuColor
                 capture(ncv, oldColorValue: ocv)
             }

@@ -1530,6 +1530,13 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
             action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
         }))
+        menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
+                                                 Exporting.ExportType.timelapse8.displayName), closure: { [weak self] in
+            guard let self else { return }
+            let action = ExportAsTimelapseAction(self.rootAction)
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .began))
+            action.flow(with: self.inputKeyEventWith(drag: nsEvent, .ended))
+        }))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(SubNSMenuItem(title: String(format: "Export as %@...".localized,
                                                  Exporting.ExportType.document.displayName), closure: { [weak self] in

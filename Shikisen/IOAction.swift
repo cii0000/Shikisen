@@ -189,6 +189,20 @@ final class ExportAsTimelapseAction: InputKeyEventAction {
         action.updateNode()
     }
 }
+final class ExportAsTimelapse8Action: InputKeyEventAction {
+    let action: IOAction
+    
+    init(_ rootAction: RootAction) {
+        action = IOAction(rootAction)
+    }
+    
+    func flow(with event: InputKeyEvent) {
+        action.exportFile(with: event, .timelapse8)
+    }
+    func updateNode() {
+        action.updateNode()
+    }
+}
 final class ExportAsDocumentAction: InputKeyEventAction {
     let action: IOAction
     
@@ -858,7 +872,7 @@ final class IOAction: Action {
                 }
             }
             documentRecorders = []
-        case .timelapse:
+        case .timelapse, .timelapse8:
             renderings = nvs.map {
                 if let sid = rootView.sheetID(at: $0.shp),
                    let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord,
@@ -897,7 +911,7 @@ final class IOAction: Action {
         case .image4K, .images4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
-        case .movie, .movie4K, .timelapse: isAlphaChannel ? MovieEncoder.FileType.mov : MovieEncoder.FileType.mp4
+        case .movie, .movie4K, .timelapse, .timelapse8: isAlphaChannel ? MovieEncoder.FileType.mov : MovieEncoder.FileType.mp4
         case .sound: Content.FileType.m4a
         case .linearPCM: Content.FileType.wav
         case .caption: Caption.FileType.itt
@@ -939,7 +953,7 @@ final class IOAction: Action {
                 } else {
                     return nil
                 }
-            case .gif, .movie, .movie4K, .timelapse: return nil
+            case .gif, .movie, .movie4K, .timelapse, .timelapse8: return nil
             case .sound, .linearPCM: return nil
             case .caption: return nil
             case .document:
@@ -999,13 +1013,14 @@ final class IOAction: Action {
                     exportSound(from: renderings, isLinearPCM: true, at: ioResult)
                 case .caption:
                     exportCaption(from: renderings, at: ioResult)
-                case .timelapse:
+                case .timelapse, .timelapse8:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 1080).rounded(.down) :
                     size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
                     exportTimelapse(from: renderings,
                                     isAlphaChannel: isAlphaChannel,
-                                    colorSpace, size: nSize, at: ioResult)
+                                    colorSpace, speed: type == .timelapse8 ? 8 : 1,
+                                    size: nSize, at: ioResult)
                 case .document:
                     exportDocument(from: nvs, isHistory: false, at: ioResult)
                 case .documentWithHistory:
@@ -1756,7 +1771,7 @@ final class IOAction: Action {
     }
     
     func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
-                         _ colorSpace: ColorSpace,
+                         _ colorSpace: ColorSpace, speed: Int,
                          size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
                               progressHandler: (Double) -> ()) async throws {
@@ -1792,7 +1807,6 @@ final class IOAction: Action {
                        allGroups.last?.group.date != history.currentDate {
                         allGroups.append((currentVersion, history[currentVersion]))
                     }
-                    let frameCount = allGroups.count + 1
                     
                     let isEnabledAnimation = sheetView.model.enabledAnimation
                     
@@ -1809,14 +1823,16 @@ final class IOAction: Action {
                                              color: backgroundColor) else { throw MovieEncoder.ExportingError() }
                     var kImages = [fkImage]
                     
+                    let currentTopI = sheetView.history.currentVersionIndex
+                    var currentI = 0, lastBitmap: Bitmap<UInt8>?
                     let vs = [nil] + allGroups.map { $0.version }
+                    var isRedraw = false, kiSet = Set<Int>()
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
                         } topIHandler: { topIndex in
+                            defer { currentI += 1 }
                             let isFirst = vi == 0 && topIndex != 0
-                            var isRedraw = false
-                            var kiSet = Set<Int>()
                             let results = sheetView.history.undoAndResults(to: topIndex)
                             var reverses = [Version: Int]()
                             for result in results {
@@ -1878,10 +1894,14 @@ final class IOAction: Action {
                             let kis = kiSet.sorted()
                             
                             if isFirst {
-                                progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
+                                progressHandler((.init(ri) + .init(vi + 1) / .init(vs.count)) / .init(renderings.count))
                                 try Task.checkCancellation()
                                 return
                             }
+                            
+                            if !(currentI == 0
+                                 || (vi == vs.count - 1 && topIndex == currentTopI)
+                                 || (currentI - 1) % speed == 0) { return }
                             
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
@@ -1944,11 +1964,10 @@ final class IOAction: Action {
                                 
                                 try await movieEncoder.write(image, duration: 1, timeScale: 60)
                                 
-                                if vi + 1 == frameCount {
-                                    guard let image = bitmap.image
-                                    else { throw MovieEncoder.ExportingError() }
-                                    try await movieEncoder.write(image, duration: 1, timeScale: 60)
-                                }
+                                lastBitmap = bitmap
+                                
+                                isRedraw = false
+                                kiSet = []
                             } else {
                                 guard let image = Node(children: [sheetView.node],
                                                        attitude: .init(position: origin),
@@ -1960,9 +1979,14 @@ final class IOAction: Action {
                                 try await movieEncoder.write(image, duration: 1, timeScale: 60)
                             }
                             
-                            progressHandler((.init(ri) + .init(vi + 1) / .init(frameCount)) / .init(renderings.count))
+                            progressHandler((.init(ri) + .init(vi + 1) / .init(vs.count)) / .init(renderings.count))
                             try Task.checkCancellation()
                         }
+                    }
+                    if let lastBitmap {
+                        guard let image = lastBitmap.image
+                        else { throw MovieEncoder.ExportingError() }
+                        try await movieEncoder.write(image, duration: 1, timeScale: 60)
                     }
                 }
                 

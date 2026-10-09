@@ -1937,7 +1937,7 @@ final class AddTimeAction: InputKeyEventAction {
                        sheetView.unselectAndNewUndoGroupIfNeeded()
                        rootView.cursor = .arrowWith(string: "Conflict with Score".localized)
                    } else {
-                       sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                       sheetView.newUndoGroup()
                        sheetView.unselect()
                        sheetView.set(beat: 0, at: 0)
                        var option = sheetView.model.animation.option

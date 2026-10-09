@@ -249,36 +249,16 @@ extension OSheet {
         }
     }
     mutating func set(_ uuColor: UUColor, atPlane pi: Int) {
-        let ocv = ColorValue(uuColor: value.picture.planes[pi].uuColor,
-                             planeIndexes: [pi], lineIndexes: [],
-                             isBackground: false,
-                             planeAnimationIndexes: [],
-                             lineAnimationIndexes: [],
-                             animationColors: [])
-        let cv = ColorValue(uuColor: uuColor,
-                            planeIndexes: [pi], lineIndexes: [],
-                            isBackground: false,
-                            planeAnimationIndexes: [],
-                            lineAnimationIndexes: [],
-                            animationColors: [])
+        let ocv = ColorValue(uuColor: value.picture.planes[pi].uuColor, planeIndexes: [pi])
+        let cv = ColorValue(uuColor: uuColor, planeIndexes: [pi])
         let undoItem = SheetUndoItem.changedColors(ocv)
         let redoItem = SheetUndoItem.changedColors(cv)
         append(undo: undoItem, redo: redoItem)
         set(redoItem)
     }
     mutating func set(backgroundUUColor: UUColor) {
-        let ocv = ColorValue(uuColor: value.backgroundUUColor,
-                             planeIndexes: [], lineIndexes: [],
-                             isBackground: true,
-                             planeAnimationIndexes: [],
-                             lineAnimationIndexes: [],
-                             animationColors: [])
-        let cv = ColorValue(uuColor: backgroundUUColor,
-                            planeIndexes: [], lineIndexes: [],
-                            isBackground: true,
-                            planeAnimationIndexes: [],
-                            lineAnimationIndexes: [],
-                            animationColors: [])
+        let ocv = ColorValue(uuColor: value.backgroundUUColor, isBackground: true)
+        let cv = ColorValue(uuColor: backgroundUUColor, isBackground: true)
         let undoItem = SheetUndoItem.changedColors(ocv)
         let redoItem = SheetUndoItem.changedColors(cv)
         append(undo: undoItem, redo: redoItem)

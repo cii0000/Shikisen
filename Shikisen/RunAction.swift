@@ -457,7 +457,7 @@ extension RunAction {
             case .removeTexts(let textIndexes):
                 sheetView.removeText(at: textIndexes)
             case .changedColors(let colorValue):
-                let oldColorValue = sheetView.currentColorValue(from: colorValue)
+                let oldColorValue = sheetView.model.currentColorValue(from: colorValue)
                 if colorValue != oldColorValue {
                     sheetView.set(colorValue, oldColorValue: oldColorValue)
                 }

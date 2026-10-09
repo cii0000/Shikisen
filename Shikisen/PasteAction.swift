@@ -1281,7 +1281,7 @@ final class APasteAction: Action {
                     return kf
                 }
                 
-                sheetView.newUndoGroup(enabledKeyframeIndex: false)
+                sheetView.newUndoGroup()
                 sheetView.unselect()
                 if indexes == animationView.model.keyframes.count.array {
                     let keyframe = Keyframe(beat: 0)

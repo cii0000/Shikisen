@@ -73,10 +73,10 @@ extension PlaneValue: Codable {}
 
 struct ColorValue {
     var uuColor: UUColor
-    var planeIndexes: [Int], lineIndexes: [Int], isBackground: Bool
-    var planeAnimationIndexes: [IndexValue<[Int]>]
-    var lineAnimationIndexes: [IndexValue<[Int]>]
-    var animationColors: [Color]
+    var planeIndexes = [Int](), lineIndexes = [Int](), isBackground = false
+    var planeAnimationIndexes = [IndexValue<[Int]>]()
+    var lineAnimationIndexes = [IndexValue<[Int]>]()
+    var animationColors = [Color]()
 }
 extension ColorValue: Protobuf {
     init(_ pb: PBColorValue) throws {
@@ -3169,6 +3169,32 @@ extension Sheet {
             let (iss, x) = snapped(p.x, values: values)
             return (iss, Point(x, p.y).rounded())
         }
+    }
+    
+    func currentColorValue(from cv: ColorValue) -> ColorValue {
+        var ncv = cv
+        if !cv.planeIndexes.isEmpty {
+            ncv.uuColor = picture.planes[cv.planeIndexes.first!].uuColor
+        } else if !cv.planeAnimationIndexes.isEmpty {
+            ncv.uuColor = animation
+                .keyframes[cv.planeAnimationIndexes.first!.index].picture
+                .planes[cv.planeIndexes.first!]
+                .uuColor
+        }
+        
+        if !cv.lineIndexes.isEmpty {
+            ncv.uuColor = picture.lines[cv.lineIndexes.first!].uuColor
+        } else if !cv.lineAnimationIndexes.isEmpty {
+            ncv.uuColor = animation
+                .keyframes[cv.lineAnimationIndexes.first!.index].picture
+                .lines[cv.lineIndexes.first!]
+                .uuColor
+        }
+        
+        if cv.isBackground {
+            ncv.uuColor = backgroundUUColor
+        }
+        return ncv
     }
 }
 extension Sheet {
