@@ -19,7 +19,7 @@ enum CircularOrientation: String, Codable {
     case clockwise, counterClockwise
 }
 
-enum Orientation: String, Codable, Hashable {
+enum Orientation: String, Hashable, Codable {
     case horizontal, vertical
 }
 extension Orientation {
@@ -50,7 +50,7 @@ enum LRTB {
     case left, right, top, bottom
 }
 
-enum LRTBOrientation: String, Codable, Hashable {
+enum LRTBOrientation: String, Hashable, Codable {
     case leftToRight, rightToLeft
     case bottomToTop, topToBottom
 }

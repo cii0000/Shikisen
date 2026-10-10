@@ -23,7 +23,7 @@ struct ColorPathValue {
     var paths: [Path], lineType: Node.LineType?, fillType: Node.FillType?
 }
 
-struct CopiedSheetsValue: Equatable {
+struct CopiedSheetsValue: Hashable, Codable {
     var deltaPoint = Point()
     var sheetIDs = [IntPoint: UUID]()
     var isSelected = false
@@ -42,7 +42,6 @@ extension CopiedSheetsValue: Protobuf {
         }
     }
 }
-extension CopiedSheetsValue: Codable {}
 
 struct PlanesValue: Codable {
     var planes: [Plane]
@@ -118,7 +117,7 @@ extension InteroptionsValue: Protobuf {
     }
 }
 
-enum PastableObject: Sendable {
+enum PastableObject: Sendable, Codable {
     case copiedSheetsValue(_ copiedSheetsValue: CopiedSheetsValue)
     case sheetValue(_ sheetValue: SheetValue)
     case border(_ border: Border)
@@ -387,141 +386,6 @@ extension PastableObject: Protobuf {
             case .tempo(let tempo):
                 $0.value = .tempo(tempo.pb)
             }
-        }
-    }
-}
-extension PastableObject: Codable {
-    private enum CodingTypeKey: String, Codable {
-        case copiedSheetsValue = "0"
-        case sheetValue = "1"
-        case border = "2"
-        case text = "3"
-        case string = "4"
-        case picture = "5"
-        case planesValue = "6"
-        case uuColor = "7"
-        case copiedAnimation = "8"
-        case ids = "9"
-        case content = "16"
-        case image = "20"
-        case beatRange = "11"
-        case normalizationValue = "12"
-        case normalizationRationalValue = "15"
-        case notesValue = "13"
-        case stereo = "22"
-        case tone = "14"
-        case rect = "23"
-        case tempo = "24"
-    }
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let key = try container.decode(CodingTypeKey.self)
-        switch key {
-        case .copiedSheetsValue:
-            self = .copiedSheetsValue(try container.decode(CopiedSheetsValue.self))
-        case .sheetValue:
-            self = .sheetValue(try container.decode(SheetValue.self))
-        case .border:
-            self = .border(try container.decode(Border.self))
-        case .text:
-            self = .text(try container.decode(Text.self))
-        case .string:
-            self = .string(try container.decode(String.self))
-        case .picture:
-            self = .picture(try container.decode(Picture.self))
-        case .planesValue:
-            self = .planesValue(try container.decode(PlanesValue.self))
-        case .uuColor:
-            self = .uuColor(try container.decode(UUColor.self))
-        case .copiedAnimation:
-            self = .copiedAnimation(try container.decode(CopiedAnimation.self))
-        case .ids:
-            self = .ids(try container.decode(InteroptionsValue.self))
-        case .content:
-            self = .content(try container.decode(Content.self))
-        case .image:
-            self = .image(try container.decode(Image.self))
-        case .beatRange:
-            self = .beatRange(try container.decode(Range<Rational>.self))
-        case .normalizationValue:
-            self = .normalizationValue(try container.decode(Double.self))
-        case .normalizationRationalValue:
-            self = .normalizationRationalValue(try container.decode(Rational.self))
-        case .notesValue:
-            self = .notesValue(try container.decode(NotesValue.self))
-        case .stereo:
-            self = .stereo(try container.decode(Stereo.self))
-        case .tone:
-            self = .tone(try container.decode(Tone.self))
-        case .rect:
-            self = .rect(try container.decode(Rect.self))
-        case .tempo:
-            self = .tempo(try container.decode(Rational.self))
-        }
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        switch self {
-        case .copiedSheetsValue(let copiedSheetsValue):
-            try container.encode(CodingTypeKey.copiedSheetsValue)
-            try container.encode(copiedSheetsValue)
-        case .sheetValue(let sheetValue):
-            try container.encode(CodingTypeKey.sheetValue)
-            try container.encode(sheetValue)
-        case .border(let border):
-            try container.encode(CodingTypeKey.border)
-            try container.encode(border)
-        case .text(let text):
-            try container.encode(CodingTypeKey.text)
-            try container.encode(text)
-        case .string(let string):
-            try container.encode(CodingTypeKey.string)
-            try container.encode(string)
-        case .picture(let picture):
-            try container.encode(CodingTypeKey.picture)
-            try container.encode(picture)
-        case .planesValue(let planesValue):
-            try container.encode(CodingTypeKey.picture)
-            try container.encode(planesValue)
-        case .uuColor(let uuColor):
-            try container.encode(CodingTypeKey.uuColor)
-            try container.encode(uuColor)
-        case .copiedAnimation(let copiedAnimation):
-            try container.encode(CodingTypeKey.copiedAnimation)
-            try container.encode(copiedAnimation)
-        case .ids(let ids):
-            try container.encode(CodingTypeKey.ids)
-            try container.encode(ids)
-        case .content(let content):
-            try container.encode(CodingTypeKey.content)
-            try container.encode(content)
-        case .image(let image):
-            try container.encode(CodingTypeKey.image)
-            try container.encode(image)
-        case .beatRange(let beatRange):
-            try container.encode(CodingTypeKey.beatRange)
-            try container.encode(beatRange)
-        case .normalizationValue(let normalizationValue):
-            try container.encode(CodingTypeKey.normalizationValue)
-            try container.encode(normalizationValue)
-        case .normalizationRationalValue(let normalizationRationalValue):
-            try container.encode(CodingTypeKey.normalizationRationalValue)
-            try container.encode(normalizationRationalValue)
-        case .notesValue(let notesValue):
-            try container.encode(CodingTypeKey.notesValue)
-            try container.encode(notesValue)
-        case .stereo(let stereo):
-            try container.encode(CodingTypeKey.stereo)
-            try container.encode(stereo)
-        case .tone(let tone):
-            try container.encode(CodingTypeKey.tone)
-            try container.encode(tone)
-        case .rect(let rect):
-            try container.encode(CodingTypeKey.rect)
-            try container.encode(rect)
-        case .tempo(let tempo):
-            try container.encode(CodingTypeKey.tempo)
-            try container.encode(tempo)
         }
     }
 }

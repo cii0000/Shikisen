@@ -772,7 +772,7 @@ extension Bezier {
     }
 }
 
-struct Bezier3: Codable, Hashable {
+struct Bezier3: Hashable, Codable {
     var p0 = Point(), cp0 = Point(), cp1 = Point(), p1 = Point()
 }
 extension Bezier3 {

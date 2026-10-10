@@ -20,7 +20,7 @@ import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif
 
-struct Picture {
+struct Picture: Hashable, Codable {
     var lines = [Line](), planes = [Plane]()
 }
 extension Picture: Protobuf {
@@ -35,7 +35,6 @@ extension Picture: Protobuf {
         }
     }
 }
-extension Picture: Hashable, Codable {}
 extension Picture: AppliableTransform {
     static func * (lhs: Self, rhs: Transform) -> Self {
         .init(lines: lhs.lines.map { $0 * rhs },

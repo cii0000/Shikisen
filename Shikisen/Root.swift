@@ -19,7 +19,7 @@ import struct Foundation.UUID
 import struct Foundation.Data
 import struct Foundation.URL
 
-struct Finding {
+struct Finding: Codable {
     var worldPosition = Point()
     var string = ""
     var isLine = false
@@ -40,7 +40,6 @@ extension Finding: Protobuf {
         }
     }
 }
-extension Finding: Codable {}
 
 struct Road {
     var shp0: IntPoint, shp1: IntPoint
@@ -82,7 +81,7 @@ extension Road {
     }
 }
 
-enum WorldUndoItem {
+enum WorldUndoItem: Codable {
     case insertSheets(_ sids: [IntPoint: UUID])
     case removeSheets(_ shps: [IntPoint])
     case setSelection(_ selection: WorldSelection)
@@ -130,39 +129,6 @@ extension WorldUndoItem: Protobuf {
             case .setSelection(let selection):
                 $0.value = .setSelection(selection.pb)
             }
-        }
-    }
-}
-extension WorldUndoItem: Codable {
-    private enum CodingTypeKey: String, Codable {
-        case insertSheets = "0"
-        case removeSheets = "1"
-        case setSelection = "2"
-    }
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let key = try container.decode(CodingTypeKey.self)
-        switch key {
-        case .insertSheets:
-            self = .insertSheets(try container.decode([IntPoint: UUID].self))
-        case .removeSheets:
-            self = .removeSheets(try container.decode([IntPoint].self))
-        case .setSelection:
-            self = .setSelection(try container.decode(WorldSelection.self))
-        }
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        switch self {
-        case .insertSheets(let sids):
-            try container.encode(CodingTypeKey.insertSheets)
-            try container.encode(sids)
-        case .removeSheets(let shps):
-            try container.encode(CodingTypeKey.removeSheets)
-            try container.encode(shps)
-        case .setSelection(let selection):
-            try container.encode(CodingTypeKey.setSelection)
-            try container.encode(selection)
         }
     }
 }
@@ -241,7 +207,7 @@ extension WorldSelection {
     }
 }
 
-struct World {
+struct World: Codable {
     var sheetIDs = [IntPoint: UUID]()
     var sheetPositions = [UUID: IntPoint]()
     var selection = WorldSelection.empty
@@ -260,7 +226,6 @@ extension World: Protobuf {
         }
     }
 }
-extension World: Codable {}
 extension World {
     func sheetID(at p: IntPoint) -> UUID? {
         sheetIDs[IntPoint(p.x, p.y)]

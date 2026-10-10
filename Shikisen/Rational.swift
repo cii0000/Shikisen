@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Rational: SignedNumeric, Hashable {
+struct Rational: SignedNumeric, Hashable, Codable {
     static let ulpOfOne = Rational(.ulpOfOne)
     var p, q: Int
     
@@ -371,23 +371,6 @@ extension Rational: Equatable {
 extension Rational: Comparable {
     static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.p * rhs.q < rhs.p * lhs.q
-    }
-}
-extension Rational: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        p = try container.decode(Int.self)
-        q = try container.decode(Int.self)
-        if q == 0 {
-            throw DecodingError
-                .dataCorruptedError(in: container,
-                                    debugDescription: "Division by zero")
-        }
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(p)
-        try container.encode(q)
     }
 }
 extension Rational: LosslessStringConvertible {

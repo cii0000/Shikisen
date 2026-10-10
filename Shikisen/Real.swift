@@ -593,7 +593,7 @@ extension Double {
     }
 }
 
-enum Easing: Codable, Hashable, CaseIterable {
+enum Easing: CaseIterable, Hashable, Codable {
     case easeIn, easeOut, easeInOut,
          easeInSin, easeOutSin, easeInOutSin,
          linear
@@ -639,7 +639,7 @@ extension Range where Bound == Int {
     }
 }
 
-struct DoubleRange: Codable, Hashable {
+struct DoubleRange: Hashable, Codable {
     var lowerBound = 0.0, upperBound = 0.0
 }
 extension DoubleRange {

@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Color {
+struct Color: Codable {
     var lcha: LCHA {
         didSet {
             if lcha != oldValue {
@@ -430,14 +430,9 @@ extension Color: MonoInterpolatable {
                      f1.colorSpace)
     }
 }
-extension Color: Codable {
-    enum CodingKeys: String, CodingKey {
-        case lcha, rgba, colorSpace = "cs"
-    }
-}
 
 /// LCH (lightness, chroma, hue) is based on the CIELAB color space.
-struct LCHA: Hashable {
+struct LCHA: Hashable, Codable {
     var l, c, h, a: Double
     
     init() {
@@ -471,26 +466,6 @@ extension LCHA: Protobuf {
             $0.h = h
             $0.a = a
         }
-    }
-}
-extension LCHA: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        l = try container.decode(Double.self).notNaN()
-            .clipped(min: Color.minLightness, max: Color.whiteLightness)
-        c = try container.decode(Double.self).notNaN()
-            .clipped(min: Color.minChroma, max: Color.maxChroma)
-        h = try container.decode(Double.self).notInfiniteAndNAN()
-            .loopedRotation
-        a = try container.decode(Double.self).notNaN()
-            .clipped(min: 0, max: 1)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(l)
-        try container.encode(c)
-        try container.encode(h)
-        try container.encode(a)
     }
 }
 extension LCHA {
@@ -539,7 +514,7 @@ extension LCHA {
     }
 }
 
-struct RGBA: Hashable {
+struct RGBA: Hashable, Codable {
     var r, g, b, a: Float
     
     init() {
@@ -611,22 +586,6 @@ extension RGBA {
         }
     }
 }
-extension RGBA: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        r = try container.decode(Float.self).notInfiniteAndNAN()
-        g = try container.decode(Float.self).notInfiniteAndNAN()
-        b = try container.decode(Float.self).notInfiniteAndNAN()
-        a = try container.decode(Float.self).notNaN().clipped(min: 0, max: 1)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(r)
-        try container.encode(g)
-        try container.encode(b)
-        try container.encode(a)
-    }
-}
 extension RGBA: Interpolatable {
     static func linear(_ f0: RGBA, _ f1: RGBA, t: Double) -> RGBA {
         let r = Float.linear(f0.r, f1.r, t: t)
@@ -662,7 +621,7 @@ extension RGBA: Interpolatable {
     }
 }
 
-enum ColorSpace: Int8, Codable, Hashable {
+enum ColorSpace: Int8, Hashable, Codable {
     // Referenced definition:
     // International Color Consortium.
     // "How to interpret the sRGB color space

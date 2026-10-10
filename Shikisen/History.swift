@@ -37,12 +37,12 @@ struct Version: Hashable, Codable {
 enum UndoItemType {
     case unreversible, lazyReversible, reversible
 }
-protocol UndoItem: Codable, Sendable, Protobuf {
+protocol UndoItem: Sendable, Protobuf, Codable {
     var type: UndoItemType { get }
     func reversed() -> Self?
 }
 
-struct UndoItemValue<T: UndoItem> {
+struct UndoItemValue<T: UndoItem>: Codable {
     var undoItem: T
     var redoItem: T
     
@@ -113,25 +113,6 @@ extension UndoItemValue: CustomStringConvertible {
         "\nundo: \(undoItem),\nredo: \(redoItem)\n"
     }
 }
-extension UndoItemValue: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case undo, redo
-    }
-    public init(from decoder: any Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        let undoItem = try? values.decode(T.self, forKey: .undo)
-        let redoItem = try? values.decode(T.self, forKey: .redo)
-        try self.init(undoItem: undoItem, redoItem: redoItem)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        let (item, type) = encodeTuple()
-        switch type {
-        case .undo: try container.encode(item, forKey: .undo)
-        case .redo: try container.encode(item, forKey: .redo)
-        }
-    }
-}
 struct UndoError<T: UndoItem>: LocalizedError {
     var errorDescription: String?
     
@@ -148,8 +129,8 @@ struct UndoError<T: UndoItem>: LocalizedError {
         errorDescription = "First Reverse Error"
     }
 }
-struct UndoDataValue<T: UndoItem> {
-    enum LoadType {
+struct UndoDataValue<T: UndoItem>: Codable {
+    enum LoadType: Codable {
         case unload, loaded, error
     }
     
@@ -269,20 +250,8 @@ extension UndoDataValue: Protobuf {
         }
     }
 }
-extension UndoDataValue: Codable {
-    public init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        undoItemData = try container.decode(Data.self)
-        redoItemData = try container.decode(Data.self)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(undoItemData)
-        try container.encode(redoItemData)
-    }
-}
 
-struct UndoGroup<T: UndoItem> {
+struct UndoGroup<T: UndoItem>: Codable {
     var values = [UndoDataValue<T>]()
     var isFirstReverse = false
     var date = Date()
@@ -314,18 +283,6 @@ extension UndoGroup: Protobuf {
             $0.isFirstReverse = isFirstReverse
             $0.date = date.pb
         }
-    }
-}
-extension UndoGroup: Codable {
-    public init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        values = try container.decode([UndoDataValue<T>].self)
-        isFirstReverse = try container.decode(Bool.self)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(values)
-        try container.encode(isFirstReverse)
     }
 }
 
@@ -394,6 +351,21 @@ extension _Branch: Protobuf {
                 $0.selectedChildIndexOptional = nil
             }
         }
+    }
+}
+extension _Branch: Codable {
+    public convenience init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        self.init()
+        groups = try container.decode([UndoGroup<T>].self)
+        childrenCount = try container.decode(Int.self)
+        selectedChildIndex = try container.decodeIfPresent(Int.self)
+    }
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(groups)
+        try container.encode(children.count)
+        try container.encode(selectedChildIndex)
     }
 }
 extension _Branch {
@@ -467,21 +439,6 @@ extension _Branch {
               selectedChildIndex: selectedChildIndex)
     }
 }
-extension _Branch: Codable {
-    public convenience init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        self.init()
-        groups = try container.decode([UndoGroup<T>].self)
-        childrenCount = try container.decode(Int.self)
-        selectedChildIndex = try container.decodeIfPresent(Int.self)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(groups)
-        try container.encode(children.count)
-        try container.encode(selectedChildIndex)
-    }
-}
 
 struct Branch<T: UndoItem> {
     var groups = [UndoGroup<T>]()
@@ -502,6 +459,17 @@ extension BranchCoder: Protobuf {
         .with {
             $0.allBranches = allBranches.map { $0.pb }
         }
+    }
+}
+extension BranchCoder: Codable {
+    public init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        let allBranches = try container.decode([_Branch<T>].self)
+        rootBranch = BranchCoder.rootBranch(from: allBranches)
+    }
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(allBranches)
     }
 }
 private enum BranchLoop<T: UndoItem> {
@@ -569,17 +537,6 @@ extension BranchCoder {
         return allBranches
     }
 }
-extension BranchCoder: Codable {
-    public init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let allBranches = try container.decode([_Branch<T>].self)
-        rootBranch = BranchCoder.rootBranch(from: allBranches)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(allBranches)
-    }
-}
 
 enum UndoType {
     case undo, redo
@@ -601,19 +558,6 @@ extension History: Protobuf {
             $0.branchCoder = BranchCoder(rootBranch: rootBranch).pb
             $0.currentVersionIndex = Int64(currentVersionIndex)
         }
-    }
-}
-extension History: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case rootBranch, currentVersionIndex
-    }
-    init(from decoder: any Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        rootBranch = try values.decode(BranchCoder.self,
-                                       forKey: .rootBranch).rootBranch
-        currentVersionIndex = try values.decode(Int.self,
-                                                forKey: .currentVersionIndex)
-        check()
     }
     mutating func check() {
         copyIfShared()
@@ -638,10 +582,20 @@ extension History: Codable {
         currentVersionIndex = j + branch.groups.count - 1
         currentVersion = .init(indexPath: indexPath, groupIndex: branch.groups.count - 1)
     }
+}
+extension History: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case rootBranch, currentVersionIndex
+    }
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        rootBranch = try values.decode(BranchCoder.self, forKey: .rootBranch).rootBranch
+        currentVersionIndex = try values.decode(Int.self, forKey: .currentVersionIndex)
+        check()
+    }
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(BranchCoder(rootBranch: rootBranch),
-                             forKey: .rootBranch)
+        try container.encode(BranchCoder(rootBranch: rootBranch), forKey: .rootBranch)
         try container.encode(currentVersionIndex, forKey: .currentVersionIndex)
     }
 }

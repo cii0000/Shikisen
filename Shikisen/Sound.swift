@@ -24,10 +24,10 @@ import Accelerate.vecLib.vDSP
 //#endif
 
 struct LyricsUnison: Hashable, Codable {
-    enum Step: Int, Hashable, Codable, CaseIterable {
+    enum Step: Int, CaseIterable, Hashable, Codable {
         case c = 0, d = 2, e = 4, f = 5, g = 7, a = 9, b = 11
     }
-    enum Accidental: Int, Hashable, Codable, CaseIterable {
+    enum Accidental: Int, CaseIterable, Hashable, Codable {
         case none = 0, flat = -1, sharp = 1
     }
     
@@ -183,7 +183,7 @@ extension Pitch {
     }
 }
 
-enum MusicScaleType: Int32, Hashable, Codable, CaseIterable {
+enum MusicScaleType: Int32, CaseIterable, Hashable, Codable {
     case popular, hexaPopular, pentaPopular, wholeTone, chromatic
 }
 extension MusicScaleType {
@@ -269,7 +269,7 @@ struct Mel {
     }
 }
 
-struct Stereo: Codable, Hashable {
+struct Stereo: Hashable, Codable {
     var volm = 0.0, pan = 0.0, id = UUID()
 }
 extension Stereo {
@@ -397,7 +397,7 @@ extension Overtone: Protobuf {
         }
     }
 }
-enum OvertoneType: Int, Hashable, Codable, CaseIterable {
+enum OvertoneType: Int, CaseIterable, Hashable, Codable {
     case evenAmp, oddVolm
 }
 extension Overtone {
@@ -993,7 +993,7 @@ extension Tone: MonoInterpolatable {
     }
 }
 
-struct Pit: Codable, Hashable {
+struct Pit: Hashable, Codable {
     var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.453125), tone = Tone(), lyric = ""
 }
 extension Pit: Protobuf {
@@ -1169,7 +1169,7 @@ extension Reverb {
     }
 }
 
-struct Note {
+struct Note: Hashable, Codable {
     static let defaultF0Pitch = Rational(51), doubleDefaultF0Pitch = Double(defaultF0Pitch)
     var beatRange = 0 ..< Rational(1, 4)
     var pitch = Rational(0), f0Pitch = defaultF0Pitch
@@ -1203,7 +1203,6 @@ extension Note: Protobuf {
         }
     }
 }
-extension Note: Hashable, Codable {}
 extension Note {
     var firstPit: Pit {
         pits.first!
@@ -1690,7 +1689,7 @@ extension Note {
 }
 
 struct Chord: Hashable, Codable {
-    enum ChordType: Int, Hashable, Codable, CaseIterable, CustomStringConvertible {
+    enum ChordType: Int, CaseIterable, Hashable, Codable, CustomStringConvertible {
         case octave, power, major3, major, suspended, minor, minor3, augmented, flatfive,
              wholeTone, semitone,
              diminish, tritone
@@ -2004,7 +2003,7 @@ extension Chord: CustomStringConvertible {
     }
 }
 
-struct ScoreOption {
+struct ScoreOption: Hashable, Codable {
     var beatRange = Music.defaultBeatRange
     var loopDurBeat: Rational = 0
     var keyBeats: [Rational] = [4, 8, 12]
@@ -2041,14 +2040,13 @@ extension ScoreOption: Protobuf {
         }
     }
 }
-extension ScoreOption: Hashable, Codable {}
 extension ScoreOption {
     var endLoopDurBeat: Rational {
         beatRange.end + loopDurBeat
     }
 }
 
-struct Score: BeatRangeType {
+struct Score: BeatRangeType, Hashable, Codable {
     static let minPitch = Rational(0, 12), maxPitch = Rational(10 * 12)
     static let pitchRange = minPitch ..< maxPitch
     static let doubleMinPitch = 0.0, doubleMaxPitch = 120.0
@@ -2099,7 +2097,6 @@ extension Score: Protobuf {
         }
     }
 }
-extension Score: Hashable, Codable {}
 extension Score {
     var spectrogram: Spectrogram? {
         if let renderedPCMBuffer {

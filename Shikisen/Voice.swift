@@ -1962,7 +1962,7 @@ struct Mora: Hashable, Codable {
     }
 }
 
-enum Phoneme: String, Hashable, Codable, CaseIterable {
+enum Phoneme: String, CaseIterable, Hashable, Codable {
     case a, i, ɯ, e, o, j, ja, β, ɴ,
          n, nj, m, mj, ɾ, ɾj,
          ha, ç, ɸ, he, ho,

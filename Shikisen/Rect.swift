@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-enum RectCorner: String {
+enum RectCorner: String, Codable {
     case minXMinY, maxXMinY, minXMaxY, maxXMaxY
 }
 extension RectCorner: Protobuf {
@@ -37,9 +37,8 @@ extension RectCorner: Protobuf {
         }
     }
 }
-extension RectCorner: Codable {}
 
-struct Rect: Hashable {
+struct Rect: Hashable, Codable {
     var origin = Point(), size = Size()
     
     init(origin: Point = Point(), size: Size = Size()) {
@@ -93,18 +92,6 @@ extension Rect {
     }
     init(_ edge: Edge) {
         self.init(points: [edge.p0, edge.p1])!
-    }
-}
-extension Rect: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        origin = try container.decode(Point.self)
-        size = try container.decode(Size.self)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(origin)
-        try container.encode(size)
     }
 }
 extension Rect: CustomStringConvertible {
@@ -817,7 +804,7 @@ struct RectSearchTree<Value: Rectable> {
     }
 }
 
-struct AABB: Codable, Hashable {
+struct AABB: Hashable, Codable {
     var xRange = DoubleRange(), yRange = DoubleRange()
     init() {
         xRange = DoubleRange()

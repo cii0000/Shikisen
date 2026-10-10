@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Double3x3 {
+struct Double3x3: Hashable, Codable {
     var column0: Double3, column1: Double3, column2: Double3
 }
 extension Double3x3 {
@@ -157,22 +157,6 @@ extension Double3x3 {
         Double3x3(column0: column0.rounded(rule),
                   column1: column1.rounded(rule),
                   column2: column2.rounded(rule))
-    }
-}
-extension Double3x3: Hashable {}
-extension Double3x3: Codable {
-    public init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let column0 = try container.decode(Double3.self)
-        let column1 = try container.decode(Double3.self)
-        let column2 = try container.decode(Double3.self)
-        self.init(column0: column0, column1: column1, column2: column2)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(self[0])
-        try container.encode(self[1])
-        try container.encode(self[2])
     }
 }
 extension Double3x3: CustomStringConvertible {
@@ -366,7 +350,7 @@ extension Array: AppliableTransform where Element: AppliableTransform {
     }
 }
 
-struct Attitude {
+struct Attitude: Hashable, Codable {
     var position = Point(), scale = Size(square: 1), rotation = 0.0
 }
 extension Attitude {
@@ -432,7 +416,6 @@ extension Attitude {
         }
     }
 }
-extension Attitude: Hashable, Codable {}
 extension Attitude: AppliableTransform {
     static func * (lhs: Attitude, rhs: Transform) -> Attitude {
         Attitude(lhs.transform * rhs)

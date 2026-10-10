@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Size: Hashable {
+struct Size: Hashable, Codable {
     var width = 0.0, height = 0.0
 }
 extension Size: Protobuf {
@@ -28,18 +28,6 @@ extension Size: Protobuf {
             $0.width = width
             $0.height = height
         }
-    }
-}
-extension Size: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        width = try container.decode(Double.self)
-        height = try container.decode(Double.self)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(width)
-        try container.encode(height)
     }
 }
 extension Size {

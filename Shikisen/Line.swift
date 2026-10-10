@@ -89,7 +89,7 @@ extension Array where Element == LineRange {
     }
 }
 
-enum InterType: Int8, Codable, Hashable {
+enum InterType: Int8, Hashable, Codable {
     case none, key, interpolated
 }
 extension InterType: Protobuf {
@@ -110,8 +110,8 @@ extension InterType: Protobuf {
     }
 }
 
-struct Line {
-    struct Control {
+struct Line: Hashable, Codable {
+    struct Control: Hashable, Codable {
         var point = Point(), weight = 0.5, pressure = 1.0
         
         init(point: Point, weight: Double = 0.5, pressure: Double = 1.0) {
@@ -207,23 +207,6 @@ extension Line.Control: Protobuf {
         }
     }
 }
-extension Line.Control: Hashable {}
-extension Line.Control: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        point = try container.decode(Point.self).notInfiniteAndNAN()
-        weight = (try container.decode(Double.self).notNaN())
-            .clipped(min: 0, max: 1)
-        pressure = (try container.decode(Double.self).notNaN())
-            .clipped(min: 0, max: 1)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(point)
-        try container.encode(weight)
-        try container.encode(pressure)
-    }
-}
 extension Line.Control: Interpolatable {
     static func linear(_ f0: Line.Control, _ f1: Line.Control,
                        t: Double) -> Line.Control {
@@ -309,27 +292,6 @@ extension Line.Control {
     }
     func distanceSquared(_ other: Line.Control) -> Double {
         point.distanceSquared(other.point)
-    }
-}
-
-extension Line: Hashable {}
-extension Line: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        controls = try container.decode([Control].self)
-        let size = (try? container.decode(Double.self)) ?? Line.defaultLineWidth
-        self.size = size.clipped(min: 0, max: Line.maxLineWidth)
-        self.interID = try container.decode(UUID.self)
-        self.interType = try container.decode(InterType.self)
-        self.uuColor = try container.decode(UUColor.self)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(controls)
-        try container.encode(size)
-        try container.encode(interID)
-        try container.encode(interType)
-        try container.encode(uuColor)
     }
 }
 extension Line: Interpolatable {
@@ -2437,20 +2399,6 @@ struct Lasso {
     init(line: Line) {
         self.line = line
         path = line.path(isClosed: true, isPolygon: false)
-    }
-}
-extension Lasso: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case line
-    }
-    init(from decoder: any Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        line = try values.decode(Line.self, forKey: .line)
-        path = line.path(isClosed: true, isPolygon: false)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(line, forKey: .line)
     }
 }
 extension Lasso: Hashable {

@@ -1102,7 +1102,7 @@ extension Polygon {
     }
 }
 
-struct Topolygon {
+struct Topolygon: Hashable, Codable {
     var polygon = Polygon()
     var holePolygons = [Polygon]()
 }
@@ -1124,8 +1124,6 @@ extension Topolygon: Protobuf {
         }
     }
 }
-extension Topolygon: Codable {}
-extension Topolygon: Hashable {}
 extension Topolygon: AppliableTransform {
     static func * (lhs: Topolygon, rhs: Transform) -> Topolygon {
         Topolygon(polygon: lhs.polygon * rhs,

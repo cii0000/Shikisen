@@ -34,7 +34,7 @@ extension UU: Protobuf where Value == Color {
     }
 }
 
-struct Plane {
+struct Plane: Hashable, Codable {
     var topolygon = Topolygon(), uuColor = UU(Color())
 }
 extension Plane: Protobuf {
@@ -59,7 +59,6 @@ extension Plane: Protobuf {
         }
     }
 }
-extension Plane: Hashable, Codable {}
 extension Plane: AppliableTransform {
     static func * (lhs: Plane, rhs: Transform) -> Plane {
         Plane(topolygon: lhs.topolygon * rhs, uuColor: lhs.uuColor)

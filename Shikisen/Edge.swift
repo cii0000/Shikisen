@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Edge: Hashable {
+struct Edge: Hashable, Codable {
     var p0, p1: Point
     
     init() {
@@ -25,18 +25,6 @@ struct Edge: Hashable {
     init(_ p0: Point, _ p1: Point) {
         self.p0 = p0
         self.p1 = p1
-    }
-}
-extension Edge: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        p0 = try container.decode(Point.self)
-        p1 = try container.decode(Point.self)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(p0)
-        try container.encode(p1)
     }
 }
 extension Edge: AppliableTransform {

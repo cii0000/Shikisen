@@ -161,7 +161,7 @@ extension Waveclip {
     }
 }
 
-struct Pitbend: Codable, Hashable {
+struct Pitbend: Hashable, Codable {
     let pitchInterpolation: Interpolation<Double>
     let firstPitch: Double, firstFqScale: Double, isEqualAllPitch: Bool
     

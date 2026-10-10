@@ -17,1428 +17,7 @@
 
 import struct Foundation.UUID
 
-struct InterOption: Hashable, Codable {
-    var id = UUID()
-    var interType = InterType.none
-}
-extension InterOption {
-    func with(_ id: UUID) -> Self {
-        .init(id: id, interType: interType)
-    }
-    func with(_ interType: InterType) -> Self {
-        .init(id: id, interType: interType)
-    }
-}
-extension InterOption: Protobuf {
-    init(_ pb: PBInterOption) throws {
-        self.id = (try? .init(pb.id)) ?? .init()
-        self.interType = (try? .init(pb.interType)) ?? .none
-    }
-    var pb: PBInterOption {
-        .with {
-            $0.id = id.pb
-            $0.interType = interType.pb
-        }
-    }
-}
-extension Line {
-    var interOption: InterOption {
-        get {
-            .init(id: interID, interType: interType)
-        }
-        set {
-            self.interID = newValue.id
-            self.interType = newValue.interType
-        }
-    }
-}
-
-struct PlaneValue {
-    var planes: [Plane]
-    var moveIndexValues: [IndexValue<Int>]
-}
-extension PlaneValue: Protobuf {
-    init(_ pb: PBPlaneValue) throws {
-        planes = try pb.planes.map { try .init($0) }
-        moveIndexValues = try pb.moveIndexValues.map { try .init($0) }
-    }
-    var pb: PBPlaneValue {
-        .with {
-            $0.planes = planes.map { $0.pb }
-            $0.moveIndexValues = moveIndexValues.map { $0.pb }
-        }
-    }
-}
-extension PlaneValue: Codable {}
-
-struct ColorValue {
-    var uuColor: UUColor
-    var planeIndexes = [Int](), lineIndexes = [Int](), isBackground = false
-    var planeAnimationIndexes = [IndexValue<[Int]>]()
-    var lineAnimationIndexes = [IndexValue<[Int]>]()
-    var animationColors = [Color]()
-}
-extension ColorValue: Protobuf {
-    init(_ pb: PBColorValue) throws {
-        uuColor = try .init(pb.uuColor)
-        planeIndexes = pb.planeIndexes.map { max(.init($0), 0) }
-        lineIndexes = pb.lineIndexes.map { max(.init($0), 0) }
-        planeAnimationIndexes = try .init(pb.planeAnimationIndexes)
-        lineAnimationIndexes = try .init(pb.lineAnimationIndexes)
-        animationColors = pb.animationColors.compactMap { try? .init($0) }
-        isBackground = pb.isBackground
-    }
-    var pb: PBColorValue {
-        .with {
-            $0.uuColor = uuColor.pb
-            $0.planeIndexes = planeIndexes.map { .init($0) }
-            $0.lineIndexes = lineIndexes.map { .init($0) }
-            $0.planeAnimationIndexes = planeAnimationIndexes.pb
-            $0.lineAnimationIndexes = lineAnimationIndexes.pb
-            $0.animationColors = animationColors.map { $0.pb }
-            $0.isBackground = isBackground
-        }
-    }
-}
-extension ColorValue: Hashable, Codable {}
-
-struct TextValue: Hashable, Codable {
-    var string: String, replacedRange: Range<Int>,
-        origin: Point?, size: Double?, widthCount: Double?
-}
-extension TextValue {
-    var newRange: Range<Int> {
-        replacedRange.lowerBound ..< (replacedRange.lowerBound + string.count)
-    }
-}
-extension TextValue: Protobuf {
-    init(_ pb: PBTextValue) throws {
-        string = pb.string
-        replacedRange = try IntRange(pb.replacedRange).value
-        if case .origin(let origin)? = pb.originOptional {
-            self.origin = try Point(origin)
-        } else {
-            origin = nil
-        }
-        if case .size(let size)? = pb.sizeOptional {
-            self.size = size
-        } else {
-            size = nil
-        }
-        if case .widthCount(let widthCount)? = pb.widthCountOptional {
-            self.widthCount = widthCount
-        } else {
-            widthCount = nil
-        }
-    }
-    var pb: PBTextValue {
-        .with {
-            $0.string = string
-            $0.replacedRange = IntRange(value: replacedRange).pb
-            if let origin {
-                $0.originOptional = .origin(origin.pb)
-            } else {
-                $0.originOptional = nil
-            }
-            if let size {
-                $0.sizeOptional = .size(size)
-            } else {
-                $0.sizeOptional = nil
-            }
-            if let widthCount {
-                $0.widthCountOptional = .widthCount(widthCount)
-            } else {
-                $0.widthCountOptional = nil
-            }
-        }
-    }
-}
-
-struct SheetValue {
-    var lines = [Line](), planes = [Plane](),
-        texts = [Text](), contents = [Content](), origin = Point()
-    var scale = 1.0
-    var id = UUID(), rootKeyframeIndex = 0
-    var keyframes = [Keyframe]()
-    var keyframeBeganIndex = 0
-    var isSelected: Bool
-}
-extension SheetValue {
-    var string: String? {
-        if texts.count == 1 {
-            texts[0].string
-        } else {
-            nil
-        }
-    }
-    var allTextsString: String {
-        let strings = texts
-            .sorted { $0.origin.y == $1.origin.y ?
-                $0.origin.x < $1.origin.x : $0.origin.y > $1.origin.y }
-            .map { $0.string }
-        var str = ""
-        for nstr in strings {
-            str += nstr
-            str += "\n\n\n\n"
-        }
-        return str
-    }
-}
-extension SheetValue: Protobuf {
-    init(_ pb: PBSheetValue) throws {
-        lines = try pb.lines.map { try Line($0) }
-        planes = try pb.planes.map { try Plane($0) }
-        texts = try pb.texts.map { try Text($0) }
-        contents = try pb.contents.map { try Content($0) }
-        origin = try Point(pb.origin)
-        scale = pb.scale == 0 ? 1 : pb.scale
-        id = try UUID(pb.id)
-        rootKeyframeIndex = Int(pb.rootKeyframeIndex)
-        keyframes = try pb.keyframes.map { try Keyframe($0) }
-        keyframeBeganIndex = Int(pb.keyframeBeganIndex)
-            .clipped(min: 0, max: keyframes.count - 1)
-        isSelected = pb.isSelected
-    }
-    var pb: PBSheetValue {
-        .with {
-            $0.lines = lines.map { $0.pb }
-            $0.planes = planes.map { $0.pb }
-            $0.texts = texts.map { $0.pb }
-            $0.contents = contents.map { $0.pb }
-            $0.origin = origin.pb
-            $0.scale = scale
-            $0.id = id.pb
-            $0.rootKeyframeIndex = Int64(rootKeyframeIndex)
-            $0.keyframes = keyframes.map { $0.pb }
-            $0.keyframeBeganIndex = Int64(keyframeBeganIndex)
-            $0.isSelected = isSelected
-        }
-    }
-}
-extension SheetValue: Codable {}
-extension SheetValue: AppliableTransform {
-    static func * (lhs: SheetValue, rhs: Transform) -> SheetValue {
-        SheetValue(lines: lhs.lines.map { $0 * rhs },
-                   planes: lhs.planes.map { $0 * rhs },
-                   texts: lhs.texts.map { $0 * rhs },
-                   contents: lhs.contents.map { $0 * rhs },
-                   origin: lhs.origin,
-                   scale: lhs.scale,
-                   id: lhs.id,
-                   rootKeyframeIndex: lhs.rootKeyframeIndex,
-                   keyframes: lhs.keyframes.map { $0 * rhs },
-                   keyframeBeganIndex: lhs.keyframeBeganIndex,
-                   isSelected: lhs.isSelected)
-    }
-}
-extension SheetValue {
-    var isEmpty: Bool {
-        lines.isEmpty && planes.isEmpty && texts.isEmpty && keyframes.isEmpty
-    }
-    static func + (lhs: SheetValue, rhs: SheetValue) -> SheetValue {
-        SheetValue(lines: lhs.lines + rhs.lines,
-                   planes: lhs.planes + rhs.planes,
-                   texts: lhs.texts + rhs.texts,
-                   contents: lhs.contents + rhs.contents,
-                   origin: lhs.origin,
-                   id: lhs.id == rhs.id ? lhs.id : UUID(),
-                   rootKeyframeIndex: lhs.rootKeyframeIndex,
-                   keyframes: lhs.keyframes + rhs.keyframes,
-                   keyframeBeganIndex: lhs.keyframeBeganIndex,
-                   isSelected: lhs.isSelected)
-    }
-    static func += (lhs: inout SheetValue, rhs: SheetValue) {
-        lhs.lines += rhs.lines
-        lhs.planes += rhs.planes
-        lhs.texts += rhs.texts
-        lhs.contents += rhs.contents
-        lhs.keyframeBeganIndex += rhs.keyframeBeganIndex
-        if lhs.id != rhs.id {
-            lhs.id = UUID()
-        }
-    }
-}
-
-extension Array where Element == Int {
-    init(_ pb: PBInt64Array) throws {
-        self = pb.value.map { Int($0) }
-    }
-    var pb: PBInt64Array {
-        .with { $0.value = map { Int64($0) } }
-    }
-}
-extension Array where Element == Line {
-    init(_ pb: PBLineArray) throws {
-        self = try pb.value.map { try Line($0) }
-    }
-    var pb: PBLineArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == Plane {
-    init(_ pb: PBPlaneArray) throws {
-        self = try pb.value.map { try Plane($0) }
-    }
-    var pb: PBPlaneArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == UUID {
-    init(_ pb: PBUUIDArray) throws {
-        self = try pb.value.map { try .init($0) }
-    }
-    var pb: PBUUIDArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension IndexValue where Value == Int {
-    init(_ pb: PBIntIndexValue) throws {
-        value = Int(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBIntIndexValue {
-        .with {
-            $0.value = Int64(value)
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == [Int] {
-    init(_ pb: PBIntArrayIndexValue) throws {
-        value = try [Int](pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBIntArrayIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension Array where Element == IndexValue<Int> {
-    init(_ pb: PBIntIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Int>($0) }
-    }
-    var pb: PBIntIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<[Int]> {
-    init(_ pb: PBIntArrayIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<[Int]>($0) }
-    }
-    var pb: PBIntArrayIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension IndexValue where Value == Line {
-    init(_ pb: PBLineIndexValue) throws {
-        value = try Line(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBLineIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == [IndexValue<Line>] {
-    init(_ pb: PBLineIndexValueArrayIndexValue) throws {
-        value = try pb.value.map { try IndexValue<Line>($0) }
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBLineIndexValueArrayIndexValue {
-        .with {
-            $0.value = value.map { $0.pb }
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Plane {
-    init(_ pb: PBPlaneIndexValue) throws {
-        value = try Plane(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBPlaneIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == [IndexValue<Plane>] {
-    init(_ pb: PBPlaneIndexValueArrayIndexValue) throws {
-        value = try pb.value.map { try IndexValue<Plane>($0) }
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBPlaneIndexValueArrayIndexValue {
-        .with {
-            $0.value = value.map { $0.pb }
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == InterOption {
-    init(_ pb: PBInterOptionIndexValue) throws {
-        value = try InterOption(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBInterOptionIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == [IndexValue<InterOption>] {
-    init(_ pb: PBInterOptionIndexValueArrayIndexValue) throws {
-        value = try pb.value.map { try IndexValue<InterOption>($0) }
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBInterOptionIndexValueArrayIndexValue {
-        .with {
-            $0.value = value.map { $0.pb }
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Text {
-    init(_ pb: PBTextIndexValue) throws {
-        value = try Text(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBTextIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Note {
-    init(_ pb: PBNoteIndexValue) throws {
-        value = (try? .init(pb.value)) ?? .init()
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBNoteIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Content {
-    init(_ pb: PBContentIndexValue) throws {
-        value = (try? .init(pb.value)) ?? .init()
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBContentIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Border {
-    init(_ pb: PBBorderIndexValue) throws {
-        value = try Border(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBBorderIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == TextValue {
-    init(_ pb: PBTextValueIndexValue) throws {
-        value = try TextValue(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBTextValueIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == Keyframe {
-    init(_ pb: PBKeyframeIndexValue) throws {
-        value = try Keyframe(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBKeyframeIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension IndexValue where Value == KeyframeOption {
-    init(_ pb: PBKeyframeOptionIndexValue) throws {
-        value = try KeyframeOption(pb.value)
-        index = max(Int(pb.index), 0)
-    }
-    var pb: PBKeyframeOptionIndexValue {
-        .with {
-            $0.value = value.pb
-            $0.index = Int64(index)
-        }
-    }
-}
-extension Array where Element == IndexValue<Line> {
-    init(_ pb: PBLineIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Line>($0) }
-    }
-    var pb: PBLineIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Plane> {
-    init(_ pb: PBPlaneIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Plane>($0) }
-    }
-    var pb: PBPlaneIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<InterOption> {
-    init(_ pb: PBInterOptionIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<InterOption>($0) }
-    }
-    var pb: PBInterOptionIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Text> {
-    init(_ pb: PBTextIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Text>($0) }
-    }
-    var pb: PBTextIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Note> {
-    init(_ pb: PBNoteIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Note>($0) }
-    }
-    var pb: PBNoteIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Content> {
-    init(_ pb: PBContentIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Content>($0) }
-    }
-    var pb: PBContentIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Border> {
-    init(_ pb: PBBorderIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Border>($0) }
-    }
-    var pb: PBBorderIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<Keyframe> {
-    init(_ pb: PBKeyframeIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<Keyframe>($0) }
-    }
-    var pb: PBKeyframeIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<KeyframeOption> {
-    init(_ pb: PBKeyframeOptionIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<KeyframeOption>($0) }
-    }
-    var pb: PBKeyframeOptionIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<[IndexValue<Line>]> {
-    init(_ pb: PBLineIndexValueArrayIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<[IndexValue<Line>]>($0) }
-    }
-    var pb: PBLineIndexValueArrayIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<[IndexValue<Plane>]> {
-    init(_ pb: PBPlaneIndexValueArrayIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<[IndexValue<Plane>]>($0) }
-    }
-    var pb: PBPlaneIndexValueArrayIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-extension Array where Element == IndexValue<[IndexValue<InterOption>]> {
-    init(_ pb: PBInterOptionIndexValueArrayIndexValueArray) throws {
-        self = try pb.value.map { try IndexValue<[IndexValue<InterOption>]>($0) }
-    }
-    var pb: PBInterOptionIndexValueArrayIndexValueArray {
-        .with { $0.value = map { $0.pb } }
-    }
-}
-
-enum SheetUndoItem {
-    case appendLine(_ line: Line)
-    case appendLines(_ lines: [Line])
-    case appendPlanes(_ planes: [Plane])
-    case removeLastLines(count: Int)
-    case removeLastPlanes(count: Int)
-    case insertLines(_ lineIndexValues: [IndexValue<Line>])
-    case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
-    case replaceLines(_ lineIndexValue: [IndexValue<Line>])
-    case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
-    case removeLines(lineIndexes: [Int])
-    case removePlanes(planeIndexes: [Int])
-    case setPlaneValue(_ planeValue: PlaneValue)
-    case changeToDraft(isReverse: Bool)
-    case setPicture(_ picture: Picture)
-    case insertDraftLines(_ lineIndexValues: [IndexValue<Line>])
-    case insertDraftPlanes(_ planeIndexValues: [IndexValue<Plane>])
-    case removeDraftLines(lineIndexes: [Int])
-    case removeDraftPlanes(planeIndexes: [Int])
-    case setDraftPicture(_ picture: Picture)
-    case insertTexts(_ textIndexValues: [IndexValue<Text>])
-    case replaceTexts(_ textIndexValue: [IndexValue<Text>])
-    case removeTexts(textIndexes: [Int])
-    case replaceString(_ textIndexValue: IndexValue<TextValue>)
-    case changedColors(_ colorUndoValue: ColorValue)
-    case insertBorders(_ borderIndexValues: [IndexValue<Border>])
-    case removeBorders(borderIndexes: [Int])
-    case setRootKeyframeIndex(rootKeyframeIndex: Int)
-    case insertKeyframes(_ pivs: [IndexValue<Keyframe>])
-    case removeKeyframes(keyframeIndexes: [Int])
-    case setKeyframeOptions(_ options: [IndexValue<KeyframeOption>])
-    case insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
-    case insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
-    case insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case removeDraftKeyLines(_ indexes: [IndexValue<[Int]>])
-    case insertDraftKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case removeDraftKeyPlanes(_ indexes: [IndexValue<[Int]>])
-    case setLineIDs(_ idvs: [IndexValue<[IndexValue<InterOption>]>])
-    case setAnimationOption(_ option: AnimationOption)
-    case insertNotes(_ noteIndexValues: [IndexValue<Note>])
-    case replaceNotes(_ noteIndexValue: [IndexValue<Note>])
-    case removeNotes(noteIndexes: [Int])
-    case insertDraftNotes(_ noteIndexValues: [IndexValue<Note>])
-    case removeDraftNotes(noteIndexes: [Int])
-    case insertContents(_ contentIndexValues: [IndexValue<Content>])
-    case replaceContents(_ contentIndexValue: [IndexValue<Content>])
-    case removeContents(contentIndexes: [Int])
-    case setScoreOption(_ option: ScoreOption)
-    case setSheetOption(_ option: SheetOption)
-    case setSelection(_ selection: SheetSelection)
-}
-extension SheetUndoItem: UndoItem {
-    var type: UndoItemType {
-        switch self {
-        case .appendLine: .reversible
-        case .appendLines: .reversible
-        case .appendPlanes: .reversible
-        case .removeLastLines: .unreversible
-        case .removeLastPlanes: .unreversible
-        case .insertLines: .reversible
-        case .insertPlanes: .reversible
-        case .replaceLines: .lazyReversible
-        case .replacePlanes: .lazyReversible
-        case .removeLines: .unreversible
-        case .removePlanes: .unreversible
-        case .setPlaneValue: .lazyReversible
-        case .changeToDraft: .reversible
-        case .setPicture: .lazyReversible
-        case .insertDraftLines: .reversible
-        case .insertDraftPlanes: .reversible
-        case .removeDraftLines: .unreversible
-        case .removeDraftPlanes: .unreversible
-        case .setDraftPicture: .lazyReversible
-        case .insertTexts: .reversible
-        case .replaceTexts: .lazyReversible
-        case .removeTexts: .unreversible
-        case .replaceString: .lazyReversible
-        case .changedColors: .lazyReversible
-        case .insertBorders: .reversible
-        case .removeBorders: .unreversible
-        case .setRootKeyframeIndex: .lazyReversible
-        case .insertKeyframes: .reversible
-        case .removeKeyframes: .unreversible
-        case .setKeyframeOptions: .lazyReversible
-        case .insertKeyLines: .reversible
-        case .replaceKeyLines: .lazyReversible
-        case .removeKeyLines: .unreversible
-        case .insertKeyPlanes: .reversible
-        case .replaceKeyPlanes: .lazyReversible
-        case .removeKeyPlanes: .unreversible
-        case .insertDraftKeyLines: .reversible
-        case .removeDraftKeyLines: .unreversible
-        case .insertDraftKeyPlanes: .reversible
-        case .removeDraftKeyPlanes: .unreversible
-        case .setLineIDs: .lazyReversible
-        case .setAnimationOption: .lazyReversible
-        case .insertNotes: .reversible
-        case .replaceNotes: .lazyReversible
-        case .removeNotes: .unreversible
-        case .insertDraftNotes: .reversible
-        case .removeDraftNotes: .unreversible
-        case .insertContents: .reversible
-        case .replaceContents: .lazyReversible
-        case .removeContents: .unreversible
-        case .setScoreOption: .lazyReversible
-        case .setSheetOption: .lazyReversible
-        case .setSelection: .lazyReversible
-        }
-    }
-    func reversed() -> SheetUndoItem? {
-        switch self {
-        case .appendLine:
-             .removeLastLines(count: 1)
-        case .appendLines(let lines):
-             .removeLastLines(count: lines.count)
-        case .appendPlanes(let planes):
-             .removeLastPlanes(count: planes.count)
-        case .removeLastLines:
-             nil
-        case .removeLastPlanes:
-             nil
-        case .insertLines(let livs):
-             .removeLines(lineIndexes: livs.map { $0.index })
-        case .insertPlanes(let pivs):
-             .removePlanes(planeIndexes: pivs.map { $0.index })
-        case .replaceLines:
-             self
-        case .replacePlanes:
-             self
-        case .removeLines:
-             nil
-        case .removePlanes:
-             nil
-        case .setPlaneValue:
-             self
-        case .changeToDraft(let isReverse):
-             .changeToDraft(isReverse: !isReverse)
-        case .setPicture(_):
-             self
-        case .insertDraftLines(let livs):
-             .removeDraftLines(lineIndexes: livs.map { $0.index })
-        case .insertDraftPlanes(let pivs):
-             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
-        case .removeDraftLines:
-             nil
-        case .removeDraftPlanes:
-             nil
-        case .setDraftPicture(_):
-             self
-        case .insertTexts(let tivs):
-             .removeTexts(textIndexes: tivs.map { $0.index })
-        case .replaceTexts:
-             self
-        case .removeTexts:
-             nil
-        case .replaceString(_):
-             self
-        case .changedColors(_):
-             self
-        case .insertBorders(let bivs):
-             .removeBorders(borderIndexes: bivs.map { $0.index })
-        case .removeBorders:
-             nil
-        case .setRootKeyframeIndex:
-             self
-        case .insertKeyframes(let pivs):
-             .removeKeyframes(keyframeIndexes: pivs.map { $0.index })
-        case .removeKeyframes:
-             nil
-        case .setKeyframeOptions:
-             self
-        case .insertKeyLines(let kivs):
-             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .replaceKeyLines:
-             self
-        case .removeKeyLines:
-             nil
-        case .insertKeyPlanes(let kivs):
-             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .replaceKeyPlanes:
-             self
-        case .removeKeyPlanes:
-             nil
-        case .insertDraftKeyLines(let kivs):
-             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .removeDraftKeyLines:
-             nil
-        case .insertDraftKeyPlanes(let kivs):
-             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .removeDraftKeyPlanes:
-             nil
-        case .setLineIDs:
-             self
-        case .setAnimationOption:
-             self
-        
-        case .insertNotes(let nivs):
-             .removeNotes(noteIndexes: nivs.map { $0.index })
-        case .replaceNotes:
-             self
-        case .removeNotes:
-             nil
-            
-        case .insertDraftNotes(let nivs):
-             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
-        case .removeDraftNotes:
-             nil
-            
-        case .insertContents(let civs):
-             .removeContents(contentIndexes: civs.map { $0.index })
-        case .replaceContents:
-             self
-        case .removeContents:
-             nil
-            
-        case .setScoreOption:
-             self
-            
-        case .setSheetOption:
-             self
-            
-        case .setSelection:
-             self
-        }
-    }
-}
-extension SheetUndoItem: Protobuf {
-    init(_ pb: PBSheetUndoItem) throws {
-        guard let value = pb.value else {
-            throw ProtobufError()
-        }
-        switch value {
-        case .appendLine(let line):
-            self = .appendLine(try Line(line))
-        case .appendLines(let lines):
-            self = .appendLines(try [Line](lines))
-        case .appendPlanes(let planes):
-            self = .appendPlanes(try [Plane](planes))
-        case .removeLastLines(let lineCount):
-            self = .removeLastLines(count: Int(lineCount))
-        case .removeLastPlanes(let planesCount):
-            self = .removeLastPlanes(count: Int(planesCount))
-        case .insertLines(let lineIndexValues):
-            self = .insertLines(try [IndexValue<Line>](lineIndexValues))
-        case .insertPlanes(let planeIndexValues):
-            self = .insertPlanes(try [IndexValue<Plane>](planeIndexValues))
-        case .replaceLines(let lines):
-            self = .replaceLines(try [IndexValue<Line>](lines))
-        case .replacePlanes(let planes):
-            self = .replacePlanes(try [IndexValue<Plane>](planes))
-        case .removeLines(let lineIndexes):
-            self = .removeLines(lineIndexes: try [Int](lineIndexes))
-        case .removePlanes(let planeIndexes):
-            self = .removePlanes(planeIndexes: try [Int](planeIndexes))
-        case .setPlaneValue(let planeValue):
-            self = .setPlaneValue(try PlaneValue(planeValue))
-        case .changeToDraft(let isReverse):
-            self = .changeToDraft(isReverse: isReverse)
-        case .setPicture(let picture):
-            self = .setPicture(try Picture(picture))
-        case .insertDraftLines(let lineIndexValues):
-            self = .insertDraftLines(try [IndexValue<Line>](lineIndexValues))
-        case .insertDraftPlanes(let planeIndexValues):
-            self = .insertDraftPlanes(try [IndexValue<Plane>](planeIndexValues))
-        case .removeDraftLines(let lineIndexes):
-            self = .removeDraftLines(lineIndexes: try [Int](lineIndexes))
-        case .removeDraftPlanes(let planeIndexes):
-            self = .removeDraftPlanes(planeIndexes: try [Int](planeIndexes))
-        case .setDraftPicture(let picture):
-            self = .setDraftPicture(try Picture(picture))
-        case .insertTexts(let texts):
-            self = .insertTexts(try [IndexValue<Text>](texts))
-        case .replaceTexts(let texts):
-            self = .replaceTexts(try [IndexValue<Text>](texts))
-        case .removeTexts(let textIndexes):
-            self = .removeTexts(textIndexes: try [Int](textIndexes))
-        case .replaceString(let textValue):
-            self = .replaceString(try IndexValue<TextValue>(textValue))
-        case .changedColors(let colorUndoValue):
-            self = .changedColors(try ColorValue(colorUndoValue))
-        case .insertBorders(let borders):
-            self = .insertBorders(try [IndexValue<Border>](borders))
-        case .removeBorders(let borderIndexes):
-            self = .removeBorders(borderIndexes: try [Int](borderIndexes))
-        case .setRootKeyframeIndex(let index):
-            self = .setRootKeyframeIndex(rootKeyframeIndex: Int(index))
-        case .insertKeyframes(let pivs):
-            self = .insertKeyframes(try [IndexValue<Keyframe>](pivs))
-        case .removeKeyframes(let keyframeIndexes):
-            self = .removeKeyframes(keyframeIndexes: try [Int](keyframeIndexes))
-        case .setKeyframeOptions(let option):
-            self = .setKeyframeOptions(try [IndexValue<KeyframeOption>](option))
-        case .insertKeyLines(let kvs):
-            self = .insertKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
-        case .replaceKeyLines(let kvs):
-            self = .replaceKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
-        case .removeKeyLines(let iivs):
-            self = .removeKeyLines(try [IndexValue<[Int]>](iivs))
-        case .insertKeyPlanes(let kvs):
-            self = .insertKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
-        case .replaceKeyPlanes(let kvs):
-            self = .replaceKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
-        case .removeKeyPlanes(let iivs):
-            self = .removeKeyPlanes(try [IndexValue<[Int]>](iivs))
-        case .insertDraftKeyLines(let kvs):
-            self = .insertDraftKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
-        case .removeDraftKeyLines(let iivs):
-            self = .removeDraftKeyLines(try [IndexValue<[Int]>](iivs))
-        case .insertDraftKeyPlanes(let kvs):
-            self = .insertDraftKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
-        case .removeDraftKeyPlanes(let iivs):
-            self = .removeDraftKeyPlanes(try [IndexValue<[Int]>](iivs))
-        case .setLineIds(let idvs):
-            self = .setLineIDs(try [IndexValue<[IndexValue<InterOption>]>](idvs))
-        case .setAnimationOption(let option):
-            self = .setAnimationOption(try AnimationOption(option))
-        case .insertNotes(let notes):
-            self = .insertNotes(try [IndexValue<Note>](notes))
-        case .replaceNotes(let notes):
-            self = .replaceNotes(try [IndexValue<Note>](notes))
-        case .removeNotes(let noteIndexes):
-            self = .removeNotes(noteIndexes: try [Int](noteIndexes))
-        case .insertDraftNotes(let noteIndexValues):
-            self = .insertDraftNotes(try [IndexValue<Note>](noteIndexValues))
-        case .removeDraftNotes(let noteIndexes):
-            self = .removeDraftNotes(noteIndexes: try [Int](noteIndexes))
-        case .insertContents(let contents):
-            self = .insertContents(try [IndexValue<Content>](contents))
-        case .replaceContents(let contents):
-            self = .replaceContents(try [IndexValue<Content>](contents))
-        case .removeContents(let contentIndexes):
-            self = .removeContents(contentIndexes: try [Int](contentIndexes))
-        case .setScoreOption(let option):
-            self = .setScoreOption(try ScoreOption(option))
-        case .setSheetOption(let option):
-            self = .setSheetOption(try SheetOption(option))
-        case .setSelection(let selection):
-            self = .setSelection(try .init(selection))
-        }
-    }
-    var pb: PBSheetUndoItem {
-        .with {
-            switch self {
-            case .appendLine(let line):
-                $0.value = .appendLine(line.pb)
-            case .appendLines(let lines):
-                $0.value = .appendLines(lines.pb)
-            case .appendPlanes(let planes):
-                $0.value = .appendPlanes(planes.pb)
-            case .removeLastLines(let lineCount):
-                $0.value = .removeLastLines(Int64(lineCount))
-            case .removeLastPlanes(let planesCount):
-                $0.value = .removeLastPlanes(Int64(planesCount))
-            case .insertLines(let lineIndexValues):
-                $0.value = .insertLines(lineIndexValues.pb)
-            case .insertPlanes(let planeIndexValues):
-                $0.value = .insertPlanes(planeIndexValues.pb)
-            case .replaceLines(let livs):
-                $0.value = .replaceLines(livs.pb)
-            case .replacePlanes(let pivs):
-                $0.value = .replacePlanes(pivs.pb)
-            case .removeLines(let lineIndexes):
-                $0.value = .removeLines(lineIndexes.pb)
-            case .removePlanes(let planeIndexes):
-                $0.value = .removePlanes(planeIndexes.pb)
-            case .setPlaneValue(let planeValue):
-                $0.value = .setPlaneValue(planeValue.pb)
-            case .changeToDraft(let isReverse):
-                $0.value = .changeToDraft(isReverse)
-            case .setPicture(let picture):
-                $0.value = .setPicture(picture.pb)
-            case .insertDraftLines(let lineIndexValues):
-                $0.value = .insertDraftLines(lineIndexValues.pb)
-            case .insertDraftPlanes(let planeIndexValues):
-                $0.value = .insertDraftPlanes(planeIndexValues.pb)
-            case .removeDraftLines(let lineIndexes):
-                $0.value = .removeDraftLines(lineIndexes.pb)
-            case .removeDraftPlanes(let planeIndexes):
-                $0.value = .removeDraftPlanes(planeIndexes.pb)
-            case .setDraftPicture(let picture):
-                $0.value = .setDraftPicture(picture.pb)
-            case .insertTexts(let texts):
-                $0.value = .insertTexts(texts.pb)
-            case .replaceTexts(let tivs):
-                $0.value = .replaceTexts(tivs.pb)
-            case .removeTexts(let textIndexes):
-                $0.value = .removeTexts(textIndexes.pb)
-            case .replaceString(let textValue):
-                $0.value = .replaceString(textValue.pb)
-            case .changedColors(let colorUndoValue):
-                $0.value = .changedColors(colorUndoValue.pb)
-            case .insertBorders(let borders):
-                $0.value = .insertBorders(borders.pb)
-            case .removeBorders(let borderIndexes):
-                $0.value = .removeBorders(borderIndexes.pb)
-            case .setRootKeyframeIndex(let keyframeIndex):
-                $0.value = .setRootKeyframeIndex(Int64(keyframeIndex))
-            case .insertKeyframes(let pivs):
-                $0.value = .insertKeyframes(pivs.pb)
-            case .removeKeyframes(let indexes):
-                $0.value = .removeKeyframes(indexes.pb)
-            case .setKeyframeOptions(let option):
-                $0.value = .setKeyframeOptions(option.pb)
-            case .insertKeyLines(let kvs):
-                $0.value = .insertKeyLines(kvs.pb)
-            case .replaceKeyLines(let kvs):
-                $0.value = .replaceKeyLines(kvs.pb)
-            case .removeKeyLines(let iivs):
-                $0.value = .removeKeyLines(iivs.pb)
-            case .insertKeyPlanes(let kvs):
-                $0.value = .insertKeyPlanes(kvs.pb)
-            case .replaceKeyPlanes(let kvs):
-                $0.value = .replaceKeyPlanes(kvs.pb)
-            case .removeKeyPlanes(let iivs):
-                $0.value = .removeKeyPlanes(iivs.pb)
-            case .insertDraftKeyLines(let kvs):
-                $0.value = .insertDraftKeyLines(kvs.pb)
-            case .removeDraftKeyLines(let iivs):
-                $0.value = .removeDraftKeyLines(iivs.pb)
-            case .insertDraftKeyPlanes(let kvs):
-                $0.value = .insertDraftKeyPlanes(kvs.pb)
-            case .removeDraftKeyPlanes(let iivs):
-                $0.value = .removeDraftKeyPlanes(iivs.pb)
-            case .setLineIDs(let idvs):
-                $0.value = .setLineIds(idvs.pb)
-            case .setAnimationOption(let option):
-                $0.value = .setAnimationOption(option.pb)
-            case .insertNotes(let nivs):
-                $0.value = .insertNotes(nivs.pb)
-            case .replaceNotes(let nivs):
-                $0.value = .replaceNotes(nivs.pb)
-            case .removeNotes(let nis):
-                $0.value = .removeNotes(nis.pb)
-            case .insertDraftNotes(let noteIndexValues):
-                $0.value = .insertDraftNotes(noteIndexValues.pb)
-            case .removeDraftNotes(let noteIndexes):
-                $0.value = .removeDraftNotes(noteIndexes.pb)
-            case .insertContents(let civs):
-                $0.value = .insertContents(civs.pb)
-            case .replaceContents(let civs):
-                $0.value = .replaceContents(civs.pb)
-            case .removeContents(let cis):
-                $0.value = .removeContents(cis.pb)
-            case .setScoreOption(let option):
-                $0.value = .setScoreOption(option.pb)
-            case .setSheetOption(let option):
-                $0.value = .setSheetOption(option.pb)
-            case .setSelection(let selection):
-                $0.value = .setSelection(selection.pb)
-            }
-        }
-    }
-}
-extension SheetUndoItem: Codable {
-    private enum CodingTypeKey: String, Codable {
-        case appendLine = "0"
-        case appendLines = "1"
-        case appendPlanes = "2"
-        case removeLastLines = "3"
-        case removeLastPlanes = "4"
-        case insertLines = "5"
-        case insertPlanes = "6"
-        case replaceLines = "53"
-        case replacePlanes = "54"
-        case removeLines = "7"
-        case removePlanes = "8"
-        case setPlaneValue = "9"
-        case changeToDraft = "10"
-        case setPicture = "11"
-        case insertDraftLines = "12"
-        case insertDraftPlanes = "13"
-        case removeDraftLines = "14"
-        case removeDraftPlanes = "15"
-        case setDraftPicture = "16"
-        case insertTexts = "17"
-        case replaceTexts = "55"
-        case removeTexts = "18"
-        case replaceString = "19"
-        case changedColors = "20"
-        case insertBorders = "21"
-        case removeBorders = "22"
-        case setRootKeyframeIndex = "23"
-        case insertKeyframes = "24"
-        case removeKeyframes = "25"
-        case setKeyframeOptions = "26"
-        case insertKeyLines = "27"
-        case replaceKeyLines = "28"
-        case removeKeyLines = "29"
-        case insertKeyPlanes = "33"
-        case replaceKeyPlanes = "40"
-        case removeKeyPlanes = "34"
-        case insertDraftKeyLines = "35"
-        case removeDraftKeyLines = "36"
-        case insertDraftKeyPlanes = "37"
-        case removeDraftKeyPlanes = "38"
-        case setLineIDs = "30"
-        case setAnimationOption = "39"
-        case insertNotes = "41"
-        case replaceNotes = "42"
-        case removeNotes = "43"
-        case insertDraftNotes = "49"
-        case removeDraftNotes = "50"
-        case insertContents = "45"
-        case replaceContents = "46"
-        case removeContents = "47"
-        case setScoreOption = "48"
-        case setSheetOption = "51"
-        case setSelection = "52"
-    }
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let key = try container.decode(CodingTypeKey.self)
-        switch key {
-        case .appendLine:
-            self = .appendLine(try container.decode(Line.self))
-        case .appendLines:
-            self = .appendLines(try container.decode([Line].self))
-        case .appendPlanes:
-            self = .appendPlanes(try container.decode([Plane].self))
-        case .removeLastLines:
-            self = .removeLastLines(count: try container.decode(Int.self))
-        case .removeLastPlanes:
-            self = .removeLastPlanes(count: try container.decode(Int.self))
-        case .insertLines:
-            self = .insertLines(try container.decode([IndexValue<Line>].self))
-        case .insertPlanes:
-            self = .insertPlanes(try container.decode([IndexValue<Plane>].self))
-        case .replaceLines:
-            self = .replaceLines(try container.decode([IndexValue<Line>].self))
-        case .replacePlanes:
-            self = .replacePlanes(try container.decode([IndexValue<Plane>].self))
-        case .removeLines:
-            self = .removeLines(lineIndexes: try container.decode([Int].self))
-        case .removePlanes:
-            self = .removePlanes(planeIndexes: try container.decode([Int].self))
-        case .setPlaneValue:
-            self = .setPlaneValue(try container.decode(PlaneValue.self))
-        case .changeToDraft:
-            self = .changeToDraft(isReverse: try container.decode(Bool.self))
-        case .setPicture:
-            self = .setPicture(try container.decode(Picture.self))
-        case .insertDraftLines:
-            self = .insertDraftLines(try container.decode([IndexValue<Line>].self))
-        case .insertDraftPlanes:
-            self = .insertDraftPlanes(try container.decode([IndexValue<Plane>].self))
-        case .removeDraftLines:
-            self = .removeDraftLines(lineIndexes: try container.decode([Int].self))
-        case .removeDraftPlanes:
-            self = .removeDraftPlanes(planeIndexes: try container.decode([Int].self))
-        case .setDraftPicture:
-            self = .setDraftPicture(try container.decode(Picture.self))
-        case .insertTexts:
-            self = .insertTexts(try container.decode([IndexValue<Text>].self))
-        case .replaceTexts:
-            self = .replaceTexts(try container.decode([IndexValue<Text>].self))
-        case .removeTexts:
-            self = .removeTexts(textIndexes: try container.decode([Int].self))
-        case .replaceString:
-            self = .replaceString(try container.decode(IndexValue<TextValue>.self))
-        case .changedColors:
-            self = .changedColors(try container.decode(ColorValue.self))
-        case .insertBorders:
-            self = .insertBorders(try container.decode([IndexValue<Border>].self))
-        case .removeBorders:
-            self = .removeBorders(borderIndexes: try container.decode([Int].self))
-        case .setRootKeyframeIndex:
-            self = .setRootKeyframeIndex(rootKeyframeIndex: try container.decode(Int.self))
-        case .insertKeyframes:
-            self = .insertKeyframes(try container.decode([IndexValue<Keyframe>].self))
-        case .removeKeyframes:
-            self = .removeKeyframes(keyframeIndexes: try container.decode([Int].self))
-        case .setKeyframeOptions:
-            self = .setKeyframeOptions(try container.decode([IndexValue<KeyframeOption>].self))
-        case .insertKeyLines:
-            self = .insertKeyLines(try container.decode([IndexValue<[IndexValue<Line>]>].self))
-        case .replaceKeyLines:
-            self = .replaceKeyLines(try container.decode([IndexValue<[IndexValue<Line>]>].self))
-        case .removeKeyLines:
-            self = .removeKeyLines(try container.decode([IndexValue<[Int]>].self))
-        case .insertKeyPlanes:
-            self = .insertKeyPlanes(try container.decode([IndexValue<[IndexValue<Plane>]>].self))
-        case .replaceKeyPlanes:
-            self = .replaceKeyPlanes(try container.decode([IndexValue<[IndexValue<Plane>]>].self))
-        case .removeKeyPlanes:
-            self = .removeKeyPlanes(try container.decode([IndexValue<[Int]>].self))
-        case .insertDraftKeyLines:
-            self = .insertDraftKeyLines(try container.decode([IndexValue<[IndexValue<Line>]>].self))
-        case .removeDraftKeyLines:
-            self = .removeDraftKeyLines(try container.decode([IndexValue<[Int]>].self))
-        case .insertDraftKeyPlanes:
-            self = .insertDraftKeyPlanes(try container.decode([IndexValue<[IndexValue<Plane>]>].self))
-        case .removeDraftKeyPlanes:
-            self = .removeDraftKeyPlanes(try container.decode([IndexValue<[Int]>].self))
-        case .setLineIDs:
-            self = .setLineIDs(try container.decode([IndexValue<[IndexValue<InterOption>]>].self))
-        case .setAnimationOption:
-            self = .setAnimationOption(try container.decode(AnimationOption.self))
-        case .insertNotes:
-            self = .insertNotes(try container.decode([IndexValue<Note>].self))
-        case .replaceNotes:
-            self = .replaceNotes(try container.decode([IndexValue<Note>].self))
-        case .removeNotes:
-            self = .removeNotes(noteIndexes: try container.decode([Int].self))
-        case .insertDraftNotes:
-            self = .insertDraftNotes(try container.decode([IndexValue<Note>].self))
-        case .removeDraftNotes:
-            self = .removeDraftNotes(noteIndexes: try container.decode([Int].self))
-        case .insertContents:
-            self = .insertContents(try container.decode([IndexValue<Content>].self))
-        case .replaceContents:
-            self = .replaceContents(try container.decode([IndexValue<Content>].self))
-        case .removeContents:
-            self = .removeContents(contentIndexes: try container.decode([Int].self))
-        case .setScoreOption:
-            self = .setScoreOption(try container.decode(ScoreOption.self))
-        case .setSheetOption:
-            self = .setSheetOption(try container.decode(SheetOption.self))
-        case .setSelection:
-            self = .setSelection(try container.decode(SheetSelection.self))
-        }
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        switch self {
-        case .appendLine(let line):
-            try container.encode(CodingTypeKey.appendLine)
-            try container.encode(line)
-        case .appendLines(let lines):
-            try container.encode(CodingTypeKey.appendLines)
-            try container.encode(lines)
-        case .appendPlanes(let planes):
-            try container.encode(CodingTypeKey.appendPlanes)
-            try container.encode(planes)
-        case .removeLastLines(let lineCount):
-            try container.encode(CodingTypeKey.removeLastLines)
-            try container.encode(lineCount)
-        case .removeLastPlanes(let planesCount):
-            try container.encode(CodingTypeKey.removeLastPlanes)
-            try container.encode(planesCount)
-        case .insertLines(let lineIndexValues):
-            try container.encode(CodingTypeKey.insertLines)
-            try container.encode(lineIndexValues)
-        case .insertPlanes(let planeIndexValues):
-            try container.encode(CodingTypeKey.insertPlanes)
-            try container.encode(planeIndexValues)
-        case .replaceLines(let vs):
-            try container.encode(CodingTypeKey.replaceLines)
-            try container.encode(vs)
-        case .replacePlanes(let vs):
-            try container.encode(CodingTypeKey.replacePlanes)
-            try container.encode(vs)
-        case .removeLines(let lineIndexes):
-            try container.encode(CodingTypeKey.removeLines)
-            try container.encode(lineIndexes)
-        case .removePlanes(let planeIndexes):
-            try container.encode(CodingTypeKey.removePlanes)
-            try container.encode(planeIndexes)
-        case .setPlaneValue(let planeValue):
-            try container.encode(CodingTypeKey.setPlaneValue)
-            try container.encode(planeValue)
-        case .changeToDraft(let isReverse):
-            try container.encode(CodingTypeKey.changeToDraft)
-            try container.encode(isReverse)
-        case .setPicture(let picture):
-            try container.encode(CodingTypeKey.setPicture)
-            try container.encode(picture)
-        case .insertDraftLines(let lineIndexValues):
-            try container.encode(CodingTypeKey.insertDraftLines)
-            try container.encode(lineIndexValues)
-        case .insertDraftPlanes(let planeIndexValues):
-            try container.encode(CodingTypeKey.insertDraftPlanes)
-            try container.encode(planeIndexValues)
-        case .removeDraftLines(let lineIndexes):
-            try container.encode(CodingTypeKey.removeDraftLines)
-            try container.encode(lineIndexes)
-        case .removeDraftPlanes(let planeIndexes):
-            try container.encode(CodingTypeKey.removeDraftPlanes)
-            try container.encode(planeIndexes)
-        case .setDraftPicture(let picture):
-            try container.encode(CodingTypeKey.setDraftPicture)
-            try container.encode(picture)
-        case .insertTexts(let texts):
-            try container.encode(CodingTypeKey.insertTexts)
-            try container.encode(texts)
-        case .replaceTexts(let vs):
-            try container.encode(CodingTypeKey.replaceTexts)
-            try container.encode(vs)
-        case .removeTexts(let textIndexes):
-            try container.encode(CodingTypeKey.removeTexts)
-            try container.encode(textIndexes)
-        case .replaceString(let textValue):
-            try container.encode(CodingTypeKey.replaceString)
-            try container.encode(textValue)
-        case .changedColors(let colorUndoValue):
-            try container.encode(CodingTypeKey.changedColors)
-            try container.encode(colorUndoValue)
-        case .insertBorders(let borders):
-            try container.encode(CodingTypeKey.insertBorders)
-            try container.encode(borders)
-        case .removeBorders(let borderIndexes):
-            try container.encode(CodingTypeKey.removeBorders)
-            try container.encode(borderIndexes)
-        case .setRootKeyframeIndex(let keyframeIndex):
-            try container.encode(CodingTypeKey.setRootKeyframeIndex)
-            try container.encode(keyframeIndex)
-        case .insertKeyframes(let pivs):
-            try container.encode(CodingTypeKey.insertKeyframes)
-            try container.encode(pivs)
-        case .removeKeyframes(let indexes):
-            try container.encode(CodingTypeKey.removeKeyframes)
-            try container.encode(indexes)
-        case .setKeyframeOptions(let options):
-            try container.encode(CodingTypeKey.setKeyframeOptions)
-            try container.encode(options)
-        case .insertKeyLines(let kvs):
-            try container.encode(CodingTypeKey.insertKeyLines)
-            try container.encode(kvs)
-        case .replaceKeyLines(let kvs):
-            try container.encode(CodingTypeKey.replaceKeyLines)
-            try container.encode(kvs)
-        case .removeKeyLines(let iivs):
-            try container.encode(CodingTypeKey.removeKeyLines)
-            try container.encode(iivs)
-        case .insertKeyPlanes(let kvs):
-            try container.encode(CodingTypeKey.insertKeyPlanes)
-            try container.encode(kvs)
-        case .replaceKeyPlanes(let kvs):
-            try container.encode(CodingTypeKey.replaceKeyPlanes)
-            try container.encode(kvs)
-        case .removeKeyPlanes(let iivs):
-            try container.encode(CodingTypeKey.removeKeyPlanes)
-            try container.encode(iivs)
-        case .insertDraftKeyLines(let kvs):
-            try container.encode(CodingTypeKey.insertDraftKeyLines)
-            try container.encode(kvs)
-        case .removeDraftKeyLines(let iivs):
-            try container.encode(CodingTypeKey.removeDraftKeyLines)
-            try container.encode(iivs)
-        case .insertDraftKeyPlanes(let kvs):
-            try container.encode(CodingTypeKey.insertDraftKeyPlanes)
-            try container.encode(kvs)
-        case .removeDraftKeyPlanes(let iivs):
-            try container.encode(CodingTypeKey.removeDraftKeyPlanes)
-            try container.encode(iivs)
-        case .setLineIDs(let idvs):
-            try container.encode(CodingTypeKey.setLineIDs)
-            try container.encode(idvs)
-        case .setAnimationOption(let option):
-            try container.encode(CodingTypeKey.setAnimationOption)
-            try container.encode(option)
-        case .insertNotes(let vs):
-            try container.encode(CodingTypeKey.insertNotes)
-            try container.encode(vs)
-        case .replaceNotes(let vs):
-            try container.encode(CodingTypeKey.replaceNotes)
-            try container.encode(vs)
-        case .removeNotes(let vs):
-            try container.encode(CodingTypeKey.removeNotes)
-            try container.encode(vs)
-        case .insertDraftNotes(let noteIndexValues):
-            try container.encode(CodingTypeKey.insertDraftNotes)
-            try container.encode(noteIndexValues)
-        case .removeDraftNotes(let noteIndexes):
-            try container.encode(CodingTypeKey.removeDraftNotes)
-            try container.encode(noteIndexes)
-        case .insertContents(let vs):
-            try container.encode(CodingTypeKey.insertContents)
-            try container.encode(vs)
-        case .replaceContents(let vs):
-            try container.encode(CodingTypeKey.replaceContents)
-            try container.encode(vs)
-        case .removeContents(let vs):
-            try container.encode(CodingTypeKey.removeContents)
-            try container.encode(vs)
-        case .setScoreOption(let option):
-            try container.encode(CodingTypeKey.setScoreOption)
-            try container.encode(option)
-        case .setSheetOption(let option):
-            try container.encode(CodingTypeKey.setSheetOption)
-            try container.encode(option)
-        case .setSelection(let selection):
-            try container.encode(CodingTypeKey.setSelection)
-            try container.encode(selection)
-        }
-    }
-}
-extension SheetUndoItem: CustomStringConvertible {
-    var description: String {
-        switch self {
-        case .appendLine: "appendLine"
-        case .appendLines: "appendLines"
-        case .appendPlanes: "appendPlanes"
-        case .removeLastLines: "removeLastLines"
-        case .removeLastPlanes: "removeLastPlanes"
-        case .insertLines: "insertLines"
-        case .insertPlanes: "insertPlane"
-        case .replaceLines: "replaceLines"
-        case .replacePlanes: "replacePlanes"
-        case .removeLines: "removeLines"
-        case .removePlanes: "removePlanes"
-        case .setPlaneValue: "setPlaneValue"
-        case .changeToDraft: "changeToDraft"
-        case .setPicture: "setPicture"
-        case .insertDraftLines: "insertDraftLines"
-        case .insertDraftPlanes: "insertDraftPlanes"
-        case .removeDraftLines: "removeDraftLines"
-        case .removeDraftPlanes: "removeDraftPlanes"
-        case .setDraftPicture: "setDraftPicture"
-        case .insertTexts: "insertTexts"
-        case .replaceTexts: "replaceTexts"
-        case .removeTexts: "removeTexts"
-        case .replaceString: "replaceString"
-        case .changedColors: "changedColors"
-        case .insertBorders: "insertBorders"
-        case .removeBorders: "removeBorders"
-        case .setRootKeyframeIndex: "setRootKeyframeIndex"
-        case .insertKeyframes: "insertKeyframes"
-        case .removeKeyframes: "removeKeyframes"
-        case .setKeyframeOptions: "setKeyframeOptions"
-        case .insertKeyLines: "insertKeyLines"
-        case .replaceKeyLines: "replaceKeyLines"
-        case .removeKeyLines: "removeKeyLines"
-        case .insertKeyPlanes: "insertKeyPlanes"
-        case .replaceKeyPlanes: "replaceKeyPlanes"
-        case .removeKeyPlanes: "removeKeyPlanes"
-        case .insertDraftKeyLines: "insertDraftKeyLines"
-        case .removeDraftKeyLines: "removeDraftKeyLines"
-        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
-        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
-        case .setLineIDs: "setLineIDs"
-        case .setAnimationOption: "setAnimationOption"
-        case .insertNotes: "insertNotes"
-        case .replaceNotes: "replaceNotes"
-        case .removeNotes: "removeNotes"
-        case .insertDraftNotes: "insertDraftNotes"
-        case .removeDraftNotes: "removeDraftNotes"
-        case .insertContents: "insertContents"
-        case .replaceContents: "replaceContents"
-        case .removeContents: "removeContents"
-        case .setScoreOption: "setScoreOption"
-        case .setSheetOption: "setSheetOption"
-        case .setSelection: "setSelection"
-        }
-    }
-}
-
-struct Border {
+struct Border: Hashable, Codable {
     var location = 0.0, orientation = Orientation.horizontal
 }
 extension Border {
@@ -1463,7 +42,6 @@ extension Border: Protobuf {
         }
     }
 }
-extension Border: Hashable, Codable {}
 extension Border {
     init(position: Point, border: Border) {
         switch border.orientation {
@@ -1554,7 +132,7 @@ protocol Picable {
     var draftPicture: Picture { get set }
 }
 
-struct KeyframeOption {
+struct KeyframeOption: Hashable, Codable {
     var beat = Rational(0)
     var previousPosition = Point(), nextPosition = Point()
 }
@@ -1572,9 +150,8 @@ extension KeyframeOption: Protobuf {
         }
     }
 }
-extension KeyframeOption: Hashable, Codable {}
 
-struct Keyframe: Picable {
+struct Keyframe: Picable, Hashable, Codable {
     var picture = Picture() {
         didSet {
             isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
@@ -1638,7 +215,6 @@ extension Keyframe {
         }
     }
 }
-extension Keyframe: Hashable, Codable {}
 extension Keyframe: AppliableTransform {
     static func * (lhs: Self, rhs: Transform) -> Self {
         .init(picture: lhs.picture * rhs,
@@ -1665,7 +241,7 @@ extension Keyframe: Protobuf {
     }
 }
 
-struct AnimationOption {
+struct AnimationOption: Hashable, Codable {
     var beatRange = Music.defaultBeatRange
     var loopDurBeat: Rational = 0
     var tempo = Music.defaultTempo
@@ -1696,7 +272,6 @@ extension AnimationOption: Protobuf {
         }
     }
 }
-extension AnimationOption: Hashable, Codable {}
 extension AnimationOption {
     var endLoopDurBeat: Rational {
         beatRange.end + loopDurBeat
@@ -1753,7 +328,7 @@ extension AnimationCompressor: Protobuf {
     }
 }
 
-struct Animation {
+struct Animation: Hashable, Codable {
     var keyframes = [Keyframe]()
 
     var rootBeat = Rational(0) {
@@ -1794,7 +369,6 @@ struct Animation {
             0 : index(atRootBeat: rootBeat)
     }
 }
-extension Animation: Hashable, Codable {}
 extension Animation: Protobuf {
     init(_ pb: PBAnimation) throws {
         keyframes = pb.keyframes.compactMap { try? Keyframe($0) }.sorted(by: { $0.beat < $1.beat })
@@ -2382,7 +956,7 @@ extension PreviousNext: Protobuf {
     }
 }
 
-struct SheetOption {
+struct SheetOption: Hashable, Codable {
     var mainFrame = Sheet.defaultBounds
 }
 extension SheetOption: Protobuf {
@@ -2398,7 +972,6 @@ extension SheetOption: Protobuf {
         }
     }
 }
-extension SheetOption: Hashable, Codable {}
 
 struct TextSelection: Hashable, Codable {
     var ranges = [Range<Int>]()
@@ -2563,7 +1136,7 @@ extension SheetSelection: Protobuf {
     }
 }
 
-struct Sheet {
+struct Sheet: Hashable, Codable {
     var animation = Animation(keyframes: [Keyframe(beat: 0)])
     var score = Score()
     var texts = [Text]()
@@ -2617,7 +1190,6 @@ extension Sheet: Protobuf {
         }
     }
 }
-extension Sheet: Hashable, Codable {}
 extension Sheet {
     static let width = 720.0, height = 720.0
     static let defaultBounds = Rect(width: width, height: height)
@@ -3204,6 +1776,1091 @@ extension Sheet {
         }
         set {
             mainFrame = newValue.mainFrame
+        }
+    }
+}
+
+struct InterOption: Hashable, Codable {
+    var id = UUID()
+    var interType = InterType.none
+}
+extension InterOption {
+    func with(_ id: UUID) -> Self {
+        .init(id: id, interType: interType)
+    }
+    func with(_ interType: InterType) -> Self {
+        .init(id: id, interType: interType)
+    }
+}
+extension InterOption: Protobuf {
+    init(_ pb: PBInterOption) throws {
+        self.id = (try? .init(pb.id)) ?? .init()
+        self.interType = (try? .init(pb.interType)) ?? .none
+    }
+    var pb: PBInterOption {
+        .with {
+            $0.id = id.pb
+            $0.interType = interType.pb
+        }
+    }
+}
+extension Line {
+    var interOption: InterOption {
+        get {
+            .init(id: interID, interType: interType)
+        }
+        set {
+            self.interID = newValue.id
+            self.interType = newValue.interType
+        }
+    }
+}
+
+struct PlaneValue: Hashable, Codable {
+    var planes: [Plane]
+    var moveIndexValues: [IndexValue<Int>]
+}
+extension PlaneValue: Protobuf {
+    init(_ pb: PBPlaneValue) throws {
+        planes = try pb.planes.map { try .init($0) }
+        moveIndexValues = try pb.moveIndexValues.map { try .init($0) }
+    }
+    var pb: PBPlaneValue {
+        .with {
+            $0.planes = planes.map { $0.pb }
+            $0.moveIndexValues = moveIndexValues.map { $0.pb }
+        }
+    }
+}
+
+struct ColorValue: Hashable, Codable {
+    var uuColor: UUColor
+    var planeIndexes = [Int](), lineIndexes = [Int](), isBackground = false
+    var planeAnimationIndexes = [IndexValue<[Int]>]()
+    var lineAnimationIndexes = [IndexValue<[Int]>]()
+    var animationColors = [Color]()
+}
+extension ColorValue: Protobuf {
+    init(_ pb: PBColorValue) throws {
+        uuColor = try .init(pb.uuColor)
+        planeIndexes = pb.planeIndexes.map { max(.init($0), 0) }
+        lineIndexes = pb.lineIndexes.map { max(.init($0), 0) }
+        planeAnimationIndexes = try .init(pb.planeAnimationIndexes)
+        lineAnimationIndexes = try .init(pb.lineAnimationIndexes)
+        animationColors = pb.animationColors.compactMap { try? .init($0) }
+        isBackground = pb.isBackground
+    }
+    var pb: PBColorValue {
+        .with {
+            $0.uuColor = uuColor.pb
+            $0.planeIndexes = planeIndexes.map { .init($0) }
+            $0.lineIndexes = lineIndexes.map { .init($0) }
+            $0.planeAnimationIndexes = planeAnimationIndexes.pb
+            $0.lineAnimationIndexes = lineAnimationIndexes.pb
+            $0.animationColors = animationColors.map { $0.pb }
+            $0.isBackground = isBackground
+        }
+    }
+}
+
+struct TextValue: Hashable, Codable {
+    var string: String, replacedRange: Range<Int>,
+        origin: Point?, size: Double?, widthCount: Double?
+}
+extension TextValue {
+    var newRange: Range<Int> {
+        replacedRange.lowerBound ..< (replacedRange.lowerBound + string.count)
+    }
+}
+extension TextValue: Protobuf {
+    init(_ pb: PBTextValue) throws {
+        string = pb.string
+        replacedRange = try IntRange(pb.replacedRange).value
+        if case .origin(let origin)? = pb.originOptional {
+            self.origin = try Point(origin)
+        } else {
+            origin = nil
+        }
+        if case .size(let size)? = pb.sizeOptional {
+            self.size = size
+        } else {
+            size = nil
+        }
+        if case .widthCount(let widthCount)? = pb.widthCountOptional {
+            self.widthCount = widthCount
+        } else {
+            widthCount = nil
+        }
+    }
+    var pb: PBTextValue {
+        .with {
+            $0.string = string
+            $0.replacedRange = IntRange(value: replacedRange).pb
+            if let origin {
+                $0.originOptional = .origin(origin.pb)
+            } else {
+                $0.originOptional = nil
+            }
+            if let size {
+                $0.sizeOptional = .size(size)
+            } else {
+                $0.sizeOptional = nil
+            }
+            if let widthCount {
+                $0.widthCountOptional = .widthCount(widthCount)
+            } else {
+                $0.widthCountOptional = nil
+            }
+        }
+    }
+}
+
+struct SheetValue: Hashable, Codable {
+    var lines = [Line](), planes = [Plane](),
+        texts = [Text](), contents = [Content](), origin = Point()
+    var scale = 1.0
+    var id = UUID(), rootKeyframeIndex = 0
+    var keyframes = [Keyframe]()
+    var keyframeBeganIndex = 0
+    var isSelected: Bool
+}
+extension SheetValue {
+    var string: String? {
+        if texts.count == 1 {
+            texts[0].string
+        } else {
+            nil
+        }
+    }
+    var allTextsString: String {
+        let strings = texts
+            .sorted { $0.origin.y == $1.origin.y ?
+                $0.origin.x < $1.origin.x : $0.origin.y > $1.origin.y }
+            .map { $0.string }
+        var str = ""
+        for nstr in strings {
+            str += nstr
+            str += "\n\n\n\n"
+        }
+        return str
+    }
+}
+extension SheetValue: Protobuf {
+    init(_ pb: PBSheetValue) throws {
+        lines = try pb.lines.map { try Line($0) }
+        planes = try pb.planes.map { try Plane($0) }
+        texts = try pb.texts.map { try Text($0) }
+        contents = try pb.contents.map { try Content($0) }
+        origin = try Point(pb.origin)
+        scale = pb.scale == 0 ? 1 : pb.scale
+        id = try UUID(pb.id)
+        rootKeyframeIndex = Int(pb.rootKeyframeIndex)
+        keyframes = try pb.keyframes.map { try Keyframe($0) }
+        keyframeBeganIndex = Int(pb.keyframeBeganIndex)
+            .clipped(min: 0, max: keyframes.count - 1)
+        isSelected = pb.isSelected
+    }
+    var pb: PBSheetValue {
+        .with {
+            $0.lines = lines.map { $0.pb }
+            $0.planes = planes.map { $0.pb }
+            $0.texts = texts.map { $0.pb }
+            $0.contents = contents.map { $0.pb }
+            $0.origin = origin.pb
+            $0.scale = scale
+            $0.id = id.pb
+            $0.rootKeyframeIndex = Int64(rootKeyframeIndex)
+            $0.keyframes = keyframes.map { $0.pb }
+            $0.keyframeBeganIndex = Int64(keyframeBeganIndex)
+            $0.isSelected = isSelected
+        }
+    }
+}
+extension SheetValue: AppliableTransform {
+    static func * (lhs: SheetValue, rhs: Transform) -> SheetValue {
+        SheetValue(lines: lhs.lines.map { $0 * rhs },
+                   planes: lhs.planes.map { $0 * rhs },
+                   texts: lhs.texts.map { $0 * rhs },
+                   contents: lhs.contents.map { $0 * rhs },
+                   origin: lhs.origin,
+                   scale: lhs.scale,
+                   id: lhs.id,
+                   rootKeyframeIndex: lhs.rootKeyframeIndex,
+                   keyframes: lhs.keyframes.map { $0 * rhs },
+                   keyframeBeganIndex: lhs.keyframeBeganIndex,
+                   isSelected: lhs.isSelected)
+    }
+}
+extension SheetValue {
+    var isEmpty: Bool {
+        lines.isEmpty && planes.isEmpty && texts.isEmpty && keyframes.isEmpty
+    }
+    static func + (lhs: SheetValue, rhs: SheetValue) -> SheetValue {
+        SheetValue(lines: lhs.lines + rhs.lines,
+                   planes: lhs.planes + rhs.planes,
+                   texts: lhs.texts + rhs.texts,
+                   contents: lhs.contents + rhs.contents,
+                   origin: lhs.origin,
+                   id: lhs.id == rhs.id ? lhs.id : UUID(),
+                   rootKeyframeIndex: lhs.rootKeyframeIndex,
+                   keyframes: lhs.keyframes + rhs.keyframes,
+                   keyframeBeganIndex: lhs.keyframeBeganIndex,
+                   isSelected: lhs.isSelected)
+    }
+    static func += (lhs: inout SheetValue, rhs: SheetValue) {
+        lhs.lines += rhs.lines
+        lhs.planes += rhs.planes
+        lhs.texts += rhs.texts
+        lhs.contents += rhs.contents
+        lhs.keyframeBeganIndex += rhs.keyframeBeganIndex
+        if lhs.id != rhs.id {
+            lhs.id = UUID()
+        }
+    }
+}
+
+extension Array where Element == Int {
+    init(_ pb: PBInt64Array) throws {
+        self = pb.value.map { Int($0) }
+    }
+    var pb: PBInt64Array {
+        .with { $0.value = map { Int64($0) } }
+    }
+}
+extension Array where Element == Line {
+    init(_ pb: PBLineArray) throws {
+        self = try pb.value.map { try Line($0) }
+    }
+    var pb: PBLineArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == Plane {
+    init(_ pb: PBPlaneArray) throws {
+        self = try pb.value.map { try Plane($0) }
+    }
+    var pb: PBPlaneArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == UUID {
+    init(_ pb: PBUUIDArray) throws {
+        self = try pb.value.map { try .init($0) }
+    }
+    var pb: PBUUIDArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension IndexValue where Value == Int {
+    init(_ pb: PBIntIndexValue) throws {
+        value = Int(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBIntIndexValue {
+        .with {
+            $0.value = Int64(value)
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == [Int] {
+    init(_ pb: PBIntArrayIndexValue) throws {
+        value = try [Int](pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBIntArrayIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension Array where Element == IndexValue<Int> {
+    init(_ pb: PBIntIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Int>($0) }
+    }
+    var pb: PBIntIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<[Int]> {
+    init(_ pb: PBIntArrayIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<[Int]>($0) }
+    }
+    var pb: PBIntArrayIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension IndexValue where Value == Line {
+    init(_ pb: PBLineIndexValue) throws {
+        value = try Line(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBLineIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == [IndexValue<Line>] {
+    init(_ pb: PBLineIndexValueArrayIndexValue) throws {
+        value = try pb.value.map { try IndexValue<Line>($0) }
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBLineIndexValueArrayIndexValue {
+        .with {
+            $0.value = value.map { $0.pb }
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Plane {
+    init(_ pb: PBPlaneIndexValue) throws {
+        value = try Plane(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBPlaneIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == [IndexValue<Plane>] {
+    init(_ pb: PBPlaneIndexValueArrayIndexValue) throws {
+        value = try pb.value.map { try IndexValue<Plane>($0) }
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBPlaneIndexValueArrayIndexValue {
+        .with {
+            $0.value = value.map { $0.pb }
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == InterOption {
+    init(_ pb: PBInterOptionIndexValue) throws {
+        value = try InterOption(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBInterOptionIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == [IndexValue<InterOption>] {
+    init(_ pb: PBInterOptionIndexValueArrayIndexValue) throws {
+        value = try pb.value.map { try IndexValue<InterOption>($0) }
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBInterOptionIndexValueArrayIndexValue {
+        .with {
+            $0.value = value.map { $0.pb }
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Text {
+    init(_ pb: PBTextIndexValue) throws {
+        value = try Text(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBTextIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Note {
+    init(_ pb: PBNoteIndexValue) throws {
+        value = (try? .init(pb.value)) ?? .init()
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBNoteIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Content {
+    init(_ pb: PBContentIndexValue) throws {
+        value = (try? .init(pb.value)) ?? .init()
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBContentIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Border {
+    init(_ pb: PBBorderIndexValue) throws {
+        value = try Border(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBBorderIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == TextValue {
+    init(_ pb: PBTextValueIndexValue) throws {
+        value = try TextValue(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBTextValueIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == Keyframe {
+    init(_ pb: PBKeyframeIndexValue) throws {
+        value = try Keyframe(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBKeyframeIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension IndexValue where Value == KeyframeOption {
+    init(_ pb: PBKeyframeOptionIndexValue) throws {
+        value = try KeyframeOption(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBKeyframeOptionIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
+extension Array where Element == IndexValue<Line> {
+    init(_ pb: PBLineIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Line>($0) }
+    }
+    var pb: PBLineIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Plane> {
+    init(_ pb: PBPlaneIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Plane>($0) }
+    }
+    var pb: PBPlaneIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<InterOption> {
+    init(_ pb: PBInterOptionIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<InterOption>($0) }
+    }
+    var pb: PBInterOptionIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Text> {
+    init(_ pb: PBTextIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Text>($0) }
+    }
+    var pb: PBTextIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Note> {
+    init(_ pb: PBNoteIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Note>($0) }
+    }
+    var pb: PBNoteIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Content> {
+    init(_ pb: PBContentIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Content>($0) }
+    }
+    var pb: PBContentIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Border> {
+    init(_ pb: PBBorderIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Border>($0) }
+    }
+    var pb: PBBorderIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<Keyframe> {
+    init(_ pb: PBKeyframeIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<Keyframe>($0) }
+    }
+    var pb: PBKeyframeIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<KeyframeOption> {
+    init(_ pb: PBKeyframeOptionIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<KeyframeOption>($0) }
+    }
+    var pb: PBKeyframeOptionIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<[IndexValue<Line>]> {
+    init(_ pb: PBLineIndexValueArrayIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<[IndexValue<Line>]>($0) }
+    }
+    var pb: PBLineIndexValueArrayIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<[IndexValue<Plane>]> {
+    init(_ pb: PBPlaneIndexValueArrayIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<[IndexValue<Plane>]>($0) }
+    }
+    var pb: PBPlaneIndexValueArrayIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+extension Array where Element == IndexValue<[IndexValue<InterOption>]> {
+    init(_ pb: PBInterOptionIndexValueArrayIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<[IndexValue<InterOption>]>($0) }
+    }
+    var pb: PBInterOptionIndexValueArrayIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
+
+enum SheetUndoItem: Codable {
+    case appendLine(_ line: Line)
+    case appendLines(_ lines: [Line])
+    case appendPlanes(_ planes: [Plane])
+    case removeLastLines(count: Int)
+    case removeLastPlanes(count: Int)
+    case insertLines(_ lineIndexValues: [IndexValue<Line>])
+    case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case replaceLines(_ lineIndexValue: [IndexValue<Line>])
+    case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
+    case removeLines(lineIndexes: [Int])
+    case removePlanes(planeIndexes: [Int])
+    case setPlaneValue(_ planeValue: PlaneValue)
+    case changeToDraft(isReverse: Bool)
+    case setPicture(_ picture: Picture)
+    case insertDraftLines(_ lineIndexValues: [IndexValue<Line>])
+    case insertDraftPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case removeDraftLines(lineIndexes: [Int])
+    case removeDraftPlanes(planeIndexes: [Int])
+    case setDraftPicture(_ picture: Picture)
+    case insertTexts(_ textIndexValues: [IndexValue<Text>])
+    case replaceTexts(_ textIndexValue: [IndexValue<Text>])
+    case removeTexts(textIndexes: [Int])
+    case replaceString(_ textIndexValue: IndexValue<TextValue>)
+    case changedColors(_ colorUndoValue: ColorValue)
+    case insertBorders(_ borderIndexValues: [IndexValue<Border>])
+    case removeBorders(borderIndexes: [Int])
+    case setRootKeyframeIndex(rootKeyframeIndex: Int)
+    case insertKeyframes(_ pivs: [IndexValue<Keyframe>])
+    case removeKeyframes(keyframeIndexes: [Int])
+    case setKeyframeOptions(_ options: [IndexValue<KeyframeOption>])
+    case insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
+    case insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
+    case insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case removeDraftKeyLines(_ indexes: [IndexValue<[Int]>])
+    case insertDraftKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case removeDraftKeyPlanes(_ indexes: [IndexValue<[Int]>])
+    case setLineIDs(_ idvs: [IndexValue<[IndexValue<InterOption>]>])
+    case setAnimationOption(_ option: AnimationOption)
+    case insertNotes(_ noteIndexValues: [IndexValue<Note>])
+    case replaceNotes(_ noteIndexValue: [IndexValue<Note>])
+    case removeNotes(noteIndexes: [Int])
+    case insertDraftNotes(_ noteIndexValues: [IndexValue<Note>])
+    case removeDraftNotes(noteIndexes: [Int])
+    case insertContents(_ contentIndexValues: [IndexValue<Content>])
+    case replaceContents(_ contentIndexValue: [IndexValue<Content>])
+    case removeContents(contentIndexes: [Int])
+    case setScoreOption(_ option: ScoreOption)
+    case setSheetOption(_ option: SheetOption)
+    case setSelection(_ selection: SheetSelection)
+}
+extension SheetUndoItem: UndoItem {
+    var type: UndoItemType {
+        switch self {
+        case .appendLine: .reversible
+        case .appendLines: .reversible
+        case .appendPlanes: .reversible
+        case .removeLastLines: .unreversible
+        case .removeLastPlanes: .unreversible
+        case .insertLines: .reversible
+        case .insertPlanes: .reversible
+        case .replaceLines: .lazyReversible
+        case .replacePlanes: .lazyReversible
+        case .removeLines: .unreversible
+        case .removePlanes: .unreversible
+        case .setPlaneValue: .lazyReversible
+        case .changeToDraft: .reversible
+        case .setPicture: .lazyReversible
+        case .insertDraftLines: .reversible
+        case .insertDraftPlanes: .reversible
+        case .removeDraftLines: .unreversible
+        case .removeDraftPlanes: .unreversible
+        case .setDraftPicture: .lazyReversible
+        case .insertTexts: .reversible
+        case .replaceTexts: .lazyReversible
+        case .removeTexts: .unreversible
+        case .replaceString: .lazyReversible
+        case .changedColors: .lazyReversible
+        case .insertBorders: .reversible
+        case .removeBorders: .unreversible
+        case .setRootKeyframeIndex: .lazyReversible
+        case .insertKeyframes: .reversible
+        case .removeKeyframes: .unreversible
+        case .setKeyframeOptions: .lazyReversible
+        case .insertKeyLines: .reversible
+        case .replaceKeyLines: .lazyReversible
+        case .removeKeyLines: .unreversible
+        case .insertKeyPlanes: .reversible
+        case .replaceKeyPlanes: .lazyReversible
+        case .removeKeyPlanes: .unreversible
+        case .insertDraftKeyLines: .reversible
+        case .removeDraftKeyLines: .unreversible
+        case .insertDraftKeyPlanes: .reversible
+        case .removeDraftKeyPlanes: .unreversible
+        case .setLineIDs: .lazyReversible
+        case .setAnimationOption: .lazyReversible
+        case .insertNotes: .reversible
+        case .replaceNotes: .lazyReversible
+        case .removeNotes: .unreversible
+        case .insertDraftNotes: .reversible
+        case .removeDraftNotes: .unreversible
+        case .insertContents: .reversible
+        case .replaceContents: .lazyReversible
+        case .removeContents: .unreversible
+        case .setScoreOption: .lazyReversible
+        case .setSheetOption: .lazyReversible
+        case .setSelection: .lazyReversible
+        }
+    }
+    func reversed() -> SheetUndoItem? {
+        switch self {
+        case .appendLine:
+             .removeLastLines(count: 1)
+        case .appendLines(let lines):
+             .removeLastLines(count: lines.count)
+        case .appendPlanes(let planes):
+             .removeLastPlanes(count: planes.count)
+        case .removeLastLines:
+             nil
+        case .removeLastPlanes:
+             nil
+        case .insertLines(let livs):
+             .removeLines(lineIndexes: livs.map { $0.index })
+        case .insertPlanes(let pivs):
+             .removePlanes(planeIndexes: pivs.map { $0.index })
+        case .replaceLines:
+             self
+        case .replacePlanes:
+             self
+        case .removeLines:
+             nil
+        case .removePlanes:
+             nil
+        case .setPlaneValue:
+             self
+        case .changeToDraft(let isReverse):
+             .changeToDraft(isReverse: !isReverse)
+        case .setPicture(_):
+             self
+        case .insertDraftLines(let livs):
+             .removeDraftLines(lineIndexes: livs.map { $0.index })
+        case .insertDraftPlanes(let pivs):
+             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
+        case .removeDraftLines:
+             nil
+        case .removeDraftPlanes:
+             nil
+        case .setDraftPicture(_):
+             self
+        case .insertTexts(let tivs):
+             .removeTexts(textIndexes: tivs.map { $0.index })
+        case .replaceTexts:
+             self
+        case .removeTexts:
+             nil
+        case .replaceString(_):
+             self
+        case .changedColors(_):
+             self
+        case .insertBorders(let bivs):
+             .removeBorders(borderIndexes: bivs.map { $0.index })
+        case .removeBorders:
+             nil
+        case .setRootKeyframeIndex:
+             self
+        case .insertKeyframes(let pivs):
+             .removeKeyframes(keyframeIndexes: pivs.map { $0.index })
+        case .removeKeyframes:
+             nil
+        case .setKeyframeOptions:
+             self
+        case .insertKeyLines(let kivs):
+             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .replaceKeyLines:
+             self
+        case .removeKeyLines:
+             nil
+        case .insertKeyPlanes(let kivs):
+             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .replaceKeyPlanes:
+             self
+        case .removeKeyPlanes:
+             nil
+        case .insertDraftKeyLines(let kivs):
+             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .removeDraftKeyLines:
+             nil
+        case .insertDraftKeyPlanes(let kivs):
+             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .removeDraftKeyPlanes:
+             nil
+        case .setLineIDs:
+             self
+        case .setAnimationOption:
+             self
+        
+        case .insertNotes(let nivs):
+             .removeNotes(noteIndexes: nivs.map { $0.index })
+        case .replaceNotes:
+             self
+        case .removeNotes:
+             nil
+            
+        case .insertDraftNotes(let nivs):
+             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
+        case .removeDraftNotes:
+             nil
+            
+        case .insertContents(let civs):
+             .removeContents(contentIndexes: civs.map { $0.index })
+        case .replaceContents:
+             self
+        case .removeContents:
+             nil
+            
+        case .setScoreOption:
+             self
+            
+        case .setSheetOption:
+             self
+            
+        case .setSelection:
+             self
+        }
+    }
+}
+extension SheetUndoItem: Protobuf {
+    init(_ pb: PBSheetUndoItem) throws {
+        guard let value = pb.value else {
+            throw ProtobufError()
+        }
+        switch value {
+        case .appendLine(let line):
+            self = .appendLine(try Line(line))
+        case .appendLines(let lines):
+            self = .appendLines(try [Line](lines))
+        case .appendPlanes(let planes):
+            self = .appendPlanes(try [Plane](planes))
+        case .removeLastLines(let lineCount):
+            self = .removeLastLines(count: Int(lineCount))
+        case .removeLastPlanes(let planesCount):
+            self = .removeLastPlanes(count: Int(planesCount))
+        case .insertLines(let lineIndexValues):
+            self = .insertLines(try [IndexValue<Line>](lineIndexValues))
+        case .insertPlanes(let planeIndexValues):
+            self = .insertPlanes(try [IndexValue<Plane>](planeIndexValues))
+        case .replaceLines(let lines):
+            self = .replaceLines(try [IndexValue<Line>](lines))
+        case .replacePlanes(let planes):
+            self = .replacePlanes(try [IndexValue<Plane>](planes))
+        case .removeLines(let lineIndexes):
+            self = .removeLines(lineIndexes: try [Int](lineIndexes))
+        case .removePlanes(let planeIndexes):
+            self = .removePlanes(planeIndexes: try [Int](planeIndexes))
+        case .setPlaneValue(let planeValue):
+            self = .setPlaneValue(try PlaneValue(planeValue))
+        case .changeToDraft(let isReverse):
+            self = .changeToDraft(isReverse: isReverse)
+        case .setPicture(let picture):
+            self = .setPicture(try Picture(picture))
+        case .insertDraftLines(let lineIndexValues):
+            self = .insertDraftLines(try [IndexValue<Line>](lineIndexValues))
+        case .insertDraftPlanes(let planeIndexValues):
+            self = .insertDraftPlanes(try [IndexValue<Plane>](planeIndexValues))
+        case .removeDraftLines(let lineIndexes):
+            self = .removeDraftLines(lineIndexes: try [Int](lineIndexes))
+        case .removeDraftPlanes(let planeIndexes):
+            self = .removeDraftPlanes(planeIndexes: try [Int](planeIndexes))
+        case .setDraftPicture(let picture):
+            self = .setDraftPicture(try Picture(picture))
+        case .insertTexts(let texts):
+            self = .insertTexts(try [IndexValue<Text>](texts))
+        case .replaceTexts(let texts):
+            self = .replaceTexts(try [IndexValue<Text>](texts))
+        case .removeTexts(let textIndexes):
+            self = .removeTexts(textIndexes: try [Int](textIndexes))
+        case .replaceString(let textValue):
+            self = .replaceString(try IndexValue<TextValue>(textValue))
+        case .changedColors(let colorUndoValue):
+            self = .changedColors(try ColorValue(colorUndoValue))
+        case .insertBorders(let borders):
+            self = .insertBorders(try [IndexValue<Border>](borders))
+        case .removeBorders(let borderIndexes):
+            self = .removeBorders(borderIndexes: try [Int](borderIndexes))
+        case .setRootKeyframeIndex(let index):
+            self = .setRootKeyframeIndex(rootKeyframeIndex: Int(index))
+        case .insertKeyframes(let pivs):
+            self = .insertKeyframes(try [IndexValue<Keyframe>](pivs))
+        case .removeKeyframes(let keyframeIndexes):
+            self = .removeKeyframes(keyframeIndexes: try [Int](keyframeIndexes))
+        case .setKeyframeOptions(let option):
+            self = .setKeyframeOptions(try [IndexValue<KeyframeOption>](option))
+        case .insertKeyLines(let kvs):
+            self = .insertKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
+        case .replaceKeyLines(let kvs):
+            self = .replaceKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
+        case .removeKeyLines(let iivs):
+            self = .removeKeyLines(try [IndexValue<[Int]>](iivs))
+        case .insertKeyPlanes(let kvs):
+            self = .insertKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
+        case .replaceKeyPlanes(let kvs):
+            self = .replaceKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
+        case .removeKeyPlanes(let iivs):
+            self = .removeKeyPlanes(try [IndexValue<[Int]>](iivs))
+        case .insertDraftKeyLines(let kvs):
+            self = .insertDraftKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
+        case .removeDraftKeyLines(let iivs):
+            self = .removeDraftKeyLines(try [IndexValue<[Int]>](iivs))
+        case .insertDraftKeyPlanes(let kvs):
+            self = .insertDraftKeyPlanes(try [IndexValue<[IndexValue<Plane>]>](kvs))
+        case .removeDraftKeyPlanes(let iivs):
+            self = .removeDraftKeyPlanes(try [IndexValue<[Int]>](iivs))
+        case .setLineIds(let idvs):
+            self = .setLineIDs(try [IndexValue<[IndexValue<InterOption>]>](idvs))
+        case .setAnimationOption(let option):
+            self = .setAnimationOption(try AnimationOption(option))
+        case .insertNotes(let notes):
+            self = .insertNotes(try [IndexValue<Note>](notes))
+        case .replaceNotes(let notes):
+            self = .replaceNotes(try [IndexValue<Note>](notes))
+        case .removeNotes(let noteIndexes):
+            self = .removeNotes(noteIndexes: try [Int](noteIndexes))
+        case .insertDraftNotes(let noteIndexValues):
+            self = .insertDraftNotes(try [IndexValue<Note>](noteIndexValues))
+        case .removeDraftNotes(let noteIndexes):
+            self = .removeDraftNotes(noteIndexes: try [Int](noteIndexes))
+        case .insertContents(let contents):
+            self = .insertContents(try [IndexValue<Content>](contents))
+        case .replaceContents(let contents):
+            self = .replaceContents(try [IndexValue<Content>](contents))
+        case .removeContents(let contentIndexes):
+            self = .removeContents(contentIndexes: try [Int](contentIndexes))
+        case .setScoreOption(let option):
+            self = .setScoreOption(try ScoreOption(option))
+        case .setSheetOption(let option):
+            self = .setSheetOption(try SheetOption(option))
+        case .setSelection(let selection):
+            self = .setSelection(try .init(selection))
+        }
+    }
+    var pb: PBSheetUndoItem {
+        .with {
+            switch self {
+            case .appendLine(let line):
+                $0.value = .appendLine(line.pb)
+            case .appendLines(let lines):
+                $0.value = .appendLines(lines.pb)
+            case .appendPlanes(let planes):
+                $0.value = .appendPlanes(planes.pb)
+            case .removeLastLines(let lineCount):
+                $0.value = .removeLastLines(Int64(lineCount))
+            case .removeLastPlanes(let planesCount):
+                $0.value = .removeLastPlanes(Int64(planesCount))
+            case .insertLines(let lineIndexValues):
+                $0.value = .insertLines(lineIndexValues.pb)
+            case .insertPlanes(let planeIndexValues):
+                $0.value = .insertPlanes(planeIndexValues.pb)
+            case .replaceLines(let livs):
+                $0.value = .replaceLines(livs.pb)
+            case .replacePlanes(let pivs):
+                $0.value = .replacePlanes(pivs.pb)
+            case .removeLines(let lineIndexes):
+                $0.value = .removeLines(lineIndexes.pb)
+            case .removePlanes(let planeIndexes):
+                $0.value = .removePlanes(planeIndexes.pb)
+            case .setPlaneValue(let planeValue):
+                $0.value = .setPlaneValue(planeValue.pb)
+            case .changeToDraft(let isReverse):
+                $0.value = .changeToDraft(isReverse)
+            case .setPicture(let picture):
+                $0.value = .setPicture(picture.pb)
+            case .insertDraftLines(let lineIndexValues):
+                $0.value = .insertDraftLines(lineIndexValues.pb)
+            case .insertDraftPlanes(let planeIndexValues):
+                $0.value = .insertDraftPlanes(planeIndexValues.pb)
+            case .removeDraftLines(let lineIndexes):
+                $0.value = .removeDraftLines(lineIndexes.pb)
+            case .removeDraftPlanes(let planeIndexes):
+                $0.value = .removeDraftPlanes(planeIndexes.pb)
+            case .setDraftPicture(let picture):
+                $0.value = .setDraftPicture(picture.pb)
+            case .insertTexts(let texts):
+                $0.value = .insertTexts(texts.pb)
+            case .replaceTexts(let tivs):
+                $0.value = .replaceTexts(tivs.pb)
+            case .removeTexts(let textIndexes):
+                $0.value = .removeTexts(textIndexes.pb)
+            case .replaceString(let textValue):
+                $0.value = .replaceString(textValue.pb)
+            case .changedColors(let colorUndoValue):
+                $0.value = .changedColors(colorUndoValue.pb)
+            case .insertBorders(let borders):
+                $0.value = .insertBorders(borders.pb)
+            case .removeBorders(let borderIndexes):
+                $0.value = .removeBorders(borderIndexes.pb)
+            case .setRootKeyframeIndex(let keyframeIndex):
+                $0.value = .setRootKeyframeIndex(Int64(keyframeIndex))
+            case .insertKeyframes(let pivs):
+                $0.value = .insertKeyframes(pivs.pb)
+            case .removeKeyframes(let indexes):
+                $0.value = .removeKeyframes(indexes.pb)
+            case .setKeyframeOptions(let option):
+                $0.value = .setKeyframeOptions(option.pb)
+            case .insertKeyLines(let kvs):
+                $0.value = .insertKeyLines(kvs.pb)
+            case .replaceKeyLines(let kvs):
+                $0.value = .replaceKeyLines(kvs.pb)
+            case .removeKeyLines(let iivs):
+                $0.value = .removeKeyLines(iivs.pb)
+            case .insertKeyPlanes(let kvs):
+                $0.value = .insertKeyPlanes(kvs.pb)
+            case .replaceKeyPlanes(let kvs):
+                $0.value = .replaceKeyPlanes(kvs.pb)
+            case .removeKeyPlanes(let iivs):
+                $0.value = .removeKeyPlanes(iivs.pb)
+            case .insertDraftKeyLines(let kvs):
+                $0.value = .insertDraftKeyLines(kvs.pb)
+            case .removeDraftKeyLines(let iivs):
+                $0.value = .removeDraftKeyLines(iivs.pb)
+            case .insertDraftKeyPlanes(let kvs):
+                $0.value = .insertDraftKeyPlanes(kvs.pb)
+            case .removeDraftKeyPlanes(let iivs):
+                $0.value = .removeDraftKeyPlanes(iivs.pb)
+            case .setLineIDs(let idvs):
+                $0.value = .setLineIds(idvs.pb)
+            case .setAnimationOption(let option):
+                $0.value = .setAnimationOption(option.pb)
+            case .insertNotes(let nivs):
+                $0.value = .insertNotes(nivs.pb)
+            case .replaceNotes(let nivs):
+                $0.value = .replaceNotes(nivs.pb)
+            case .removeNotes(let nis):
+                $0.value = .removeNotes(nis.pb)
+            case .insertDraftNotes(let noteIndexValues):
+                $0.value = .insertDraftNotes(noteIndexValues.pb)
+            case .removeDraftNotes(let noteIndexes):
+                $0.value = .removeDraftNotes(noteIndexes.pb)
+            case .insertContents(let civs):
+                $0.value = .insertContents(civs.pb)
+            case .replaceContents(let civs):
+                $0.value = .replaceContents(civs.pb)
+            case .removeContents(let cis):
+                $0.value = .removeContents(cis.pb)
+            case .setScoreOption(let option):
+                $0.value = .setScoreOption(option.pb)
+            case .setSheetOption(let option):
+                $0.value = .setSheetOption(option.pb)
+            case .setSelection(let selection):
+                $0.value = .setSelection(selection.pb)
+            }
+        }
+    }
+}
+extension SheetUndoItem: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .appendLine: "appendLine"
+        case .appendLines: "appendLines"
+        case .appendPlanes: "appendPlanes"
+        case .removeLastLines: "removeLastLines"
+        case .removeLastPlanes: "removeLastPlanes"
+        case .insertLines: "insertLines"
+        case .insertPlanes: "insertPlane"
+        case .replaceLines: "replaceLines"
+        case .replacePlanes: "replacePlanes"
+        case .removeLines: "removeLines"
+        case .removePlanes: "removePlanes"
+        case .setPlaneValue: "setPlaneValue"
+        case .changeToDraft: "changeToDraft"
+        case .setPicture: "setPicture"
+        case .insertDraftLines: "insertDraftLines"
+        case .insertDraftPlanes: "insertDraftPlanes"
+        case .removeDraftLines: "removeDraftLines"
+        case .removeDraftPlanes: "removeDraftPlanes"
+        case .setDraftPicture: "setDraftPicture"
+        case .insertTexts: "insertTexts"
+        case .replaceTexts: "replaceTexts"
+        case .removeTexts: "removeTexts"
+        case .replaceString: "replaceString"
+        case .changedColors: "changedColors"
+        case .insertBorders: "insertBorders"
+        case .removeBorders: "removeBorders"
+        case .setRootKeyframeIndex: "setRootKeyframeIndex"
+        case .insertKeyframes: "insertKeyframes"
+        case .removeKeyframes: "removeKeyframes"
+        case .setKeyframeOptions: "setKeyframeOptions"
+        case .insertKeyLines: "insertKeyLines"
+        case .replaceKeyLines: "replaceKeyLines"
+        case .removeKeyLines: "removeKeyLines"
+        case .insertKeyPlanes: "insertKeyPlanes"
+        case .replaceKeyPlanes: "replaceKeyPlanes"
+        case .removeKeyPlanes: "removeKeyPlanes"
+        case .insertDraftKeyLines: "insertDraftKeyLines"
+        case .removeDraftKeyLines: "removeDraftKeyLines"
+        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
+        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
+        case .setLineIDs: "setLineIDs"
+        case .setAnimationOption: "setAnimationOption"
+        case .insertNotes: "insertNotes"
+        case .replaceNotes: "replaceNotes"
+        case .removeNotes: "removeNotes"
+        case .insertDraftNotes: "insertDraftNotes"
+        case .removeDraftNotes: "removeDraftNotes"
+        case .insertContents: "insertContents"
+        case .replaceContents: "replaceContents"
+        case .removeContents: "removeContents"
+        case .setScoreOption: "setScoreOption"
+        case .setSheetOption: "setSheetOption"
+        case .setSelection: "setSelection"
         }
     }
 }

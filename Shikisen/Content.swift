@@ -18,7 +18,7 @@
 import struct Foundation.URL
 import struct Foundation.UUID
 
-struct ContentTimeOption: Codable, Hashable, BeatRangeType {
+struct ContentTimeOption: BeatRangeType, Hashable, Codable {
     var beatRange = 0 ..< Rational(0)
     var localStartBeat = Rational(0)
     var tempo = Music.defaultTempo
@@ -79,7 +79,7 @@ struct Content: Hashable, Codable {
         }
     }
     
-    enum ContentType: Int, Hashable, Codable, CaseIterable {
+    enum ContentType: Int, CaseIterable, Hashable, Codable {
         case movie, sound, image, none
         
         var isAudio: Bool {
