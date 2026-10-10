@@ -169,9 +169,9 @@ final class ASelectVersionAction: Action {
         rootNode.append(child: currentKnobNode)
     }
     func undo(at p: Point, undoIndex: Int) {
-        var frame: Rect?, nodes = [Node]()
+        var frame: Rect?, nodes = [Node](), errors = [any Error]()
         if let sheetView = sheetView {
-            let (aFrame, aNodes) = sheetView.undo(to: undoIndex)
+            let (aFrame, aNodes, aErrors) = sheetView.undo(to: undoIndex)
             if let aFrame = aFrame {
                 frame = sheetView.convertToWorld(aFrame)
             }
@@ -179,9 +179,12 @@ final class ASelectVersionAction: Action {
                 $0.attitude = sheetView.node.attitude
             }
             nodes = aNodes
+            errors = aErrors
         } else {
-            frame = rootView.undo(to: undoIndex)
+            (frame, errors) = rootView.undo(to: undoIndex)
         }
+        errors.forEach { rootAction.hudView.show($0) }
+        
         if let frame = frame {
             let f = rootView.screenBounds * rootView.screenToWorldTransform
             if frame.width > 0 || frame.height > 0, !f.intersects(frame) {

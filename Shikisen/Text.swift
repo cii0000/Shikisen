@@ -17,9 +17,10 @@
 
 import struct Foundation.Locale
 import struct Foundation.Data
+import protocol Foundation.LocalizedError
 
 extension String: Serializable {
-    struct SerializableError: Error {}
+    struct SerializableError: LocalizedError {}
     init(serializedData data: Data) throws {
         guard let string = String(data: data, encoding: .utf8) else {
             throw SerializableError()

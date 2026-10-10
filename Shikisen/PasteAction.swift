@@ -17,6 +17,7 @@
 
 import struct Foundation.Data
 import struct Foundation.UUID
+import protocol Foundation.LocalizedError
 
 struct ColorPathValue {
     var paths: [Path], lineType: Node.LineType?, fillType: Node.FillType?
@@ -153,7 +154,7 @@ extension PastableObject {
             .replacingOccurrences(of: "<", with: "")
             .replacingOccurrences(of: ">", with: "")
     }
-    struct PastableError: Error {}
+    struct PastableError: LocalizedError {}
     var typeName: String {
         switch self {
         case .copiedSheetsValue(let copiedSheetsValue):
@@ -3075,7 +3076,7 @@ final class APasteAction: Action {
                 if value.isSelected {
                     for (sheetView, selection) in updatedNewUndoGroupDic {
                         if selection != sheetView.model.selection {
-                            sheetView.doSet(selection)
+                            sheetView.set(selection)
                         }
                     }
                 }
@@ -3276,7 +3277,7 @@ final class APasteAction: Action {
             sheetView.rootKeyframeIndex = sheetView.model.animation.keyframes.count * count + ni
             let selection = SheetSelection(keyframeSelections: kivs.reduce(into: .init()) { $0[$1.index] = .init() })
             if selection != sheetView.model.selection {
-                sheetView.doSet(selection)
+                sheetView.set(selection)
             }
             rootAction.updateActionNode()
             rootView.updateSelectedFrame()
@@ -3405,7 +3406,7 @@ final class APasteAction: Action {
                 sheetView.capture(noteIVs, old: oldNoteIVs)
             }
             if v.isSelected {
-                sheetView.doSet(SheetSelection(noteSelections: noteIVs.map { $0.index }
+                sheetView.set(SheetSelection(noteSelections: noteIVs.map { $0.index }
                     .reduce(into: .init()) { $0[$1] = .init(pitSelections: [0: .init()]) }))
             }
         case .stereo(let stereo):
@@ -3656,6 +3657,10 @@ final class APasteAction: Action {
             exportingView.cancel()
             return true
         }
+        if let errorView = rootAction.hudView.errorView(at: sp) {
+            errorView.close()
+            return true
+        }
         for runAction in rootAction.runActions {
             if runAction.containsCalculating(p) {
                 Pasteboard.shared.copiedObjects = [.string(runAction.calculatingString)]
@@ -3715,6 +3720,7 @@ final class APasteAction: Action {
                   fillType: .color(.subSelected))]
             return true
         }
+        
         return false
     }
     func copy(with event: InputKeyEvent) {
@@ -3928,7 +3934,7 @@ final class APasteAction: Action {
                     rootView.append(nIndexes)
                 }
                 if csv.isSelected, nSelection != rootView.world.selection {
-                    rootView.doSet(nSelection)
+                    rootView.set(nSelection)
                 }
                 rootView.updateNode()
             }
@@ -3957,7 +3963,7 @@ final class APasteAction: Action {
                 rootView.close(from: shps)
                 rootView.newUndoGroup()
                 if !rootView.world.selection.isEmpty {
-                    rootView.doSet(WorldSelection.empty)
+                    rootView.set(WorldSelection.empty)
                 }
                 rootView.removeSheets(at: shps)
             }

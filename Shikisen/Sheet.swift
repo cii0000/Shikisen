@@ -3208,857 +3208,494 @@ extension Sheet {
     }
 }
 
+typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
 extension Sheet {
     func undoItemValue(with result: SheetHistory.UndoResult,
-                       reverses: inout [Version: Int],
-                       in history: inout SheetHistory) -> UndoItemValue<SheetUndoItem>? {
-        if result.item.loadType == .unload {
-            _ = history[result.version].values[result.valueIndex].loadRedoItem()
-            loadCheck(with: result, reverses: &reverses, in: &history)
-            return history[result.version].values[result.valueIndex].undoItemValue
+                       in history: inout SheetHistory) throws -> UndoItemValue<SheetUndoItem> {
+        if let uiv = result.item.undoItemValue {
+            return uiv
         } else {
-            return result.item.undoItemValue
+            do {
+                guard let uiv = history[result].loadRedoItem()
+                else { throw UndoError(load: result.item) }
+                
+                if enabledAnimation, history[result.version].isFirstReverse {
+                    if case .setRootKeyframeIndex? =  history[result.version].values.first?.loadedRedoItem()?.undoItem {
+                    } else {
+                        throw UndoError(first: history[result])
+                    }
+                }
+                
+                try loadCheck(redo: result.type == .undo ? uiv.redoItem : uiv.undoItem)
+                let undoitem = result.type == .undo ? uiv.undoItem : uiv.redoItem
+                try loadCheck(undo: undoitem)
+                setReverse(undo: undoitem, with: result, in: &history)
+                return history[result].undoItemValue!
+            } catch {
+                history[result].setError()
+                throw error
+            }
         }
     }
-    func loadCheck(with result: SheetHistory.UndoResult,
-                   reverses: inout [Version: Int],
-                   in history: inout SheetHistory) {
-        guard let uiv = history[result.version].values[result.valueIndex]
-                .undoItemValue else { return }
-        
-        func updateFirstReverse() {
-            if enabledAnimation, history[result.version].isFirstReverse {
-                if case .setRootKeyframeIndex? =  history[result.version].values.first?.loadedRedoItem()?.undoItem {
-                } else {
-                    reverses[result.version] = animation.rootIndex
-                    print("first reverse error")
-                }
-            }
+    
+    private func loadCheck(redo item: SheetUndoItem) throws {
+        func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+            ivs.allSatisfy { $0.index < array.count && $0.value == array[$0.index] }
+        }
+        func isSafeReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+            ivs.allSatisfy { $0.index < array.count && $0.value == array[$0.index] }
+        }
+        func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
+            idxs.filter { $0 < array.count + idxs.count }.sorted() == idxs
+        }
+        func error() -> UndoError<SheetUndoItem> {
+            UndoError(redo: item)
         }
         
-        let isUndo = result.type == .undo
-        let reversedType: UndoType = isUndo ? .redo : .undo
-        switch isUndo ? uiv.redoItem : uiv.undoItem {
+        switch item {
         case .appendLine(let line):
-            updateFirstReverse()
-            if let lastLine = picture.lines.last {
-                if lastLine != line {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.appendLine(lastLine), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard let lastLine = picture.lines.last, lastLine == line else { throw error() }
         case .appendLines(let lines):
-            updateFirstReverse()
             let di = picture.lines.count - lines.count
-            if di >= 0 {
-                let lastLines = Array(picture.lines[di...])
-                if lastLines != lines {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.appendLines(lastLines), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard di >= 0, Array(picture.lines[di...]) == lines else { throw error() }
         case .appendPlanes(let planes):
-            updateFirstReverse()
             let di = picture.planes.count - planes.count
-            if di >= 0 {
-                let lastPlanes = Array(picture.planes[di...])
-                if lastPlanes != planes {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.appendPlanes(lastPlanes),
-                                                type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
-        case .removeLastLines:
-            updateFirstReverse()
-        case .removeLastPlanes:
-            updateFirstReverse()
+            guard di >= 0, Array(picture.planes[di...]) == planes else { throw error() }
+        case .removeLastLines: break
+        case .removeLastPlanes: break
         case .insertLines(let livs):
-            updateFirstReverse()
-            let maxI = livs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < picture.lines.count {
-                let oldLIVS = livs.map { IndexValue(value: picture.lines[$0.index],
-                                                    index: $0.index) }
-                if oldLIVS != livs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertLines(oldLIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
         case .insertPlanes(let pivs):
-            updateFirstReverse()
-            let maxI = pivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < picture.planes.count {
-                let oldPIVS = pivs.map { IndexValue(value: picture.planes[$0.index],
-                                                    index: $0.index) }
-                if oldPIVS != pivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertPlanes(oldPIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
         case .replaceLines(let livs):
-            updateFirstReverse()
-            let lines = picture.lines
-            for liv in livs {
-                if liv.index >= lines.count || liv.value != lines[liv.index] {
-                    history.error(result)
-                    break
-                }
-            }
+            guard isSafeReplace(livs, in: picture.lines) else { throw error() }
         case .replacePlanes(let pivs):
-            updateFirstReverse()
-            let planes = picture.planes
-            for piv in pivs {
-                if piv.index >= planes.count || piv.value != planes[piv.index] {
-                    history.error(result)
-                    break
-                }
-            }
-        case .removeLines(let lineIndexes):
-            updateFirstReverse()
-            let oLIs = lineIndexes.filter { $0 < picture.lines.count + lineIndexes.count }.sorted()
-            if oLIs != lineIndexes {
-                history.save(.removeLines(lineIndexes: oLIs), type: reversedType, with: result)
-            }
-        case .removePlanes(let planeIndexes):
-            updateFirstReverse()
-            let oldPIS = planeIndexes.filter { $0 < picture.planes.count + planeIndexes.count }.sorted()
-            if oldPIS != planeIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removePlanes(planeIndexes: oldPIS), type: reversedType)
-            }
+            guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
+        case .removeLines(let lis):
+            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
+        case .removePlanes(let pis):
+            guard isSafeRemove(pis, in: picture.planes) else { throw error() }
         case .setPlaneValue(let planeValue):
-            updateFirstReverse()
-            if planeValue.planes.count + planeValue.moveIndexValues.count
-                == picture.planes.count {
-                
-                var isArray = Array(repeating: false,
-                                    count: picture.planes.count)
-                for v in planeValue.moveIndexValues {
-                    if v.index < isArray.count {
-                        isArray[v.index] = true
-                    } else {
-                        history.error(result)
-                    }
-                }
-                var i = 0
-                for (j, isMoved) in isArray.enumerated() {
-                    if !isMoved {
-                        if i < planeValue.planes.count
-                            && planeValue.planes[i] != picture.planes[j] {
-                            
-                            history.error(result)
-                            break
-                        }
-                        i += 1
-                    }
-                }
-            } else {
-                history.error(result)
+            guard planeValue.planes.count + planeValue.moveIndexValues.count
+                    == picture.planes.count else { throw error() }
+            var isArray = Array(repeating: false, count: picture.planes.count)
+            for v in planeValue.moveIndexValues {
+                guard v.index < isArray.count else { throw error() }
+                isArray[v.index] = true
             }
-        case .changeToDraft:
-            updateFirstReverse()
+            var i = 0
+            for (j, isMoved) in isArray.enumerated() {
+                if !isMoved {
+                    guard i < planeValue.planes.count
+                            && planeValue.planes[i] == picture.planes[j] else { throw error() }
+                    i += 1
+                }
+            }
+        case .changeToDraft: break
         case .setPicture(let picture):
-            updateFirstReverse()
-            if self.picture != picture {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setPicture(self.picture), type: reversedType)
-            }
+            guard self.picture == picture else { throw error() }
         case .insertDraftLines(let livs):
-            updateFirstReverse()
-            let maxI = livs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < draftPicture.lines.count {
-                let oldLIVS = livs.map { IndexValue(value: draftPicture.lines[$0.index],
-                                                    index: $0.index) }
-                if oldLIVS != livs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertDraftLines(oldLIVS), type: reversedType)
-                }
-            } else {
-                history[result.version].values[result.valueIndex].error()
-            }
+            guard isSafeInsert(livs, in: draftPicture.lines) else { throw error() }
         case .insertDraftPlanes(let pivs):
-            updateFirstReverse()
-            let maxI = pivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < draftPicture.planes.count {
-                let oldPIVS = pivs.map { IndexValue(value: draftPicture.planes[$0.index],
-                                                    index: $0.index) }
-                if oldPIVS != pivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertDraftPlanes(oldPIVS), type: reversedType)
-                }
-            } else {
-                history[result.version].values[result.valueIndex].error()
-            }
-        case .removeDraftLines(let lineIndexes):
-            updateFirstReverse()
-            let oldLIS = lineIndexes.filter { $0 < draftPicture.lines.count + lineIndexes.count }.sorted()
-            if oldLIS != lineIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeDraftLines(lineIndexes: oldLIS), type: reversedType)
-            }
-        case .removeDraftPlanes(let planeIndexes):
-            updateFirstReverse()
-            let oldPIS = planeIndexes.filter { $0 < draftPicture.planes.count + planeIndexes.count }.sorted()
-            if oldPIS != planeIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeDraftPlanes(planeIndexes: oldPIS), type: reversedType)
-            }
+            guard isSafeInsert(pivs, in: draftPicture.planes) else { throw error() }
+        case .removeDraftLines(let lis):
+            guard isSafeRemove(lis, in: draftPicture.lines) else { throw error() }
+        case .removeDraftPlanes(let pis):
+            guard isSafeRemove(pis, in: draftPicture.planes) else { throw error() }
         case .setDraftPicture(let draftPicture):
-            updateFirstReverse()
-            if self.draftPicture != draftPicture {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setDraftPicture(self.draftPicture),
-                                            type: reversedType)
-            }
+            guard self.draftPicture == draftPicture else { throw error() }
         case .insertTexts(let tivs):
-            updateFirstReverse()
-            let maxI = tivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < texts.count {
-                let oldTIVS = tivs.map { IndexValue(value: texts[$0.index],
-                                                    index: $0.index) }
-                if oldTIVS != tivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertTexts(oldTIVS), type: reversedType)
-                }
-            } else {
-                history[result.version].values[result.valueIndex].error()
-            }
+            guard isSafeInsert(tivs, in: texts) else { throw error() }
         case .replaceTexts(let tivs):
-            updateFirstReverse()
-            for tiv in tivs {
-                if tiv.index >= texts.count || tiv.value != texts[tiv.index] {
-                    history.error(result)
-                    break
-                }
-            }
-        case .removeTexts(let textIndexes):
-            updateFirstReverse()
-            let oldTIS = textIndexes.filter { $0 < texts.count + textIndexes.count }.sorted()
-            if oldTIS != textIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeTexts(textIndexes: oldTIS), type: reversedType)
-            }
+            guard isSafeReplace(tivs, in: texts) else { throw error() }
+        case .removeTexts(let tis):
+            guard isSafeRemove(tis, in: texts) else { throw error() }
         case .replaceString(let tuiv):
-            updateFirstReverse()
-            guard tuiv.index < texts.count else {
-                history.error(result)
-                break
-            }
-            let text = texts[tuiv.index]
-            let intRange = tuiv.value.newRange
-            if intRange.lowerBound >= 0
-                && intRange.upperBound <= text.string.count {
-                
-                let range = text.string.range(fromInt: intRange)
-                let oldString = text.string[range]
-                let oldOrigin = tuiv.value.origin != nil ? text.origin : nil
-                let oldSize = tuiv.value.size != nil ? text.size : nil
-                let oldWidthCount
-                = tuiv.value.widthCount != nil ? text.widthCount : nil
-                if oldString != tuiv.value.string
-                    || oldOrigin != tuiv.value.origin
-                    || oldSize != tuiv.value.size
-                    || oldWidthCount != tuiv.value.widthCount {
-                    
-                    let nOrigin = oldOrigin != tuiv.value.origin ?
-                        oldOrigin : tuiv.value.origin
-                    let nSize = oldSize != tuiv.value.size ?
-                        oldSize : tuiv.value.size
-                    let nWidthCount = oldWidthCount != tuiv.value.widthCount ?
-                        oldWidthCount : tuiv.value.widthCount
-                    let tv = TextValue(string: String(oldString),
-                                       replacedRange: tuiv.value.replacedRange,
-                                       origin: nOrigin, size: nSize,
-                                       widthCount: nWidthCount)
-                    let nTUIV = IndexValue(value: tv, index: tuiv.index)
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.replaceString(nTUIV), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
-        case .changedColors(let colorUndoValue):
-            updateFirstReverse()
-            
-            if !colorUndoValue.planeIndexes.isEmpty {
-                let maxPISI = colorUndoValue.planeIndexes.max { $0 < $1 }
-                if let maxPISI = maxPISI, maxPISI < picture.planes.count {
-                    for i in colorUndoValue.planeIndexes {
-                        if picture.planes[i].uuColor != colorUndoValue.uuColor {
-                            history.error(result)
-                            break
-                        }
-                    }
-                } else {
-                    history.error(result)
-                }
-            } else if !colorUndoValue.planeAnimationIndexes.isEmpty {
-                loop: for k in colorUndoValue.planeAnimationIndexes {
-                    if k.index >= animation.keyframes.count {
-                        history.error(result)
-                        break loop
-                    }
+            guard tuiv.index < texts.count else { throw error() }
+            let text = texts[tuiv.index], intRange = tuiv.value.newRange
+            guard intRange.lowerBound >= 0
+                    && intRange.upperBound <= text.string.count else { throw error() }
+            let range = text.string.range(fromInt: intRange)
+            let oldString = text.string[range]
+            let oldOrigin = tuiv.value.origin != nil ? text.origin : nil
+            let oldSize = tuiv.value.size != nil ? text.size : nil
+            let oldWidthCount = tuiv.value.widthCount != nil ? text.widthCount : nil
+            guard oldString == tuiv.value.string
+                && oldOrigin == tuiv.value.origin
+                && oldSize == tuiv.value.size
+                    && oldWidthCount == tuiv.value.widthCount else { throw error() }
+        case .changedColors(let cuv):
+            if !cuv.planeIndexes.isEmpty {
+                guard cuv.planeIndexes.allSatisfy({
+                    $0 < picture.planes.count
+                    && cuv.uuColor == picture.planes[$0].uuColor
+                }) else { throw error() }
+            } else if !cuv.planeAnimationIndexes.isEmpty {
+                for k in cuv.planeAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { throw error() }
                     let planes = animation.keyframes[k.index].picture.planes
-                    for pi in k.value {
-                        if pi >= planes.count {
-                            history.error(result)
-                            break loop
-                        }
-                        if planes[pi].uuColor != colorUndoValue.uuColor {
-                            history.error(result)
-                            break loop
-                        }
-                    }
+                    guard k.value.allSatisfy({
+                        $0 < planes.count && planes[$0].uuColor == cuv.uuColor
+                    }) else { throw error() }
                 }
             }
             
-            if !colorUndoValue.lineIndexes.isEmpty {
-                let maxLISI = colorUndoValue.lineIndexes.max { $0 < $1 }
-                if let maxLISI, maxLISI < picture.lines.count {
-                    for i in colorUndoValue.lineIndexes {
-                        if picture.lines[i].uuColor != colorUndoValue.uuColor {
-                            history.error(result)
-                            break
-                        }
-                    }
-                } else {
-                    history.error(result)
-                }
-            } else if !colorUndoValue.lineAnimationIndexes.isEmpty {
-                loop: for k in colorUndoValue.lineAnimationIndexes {
-                    if k.index >= animation.keyframes.count {
-                        history.error(result)
-                        break loop
-                    }
+            if !cuv.lineIndexes.isEmpty {
+                guard cuv.lineIndexes.allSatisfy({
+                    $0 < picture.lines.count
+                    && cuv.uuColor == picture.lines[$0].uuColor
+                }) else { throw error() }
+            } else if !cuv.lineAnimationIndexes.isEmpty {
+                for k in cuv.lineAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { throw error() }
                     let lines = animation.keyframes[k.index].picture.lines
-                    for li in k.value {
-                        if li >= lines.count {
-                            history.error(result)
-                            break loop
-                        }
-                        if lines[li].uuColor != colorUndoValue.uuColor {
-                            history.error(result)
-                            break loop
-                        }
-                    }
+                    guard k.value.allSatisfy({
+                        $0 < lines.count && lines[$0].uuColor == cuv.uuColor
+                    }) else { throw error() }
                 }
             }
             
-            if colorUndoValue.isBackground && backgroundUUColor != colorUndoValue.uuColor {
-                history.error(result)
+            if cuv.isBackground {
+                guard backgroundUUColor == cuv.uuColor else { throw error() }
             }
         case .insertBorders(let bivs):
-            updateFirstReverse()
-            let maxI = bivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < borders.count {
-                let oldBIVS = bivs.map { IndexValue(value: borders[$0.index],
-                                                    index: $0.index) }
-                if oldBIVS != bivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertBorders(oldBIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
-        case .removeBorders(let borderIndexes):
-            updateFirstReverse()
-            let oldBIS = borderIndexes.filter { $0 < borders.count + borderIndexes.count }.sorted()
-            if oldBIS != borderIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeBorders(borderIndexes: oldBIS), type: reversedType)
-            }
-        case .setRootKeyframeIndex(_): break
+            guard isSafeInsert(bivs, in: borders) else { throw error() }
+        case .removeBorders(let bis):
+            guard isSafeRemove(bis, in: borders) else { throw error() }
+        case .setRootKeyframeIndex: break
         case .insertKeyframes(let kivs):
-            let maxI = kivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < animation.keyframes.count {
-                let oldKIVS = kivs.map { IndexValue(value: animation.keyframes[$0.index],
-                                                    index: $0.index) }
-                if oldKIVS != kivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertKeyframes(oldKIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
+            guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
+        case .removeKeyframes(let kis):
+            guard isSafeRemove(kis, in: animation.keyframes) else { throw error() }
+        case .setKeyframeOptions(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      kv.value == animation.keyframes[kv.index].option
+                        else { throw error() }
             }
-        case .removeKeyframes(let indexes):
-            let oldKIS = indexes.filter { $0 < animation.keyframes.count + indexes.count }.sorted()
-            if oldKIS != indexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeKeyframes(keyframeIndexes: oldKIS), type: reversedType)
-            }
-        case .setKeyframeOptions(let koivs):
-            var isError = false
-            for koiv in koivs {
-                if koiv.index >= animation.keyframes.count {
-                    isError = true
-                }
-            }
-            if isError {
-                history.error(result)
-            } else {
-                let okoivs = koivs.map {
-                    IndexValue(value: animation.keyframes[$0.index].option,
-                               index: $0.index)
-                }
-                if okoivs != koivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?
-                        .set(.setKeyframeOptions(okoivs), type: reversedType)
-                }
-            }
-            
         case .insertKeyLines(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                let maxI = k.value.max { $0.index < $1.index }?.index
-                if let maxI = maxI, maxI < lines.count {
-                    let oldLIVS = k.value.map { IndexValue(value: lines[$0.index],
-                                                           index: $0.index) }
-                    if oldLIVS != k.value {
-                        history.error(result)
-                        break loop
-                    }
-                } else {
-                    history.error(result)
-                    break loop
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                        else { throw error() }
             }
         case .replaceKeyLines(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                for liv in k.value {
-                    if liv.index >= lines.count {
-                        history.error(result)
-                        break loop
-                    }
-                    if liv.value != lines[liv.index] {
-                        history.error(result)
-                        break loop
-                    }
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                        else { throw error() }
             }
-        case .removeKeyLines(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                let oldLIS = k.value.filter { $0 < lines.count + k.value.count }.sorted()
-                if oldLIS != k.value {
-                    history.error(result)
-                    break loop
-                }
+        case .removeKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                        else { throw error() }
             }
-            
         case .insertKeyPlanes(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                let maxI = k.value.max { $0.index < $1.index }?.index
-                if let maxI = maxI, maxI < planes.count {
-                    let oldPIVS = k.value.map { IndexValue(value: planes[$0.index],
-                                                           index: $0.index) }
-                    if oldPIVS != k.value {
-                        history.error(result)
-                        break loop
-                    }
-                } else {
-                    history.error(result)
-                    break loop
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                        else { throw error() }
             }
         case .replaceKeyPlanes(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                for piv in k.value {
-                    if piv.index >= planes.count {
-                        history.error(result)
-                        break loop
-                    }
-                    if piv.value != planes[piv.index] {
-                        history.error(result)
-                        break loop
-                    }
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                        else { throw error() }
             }
-        case .removeKeyPlanes(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                let oldPIS = k.value.filter { $0 < planes.count + k.value.count }.sorted()
-                if oldPIS != k.value {
-                    history.error(result)
-                    break loop
-                }
+        case .removeKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                        else { throw error() }
             }
-            
         case .insertDraftKeyLines(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].draftPicture.lines
-                let maxI = k.value.max { $0.index < $1.index }?.index
-                if let maxI = maxI, maxI < lines.count {
-                    let oldLIVS = k.value.map { IndexValue(value: lines[$0.index],
-                                                           index: $0.index) }
-                    if oldLIVS != k.value {
-                        history.error(result)
-                        break loop
-                    }
-                } else {
-                    history.error(result)
-                    break loop
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.lines)
+                        else { throw error() }
             }
-        case .removeDraftKeyLines(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].draftPicture.lines
-                let oldLIS = k.value.filter { $0 < lines.count + k.value.count }.sorted()
-                if oldLIS != k.value {
-                    history.error(result)
-                    break loop
-                }
+        case .removeDraftKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.lines)
+                        else { throw error() }
             }
-            
         case .insertDraftKeyPlanes(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].draftPicture.planes
-                let maxI = k.value.max { $0.index < $1.index }?.index
-                if let maxI = maxI, maxI < planes.count {
-                    let oldPIVS = k.value.map { IndexValue(value: planes[$0.index],
-                                                           index: $0.index) }
-                    if oldPIVS != k.value {
-                        history.error(result)
-                        break loop
-                    }
-                } else {
-                    history.error(result)
-                    break loop
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.planes)
+                        else { throw error() }
             }
-        case .removeDraftKeyPlanes(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].draftPicture.planes
-                let oldPIS = k.value.filter { $0 < planes.count + k.value.count }.sorted()
-                if oldPIS != k.value {
-                    history.error(result)
-                    break loop
-                }
+        case .removeDraftKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.planes)
+                        else { throw error() }
             }
-            
         case .setLineIDs(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                for liv in k.value {
-                    if liv.index >= lines.count {
-                        history.error(result)
-                        break loop
-                    }
-                    if liv.value != lines[liv.index].interOption {
-                        history.error(result)
-                        break loop
-                    }
-                }
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count else { throw error() }
+                let lines = animation.keyframes[kv.index].picture.lines
+                guard kv.value.allSatisfy({
+                    $0.index < lines.count && $0.value == lines[$0.index].interOption
+                }) else { throw error() }
             }
-            
         case .setAnimationOption(let option):
-            let oldOption = animation.option
-            if oldOption != option {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setAnimationOption(oldOption), type: reversedType)
-            }
-            
+            guard animation.option == option else { throw error() }
         case .insertNotes(let nivs):
-            updateFirstReverse()
-            let maxI = nivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < score.notes.count {
-                let oldNIVS = nivs.map { IndexValue(value: score.notes[$0.index],
-                                                    index: $0.index) }
-                if oldNIVS != nivs {
-                    print("InsertNotesUndoError", score.notes.count, oldNIVS.count, nivs.count, oldNIVS, nivs)
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertNotes(oldNIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard isSafeInsert(nivs, in: score.notes) else { throw error() }
         case .replaceNotes(let nivs):
-            updateFirstReverse()
-            let notes = score.notes
-            for niv in nivs {
-                if niv.index >= notes.count {
-                    history.error(result)
-                    break
-                }
-                if niv.value != notes[niv.index] {
-                    history.error(result)
-                    break
-                }
-            }
-        case .removeNotes(let noteIndexes):
-            updateFirstReverse()
-            let oldNIS = noteIndexes.filter { $0 < score.notes.count + noteIndexes.count }.sorted()
-            if oldNIS != noteIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeNotes(noteIndexes: oldNIS), type: reversedType)
-            }
+            guard isSafeReplace(nivs, in: score.notes) else { throw error() }
+        case .removeNotes(let nis):
+            guard isSafeRemove(nis, in: score.notes) else { throw error() }
         case .insertDraftNotes(let nivs):
-            updateFirstReverse()
-            let maxI = nivs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < score.notes.count {
-                let oldNIVS = nivs.map { IndexValue(value: score.notes[$0.index],
-                                                    index: $0.index) }
-                if oldNIVS != nivs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertDraftNotes(oldNIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
-        case .removeDraftNotes(let noteIndexes):
-            updateFirstReverse()
-            let oldNIS = noteIndexes.filter { $0 < score.notes.count + noteIndexes.count }.sorted()
-            if oldNIS != noteIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeDraftNotes(noteIndexes: oldNIS), type: reversedType)
-            }
+            guard isSafeInsert(nivs, in: score.draftNotes) else { throw error() }
+        case .removeDraftNotes(let nis):
+            guard isSafeRemove(nis, in: score.draftNotes) else { throw error() }
         case .insertContents(let civs):
-            updateFirstReverse()
-            let maxI = civs.max { $0.index < $1.index }?.index
-            if let maxI = maxI, maxI < contents.count {
-                let oldCIVS = civs.map { IndexValue(value: contents[$0.index],
-                                                    index: $0.index) }
-                if oldCIVS != civs {
-                    history[result.version].values[result.valueIndex]
-                        .saveUndoItemValue?.set(.insertContents(oldCIVS), type: reversedType)
-                }
-            } else {
-                history.error(result)
-            }
+            guard isSafeInsert(civs, in: contents) else { throw error() }
         case .replaceContents(let civs):
-            updateFirstReverse()
-            let contents = contents
-            for civ in civs {
-                if civ.index >= contents.count || civ.value != contents[civ.index] {
-                    history.error(result)
-                    break
-                }
-            }
-        case .removeContents(let contentIndexes):
-            updateFirstReverse()
-            let oldCIS = contentIndexes.filter { $0 < contents.count + contentIndexes.count }.sorted()
-            if oldCIS != contentIndexes {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.removeContents(contentIndexes: oldCIS), type: reversedType)
-            }
+            guard isSafeReplace(civs, in: contents) else { throw error() }
+        case .removeContents(let cis):
+            guard isSafeRemove(cis, in: contents) else { throw error() }
         case .setScoreOption(let option):
-            let oldOption = score.option
-            if oldOption != option {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setScoreOption(oldOption), type: reversedType)
-            }
+            guard score.option == option else { throw error() }
         case .setSheetOption(let option):
-            let oldOption = self.option
-            if oldOption != option {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setSheetOption(oldOption), type: reversedType)
-            }
+            guard self.option == option else { throw error() }
         case .setSelection(let selection):
-            updateFirstReverse()
-            
-            let oldSelection = self.selection
-            if selection != oldSelection {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setSelection(oldSelection), type: reversedType)
+            guard self.selection == selection else { throw error() }
+        }
+    }
+    
+    private func loadCheck(undo item: SheetUndoItem) throws {
+        func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+            var count = array.count
+            return ivs.allSatisfy {
+                if $0.index > count { return false }
+                count += 1
+                return true
             }
         }
+        func isSafeReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+            ivs.allSatisfy { $0.index < array.count }
+        }
+        func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
+            idxs == idxs.filter { $0 < array.count }.sorted()
+        }
+        func error() -> UndoError<SheetUndoItem> {
+            UndoError(undo: item)
+        }
         
-        guard let nuiv = history[result.version].values[result.valueIndex]
-                .undoItemValue else { return }
-        switch isUndo ? nuiv.undoItem : nuiv.redoItem {
-        case .appendLine(_):
-            updateFirstReverse()
-        case .appendLines(_):
-            updateFirstReverse()
-        case .appendPlanes(_):
-            updateFirstReverse()
+        switch item {
+        case .appendLine: break
+        case .appendLines: break
+        case .appendPlanes: break
         case .removeLastLines(let count):
-            updateFirstReverse()
-            if count > picture.lines.count {
-                history[result.version]
-                    .values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .appendLines(picture.lines),
-                                    redoItem: .removeLastLines(count: picture.lines.count),
-                                    isReversed: isUndo)
-            }
+            guard count <= picture.lines.count else { throw error() }
         case .removeLastPlanes(let count):
-            updateFirstReverse()
-            if count > picture.planes.count {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .appendPlanes(picture.planes),
-                                    redoItem: .removeLastPlanes(count: picture.planes.count),
-                                    isReversed: isUndo)
-            }
-        case .insertLines(var livs):
-            updateFirstReverse()
-            var isChanged = false, linesCount = picture.lines.count
-            livs.enumerated().forEach { (k, iv) in
-                if iv.index > linesCount {
-                    livs[k].index = linesCount
-                    isChanged = true
-                }
-                linesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeLines(lineIndexes: livs.map { $0.index }),
-                                    redoItem: .insertLines(livs),
-                                    isReversed: isUndo)
-            }
-        case .insertPlanes(var pivs):
-            updateFirstReverse()
-            var isChanged = false, planesCount = picture.planes.count
-            pivs.enumerated().forEach { (k, iv) in
-                if iv.index > planesCount {
-                    pivs[k].index = planesCount
-                    isChanged = true
-                }
-                planesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removePlanes(planeIndexes: pivs.map { $0.index }),
-                                    redoItem: .insertPlanes(pivs),
-                                    isReversed: isUndo)
-            }
+            guard count <= picture.planes.count else { throw error() }
+        case .insertLines(let livs):
+            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
+        case .insertPlanes(let pivs):
+            guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
         case .replaceLines(let livs):
-            updateFirstReverse()
-            let lines = picture.lines
-            if livs.contains(where: { $0.index >= lines.count }) {
-                history.error(result)
-            } else {
-                let oldLIVs = livs.map { IndexValue(value: lines[$0.index], index: $0.index) }
-                history.setReverse(.replaceLines(oldLIVs), with: result)
-            }
+            guard isSafeReplace(livs, in: picture.lines) else { throw error() }
         case .replacePlanes(let pivs):
-            updateFirstReverse()
-            let planes = picture.planes
-            if pivs.contains(where: { $0.index >= planes.count }) {
-                history.error(result)
-            } else {
-                let oldPIVs = pivs.map { IndexValue(value: planes[$0.index], index: $0.index) }
-                history.setReverse(.replacePlanes(oldPIVs), with: result)
+            guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
+        case .removeLines(let lis):
+            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
+        case .removePlanes(let pis):
+            guard isSafeRemove(pis, in: picture.planes) else { throw error() }
+        case .setPlaneValue(let planeValue):
+            for v in planeValue.moveIndexValues {
+                guard v.value < picture.planes.count else { throw error() }
             }
-        case .removeLines(var lineIndexes):
-            updateFirstReverse()
-            let lis = lineIndexes.filter { $0 < picture.lines.count }.sorted()
-            if lineIndexes != lis {
-                lineIndexes = lis
-                let livs = lineIndexes.map {
-                    IndexValue(value: picture.lines[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertLines(livs),
-                                    redoItem: .removeLines(lineIndexes: lis),
-                                    isReversed: isUndo)
-            }
-        case .removePlanes(var planeIndexes):
-            updateFirstReverse()
-            let pis = planeIndexes.filter { $0 < picture.planes.count }.sorted()
-            if planeIndexes != pis {
-                planeIndexes = pis
-                let pivs = planeIndexes.map {
-                    IndexValue(value: picture.planes[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertPlanes(pivs),
-                                    redoItem: .removePlanes(planeIndexes: pis),
-                                    isReversed: isUndo)
-            }
-        case .setPlaneValue(var planeValue):
-            updateFirstReverse()
-            var isChanged = false
-            let oldPlanesCount = picture.planes.count
-            if oldPlanesCount > 0 {
-                for (i, v) in planeValue.moveIndexValues.enumerated() {
-                    if v.value >= oldPlanesCount {
-                        planeValue.moveIndexValues[i].value = oldPlanesCount - 1
-                        isChanged = true
-                    }
-                }
-            } else {
-                planeValue.moveIndexValues = []
-            }
-            
             var planesCount = planeValue.planes.count
-            planeValue.moveIndexValues.enumerated().forEach { (k, iv) in
-                if iv.index > planesCount {
-                    planeValue.moveIndexValues[k].index = planesCount
-                    isChanged = true
-                }
+            for iv in planeValue.moveIndexValues {
+                guard iv.index <= planesCount else { throw error() }
                 planesCount += 1
             }
+        case .changeToDraft: break
+        case .setPicture: break
+        case .insertDraftLines(let livs):
+            guard isSafeInsert(livs, in: draftPicture.lines) else { throw error() }
+        case .insertDraftPlanes(let pivs):
+            guard isSafeInsert(pivs, in: draftPicture.planes) else { throw error() }
+        case .removeDraftLines(let lis):
+            guard isSafeRemove(lis, in: draftPicture.lines) else { throw error() }
+        case .removeDraftPlanes(let pis):
+            guard isSafeRemove(pis, in: draftPicture.planes) else { throw error() }
+        case .setDraftPicture: break
+        case .insertTexts(let tivs):
+            guard isSafeInsert(tivs, in: texts) else { throw error() }
+        case .replaceTexts(let tivs):
+            guard isSafeReplace(tivs, in: texts) else { throw error() }
+        case .removeTexts(let tis):
+            guard isSafeRemove(tis, in: texts) else { throw error() }
+        case .replaceString(let tviv):
+            guard !texts.isEmpty, tviv.index < texts.count else { throw error() }
+            let oldString = texts[tviv.index].string
+            guard tviv.value.replacedRange.lowerBound >= 0,
+                  tviv.value.replacedRange.lowerBound <= oldString.count,
+                  tviv.value.replacedRange.upperBound <= oldString.count else { throw error() }
+        case .changedColors(let cuv):
+            if !cuv.planeIndexes.isEmpty {
+                guard cuv.planeIndexes
+                    .allSatisfy({ $0 < picture.planes.count }) else { throw error() }
+            } else if !cuv.planeAnimationIndexes.isEmpty {
+                for k in cuv.planeAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { throw error() }
+                    let planes = animation.keyframes[k.index].picture.planes
+                    guard k.value.allSatisfy({ $0 < planes.count }) else { throw error() }
+                }
+            }
             
-            var isArray = Array(repeating: false,
-                                count: picture.planes.count)
+            if !cuv.lineIndexes.isEmpty {
+                guard cuv.lineIndexes
+                    .allSatisfy({ $0 < picture.lines.count }) else { throw error() }
+            } else if !cuv.lineAnimationIndexes.isEmpty {
+                for k in cuv.lineAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { throw error() }
+                    let lines = animation.keyframes[k.index].picture.lines
+                    guard k.value.allSatisfy({ $0 < lines.count }) else { throw error() }
+                }
+            }
+        case .insertBorders(let bivs):
+            guard isSafeInsert(bivs, in: borders) else { throw error() }
+        case .removeBorders(let bis):
+            guard isSafeRemove(bis, in: borders) else { throw error() }
+        case .setRootKeyframeIndex: break
+        case .insertKeyframes(let kivs):
+            guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
+        case .removeKeyframes(let kis):
+            guard isSafeRemove(kis, in: animation.keyframes) else { throw error() }
+        case .setKeyframeOptions(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count else { throw error() }
+            }
+        case .insertKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                else { throw error() }
+            }
+        case .replaceKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                else { throw error() }
+            }
+        case .removeKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
+                else { throw error() }
+            }
+        case .insertKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                else { throw error() }
+            }
+        case .replaceKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                else { throw error() }
+            }
+        case .removeKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
+                else { throw error() }
+            }
+        case .insertDraftKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.lines)
+                else { throw error() }
+            }
+        case .removeDraftKeyLines(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.lines)
+                else { throw error() }
+            }
+        case .insertDraftKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeInsert(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.planes)
+                else { throw error() }
+            }
+        case .removeDraftKeyPlanes(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafeRemove(kv.value,
+                                   in: animation.keyframes[kv.index].draftPicture.planes)
+                else { throw error() }
+            }
+        case .setLineIDs(let kvs):
+            for kv in kvs {
+                guard kv.index < animation.keyframes.count else { throw error() }
+                let lines = animation.keyframes[kv.index].picture.lines
+                guard kv.value.allSatisfy({ $0.index < lines.count }) else { throw error() }
+            }
+        case .setAnimationOption: break
+        case .insertNotes(let nivs):
+            guard isSafeInsert(nivs, in: score.notes) else { throw error() }
+        case .replaceNotes(let nivs):
+            guard isSafeReplace(nivs, in: score.notes) else { throw error() }
+        case .removeNotes(let nis):
+            guard isSafeRemove(nis, in: score.notes) else { throw error() }
+        case .insertDraftNotes(let nivs):
+            guard isSafeInsert(nivs, in: score.draftNotes) else { throw error() }
+        case .removeDraftNotes(let nis):
+            guard isSafeRemove(nis, in: score.draftNotes) else { throw error() }
+        case .insertContents(let civs):
+            guard isSafeInsert(civs, in: contents) else { throw error() }
+        case .replaceContents(let civs):
+            guard isSafeReplace(civs, in: contents) else { throw error() }
+        case .removeContents(let cis):
+            guard isSafeRemove(cis, in: contents) else { throw error() }
+        case .setScoreOption: break
+        case .setSheetOption: break
+        case .setSelection(let selection):
+            guard checkConsistency(selection) else { throw error() }
+        }
+    }
+    
+    private func setReverse(undo item: SheetUndoItem,
+                            with result: SheetHistory.UndoResult,
+                            in history: inout SheetHistory) {
+        switch item {
+        case .appendLine: break
+        case .appendLines: break
+        case .appendPlanes: break
+        case .removeLastLines: break
+        case .removeLastPlanes: break
+        case .insertLines: break
+        case .insertPlanes: break
+        case .replaceLines(let livs):
+            let oldLIVs = livs.map { IndexValue(value: picture.lines[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replaceLines(oldLIVs), with: result)
+        case .replacePlanes(let pivs):
+            let oldPIVs = pivs.map { IndexValue(value: picture.planes[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replacePlanes(oldPIVs), with: result)
+        case .removeLines: break
+        case .removePlanes: break
+        case .setPlaneValue(let planeValue):
+            var isArray = Array(repeating: false, count: picture.planes.count)
             for v in planeValue.moveIndexValues {
                 isArray[v.value] = true
             }
@@ -4068,775 +3705,138 @@ extension Sheet {
             let oldVs = planeValue.moveIndexValues
                 .map { IndexValue(value: $0.index, index: $0.value) }
                 .sorted { $0.index < $1.index }
-            let oldPlaneValue = PlaneValue(planes: oldPlanes,
-                                           moveIndexValues: oldVs)
-            
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .setPlaneValue(oldPlaneValue),
-                                    redoItem: .setPlaneValue(planeValue),
-                                    isReversed: isUndo)
-            } else {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .setPlaneValue(oldPlaneValue)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .setPlaneValue(oldPlaneValue)
-                }
-            }
-        case .changeToDraft(_):
-            updateFirstReverse()
-        case .setPicture(_):
-            updateFirstReverse()
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setPicture(self.picture)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setPicture(self.picture)
-            }
-        case .insertDraftLines(var livs):
-            updateFirstReverse()
-            var isChanged = false, linesCount = draftPicture.lines.count
-            livs.enumerated().forEach { (k, iv) in
-                if iv.index > linesCount {
-                    livs[k].index = linesCount
-                    isChanged = true
-                }
-                linesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeDraftLines(lineIndexes: livs.map { $0.index }),
-                                    redoItem: .insertDraftLines(livs),
-                                    isReversed: isUndo)
-            }
-        case .insertDraftPlanes(var pivs):
-            updateFirstReverse()
-            var isChanged = false, planesCount = draftPicture.planes.count
-            pivs.enumerated().forEach { (k, iv) in
-                if iv.index > planesCount {
-                    pivs[k].index = planesCount
-                    isChanged = true
-                }
-                planesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeDraftPlanes(planeIndexes: pivs.map { $0.index }),
-                                    redoItem: .insertDraftPlanes(pivs),
-                                    isReversed: isUndo)
-            }
-        case .removeDraftLines(var lineIndexes):
-            updateFirstReverse()
-            let lis = lineIndexes.filter { $0 < draftPicture.lines.count }.sorted()
-            if lineIndexes != lis {
-                lineIndexes = lis
-                let livs = lineIndexes.map {
-                    IndexValue(value: draftPicture.lines[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertDraftLines(livs),
-                                    redoItem: .removeDraftLines(lineIndexes: lis),
-                                    isReversed: isUndo)
-            }
-        case .removeDraftPlanes(var planeIndexes):
-            updateFirstReverse()
-            let pis = planeIndexes.filter { $0 < draftPicture.planes.count }.sorted()
-            if planeIndexes != pis {
-                planeIndexes = pis
-                let pivs = planeIndexes.map {
-                    IndexValue(value: draftPicture.planes[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertDraftPlanes(pivs),
-                                    redoItem: .removeDraftPlanes(planeIndexes: pis),
-                                    isReversed: isUndo)
-            }
-        case .setDraftPicture(_):
-            updateFirstReverse()
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setDraftPicture(self.draftPicture)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setDraftPicture(self.draftPicture)
-            }
-        case .insertTexts(var tivs):
-            updateFirstReverse()
-            var isChanged = false, textsCount = texts.count
-            tivs.enumerated().forEach { (k, iv) in
-                if iv.index > textsCount {
-                    tivs[k].index = textsCount
-                    isChanged = true
-                }
-                textsCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeTexts(textIndexes: tivs.map { $0.index }),
-                                    redoItem: .insertTexts(tivs),
-                                    isReversed: isUndo)
-            }
+            let oldPlaneValue = PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
+            history.setReverse(.setPlaneValue(oldPlaneValue), with: result)
+        case .changeToDraft: break
+        case .setPicture:
+            history.setReverse(.setPicture(self.picture), with: result)
+        case .insertDraftLines: break
+        case .insertDraftPlanes: break
+        case .removeDraftLines: break
+        case .removeDraftPlanes: break
+        case .setDraftPicture:
+            history.setReverse(.setDraftPicture(self.draftPicture), with: result)
+        case .insertTexts: break
         case .replaceTexts(let tivs):
-            updateFirstReverse()
-            if tivs.contains(where: { $0.index >= texts.count }) {
-                history.error(result)
-            } else {
-                let oldTIVs = tivs.map { IndexValue(value: texts[$0.index], index: $0.index) }
-                history.setReverse(.replaceTexts(oldTIVs), with: result)
-            }
-        case .removeTexts(var textIndexes):
-            updateFirstReverse()
-            let tis = textIndexes.filter { $0 < texts.count }.sorted()
-            if textIndexes != tis {
-                textIndexes = tis
-                let tivs = textIndexes.map {
-                    IndexValue(value: texts[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertTexts(tivs),
-                                    redoItem: .removeTexts(textIndexes: tis),
-                                    isReversed: isUndo)
-            }
-        case .replaceString(var tuiv):
-            updateFirstReverse()
-            guard !texts.isEmpty else {
-                history.error(result)
-                break
-            }
-            var isChanged = false
-            if tuiv.index >= texts.count {
-                tuiv.index = texts.count - 1
-                isChanged = true
-            }
-            let oldString = texts[tuiv.index].string
-            if tuiv.value.replacedRange.lowerBound < 0 {
-                tuiv.value.replacedRange
-                    = 0 ..< tuiv.value.replacedRange.upperBound
-                isChanged = true
-            }
-            if tuiv.value.replacedRange.lowerBound > oldString.count {
-                tuiv.value.replacedRange
-                    = oldString.count ..< oldString.count
-                isChanged = true
-            }
-            if tuiv.value.replacedRange.upperBound > oldString.count {
-                tuiv.value.replacedRange
-                    = tuiv.value.replacedRange.lowerBound ..< oldString.count
-                isChanged = true
-            }
-            let oldRange = tuiv.value.newRange
-            let oldOrigin = tuiv.value.origin != nil ?
-                texts[tuiv.index].origin : nil
-            let oldSize = tuiv.value.size != nil ?
-                texts[tuiv.index].size : nil
-            let oldWidthCount = tuiv.value.widthCount != nil ?
-                texts[tuiv.index].widthCount : nil
-            let nRange = oldString.range(fromInt: tuiv.value.replacedRange)
-            let nString = String(oldString[nRange])
-            let tv = TextValue(string: nString,
-                               replacedRange: oldRange,
-                               origin: oldOrigin, size: oldSize,
-                               widthCount: oldWidthCount)
-            let tiv = IndexValue(value: tv, index: tuiv.index)
-            if isChanged {
-                history[result.version]
-                    .values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .replaceString(tiv),
-                                    redoItem: .replaceString(tuiv),
-                                    isReversed: isUndo)
-            } else {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .replaceString(tiv)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .replaceString(tiv)
-                }
-            }
-        case .changedColors(var colorUndoValue):
-            updateFirstReverse()
-            var isChanged = false, isError = false
-            if !colorUndoValue.planeIndexes.isEmpty {
-                let pis = colorUndoValue.planeIndexes.filter {
-                    $0 < picture.planes.count
-                }
-                if colorUndoValue.planeIndexes != pis {
-                    colorUndoValue.planeIndexes = pis
-                    isChanged = true
-                }
-            } else if !colorUndoValue.planeAnimationIndexes.isEmpty {
-                func error() {
-                    history.error(result)
-                    isError = true
-                }
-                loop: for k in colorUndoValue.planeAnimationIndexes {
-                    if k.index >= animation.keyframes.count {
-                        error()
-                        break loop
+            let oldTIVs = tivs.map { IndexValue(value: texts[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replaceTexts(oldTIVs), with: result)
+        case .removeTexts: break
+        case .replaceString(let tviv):
+            let oldString = texts[tviv.index].string
+            let oldRange = tviv.value.newRange
+            let oldOrigin = tviv.value.origin != nil ? texts[tviv.index].origin : nil
+            let oldSize = tviv.value.size != nil ? texts[tviv.index].size : nil
+            let oldWidthCount = tviv.value.widthCount != nil ? texts[tviv.index].widthCount : nil
+            let nRange = oldString.range(fromInt: tviv.value.replacedRange)
+            let tiv = IndexValue(value: TextValue(string: String(oldString[nRange]),
+                                                  replacedRange: oldRange,
+                                                  origin: oldOrigin, size: oldSize,
+                                                  widthCount: oldWidthCount),
+                                 index: tviv.index)
+            history.setReverse(.replaceString(tiv), with: result)
+        case .changedColors(let cuv):
+            var oldCUV = cuv
+            var isBackground = true
+            if let pi = oldCUV.planeIndexes.first {
+                oldCUV.uuColor = picture.planes[pi].uuColor
+                isBackground = false
+            } else if let piv = oldCUV.planeAnimationIndexes.first,
+                      let pi = piv.value.first {
+                if oldCUV.planeAnimationIndexes.count == oldCUV.animationColors.count {
+                    oldCUV.animationColors = oldCUV.planeAnimationIndexes.map {
+                        animation.keyframes[$0.index].picture.planes[$0.value.first!].uuColor.value
                     }
-                    let planes = animation.keyframes[k.index].picture.planes
-                    for i in k.value {
-                        if i >= planes.count {
-                            error()
-                            break loop
-                        }
-                    }
-                }
-            }
-            
-            if !colorUndoValue.lineIndexes.isEmpty {
-                let lis = colorUndoValue.lineIndexes.filter {
-                    $0 < picture.lines.count
-                }
-                if colorUndoValue.lineIndexes != lis {
-                    colorUndoValue.lineIndexes = lis
-                    isChanged = true
-                }
-            } else if !colorUndoValue.lineAnimationIndexes.isEmpty {
-                func error() {
-                    history[result.version]
-                        .values[result.valueIndex].error()
-                    isError = true
-                }
-                loop: for k in colorUndoValue.lineAnimationIndexes {
-                    if k.index >= animation.keyframes.count {
-                        error()
-                        break loop
-                    }
-                    let lines = animation.keyframes[k.index].picture.lines
-                    for i in k.value {
-                        if i >= lines.count {
-                            error()
-                            break loop
-                        }
-                    }
-                }
-            }
-            
-            if !isError {
-                var oColorUndoValue = colorUndoValue
-                var isBackground = true
-                if let pi = oColorUndoValue.planeIndexes.first {
-                    oColorUndoValue.uuColor = picture.planes[pi].uuColor
-                    isBackground = false
-                } else if let piv = oColorUndoValue.planeAnimationIndexes.first,
-                          let pi = piv.value.first {
-                    if oColorUndoValue.planeAnimationIndexes.count == oColorUndoValue.animationColors.count {
-                        
-                        oColorUndoValue.animationColors = oColorUndoValue.planeAnimationIndexes.map {
-                            animation.keyframes[$0.index].picture.planes[$0.value.first!].uuColor.value
-                        }
-                    } else {
-                        oColorUndoValue.uuColor
-                        = animation.keyframes[piv.index].picture.planes[pi].uuColor
-                    }
-                    isBackground = false
-                }
-                
-                if let li = oColorUndoValue.lineIndexes.first {
-                    oColorUndoValue.uuColor = picture.lines[li].uuColor
-                    isBackground = false
-                } else if let liv = oColorUndoValue.lineAnimationIndexes.first,
-                          let li = liv.value.first {
-                    if oColorUndoValue.lineAnimationIndexes.count == oColorUndoValue.animationColors.count {
-                        
-                        oColorUndoValue.animationColors = oColorUndoValue.lineAnimationIndexes.map {
-                            animation.keyframes[$0.index].picture.lines[$0.value.first!].uuColor.value
-                        }
-                    } else {
-                        oColorUndoValue.uuColor
-                        = animation.keyframes[liv.index].picture.lines[li].uuColor
-                    }
-                    isBackground = false
-                }
-                
-                if isBackground {
-                    oColorUndoValue.uuColor = backgroundUUColor
-                }
-                
-                if isChanged {
-                    history[result.version].values[result.valueIndex].saveUndoItemValue
-                        = UndoItemValue(undoItem: .changedColors(oColorUndoValue),
-                                        redoItem: .changedColors(colorUndoValue),
-                                        isReversed: isUndo)
                 } else {
-                    switch result.type {
-                    case .undo:
-                        history[result.version].values[result.valueIndex]
-                            .undoItemValue?.redoItem = .changedColors(oColorUndoValue)
-                    case .redo:
-                        history[result.version].values[result.valueIndex]
-                            .undoItemValue?.undoItem = .changedColors(oColorUndoValue)
-                    }
+                    oldCUV.uuColor = animation.keyframes[piv.index].picture.planes[pi].uuColor
                 }
-            }
-        case .insertBorders(var bivs):
-            updateFirstReverse()
-            var isChanged = false, bordersCount = borders.count
-            bivs.enumerated().forEach { (k, iv) in
-                if iv.index > bordersCount {
-                    bivs[k].index = bordersCount
-                    isChanged = true
-                }
-                bordersCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeBorders(borderIndexes: bivs.map { $0.index }),
-                                    redoItem: .insertBorders(bivs),
-                                    isReversed: isUndo)
-            }
-        case .removeBorders(var borderIndexes):
-            updateFirstReverse()
-            let bis = borderIndexes.filter { $0 < borders.count }.sorted()
-            if borderIndexes != bis {
-                borderIndexes = bis
-                let bivs = borderIndexes.map {
-                    IndexValue(value: borders[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertBorders(bivs),
-                                    redoItem: .removeBorders(borderIndexes: bis),
-                                    isReversed: isUndo)
-            }
-        case .setRootKeyframeIndex(let rootKeyframeIndex):
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex)
-            }
-        case .insertKeyframes(var pivs):
-            var isChanged = false, keyframesCount = animation.keyframes.count
-            pivs.enumerated().forEach { (k, iv) in
-                if iv.index > keyframesCount {
-                    pivs[k].index = keyframesCount
-                    isChanged = true
-                }
-                keyframesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeKeyframes(keyframeIndexes: pivs.map { $0.index }),
-                                    redoItem: .insertKeyframes(pivs),
-                                    isReversed: isUndo)
-            }
-        case .removeKeyframes(var indexes):
-            let pis = indexes.filter { $0 < animation.keyframes.count }.sorted()
-            if indexes != pis {
-                indexes = pis
-                let pivs = indexes.map {
-                    IndexValue(value: animation.keyframes[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertKeyframes(pivs),
-                                    redoItem: .removeKeyframes(keyframeIndexes: pis),
-                                    isReversed: isUndo)
-            }
-        case .setKeyframeOptions(let koivs):
-            updateFirstReverse()
-            let isError = {
-                for koiv in koivs {
-                    if koiv.index >= animation.keyframes.count {
-                        return true
-                    }
-                }
-                return false
-            } ()
-            if isError {
-                history.error(result)
-            } else {
-                let okoivs = koivs.map {
-                    IndexValue(value: animation.keyframes[$0.index].option,
-                               index: $0.index)
-                }
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .setKeyframeOptions(okoivs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .setKeyframeOptions(okoivs)
-                }
+                isBackground = false
             }
             
-        case .insertKeyLines(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                var linesCount = lines.count
-                for liv in k.value {
-                    if liv.index > linesCount {
-                        history.error(result)
-                        break loop
+            if let li = oldCUV.lineIndexes.first {
+                oldCUV.uuColor = picture.lines[li].uuColor
+                isBackground = false
+            } else if let liv = oldCUV.lineAnimationIndexes.first,
+                      let li = liv.value.first {
+                if oldCUV.lineAnimationIndexes.count == oldCUV.animationColors.count {
+                    oldCUV.animationColors = oldCUV.lineAnimationIndexes.map {
+                        animation.keyframes[$0.index].picture.lines[$0.value.first!].uuColor.value
                     }
-                    linesCount += 1
+                } else {
+                    oldCUV.uuColor = animation.keyframes[liv.index].picture.lines[li].uuColor
                 }
+                isBackground = false
             }
+            
+            if isBackground {
+                oldCUV.uuColor = backgroundUUColor
+            }
+            
+            history.setReverse(.changedColors(oldCUV), with: result)
+        case .insertBorders: break
+        case .removeBorders: break
+        case .setRootKeyframeIndex(let rootKI):
+            history.setReverse(.setRootKeyframeIndex(rootKeyframeIndex: rootKI), with: result)
+        case .insertKeyframes: break
+        case .removeKeyframes: break
+        case .setKeyframeOptions(let kvs):
+            let oldKVs = kvs.map { IndexValue(value: animation.keyframes[$0.index].option,
+                                              index: $0.index) }
+            history.setReverse(.setKeyframeOptions(oldKVs), with: result)
+        case .insertKeyLines: break
         case .replaceKeyLines(let kvs):
-            updateFirstReverse()
-            var isError = false
-            func error() {
-                history.error(result)
-                isError = true
+            let oldKVs = kvs.map {
+                let lines = animation.keyframes[$0.index].picture.lines
+                let oldLIVs = $0.value.map { IndexValue(value: lines[$0.index],
+                                                        index: $0.index) }
+                return IndexValue(value: oldLIVs, index: $0.index)
             }
-            var oldKVs = [IndexValue<[IndexValue<Line>]>]()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    error()
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                var oldLIVs = [IndexValue<Line>]()
-                for liv in k.value {
-                    if liv.index >= lines.count {
-                        error()
-                        break loop
-                    }
-                    oldLIVs.append(IndexValue(value: lines[liv.index],
-                                              index: liv.index))
-                }
-                oldKVs.append(IndexValue(value: oldLIVs, index: k.index))
-            }
-            if !isError {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .replaceKeyLines(oldKVs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .replaceKeyLines(oldKVs)
-                }
-            }
-        case .removeKeyLines(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                let lis = k.value.filter { $0 < lines.count }.sorted()
-                if k.value != lis {
-                    history.error(result)
-                    break loop
-                }
-            }
-            
-        case .insertKeyPlanes(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                var planesCount = planes.count
-                for piv in k.value {
-                    if piv.index > planesCount {
-                        history.error(result)
-                        break loop
-                    }
-                    planesCount += 1
-                }
-            }
+            history.setReverse(.replaceKeyLines(oldKVs), with: result)
+        case .removeKeyLines: break
+        case .insertKeyPlanes: break
         case .replaceKeyPlanes(let kvs):
-            updateFirstReverse()
-            var isError = false
-            func error() {
-                history.error(result)
-                isError = true
+            let oldKVs = kvs.map {
+                let planes = animation.keyframes[$0.index].picture.planes
+                let oldPIVs = $0.value.map { IndexValue(value: planes[$0.index],
+                                                        index: $0.index) }
+                return IndexValue(value: oldPIVs, index: $0.index)
             }
-            var oldKVs = [IndexValue<[IndexValue<Plane>]>]()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    error()
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                var oldPIVs = [IndexValue<Plane>]()
-                for piv in k.value {
-                    if piv.index >= planes.count {
-                        error()
-                        break loop
-                    }
-                    oldPIVs.append(IndexValue(value: planes[piv.index],
-                                              index: piv.index))
-                }
-                oldKVs.append(IndexValue(value: oldPIVs, index: k.index))
-            }
-            if !isError {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .replaceKeyPlanes(oldKVs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .replaceKeyPlanes(oldKVs)
-                }
-            }
-        case .removeKeyPlanes(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].picture.planes
-                let pis = k.value.filter { $0 < planes.count }.sorted()
-                if k.value != pis {
-                    history.error(result)
-                    break loop
-                }
-            }
-            
-        case .insertDraftKeyLines(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].draftPicture.lines
-                var linesCount = lines.count
-                for liv in k.value {
-                    if liv.index > linesCount {
-                        history.error(result)
-                        break loop
-                    }
-                    linesCount += 1
-                }
-            }
-        case .removeDraftKeyLines(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].draftPicture.lines
-                let lis = k.value.filter { $0 < lines.count }.sorted()
-                if k.value != lis {
-                    history.error(result)
-                    break loop
-                }
-            }
-            
-        case .insertDraftKeyPlanes(let kvs):
-            updateFirstReverse()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].draftPicture.planes
-                var planesCount = planes.count
-                for piv in k.value {
-                    if piv.index > planesCount {
-                        history.error(result)
-                        break loop
-                    }
-                    planesCount += 1
-                }
-            }
-        case .removeDraftKeyPlanes(let iivs):
-            updateFirstReverse()
-            loop: for k in iivs {
-                if k.index >= animation.keyframes.count {
-                    history.error(result)
-                    break loop
-                }
-                let planes = animation.keyframes[k.index].draftPicture.planes
-                let pis = k.value.filter { $0 < planes.count }.sorted()
-                if k.value != pis {
-                    history.error(result)
-                    break loop
-                }
-            }
-            
+            history.setReverse(.replaceKeyPlanes(oldKVs), with: result)
+        case .removeKeyPlanes: break
+        case .insertDraftKeyLines: break
+        case .removeDraftKeyLines: break
+        case .insertDraftKeyPlanes: break
+        case .removeDraftKeyPlanes: break
         case .setLineIDs(let kvs):
-            updateFirstReverse()
-            var isError = false
-            func error() {
-                history.error(result)
-                isError = true
+            let oldKVs = kvs.map {
+                let lines = animation.keyframes[$0.index].picture.lines
+                let oldKIVs = $0.value.map { IndexValue(value: lines[$0.index].interOption,
+                                                        index: $0.index) }
+                return IndexValue(value: oldKIVs, index: $0.index)
             }
-            var oldKvs = [IndexValue<[IndexValue<InterOption>]>]()
-            loop: for k in kvs {
-                if k.index >= animation.keyframes.count {
-                    error()
-                    break loop
-                }
-                let lines = animation.keyframes[k.index].picture.lines
-                var oldVs = [IndexValue<InterOption>]()
-                for liv in k.value {
-                    if liv.index >= lines.count {
-                        error()
-                        break loop
-                    }
-                    oldVs.append(IndexValue(value: lines[liv.index].interOption,
-                                              index: liv.index))
-                }
-                oldKvs.append(IndexValue(value: oldVs, index: k.index))
-            }
-            if !isError {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .setLineIDs(oldKvs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .setLineIDs(oldKvs)
-                }
-            }
-            
+            history.setReverse(.setLineIDs(oldKVs), with: result)
         case .setAnimationOption:
             history.setReverse(.setAnimationOption(animation.option), with: result)
-        case .insertNotes(var nivs):
-            updateFirstReverse()
-            var isChanged = false, notesCount = score.notes.count
-            nivs.enumerated().forEach { (k, iv) in
-                if iv.index > notesCount {
-                    nivs[k].index = notesCount
-                    isChanged = true
-                }
-                notesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeNotes(noteIndexes: nivs.map { $0.index }),
-                                    redoItem: .insertNotes(nivs),
-                                    isReversed: isUndo)
-            }
+        case .insertNotes: break
         case .replaceNotes(let nivs):
-            updateFirstReverse()
-            var isError = false
-            func error() {
-                history.error(result)
-                isError = true
-            }
-            let notes = score.notes
-            var oldNIVs = [IndexValue<Note>]()
-            for niv in nivs {
-                if niv.index >= notes.count {
-                    error()
-                    break
-                }
-                oldNIVs.append(IndexValue(value: notes[niv.index],
-                                          index: niv.index))
-            }
-            if !isError {
-                switch result.type {
-                case .undo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.redoItem = .replaceNotes(oldNIVs)
-                case .redo:
-                    history[result.version].values[result.valueIndex]
-                        .undoItemValue?.undoItem = .replaceNotes(oldNIVs)
-                }
-            }
-        case .removeNotes(var noteIndexes):
-            updateFirstReverse()
-            let nis = noteIndexes.filter { $0 < score.notes.count }.sorted()
-            if noteIndexes != nis {
-                noteIndexes = nis
-                let nivs = noteIndexes.map {
-                    IndexValue(value: score.notes[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertNotes(nivs),
-                                    redoItem: .removeNotes(noteIndexes: nis),
-                                    isReversed: isUndo)
-            }
-        case .insertDraftNotes(var nivs):
-            updateFirstReverse()
-            var isChanged = false, notesCount = score.notes.count
-            nivs.enumerated().forEach { (k, iv) in
-                if iv.index > notesCount {
-                    nivs[k].index = notesCount
-                    isChanged = true
-                }
-                notesCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeDraftNotes(noteIndexes: nivs.map { $0.index }),
-                                    redoItem: .insertDraftNotes(nivs),
-                                    isReversed: isUndo)
-            }
-        case .removeDraftNotes(var noteIndexes):
-            updateFirstReverse()
-            let nis = noteIndexes.filter { $0 < score.notes.count }.sorted()
-            if noteIndexes != nis {
-                noteIndexes = nis
-                let nivs = noteIndexes.map {
-                    IndexValue(value: score.notes[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertDraftNotes(nivs),
-                                    redoItem: .removeDraftNotes(noteIndexes: nis),
-                                    isReversed: isUndo)
-            }
-        case .insertContents(var civs):
-            updateFirstReverse()
-            var isChanged = false, contentsCount = contents.count
-            civs.enumerated().forEach { (k, iv) in
-                if iv.index > contentsCount {
-                    civs[k].index = contentsCount
-                    isChanged = true
-                }
-                contentsCount += 1
-            }
-            if isChanged {
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .removeContents(contentIndexes: civs.map { $0.index }),
-                                    redoItem: .insertContents(civs),
-                                    isReversed: isUndo)
-            }
+            let oldNIVs = nivs.map { IndexValue(value: score.notes[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replaceNotes(oldNIVs), with: result)
+        case .removeNotes: break
+        case .insertDraftNotes: break
+        case .removeDraftNotes: break
+        case .insertContents: break
         case .replaceContents(let civs):
-            updateFirstReverse()
-            if civs.contains(where: { $0.index >= contents.count }) {
-                history.error(result)
-            } else {
-                let oldCIVs = civs.map { IndexValue(value: contents[$0.index], index: $0.index) }
-                history.setReverse(.replaceContents(oldCIVs), with: result)
-            }
-        case .removeContents(var contentIndexes):
-            updateFirstReverse()
-            let cis = contentIndexes.filter { $0 < contents.count }.sorted()
-            if contentIndexes != cis {
-                contentIndexes = cis
-                let civs = contentIndexes.map {
-                    IndexValue(value: contents[$0], index: $0)
-                }
-                history[result.version].values[result.valueIndex].saveUndoItemValue
-                    = UndoItemValue(undoItem: .insertContents(civs),
-                                    redoItem: .removeContents(contentIndexes: cis),
-                                    isReversed: isUndo)
-            }
+            let oldCIVs = civs.map { IndexValue(value: contents[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replaceContents(oldCIVs), with: result)
+        case .removeContents: break
         case .setScoreOption:
             history.setReverse(.setScoreOption(score.option), with: result)
         case .setSheetOption:
             history.setReverse(.setSheetOption(self.option), with: result)
-        case .setSelection(let selection):
-            if checkConsistency(selection) {
-                history.setReverse(.setSelection(self.selection), with: result)
-            } else {
-                history.error(result)
-            }
+        case .setSelection:
+            history.setReverse(.setSelection(self.selection), with: result)
         }
     }
 }

@@ -945,9 +945,7 @@ struct Spectrogram {
         let h = stereoCount
         guard let bitmap = Bitmap<UInt8>(width: width, height: h, colorSpace: .sRGB) else { return nil }
         func rgamma(_ x: Double) -> Double {
-            x <= 0.0031308 ?
-            12.92 * x :
-            1.055 * (x ** (1 / 2.4)) - 0.055
+            x <= 0.0031308 ? 12.92 * x : 1.055 * (x ** (1 / 2.4)) - 0.055
         }
         
         for x in 0 ..< width {
@@ -955,7 +953,10 @@ struct Spectrogram {
                 let stereo = frames[x + xi].stereos[h - 1 - y]
                 let alpha = rgamma(Self.mainVolm(fromVolum: stereo.volm))
                 guard !alpha.isNaN else {
-                    print("NaN:", stereo.volm)
+                    bitmap[x, y, 0] = 1
+                    bitmap[x, y, 1] = 0
+                    bitmap[x, y, 2] = 0
+                    bitmap[x, y, 3] = 1
                     continue
                 }
                 bitmap[x, y, 0] = stereo.pan > 0 ? UInt8(rgamma(stereo.volm * stereo.pan * Self.redRatio) * Double(UInt8.max)) : 0

@@ -299,51 +299,52 @@ extension World {
 typealias WorldHistory = History<WorldUndoItem>
 extension World {
     func undoItemValue(with result: WorldHistory.UndoResult,
-                       in history: inout WorldHistory) -> UndoItemValue<WorldUndoItem>? {
-        if result.item.loadType == .unload {
-            _ = history[result.version].values[result.valueIndex].loadRedoItem()
-            loadCheck(with: result, in: &history)
-            return history[result.version].values[result.valueIndex].undoItemValue
+                       in history: inout WorldHistory) throws -> UndoItemValue<WorldUndoItem> {
+        if let uiv = result.item.undoItemValue {
+            return uiv
         } else {
-            return result.item.undoItemValue
+            do {
+                guard let uiv = history[result].loadRedoItem()
+                else { throw UndoError(load: result.item) }
+                try loadCheck(redo: result.type == .undo ? uiv.redoItem : uiv.undoItem)
+                try loadCheck(undo: result.type == .undo ? uiv.undoItem : uiv.redoItem)
+                setReverse(undo: result.type == .undo ? uiv.undoItem : uiv.redoItem,
+                           with: result, in: &history)
+                return history[result].undoItemValue!
+            } catch {
+                history[result].setError()
+                throw error
+            }
         }
     }
-    func loadCheck(with result: WorldHistory.UndoResult, in history: inout WorldHistory) {
-        guard let uiv = history[result.version].values[result.valueIndex]
-            .undoItemValue else { return }
-        
-        let isUndo = result.type == .undo
-        let reversedType: UndoType = isUndo ? .redo : .undo
-        
-        switch !isUndo ? uiv.undoItem : uiv.redoItem {
-        case .insertSheets(let sids):
-            for (shp, sid) in sids {
-                if sheetIDs[shp] != sid {
-                    history[result.version].values[result.valueIndex].error()
-                    break
-                }
-            }
-        case .removeSheets: break
-        case .setSelection(let selection):
-            if self.selection != selection {
-                history[result.version].values[result.valueIndex]
-                    .saveUndoItemValue?.set(.setSelection(self.selection),
-                                            type: reversedType)
-            }
+    private func loadCheck(redo item: WorldUndoItem) throws {
+        func error() -> UndoError<WorldUndoItem> {
+            UndoError(redo: item)
         }
         
-        switch isUndo ? uiv.undoItem : uiv.redoItem {
-        case .insertSheets(_): break
-        case .removeSheets(_): break
+        switch item {
+        case .insertSheets(let sids):
+            guard sids.allSatisfy({ sheetIDs[$0.key] == $0.value }) else { throw error() }
+        case .removeSheets: break
+        case .setSelection(let selection):
+            guard self.selection == selection else { throw error() }
+        }
+    }
+    private func loadCheck(undo item: WorldUndoItem) throws {
+        switch item {
+        case .insertSheets: break
+        case .removeSheets: break
+        case .setSelection: break
+        }
+    }
+    private func setReverse(undo item: WorldUndoItem,
+                            with result: WorldHistory.UndoResult,
+                            in history: inout WorldHistory) {
+        switch item {
+        case .insertSheets: break
+        case .removeSheets: break
         case .setSelection:
-            switch result.type {
-            case .undo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.redoItem = .setSelection(selection)
-            case .redo:
-                history[result.version].values[result.valueIndex]
-                    .undoItemValue?.undoItem = .setSelection(selection)
-            }
+            history.setReverse(.setSelection(self.selection), with: result)
         }
     }
 }

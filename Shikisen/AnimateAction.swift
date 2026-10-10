@@ -679,7 +679,7 @@ final class InsertAction: InputKeyEventAction {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
                     isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
+                    sheetView.set(SheetSelection.empty)
                 }
                 
                 let sheetP = sheetView.convertFromWorld(p)
@@ -1888,7 +1888,7 @@ final class DisconnectAction: InputKeyEventAction {
                     if !replaceIVs.isEmpty {
                         sheetView.newUndoGroup()
                         if !sheetView.model.selection.isEmpty {
-                            sheetView.doSet(SheetSelection.empty)
+                            sheetView.set(SheetSelection.empty)
                             rootView.updateSelectedFrame()
                         }
                         sheetView.replace(replaceIVs)
@@ -2102,7 +2102,7 @@ final class DisconnectAction: InputKeyEventAction {
                     if !values.isEmpty || !removeValues.isEmpty || !appendValues.isEmpty {
                         sheetView.newUndoGroup()
                         if !sheetView.model.selection.isEmpty {
-                            sheetView.doSet(SheetSelection.empty)
+                            sheetView.set(SheetSelection.empty)
                             rootView.updateSelectedFrame()
                         }
                         if !values.isEmpty {
@@ -2181,7 +2181,7 @@ final class DisconnectAction: InputKeyEventAction {
                     if !values.isEmpty {
                         sheetView.newUndoGroup()
                         if !sheetView.model.selection.isEmpty {
-                            sheetView.doSet(SheetSelection.empty)
+                            sheetView.set(SheetSelection.empty)
                             rootView.updateSelectedFrame()
                         }
                         sheetView.removeKeyLines(values)

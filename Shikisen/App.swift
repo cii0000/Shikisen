@@ -649,7 +649,7 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
                                widthCount: nil)
             sheetView.newUndoGroup()
             if !sheetView.selection.isEmpty {
-                sheetView.doSet(.empty)
+                sheetView.set(SheetSelection.empty)
             }
             sheetView.replace(IndexValue(value: tv, index: ti))
             
@@ -2933,8 +2933,8 @@ extension URL {
         }
         return fileSize
     }
-    struct ReadError: Error {}
-    struct WriteError: Error {}
+    struct ReadError: LocalizedError {}
+    struct WriteError: LocalizedError {}
 }
 extension FileManager {
     func removeItemIfFileExists(_ url: URL) throws {
@@ -2967,7 +2967,7 @@ extension URL {
         self = url
     }
     
-    struct BookmarkError: Error {}
+    struct BookmarkError: LocalizedError {}
     /// SandBox: com.apple.security.files.bookmarks.app-scope = true
     init(bookmarkData: Data) throws {
         do {

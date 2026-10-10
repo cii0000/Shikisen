@@ -75,6 +75,10 @@
 
 "Empty Action" = "アクションなし";
 
+"Undo Error" = "取り消しエラー";
+"Redo Error" = "やり直しエラー";
+"History Load Error" = "履歴ロードエラー";
+
 "No Update" = "更新なし";
 "Making Faces" = "面を作成中";
 "Stopping Task" = "タスクを停止中";
@@ -283,9 +287,7 @@
 "Acknowledgments" = "謝辞";
 "Privacy Policy" = "プライバシーポリシー";
 
-
-
-
+"Texture Error: %@ is unsupport pixel format" = "テクスチャエラー：%@は未サポートのピクセルフォーマットです";
 
 "Calculating" = "計算中";
 

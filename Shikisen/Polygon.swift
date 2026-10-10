@@ -38,6 +38,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import protocol Foundation.LocalizedError
+
 struct Triangle: Hashable, Codable {
     var p0, p1, p2: Point
     init() {
@@ -522,7 +524,7 @@ extension Polygon {
         }
         return true
     }
-    struct PolygonError: Error {}
+    struct PolygonError: LocalizedError {}
     func monotonePolygons() throws -> [Polygon] {
         guard points.count >= 3 else { return [] }
         let ps: [Point] = points.enumerated().compactMap { i, p1 in
@@ -1280,7 +1282,7 @@ private struct MEdge: Comparable {
     }
 }
 extension Topolygon {
-    struct TopolygonError: Error {}
+    struct TopolygonError: LocalizedError {}
     func monotonePolygons() throws -> [Polygon] {
         let oPolys = [polygon] + holePolygons
         let polygons: [Polygon] = oPolys.compactMap { polygon in

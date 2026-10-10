@@ -1226,7 +1226,7 @@ final class LineAction: Action {
             } else {
                 if !rootView.world.selection.isEmpty {
                     rootView.newUndoGroup()
-                    rootView.doSet(WorldSelection.empty)
+                    rootView.set(WorldSelection.empty)
                     isUpdatedNewUndoGroupWorld = true
                 }
             }

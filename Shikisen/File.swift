@@ -20,6 +20,7 @@ import struct Foundation.Date
 import class Foundation.DateFormatter
 import struct Foundation.URL
 import class Foundation.FileManager
+import protocol Foundation.LocalizedError
 import SwiftProtobuf
 
 extension Date {
@@ -31,7 +32,7 @@ extension Date {
     }
 }
 
-struct ProtobufError: Error {}
+struct ProtobufError: LocalizedError {}
 protocol Serializable {
     init(serializedData: Data) throws
     func serializedData() throws -> Data
@@ -120,7 +121,7 @@ extension Encodable {
     }
 }
 
-struct FileError: Error {}
+struct FileError: LocalizedError {}
 protocol File: AnyObject {
     var url: URL { get }
     var key: String { get }

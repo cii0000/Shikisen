@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
+import protocol Foundation.LocalizedError
+
 //#if anyAppleOS
 import Accelerate.vecLib.vDSP
 @preconcurrency import AVFAudio
@@ -83,7 +85,7 @@ final class NotePlayer {
     var scoreNoder: ScoreNoder
     var noteIDs = Set<UUID>()
     
-    struct NotePlayerError: Error {}
+    struct NotePlayerError: LocalizedError {}
     
     init(notes: [Note.PitResult]) throws {
         let sequencer = Sequencer(audiotracks: [], type: .loopNote)
@@ -1258,7 +1260,7 @@ extension Sequencer {
     }
 }
 extension Sequencer {
-    struct ExportError: Error {}
+    struct ExportError: LocalizedError {}
     
     static func audioSettings(isLinearPCM: Bool, channelCount: Int,
                               sampleRate: Double) -> [String: Any] {
@@ -1403,7 +1405,7 @@ extension Sequencer {
 
 typealias PCMBuffer = AVAudioPCMBuffer
 extension AVAudioPCMBuffer {
-    struct AVAudioPCMBufferError: Error {}
+    struct AVAudioPCMBufferError: LocalizedError {}
     
     static var pcmFormat: AVAudioFormat? {
         AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -2159,7 +2161,7 @@ final class ClippingAudioUnit: AUAudioUnit {
         }
     }
     
-    struct SError: Error {}
+    struct SError: LocalizedError {}
 
     override init(componentDescription: AudioComponentDescription,
                   options: AudioComponentInstantiationOptions = []) throws {

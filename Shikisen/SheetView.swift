@@ -3243,13 +3243,13 @@ final class SheetView: View, @unchecked Sendable {
     
     func unselect() {
         if !model.selection.isEmpty {
-            doSet(SheetSelection.empty)
+            set(SheetSelection.empty)
         }
     }
     func unselectAndNewUndoGroupIfNeeded() {
         if !model.selection.isEmpty {
             newUndoGroup()
-            doSet(SheetSelection.empty)
+            set(SheetSelection.empty)
         }
     }
     func unselectAndNewUndoGroupIfNeeded(withoutText textI: Int) {
@@ -3257,7 +3257,7 @@ final class SheetView: View, @unchecked Sendable {
         selection.textSelections[textI] = nil
         if !selection.isEmpty {
             newUndoGroup()
-            doSet(SheetSelection.empty)
+            set(SheetSelection.empty)
         }
     }
     func unselect(isNewUndoGroup: inout Bool) {
@@ -3266,7 +3266,7 @@ final class SheetView: View, @unchecked Sendable {
                 newUndoGroup()
                 isNewUndoGroup = false
             }
-            doSet(SheetSelection.empty)
+            set(SheetSelection.empty)
         }
     }
     
@@ -3469,6 +3469,33 @@ final class SheetView: View, @unchecked Sendable {
     private func append(undo undoItem: SheetUndoItem,
                         redo redoItem: SheetUndoItem) {
         history.append(undo: undoItem, redo: redoItem)
+    }
+    private func append(_ uiv: SheetUndoItemValue) {
+        history.append(uiv)
+    }
+    private func appendAndSet(_ uiv: SheetUndoItemValue) {
+        history.append(uiv)
+        set(uiv.redoItem)
+    }
+    @discardableResult
+    func undo(to toTopIndex: Int,
+              isMakeRect: Bool = true, isSleep: Bool = true) -> (rect: Rect?,
+                                                                 nodes: [Node],
+                                                                 errors: [any Error]) {
+        var rect = Rect?.none, nodes = [Node](), errors = [any Error]()
+        let results = history.undoAndResults(to: toTopIndex)
+        for result in results {
+            do {
+                let uiv = try model.undoItemValue(with: result, in: &history)
+                let (aRect, aNodes) = set(result.undoItem(with: uiv),
+                                          isMakeRect: isMakeRect, isSleep: isSleep)
+                rect += aRect
+                nodes += aNodes
+            } catch {
+                errors.append(error)
+            }
+        }
+        return (rect, nodes, errors)
     }
     @discardableResult
     func set(_ item: SheetUndoItem,
@@ -5393,7 +5420,7 @@ final class SheetView: View, @unchecked Sendable {
         set(redoItem)
     }
     
-    func doSet(_ selection: SheetSelection) {
+    func set(_ selection: SheetSelection) {
         let undoItem = SheetUndoItem.setSelection(model.selection)
         let redoItem = SheetUndoItem.setSelection(selection)
         append(undo: undoItem, redo: redoItem)
@@ -5403,31 +5430,6 @@ final class SheetView: View, @unchecked Sendable {
         let undoItem = SheetUndoItem.setSelection(oldSelection)
         let redoItem = SheetUndoItem.setSelection(model.selection)
         append(undo: undoItem, redo: redoItem)
-    }
-    
-    @discardableResult
-    func undo(to toTopIndex: Int,
-              isMakeRect: Bool = true, isSleep: Bool = true) -> (rect: Rect?, nodes: [Node]) {
-        var rect = Rect?.none, nodes = [Node]()
-        let results = history.undoAndResults(to: toTopIndex)
-        var reverses = [Version: Int]()
-        for result in results {
-            guard let uiv = model.undoItemValue(with: result, reverses: &reverses,
-                                                in: &history) else { continue }
-            let (aRect, aNodes) = set(result.undoItem(with: uiv),
-                                      isMakeRect: isMakeRect, isSleep: isSleep)
-            rect += aRect
-            nodes += aNodes
-        }
-        
-        for (version, index) in reverses {
-            let item = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: index)
-            let uiv = UndoItemValue(undoItem: item, redoItem: item)
-            let udv = UndoDataValue(save: uiv)
-            history[version].values.insert(udv, at: 0)
-        }
-        
-        return (rect, nodes)
     }
     
     func textTuple(at p: Point, scale: Double) -> (textView: SheetTextView,
@@ -5580,7 +5582,7 @@ final class SheetView: View, @unchecked Sendable {
             if !isUpdatedNewUndoGroup {
                 newUndoGroup()
                 if !model.selection.isEmpty {
-                    doSet(SheetSelection.empty)
+                    set(SheetSelection.empty)
                 }
                 isUpdatedNewUndoGroup = true
             }
@@ -6063,7 +6065,7 @@ final class SheetColorOwner {
                 }
                 if !removeKeyLines.isEmpty || !insertKeyLines.isEmpty {
                     //
-                    sheetView.doSet(.empty)
+                    sheetView.set(SheetSelection.empty)
                     
                     sheetView.removeKeyLines(removeKeyLines)
                     sheetView.insertKeyLines(insertKeyLines)
@@ -6072,7 +6074,7 @@ final class SheetColorOwner {
                 let lis = colorValue.lineIndexes.filter { $0 != 0 }
                 if !lis.isEmpty {
                     //
-                    sheetView.doSet(.empty)
+                    sheetView.set(SheetSelection.empty)
                     
                     let livs = sheetView.model.picture.lines[lis].enumerated()
                         .map { IndexValue(value: $0.element, index: $0.offset) }

@@ -440,7 +440,7 @@ final class IOAction: Action {
                                     sheetView.unselect()
                                     sheetView.append(text)
                                     sheetView.append(content)
-                                    sheetView.doSet(.init(textSelections: text.string.isEmpty ?
+                                    sheetView.set(SheetSelection(textSelections: text.string.isEmpty ?
                                                           [:] :
                                                              [sheetView.model.texts.count - 1:
                                                                      .init(ranges: [text.string.allIntRange])],
@@ -483,11 +483,11 @@ final class IOAction: Action {
                         sheetView.unselect()
                         sheetView.append(text)
                         sheetView.append(content)
-                        sheetView.doSet(.init(textSelections: text.string.isEmpty ?
+                        sheetView.set(SheetSelection(textSelections: text.string.isEmpty ?
                                               [:] :
                                                  [sheetView.model.texts.count - 1:
                                                          .init(ranges: [text.string.allIntRange])],
-                                              contentIs: [sheetView.model.contents.count - 1]))
+                                                       contentIs: [sheetView.model.contents.count - 1]))
                     }
                 }
                 
@@ -572,7 +572,7 @@ final class IOAction: Action {
             }
             let nSelection = WorldSelection(sheetIDs: Array(nSIDs.values))
             if nSelection != rootView.world.selection {
-                rootView.doSet(nSelection)
+                rootView.set(nSelection)
             }
             if !resetSIDs.isEmpty {
                 rootView.moveSheetsToUpperRightCorner(with: Array(resetSIDs),
@@ -1834,11 +1834,9 @@ final class IOAction: Action {
                             defer { currentI += 1 }
                             let isFirst = vi == 0 && topIndex != 0
                             let results = sheetView.history.undoAndResults(to: topIndex)
-                            var reverses = [Version: Int]()
                             for result in results {
-                                guard let uiv = sheetView.model
-                                    .undoItemValue(with: result, reverses: &reverses,
-                                                   in: &sheetView.history) else { continue }
+                                let uiv = try sheetView.model
+                                    .undoItemValue(with: result, in: &sheetView.history)
                                 let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
                                 let item = result.undoItem(with: uiv)
                                 _ = sheetView.set(item, isMakeRect: false, isSleep: false)
@@ -1884,12 +1882,6 @@ final class IOAction: Action {
                                     default: kiSet.insert(sheetView.model.animation.index)
                                     }
                                 }
-                            }
-                            for (version, index) in reverses {
-                                let item = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: index)
-                                let uiv = UndoItemValue(undoItem: item, redoItem: item)
-                                let udv = UndoDataValue(save: uiv)
-                                sheetView.history[version].values.insert(udv, at: 0)
                             }
                             let kis = kiSet.sorted()
                             

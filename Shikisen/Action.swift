@@ -16,7 +16,14 @@
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
 import struct Foundation.UUID
+import protocol Foundation.LocalizedError
 import Dispatch
+
+extension LocalizedError {
+    var errorDescription: String? {
+        String(describing: type(of: self))
+    }
+}
 
 @MainActor protocol Action {
     func updateNode()

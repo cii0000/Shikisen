@@ -22,6 +22,7 @@ import struct Foundation.UUID
 import struct Foundation.Date
 import class Foundation.Timer
 import class Foundation.DateFormatter
+import protocol Foundation.LocalizedError
 
 struct HUDItem {
     let node = Node()
@@ -37,6 +38,16 @@ struct HUDItem {
     var string = "" {
         didSet {
             updateWithString()
+        }
+    }
+    var backgroundColor = Color.transparentDisabled {
+        didSet {
+            node.children[0].fillType = .color(backgroundColor)
+        }
+    }
+    var borderColor = Color.subBorder {
+        didSet {
+            node.children[0].lineType = .color(borderColor)
         }
     }
     mutating func updateWithString() {
@@ -66,10 +77,10 @@ struct HUDItem {
         var w = 0.0, h = margin
         let color = Color.content
         if let (nts, nNode) = textNode(with: string, color: color) {
-            nNode.attitude.position = Point((margin + imagePadding).rounded(), h + fontSize / 2 - imagePadding)
+            nNode.attitude.position = Point((margin + imagePadding).rounded(), h + nts.height - fontSize / 2 - imagePadding)
             w = max(w, nts.width + margin * 2)
             children.append(nNode)
-            h += fontSize + padding
+            h += nts.height + padding
             
             h += -padding + margin
         }
@@ -159,6 +170,38 @@ final class ExportingView: View, @unchecked Sendable {
     }
 }
 
+final class ErrorView: View, @unchecked Sendable {
+    typealias Model = Error
+    var model: any Model
+    
+    var hudItem: HUDItem
+    let node: Node
+    
+    init(model: any Model) {
+        self.model = model
+        hudItem = .init(string: "⚠︎ \(model.localizedDescription)")
+        hudItem.backgroundColor = .backgroundWarning
+        hudItem.borderColor = .borderWarning
+        node = hudItem.node
+    }
+    
+    var isCanceled = false, isClosed = false
+    var cancelHandler: (() -> ())?
+    var closeHandler: ((ErrorView) -> ())?
+    func cancel() {
+        close()
+        guard !isCanceled else { return }
+        isCanceled = true
+        cancelHandler?()
+    }
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        node.removeFromParent()
+        closeHandler?(self)
+    }
+}
+
 final class DateView: View, @unchecked Sendable {
     typealias Model = Date
     var model = Model() {
@@ -228,7 +271,7 @@ final class HUDView: View, @unchecked Sendable {
         didSet {
             updateDateWithScreenBounds()
             updateActionListWithScreenBounds()
-            updateExportingsWithScreenBounds()
+            updateExportingsAndErrorsWithScreenBounds()
         }
     }
     func updateDateWithScreenBounds() {
@@ -265,8 +308,8 @@ final class HUDView: View, @unchecked Sendable {
             }
         }
     }
-    func updateExportingsWithScreenBounds() {
-        guard !exportingViews.isEmpty else { return }
+    func updateExportingsAndErrorsWithScreenBounds() {
+        guard !exportingViews.isEmpty || !errorViews.isEmpty else { return }
         let sb = screenBounds
         var p = sb.maxXMaxYPoint
         if let b = actionNode?.bounds {
@@ -283,6 +326,12 @@ final class HUDView: View, @unchecked Sendable {
             = .init(p.x - exportingView.hudItem.size.width,
                     p.y - exportingView.hudItem.size.height)
             p.y -= exportingView.hudItem.size.height + padding
+        }
+        for errorView in errorViews {
+            errorView.node.attitude.position
+            = .init(p.x - errorView.hudItem.size.width,
+                    p.y - errorView.hudItem.size.height)
+            p.y -= errorView.hudItem.size.height + padding
         }
     }
     
@@ -320,16 +369,38 @@ final class HUDView: View, @unchecked Sendable {
             node.append(child: actionNode)
         }
         updateDateWithScreenBounds()
-        updateExportingsWithScreenBounds()
+        updateExportingsAndErrorsWithScreenBounds()
     }
     func containsActionList(at sp: Point) -> Bool {
         guard !isHiddenActionList, let actionNode else { return false }
         return actionNode.path.contains(actionNode.convertFromWorld(sp))
     }
     
-//    func show(_ error: any Error) {
-//        "Error".localized + ": " + error.localizedDescription
-//    }
+    private var errorViews = [ErrorView]()
+    func show(_ error: any Error) {
+        if errorViews.count >= 5 {
+            errorViews[...(errorViews.count - 5)].forEach { $0.close() }
+        }
+        let errorView = ErrorView(model: error)
+        errorView.closeHandler = { [weak self] view in
+            guard let self else { return }
+            if let i = self.errorViews.firstIndex(of: view) {
+                self.errorViews.remove(at: i)
+            }
+            self.updateExportingsAndErrorsWithScreenBounds()
+        }
+        errorViews.append(errorView)
+        node.append(child: errorView.node)
+        updateExportingsAndErrorsWithScreenBounds()
+    }
+    func errorView(at sp: Point) -> ErrorView? {
+        for errorView in errorViews {
+            if errorView.hudItem.contains(sp) {
+                return errorView
+            }
+        }
+        return nil
+    }
     
     private(set) var exportingViews = [ExportingView]()
     func append(_ exportingView: ExportingView) {
@@ -338,11 +409,11 @@ final class HUDView: View, @unchecked Sendable {
             if let i = self.exportingViews.firstIndex(of: view) {
                 self.exportingViews.remove(at: i)
             }
-            self.updateExportingsWithScreenBounds()
+            self.updateExportingsAndErrorsWithScreenBounds()
         }
         exportingViews.append(exportingView)
         node.append(child: exportingView.node)
-        updateExportingsWithScreenBounds()
+        updateExportingsAndErrorsWithScreenBounds()
     }
     func exportingView(at sp: Point) -> ExportingView? {
         for exportingView in exportingViews {
@@ -674,7 +745,7 @@ final class RootView: View, @unchecked Sendable {
         set(redoItem)
     }
     
-    func doSet(_ selection: WorldSelection) {
+    func set(_ selection: WorldSelection) {
         let undoItem = WorldUndoItem.setSelection(world.selection)
         let redoItem = WorldUndoItem.setSelection(selection)
         append(undo: undoItem, redo: redoItem)
@@ -687,20 +758,24 @@ final class RootView: View, @unchecked Sendable {
     }
     
     @discardableResult
-    func undo(to toTopIndex: Int) -> Rect? {
-        var frame = Rect?.none
+    func undo(to toTopIndex: Int) -> (rect: Rect?, errors: [any Error]) {
+        var rect = Rect?.none, errors = [any Error]()
         let results = history.undoAndResults(to: toTopIndex)
         for result in results {
-            guard let uiv = world.undoItemValue(with: result, in: &history) else { continue }
-            if let aFrame = set(result.undoItem(with: uiv), isMakeRect: true) {
-                frame += aFrame
+            do {
+                let uiv = try world.undoItemValue(with: result, in: &history)
+                if let aRect = set(result.undoItem(with: uiv), isMakeRect: true) {
+                    rect += aRect
+                }
+            } catch {
+                errors.append(error)
             }
         }
-        return frame
+        return (rect, errors)
     }
     
-    struct RestoreError: Error {
-        var localizedDescription = "There are sheets added in the upper right corner because the positions data is not found.".localized
+    struct RestoreError: LocalizedError {
+        var errorDescription: String? = "There are sheets added in the upper right corner because the positions data is not found.".localized
     }
     func restoreDatabase() throws {
         var resetSIDs = Set<UUID>()
@@ -1897,7 +1972,7 @@ final class RootView: View, @unchecked Sendable {
     func unselectAndNewUndoGroupIfNeeded() {
         if !world.selection.isEmpty {
             newUndoGroup()
-            doSet(WorldSelection.empty)
+            set(WorldSelection.empty)
         }
     }
     func unselectAllAndNewUndoGroupIfNeeded() {
@@ -1906,7 +1981,7 @@ final class RootView: View, @unchecked Sendable {
         }
         if !world.selection.isEmpty {
             newUndoGroup()
-            doSet(WorldSelection.empty)
+            set(WorldSelection.empty)
         }
     }
     func unselectAllAndNewUndoGroupIfNeeded(withoutTextI textI: Int, in sheetView: SheetView) {
@@ -1919,7 +1994,7 @@ final class RootView: View, @unchecked Sendable {
         }
         if !world.selection.isEmpty {
             newUndoGroup()
-            doSet(WorldSelection.empty)
+            set(WorldSelection.empty)
         }
     }
     func closeAllPanels(at p: Point) {
@@ -2606,7 +2681,7 @@ final class RootView: View, @unchecked Sendable {
             }
         }
     }
-    struct ReadingError: Error {}
+    struct ReadingError: LocalizedError {}
     private func readAndClose(_ type: NodeType, priority: TaskPriority = .high,
                               at sid: UUID, _ shp: IntPoint) {
         switch type {

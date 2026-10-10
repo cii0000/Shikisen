@@ -17,6 +17,7 @@
 
 import struct Foundation.Data
 import struct Foundation.Date
+import protocol Foundation.LocalizedError
 
 extension Date: Protobuf {
     init(_ pb: PBDate) throws {
@@ -44,9 +45,12 @@ protocol UndoItem: Codable, Sendable, Protobuf {
 struct UndoItemValue<T: UndoItem> {
     var undoItem: T
     var redoItem: T
-}
-extension UndoItemValue {
-    init(undoItem: T, redoItem: T, isReversed: Bool) {
+    
+    init(undo undoItem: T, redo redoItem: T) {
+        self.undoItem = undoItem
+        self.redoItem = redoItem
+    }
+    init(undo undoItem: T, redo redoItem: T, isReversed: Bool) {
         if isReversed {
             self.undoItem = redoItem
             self.redoItem = undoItem
@@ -55,7 +59,7 @@ extension UndoItemValue {
             self.redoItem = redoItem
         }
     }
-    struct InitializeError: Error {}
+    struct InitializeError: LocalizedError {}
     init(undoItem: T?, redoItem: T?) throws {
         var undoItem = undoItem, redoItem = redoItem
         if let undoItem = undoItem, undoItem.type == .lazyReversible {
@@ -89,15 +93,6 @@ extension UndoItemValue {
         case .redo:
             self.undoItem = reversedItem
             self.redoItem = item
-        }
-    }
-    mutating func set(_ item: T, type: UndoType) {
-        print("UndoItem set: \(item) \(type)")
-        switch type {
-        case .undo:
-            undoItem = item
-        case .redo:
-            redoItem = item
         }
     }
     func encodeTuple() -> (undoItem: T, type: UndoType) {
@@ -137,6 +132,22 @@ extension UndoItemValue: Codable {
         }
     }
 }
+struct UndoError<T: UndoItem>: LocalizedError {
+    var errorDescription: String?
+    
+    init(load udv: UndoDataValue<T>) {
+        errorDescription = "History Load Error".localized
+    }
+    init(undo undoItem: T) {
+        errorDescription = "\("Undo Error".localized): \(String(describing: undoItem))"
+    }
+    init(redo redoItem: T) {
+        errorDescription = "\("Redo Error".localized): \(String(describing: redoItem))"
+    }
+    init(first udv: UndoDataValue<T>) {
+        errorDescription = "First Reverse Error"
+    }
+}
 struct UndoDataValue<T: UndoItem> {
     enum LoadType {
         case unload, loaded, error
@@ -147,11 +158,8 @@ struct UndoDataValue<T: UndoItem> {
     var loadType = LoadType.unload
     var undoItemValue = UndoItemValue<T>?.none
     
-    mutating func error() {
-        print("Undo error: \(loadType) \(String(describing: undoItemValue))")
+    mutating func setError() {
         loadType = .error
-        undoItemData = Data()
-        redoItemData = Data()
         undoItemValue = nil
     }
     var saveUndoItemValue: UndoItemValue<T>? {
@@ -171,22 +179,18 @@ extension UndoDataValue {
         save()
     }
     mutating func loadRedoItem() -> UndoItemValue<T>? {
-        if loadType == .error {
-            return nil
-        } else if let undoItemValue = undoItemValue {
+        if let undoItemValue = undoItemValue {
             return undoItemValue
         } else {
             let undoItem = try? T(serializedData: undoItemData)
             let redoItem = try? T(serializedData: redoItemData)
             if let undoItem = undoItem {
                 if let redoItem = redoItem {
-                    undoItemValue = UndoItemValue(undoItem: undoItem,
-                                                  redoItem: redoItem)
+                    undoItemValue = .init(undo: undoItem, redo: redoItem)
                     loadType = .loaded
                     return undoItemValue
                 } else if let redoItem = undoItem.reversed() {
-                    undoItemValue = UndoItemValue<T>(undoItem: undoItem,
-                                                     redoItem: redoItem)
+                    undoItemValue = .init(undo: undoItem, redo: redoItem)
                     loadType = .loaded
                     return undoItemValue
                 } else {
@@ -195,8 +199,7 @@ extension UndoDataValue {
                     return nil
                 }
             } else if let redoItem = redoItem, let undoItem = redoItem.reversed() {
-                undoItemValue = UndoItemValue<T>(undoItem: undoItem,
-                                                 redoItem: redoItem)
+                undoItemValue = .init(undo: undoItem, redo: redoItem)
                 loadType = .loaded
                 return undoItemValue
             } else {
@@ -216,14 +219,14 @@ extension UndoDataValue {
             let redoItem = try? T(serializedData: redoItemData)
             if let undoItem = undoItem {
                 if let redoItem = redoItem {
-                    return UndoItemValue(undoItem: undoItem, redoItem: redoItem)
+                    return .init(undo: undoItem, redo: redoItem)
                 } else if let redoItem = undoItem.reversed() {
-                    return UndoItemValue<T>(undoItem: undoItem, redoItem: redoItem)
+                    return .init(undo: undoItem, redo: redoItem)
                 } else {
                     return nil
                 }
             } else if let redoItem = redoItem, let undoItem = redoItem.reversed() {
-                return UndoItemValue<T>(undoItem: undoItem, redoItem: redoItem)
+                return .init(undo: undoItem, redo: redoItem)
             } else {
                 return nil
             }
@@ -394,14 +397,14 @@ extension _Branch: Protobuf {
     }
 }
 extension _Branch {
-    func appendInLastGroup(undo undoItem: T,
-                                    redo redoItem: T) {
-        let uiv = UndoItemValue(undoItem: undoItem, redoItem: redoItem)
-        let udv = UndoDataValue(save: uiv)
-        groups[.last].values.append(udv)
+    func appendInLastGroup(undo undoItem: T, redo redoItem: T) {
+        groups[.last].values.append(.init(save: .init(undo: undoItem, redo: redoItem)))
+    }
+    func appendInLastGroup(_ uiv: UndoItemValue<T>) {
+        groups[.last].values.append(.init(save: uiv))
     }
     func setFirstInLastGroup(item: T) {
-        let uiv = UndoItemValue(undoItem: item, redoItem: item)
+        let uiv = UndoItemValue(undo: item, redo: item)
         let udv = UndoDataValue(save: uiv)
         groups[.last].values = [udv]
         groups[.last].isFirstReverse = true
@@ -720,6 +723,11 @@ extension History {
         rootBranch[currentVersion!.indexPath]
             .appendInLastGroup(undo: undoItem, redo: redoItem)
     }
+    mutating func append(_ uiv: UndoItemValue<T>) {
+        copyIfShared()
+        
+        rootBranch[currentVersion!.indexPath].appendInLastGroup(uiv)
+    }
     
     struct UndoResult {
         var item: UndoDataValue<T>, type: UndoType
@@ -802,6 +810,14 @@ extension History {
             rootBranch[version.indexPath].groups[version.groupIndex] = newValue
         }
     }
+    subscript(result: UndoResult) -> UndoDataValue<T> {
+        get { self[result.version].values[result.valueIndex] }
+        set {
+            copyIfShared()
+            
+            self[result.version].values[result.valueIndex] = newValue
+        }
+    }
     
     mutating func set(selectedChildIndex: Int, at indexPath: [Int]) {
         copyIfShared()
@@ -863,18 +879,10 @@ extension History {
         }
     }
     
-    mutating func error(_ result: UndoResult) {
-        self[result.version].values[result.valueIndex].error()
-    }
-    mutating func save(_ item: T, type: UndoType, with result: UndoResult) {
-        self[result.version].values[result.valueIndex].saveUndoItemValue?.set(item, type: type)
-    }
     mutating func setReverse(_ item: T, with result: UndoResult) {
         switch result.type {
-        case .undo:
-            self[result.version].values[result.valueIndex].undoItemValue?.redoItem = item
-        case .redo:
-            self[result.version].values[result.valueIndex].undoItemValue?.undoItem = item
+        case .undo: self[result].undoItemValue?.redoItem = item
+        case .redo: self[result].undoItemValue?.undoItem = item
         }
     }
     

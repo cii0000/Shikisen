@@ -200,14 +200,14 @@ final class MoveSheetsAction: DragEventAction {
                 isNewUndoGroup = true
                 rootView.newUndoGroup()
                 if !isSelected && !rootView.world.selection.isEmpty {
-                    rootView.doSet(WorldSelection.empty)
+                    rootView.set(WorldSelection.empty)
                 }
                 rootView.removeSheets(at: shps)
             } else {
                 if !isSelected && !rootView.world.selection.isEmpty {
                     isNewUndoGroup = true
                     rootView.newUndoGroup()
-                    rootView.doSet(WorldSelection.empty)
+                    rootView.set(WorldSelection.empty)
                 }
                 rootView.cursor = .arrowWith(string: "Empty".localized)
             }
@@ -310,13 +310,13 @@ final class MoveSheetsAction: DragEventAction {
                 var selection = rootView.world.selection
                 selection.lastPosition = containsSelectedLastLine ?
                 selection.lastPosition! + p - beganP : nil
-                rootView.doSet(selection)
+                rootView.set(selection)
             }
         }
         
 //        if !rootView.world.selection.isEmpty {
 //            rootView.newUndoGroup()
-//            rootView.doSet(WorldSelection.empty)
+//            rootView.set(WorldSelection.empty)
 //        }
     }
 }
@@ -378,7 +378,7 @@ final class MoveAnimationAction: DragEventAction {
                         if !sheetView.model.selection.isEmpty {
                             sheetView.newUndoGroup()
                             isNewUndoGroup = false
-                            sheetView.doSet(SheetSelection.empty)
+                            sheetView.set(SheetSelection.empty)
                         }
                     }
                     
@@ -741,7 +741,7 @@ final class MoveScoreAction: DragEventAction {
                     if !sheetView.model.selection.isEmpty {
                         sheetView.newUndoGroup()
                         isNewUndoGroup = false
-                        sheetView.doSet(SheetSelection.empty)
+                        sheetView.set(SheetSelection.empty)
                         rootView.updateSelectedFrame()
                     }
                 }
@@ -1816,7 +1816,7 @@ final class MoveScoreAction: DragEventAction {
                         var selection = sheetView.selection
                         selection.lastPosition = type == .note && containsSelectedLastLine ?
                         selection.lastPosition! + p - beganP : nil
-                        sheetView.doSet(selection)
+                        sheetView.set(selection)
                     }
                 }
                 
@@ -2050,7 +2050,7 @@ final class MoveTextAction: DragEventAction {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
                     isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
+                    sheetView.set(SheetSelection.empty)
                     rootView.updateSelectedFrame()
                 }
                 
@@ -2212,7 +2212,7 @@ final class MoveTempoAction: DragEventAction {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
                     isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
+                    sheetView.set(SheetSelection.empty)
                     rootView.updateSelectedFrame()
                 }
                 
@@ -2582,7 +2582,7 @@ final class MoveSheetAction: DragEventAction {
                         selection.lastPosition
                         = type == .move && containsSelectedLastLine ?
                         selection.lastPosition! + p - oldP : nil
-                        sheetView.doSet(selection)
+                        sheetView.set(selection)
                     }
                 }
                 
@@ -2663,7 +2663,7 @@ final class MoveLineAction: DragEventAction {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
                     isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
+                    sheetView.set(SheetSelection.empty)
                     rootView.updateSelectedFrame()
                 }
                 

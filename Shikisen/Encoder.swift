@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
+import protocol Foundation.LocalizedError
+
 //#if anyAppleOS
 import AVFoundation
 import VideoToolbox
@@ -163,7 +165,7 @@ extension AVFileType: FileTypeProtocol {
 }
 
 final class MovieEncoder {
-    struct ExportingError: Error {}
+    struct ExportingError: LocalizedError {}
     
     enum FileType: FileTypeProtocol, CaseIterable {
         case mov, mp4
@@ -377,7 +379,7 @@ extension Caption {
 }
 
 final class CaptionEncoder {
-    struct ExportingError: Error {}
+    struct ExportingError: LocalizedError {}
     
     let url: URL, frameRate: Int
     private let writer: AVAssetWriter,
@@ -539,7 +541,7 @@ extension MovieEncoder {
 }
 
 final class MoviePlayer {
-    struct MoviePlayerError: Error {}
+    struct MoviePlayerError: LocalizedError {}
     static func images(url: URL, handler: (Double, CGImage) -> ()) async throws {
         let asset = AVURLAsset(url: url)
         

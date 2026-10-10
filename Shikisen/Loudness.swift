@@ -38,6 +38,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import protocol Foundation.LocalizedError
+
 //#if anyAppleOS
 import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
@@ -225,7 +227,7 @@ struct Loudness {
         self.blockSize = blockSize
     }
 
-    struct ValueError: Error {
+    struct ValueError: LocalizedError {
         var string: String
         init(_ str: String) {
             self.string = str

@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
+import protocol Foundation.LocalizedError
+
 //#if anyAppleOS
 @preconcurrency import MetalKit
 import MetalPerformanceShaders
@@ -23,7 +25,7 @@ import UniformTypeIdentifiers
 //#elseif os(linux) && os(windows)
 //#endif
 
-struct RendererError: Error {}
+struct RendererError: LocalizedError {}
 
 final class Renderer {
     let device: any MTLDevice
@@ -1067,7 +1069,7 @@ struct Texture {
     }
     
     struct TextureError: Error {
-        var localizedDescription = ""
+        var errorDescription: String?
     }
     
     struct Block {
@@ -1239,7 +1241,7 @@ extension MTLTexture {
     func cgImage(with colorSpace: CGColorSpace, mipmapLevel: Int = 0) throws -> CGImage {
         if pixelFormat != .rgba8Unorm && pixelFormat != .rgba8Unorm_srgb
             && pixelFormat != .bgra8Unorm && pixelFormat != .bgra8Unorm_srgb {
-            throw Texture.TextureError(localizedDescription: "Texture: Unsupport pixel format \(pixelFormat)")
+            throw Texture.TextureError(errorDescription: String(format: "Texture Error: %@ is unsupport pixel format".localized, "\(pixelFormat)"))
         }
         let nl = 2 ** mipmapLevel
         let nw = width / nl, nh = height / nl
@@ -1925,7 +1927,7 @@ extension Image {
 }
 extension Image: Hashable {}
 extension Image: Codable {
-    struct CodableError: Error {}
+    struct CodableError: LocalizedError {}
     init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         let data = try container.decode(Data.self)
@@ -1944,7 +1946,7 @@ extension Image: Codable {
     }
 }
 extension Image: Serializable {
-    struct SerializableError: Error {}
+    struct SerializableError: LocalizedError {}
     init(serializedData data: Data) throws {
         guard let cgImageSource
                 = CGImageSourceCreateWithData(data as CFData, nil) else {
@@ -1965,7 +1967,7 @@ extension Image: Serializable {
     }
 }
 extension Image: Protobuf {
-    struct DecodeError: Error {}
+    struct DecodeError: LocalizedError {}
     init(_ pb: PBImage) throws {
         guard let aSelf = Image(data: pb.data) else {
             throw DecodeError()

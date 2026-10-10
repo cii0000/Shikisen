@@ -39,7 +39,7 @@ extension OSheet {
     }
     private mutating func append(undo undoItem: SheetUndoItem,
                         redo redoItem: SheetUndoItem) {
-        undos.append(UndoItemValue(undoItem: undoItem, redoItem: redoItem))
+        undos.append(UndoItemValue(undo: undoItem, redo: redoItem))
     }
     mutating func set(_ item: SheetUndoItem) {
         switch item {

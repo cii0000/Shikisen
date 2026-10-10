@@ -532,7 +532,7 @@ final class ChangeTextOrientationAction: Action {
                 if !sheetView.model.selection.isEmpty {
                     sheetView.newUndoGroup()
                     isNewUndoGroup = false
-                    sheetView.doSet(SheetSelection.empty)
+                    sheetView.set(SheetSelection.empty)
                 }
                 
                 if let aTextView = rootAction.textAction.editingTextView,
