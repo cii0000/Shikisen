@@ -1835,11 +1835,11 @@ final class IOAction: Action {
                             let isFirst = vi == 0 && topIndex != 0
                             let results = sheetView.history.undoAndResults(to: topIndex)
                             for result in results {
-                                let uiv = try sheetView.model
-                                    .undoItemValue(with: result, in: &sheetView.history)
+                                let item = try sheetView.model
+                                    .undoItem(with: result, in: &sheetView.history)
                                 let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
-                                let item = result.undoItem(with: uiv)
-                                _ = sheetView.set(item, isMakeRect: false, isSleep: false)
+                                
+                                sheetView.set(item, isMakeRect: false, isSleep: false)
                                 
                                 if !isFirst && isEnabledAnimation {
                                     switch item {
@@ -1863,8 +1863,8 @@ final class IOAction: Action {
                                         kiSet.formUnion(kvs.map { $0.index })
                                     case .replaceKeyPlanes(let kvs):
                                         kiSet.formUnion(kvs.map { $0.index })
-                                    case .setRootKeyframeIndex(let rootKeyframeIndex):
-                                        kiSet.insert(sheetView.model.animation.index(atRoot: rootKeyframeIndex))
+                                    case .setRootKeyframeI(let rootKI):
+                                        kiSet.insert(sheetView.model.animation.index(atRoot: rootKI))
                                     case .insertKeyframes(let kvs):
                                         for kv in kvs {
                                             if kv.index <= kImages.count {

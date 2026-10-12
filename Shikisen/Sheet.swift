@@ -134,20 +134,22 @@ protocol Picable {
 
 struct KeyframeOption: Hashable, Codable {
     var beat = Rational(0)
-    var previousPosition = Point(), nextPosition = Point()
 }
 extension KeyframeOption: Protobuf {
     init(_ pb: PBKeyframeOption) throws {
         beat = (try? .init(pb.beat)) ?? 0
-        previousPosition = (try? .init(pb.previousPosition)) ?? .init()
-        nextPosition = (try? .init(pb.nextPosition)) ?? .init()
     }
     var pb: PBKeyframeOption {
         .with {
             $0.beat = beat.pb
-            $0.previousPosition = previousPosition.pb
-            $0.nextPosition = nextPosition.pb
         }
+    }
+}
+extension KeyframeOption {
+    func with(beat: Rational) -> Self {
+        var v = self
+        v.beat = beat
+        return v
     }
 }
 
@@ -160,19 +162,15 @@ struct Keyframe: Picable, Hashable, Codable {
     var draftPicture = Picture()
     
     var beat = Rational()
-    var previousPosition = Point(), nextPosition = Point()
     var id = UUID()
     private(set) var isKey = true
     
     init(picture: Picture = Picture(), draftPicture: Picture = Picture(),
-         beat: Rational = Keyframe.defaultDurBeat,
-         previousPosition: Point = .init(), nextPosition: Point = .init(), id: UUID = .init()) {
+         beat: Rational = Keyframe.defaultDurBeat, id: UUID = .init()) {
         
         self.picture = picture
         self.draftPicture = draftPicture
         self.beat = beat
-        self.previousPosition = previousPosition
-        self.nextPosition = nextPosition
         self.id = id
         isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
     }
@@ -205,13 +203,10 @@ extension Keyframe {
     
     var option: KeyframeOption {
         get {
-            .init(beat: beat,
-                  previousPosition: previousPosition, nextPosition: nextPosition)
+            .init(beat: beat)
         }
         set {
             self.beat = newValue.beat
-            self.previousPosition = newValue.previousPosition
-            self.nextPosition = newValue.nextPosition
         }
     }
 }
@@ -219,15 +214,14 @@ extension Keyframe: AppliableTransform {
     static func * (lhs: Self, rhs: Transform) -> Self {
         .init(picture: lhs.picture * rhs,
               draftPicture: lhs.draftPicture * rhs,
-              beat: lhs.beat,
-              previousPosition: lhs.previousPosition, nextPosition: lhs.nextPosition, id: lhs.id)
+              beat: lhs.beat, id: lhs.id)
     }
 }
 extension Keyframe: Protobuf {
     init(_ pb: PBKeyframe) throws {
         picture = (try? Picture(pb.picture)) ?? Picture()
         draftPicture = (try? Picture(pb.draftPicture)) ?? Picture()
-        beat = max((try? Rational(pb.beat)) ?? 1, 0)
+        beat = (try? Rational(pb.beat)) ?? 0
         id = (try? .init(pb.id)) ?? .init()
         isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
     }
@@ -290,7 +284,7 @@ extension KeyframeKey: Protobuf {
         planeIs = pb.planeIs.map { Int($0) }
         draftLineIs = pb.draftLineIs.map { Int($0) }
         draftPlaneIs = pb.draftPlaneIs.map { Int($0) }
-        beat = max((try? Rational(pb.beat)) ?? 1, 0)
+        beat = (try? Rational(pb.beat)) ?? 0
         id = (try? .init(pb.id)) ?? .init()
     }
     var pb: PBKeyframeKey {
@@ -811,6 +805,9 @@ extension Animation: BeatRangeType {
     func rootBeat(at rootBP: RootBeatPosition) -> Rational {
         rootBP.beat + rootLoopIndexBeat(atRootLoop: rootBP.loopIndex)
     }
+    func rootIndex(atLooped i: Int) -> Int {
+        rootBeatPosition.loopIndex * keyframes.count + i
+    }
     
     var interIndexes: [Int] {
         keyframes.enumerated()
@@ -1145,6 +1142,7 @@ struct Sheet: Hashable, Codable {
     var mainFrame = Sheet.defaultBounds
     var backgroundUUColor = Sheet.defalutBackgroundUUColor
     var selection = SheetSelection.empty
+    var keyframeAttitude = Attitude.identity
 }
 extension Sheet: Protobuf {
     init(_ pb: PBSheet) throws {
@@ -1169,6 +1167,8 @@ extension Sheet: Protobuf {
         if !checkConsistency(selection) {
             selection = .empty
         }
+        keyframeAttitude = pb.hasKeyframeAttitude ?
+        ((try? .init(pb.keyframeAttitude)) ?? .identity) : .identity
     }
     var pb: PBSheet {
         .with {
@@ -1187,6 +1187,9 @@ extension Sheet: Protobuf {
             }
             $0.backgroundUucolor = backgroundUUColor.pb
             $0.selection = selection.pb
+            if !keyframeAttitude.isIdentity {
+                $0.keyframeAttitude = keyframeAttitude.pb
+            }
         }
     }
 }
@@ -1216,6 +1219,10 @@ extension Sheet {
     static let timelineMargin = 24.0
 }
 extension Sheet {
+    var bounds: Rect {
+        Self.defaultBounds
+    }
+    
     var picture: Picture {
         get { animation.currentKeyframe.picture }
         set { animation.currentKeyframe.picture = newValue }
@@ -2139,6 +2146,18 @@ extension IndexValue where Value == [IndexValue<Plane>] {
         }
     }
 }
+extension IndexValue where Value == PlaneValue {
+    init(_ pb: PBPlaneValueIndexValue) throws {
+        value = try PlaneValue(pb.value)
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBPlaneValueIndexValue {
+        .with {
+            $0.value = value.pb
+            $0.index = Int64(index)
+        }
+    }
+}
 extension IndexValue where Value == InterOption {
     init(_ pb: PBInterOptionIndexValue) throws {
         value = try InterOption(pb.value)
@@ -2263,6 +2282,14 @@ extension Array where Element == IndexValue<Plane> {
         .with { $0.value = map { $0.pb } }
     }
 }
+extension Array where Element == IndexValue<PlaneValue> {
+    init(_ pb: PBPlaneValueIndexValueArray) throws {
+        self = try pb.value.map { try IndexValue<PlaneValue>($0) }
+    }
+    var pb: PBPlaneValueIndexValueArray {
+        .with { $0.value = map { $0.pb } }
+    }
+}
 extension Array where Element == IndexValue<InterOption> {
     init(_ pb: PBInterOptionIndexValueArray) throws {
         self = try pb.value.map { try IndexValue<InterOption>($0) }
@@ -2344,76 +2371,98 @@ extension Array where Element == IndexValue<[IndexValue<InterOption>]> {
     }
 }
 
-enum SheetUndoItem: Codable {
+enum SheetUndoItem {
     case appendLine(_ line: Line)
+    case appendKeyLine(_ kv: IndexValue<Line>)
     case appendLines(_ lines: [Line])
-    case appendPlanes(_ planes: [Plane])
-    case removeLastLines(count: Int)
-    case removeLastPlanes(count: Int)
     case insertLines(_ lineIndexValues: [IndexValue<Line>])
-    case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
     case replaceLines(_ lineIndexValue: [IndexValue<Line>])
-    case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
+    case replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case setLineIDs(_ idvs: [IndexValue<[IndexValue<InterOption>]>])
+    case removeLastLines(count: Int)
+    case removeLastKeyLines(_ countKV: IndexValue<Int>)
     case removeLines(lineIndexes: [Int])
+    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
+
+    case insertDraftLines(_ lineIndexValues: [IndexValue<Line>])
+    case insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case removeDraftLines(lineIndexes: [Int])
+    case removeDraftKeyLines(_ indexes: [IndexValue<[Int]>])
+    
+    case appendPlanes(_ planes: [Plane])
+    case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
+    case replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case removeLastPlanes(count: Int)
     case removePlanes(planeIndexes: [Int])
+    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
+    
+    case insertDraftPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case insertDraftKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case removeDraftPlanes(planeIndexes: [Int])
+    case removeDraftKeyPlanes(_ indexes: [IndexValue<[Int]>])
+    
     case setPlaneValue(_ planeValue: PlaneValue)
+    case setKeyPlaneValues(_ pvkvs: [IndexValue<PlaneValue>])
+    case changedColors(_ colorValue: ColorValue)
+    
     case changeToDraft(isReverse: Bool)
     case setPicture(_ picture: Picture)
-    case insertDraftLines(_ lineIndexValues: [IndexValue<Line>])
-    case insertDraftPlanes(_ planeIndexValues: [IndexValue<Plane>])
-    case removeDraftLines(lineIndexes: [Int])
-    case removeDraftPlanes(planeIndexes: [Int])
     case setDraftPicture(_ picture: Picture)
-    case insertTexts(_ textIndexValues: [IndexValue<Text>])
-    case replaceTexts(_ textIndexValue: [IndexValue<Text>])
-    case removeTexts(textIndexes: [Int])
-    case replaceString(_ textIndexValue: IndexValue<TextValue>)
-    case changedColors(_ colorUndoValue: ColorValue)
+    
+    case insertKeyframes(_ kivs: [IndexValue<Keyframe>])
+    case setKeyframeOptions(_ koivs: [IndexValue<KeyframeOption>])
+    case removeKeyframes(_ kis: [Int])
+    
+    case setRootKeyframeI(_ rootKI: Int)
+    
+    case insertTexts(_ tivs: [IndexValue<Text>])
+    case replaceTexts(_ tivs: [IndexValue<Text>])
+    case removeTexts(_ tis: [Int])
+    case replaceString(_ tviv: IndexValue<TextValue>)
+    
+    case insertNotes(_ nivs: [IndexValue<Note>])
+    case replaceNotes(_ niv: [IndexValue<Note>])
+    case removeNotes(noteIndexes: [Int])
+    
+    case insertDraftNotes(_ nivs: [IndexValue<Note>])
+    case removeDraftNotes(noteIndexes: [Int])
+    
+    case insertContents(_ civs: [IndexValue<Content>])
+    case replaceContents(_ civs: [IndexValue<Content>])
+    case removeContents(contentIndexes: [Int])
+    
     case insertBorders(_ borderIndexValues: [IndexValue<Border>])
     case removeBorders(borderIndexes: [Int])
-    case setRootKeyframeIndex(rootKeyframeIndex: Int)
-    case insertKeyframes(_ pivs: [IndexValue<Keyframe>])
-    case removeKeyframes(keyframeIndexes: [Int])
-    case setKeyframeOptions(_ options: [IndexValue<KeyframeOption>])
-    case insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
-    case insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
-    case insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
-    case removeDraftKeyLines(_ indexes: [IndexValue<[Int]>])
-    case insertDraftKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case removeDraftKeyPlanes(_ indexes: [IndexValue<[Int]>])
-    case setLineIDs(_ idvs: [IndexValue<[IndexValue<InterOption>]>])
+    
     case setAnimationOption(_ option: AnimationOption)
-    case insertNotes(_ noteIndexValues: [IndexValue<Note>])
-    case replaceNotes(_ noteIndexValue: [IndexValue<Note>])
-    case removeNotes(noteIndexes: [Int])
-    case insertDraftNotes(_ noteIndexValues: [IndexValue<Note>])
-    case removeDraftNotes(noteIndexes: [Int])
-    case insertContents(_ contentIndexValues: [IndexValue<Content>])
-    case replaceContents(_ contentIndexValue: [IndexValue<Content>])
-    case removeContents(contentIndexes: [Int])
     case setScoreOption(_ option: ScoreOption)
     case setSheetOption(_ option: SheetOption)
+    
     case setSelection(_ selection: SheetSelection)
 }
 extension SheetUndoItem: UndoItem {
     var type: UndoItemType {
         switch self {
         case .appendLine: .reversible
+        case .appendKeyLine: .reversible
         case .appendLines: .reversible
-        case .appendPlanes: .reversible
-        case .removeLastLines: .unreversible
-        case .removeLastPlanes: .unreversible
         case .insertLines: .reversible
+        case .insertKeyLines: .reversible
+        case .removeLastLines: .unreversible
+        case .removeLastKeyLines: .unreversible
+            
+        case .appendPlanes: .reversible
+        case .removeLastPlanes: .unreversible
         case .insertPlanes: .reversible
         case .replaceLines: .lazyReversible
         case .replacePlanes: .lazyReversible
         case .removeLines: .unreversible
         case .removePlanes: .unreversible
         case .setPlaneValue: .lazyReversible
+        case .setKeyPlaneValues: .lazyReversible
         case .changeToDraft: .reversible
         case .setPicture: .lazyReversible
         case .insertDraftLines: .reversible
@@ -2428,11 +2477,10 @@ extension SheetUndoItem: UndoItem {
         case .changedColors: .lazyReversible
         case .insertBorders: .reversible
         case .removeBorders: .unreversible
-        case .setRootKeyframeIndex: .lazyReversible
         case .insertKeyframes: .reversible
         case .removeKeyframes: .unreversible
         case .setKeyframeOptions: .lazyReversible
-        case .insertKeyLines: .reversible
+        case .setRootKeyframeI: .lazyReversible
         case .replaceKeyLines: .lazyReversible
         case .removeKeyLines: .unreversible
         case .insertKeyPlanes: .reversible
@@ -2457,16 +2505,22 @@ extension SheetUndoItem: UndoItem {
         case .setSelection: .lazyReversible
         }
     }
+    
     func reversed() -> SheetUndoItem? {
         switch self {
         case .appendLine:
              .removeLastLines(count: 1)
+        case .appendKeyLine(let kv):
+            .removeLastKeyLines(.init(value: 1, index: kv.index))
         case .appendLines(let lines):
              .removeLastLines(count: lines.count)
-        case .appendPlanes(let planes):
-             .removeLastPlanes(count: planes.count)
         case .removeLastLines:
              nil
+        case .removeLastKeyLines:
+             nil
+            
+        case .appendPlanes(let planes):
+             .removeLastPlanes(count: planes.count)
         case .removeLastPlanes:
              nil
         case .insertLines(let livs):
@@ -2483,6 +2537,8 @@ extension SheetUndoItem: UndoItem {
              nil
         case .setPlaneValue:
              self
+        case .setKeyPlaneValues:
+             self
         case .changeToDraft(let isReverse):
              .changeToDraft(isReverse: !isReverse)
         case .setPicture(_):
@@ -2498,7 +2554,7 @@ extension SheetUndoItem: UndoItem {
         case .setDraftPicture(_):
              self
         case .insertTexts(let tivs):
-             .removeTexts(textIndexes: tivs.map { $0.index })
+             .removeTexts(tivs.map { $0.index })
         case .replaceTexts:
              self
         case .removeTexts:
@@ -2511,13 +2567,13 @@ extension SheetUndoItem: UndoItem {
              .removeBorders(borderIndexes: bivs.map { $0.index })
         case .removeBorders:
              nil
-        case .setRootKeyframeIndex:
-             self
-        case .insertKeyframes(let pivs):
-             .removeKeyframes(keyframeIndexes: pivs.map { $0.index })
+        case .insertKeyframes(let kivs):
+             .removeKeyframes(kivs.map { $0.index })
         case .removeKeyframes:
              nil
         case .setKeyframeOptions:
+             self
+        case .setRootKeyframeI:
              self
         case .insertKeyLines(let kivs):
              .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
@@ -2577,6 +2633,67 @@ extension SheetUndoItem: UndoItem {
              self
         }
     }
+    
+    var caseName: String {
+        switch self {
+        case .appendLine: "appendLine"
+        case .appendKeyLine: "appendKeyLine"
+        case .appendLines: "appendLines"
+        case .insertLines: "insertLines"
+        case .removeLastLines: "removeLastLines"
+        case .removeLastKeyLines: "removeLastKeyLines"
+        case .appendPlanes: "appendPlanes"
+        case .removeLastPlanes: "removeLastPlanes"
+        case .insertPlanes: "insertPlane"
+        case .replaceLines: "replaceLines"
+        case .replacePlanes: "replacePlanes"
+        case .removeLines: "removeLines"
+        case .removePlanes: "removePlanes"
+        case .setPlaneValue: "setPlaneValue"
+        case .setKeyPlaneValues: "setKeyPlaneValues"
+        case .changeToDraft: "changeToDraft"
+        case .setPicture: "setPicture"
+        case .insertDraftLines: "insertDraftLines"
+        case .insertDraftPlanes: "insertDraftPlanes"
+        case .removeDraftLines: "removeDraftLines"
+        case .removeDraftPlanes: "removeDraftPlanes"
+        case .setDraftPicture: "setDraftPicture"
+        case .insertTexts: "insertTexts"
+        case .replaceTexts: "replaceTexts"
+        case .removeTexts: "removeTexts"
+        case .replaceString: "replaceString"
+        case .changedColors: "changedColors"
+        case .insertBorders: "insertBorders"
+        case .removeBorders: "removeBorders"
+        case .insertKeyframes: "insertKeyframes"
+        case .removeKeyframes: "removeKeyframes"
+        case .setKeyframeOptions: "setKeyframeOptions"
+        case .setRootKeyframeI: "setRootKeyframeI"
+        case .insertKeyLines: "insertKeyLines"
+        case .replaceKeyLines: "replaceKeyLines"
+        case .removeKeyLines: "removeKeyLines"
+        case .insertKeyPlanes: "insertKeyPlanes"
+        case .replaceKeyPlanes: "replaceKeyPlanes"
+        case .removeKeyPlanes: "removeKeyPlanes"
+        case .insertDraftKeyLines: "insertDraftKeyLines"
+        case .removeDraftKeyLines: "removeDraftKeyLines"
+        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
+        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
+        case .setLineIDs: "setLineIDs"
+        case .setAnimationOption: "setAnimationOption"
+        case .insertNotes: "insertNotes"
+        case .replaceNotes: "replaceNotes"
+        case .removeNotes: "removeNotes"
+        case .insertDraftNotes: "insertDraftNotes"
+        case .removeDraftNotes: "removeDraftNotes"
+        case .insertContents: "insertContents"
+        case .replaceContents: "replaceContents"
+        case .removeContents: "removeContents"
+        case .setScoreOption: "setScoreOption"
+        case .setSheetOption: "setSheetOption"
+        case .setSelection: "setSelection"
+        }
+    }
 }
 extension SheetUndoItem: Protobuf {
     init(_ pb: PBSheetUndoItem) throws {
@@ -2586,16 +2703,20 @@ extension SheetUndoItem: Protobuf {
         switch value {
         case .appendLine(let line):
             self = .appendLine(try Line(line))
+        case .appendKeyLine(let liv):
+            self = .appendKeyLine(try .init(liv))
         case .appendLines(let lines):
             self = .appendLines(try [Line](lines))
-        case .appendPlanes(let planes):
-            self = .appendPlanes(try [Plane](planes))
-        case .removeLastLines(let lineCount):
-            self = .removeLastLines(count: Int(lineCount))
-        case .removeLastPlanes(let planesCount):
-            self = .removeLastPlanes(count: Int(planesCount))
         case .insertLines(let lineIndexValues):
             self = .insertLines(try [IndexValue<Line>](lineIndexValues))
+        case .removeLastLines(let lineCount):
+            self = .removeLastLines(count: Int(lineCount))
+        case .removeLastKeyLines(let countIV):
+            self = .removeLastKeyLines(try .init(countIV))
+        case .appendPlanes(let planes):
+            self = .appendPlanes(try [Plane](planes))
+        case .removeLastPlanes(let planesCount):
+            self = .removeLastPlanes(count: Int(planesCount))
         case .insertPlanes(let planeIndexValues):
             self = .insertPlanes(try [IndexValue<Plane>](planeIndexValues))
         case .replaceLines(let lines):
@@ -2608,6 +2729,8 @@ extension SheetUndoItem: Protobuf {
             self = .removePlanes(planeIndexes: try [Int](planeIndexes))
         case .setPlaneValue(let planeValue):
             self = .setPlaneValue(try PlaneValue(planeValue))
+        case .setKeyPlaneValues(let pvkvs):
+            self = .setKeyPlaneValues(try .init(pvkvs))
         case .changeToDraft(let isReverse):
             self = .changeToDraft(isReverse: isReverse)
         case .setPicture(let picture):
@@ -2626,8 +2749,8 @@ extension SheetUndoItem: Protobuf {
             self = .insertTexts(try [IndexValue<Text>](texts))
         case .replaceTexts(let texts):
             self = .replaceTexts(try [IndexValue<Text>](texts))
-        case .removeTexts(let textIndexes):
-            self = .removeTexts(textIndexes: try [Int](textIndexes))
+        case .removeTexts(let tis):
+            self = .removeTexts(try [Int](tis))
         case .replaceString(let textValue):
             self = .replaceString(try IndexValue<TextValue>(textValue))
         case .changedColors(let colorUndoValue):
@@ -2636,14 +2759,14 @@ extension SheetUndoItem: Protobuf {
             self = .insertBorders(try [IndexValue<Border>](borders))
         case .removeBorders(let borderIndexes):
             self = .removeBorders(borderIndexes: try [Int](borderIndexes))
-        case .setRootKeyframeIndex(let index):
-            self = .setRootKeyframeIndex(rootKeyframeIndex: Int(index))
         case .insertKeyframes(let pivs):
             self = .insertKeyframes(try [IndexValue<Keyframe>](pivs))
-        case .removeKeyframes(let keyframeIndexes):
-            self = .removeKeyframes(keyframeIndexes: try [Int](keyframeIndexes))
+        case .removeKeyframes(let kis):
+            self = .removeKeyframes(try [Int](kis))
         case .setKeyframeOptions(let option):
             self = .setKeyframeOptions(try [IndexValue<KeyframeOption>](option))
+        case .setRootKeyframeI(let rootKI):
+            self = .setRootKeyframeI(Int(rootKI))
         case .insertKeyLines(let kvs):
             self = .insertKeyLines(try [IndexValue<[IndexValue<Line>]>](kvs))
         case .replaceKeyLines(let kvs):
@@ -2697,16 +2820,20 @@ extension SheetUndoItem: Protobuf {
             switch self {
             case .appendLine(let line):
                 $0.value = .appendLine(line.pb)
+            case .appendKeyLine(let kv):
+                $0.value = .appendKeyLine(kv.pb)
             case .appendLines(let lines):
                 $0.value = .appendLines(lines.pb)
-            case .appendPlanes(let planes):
-                $0.value = .appendPlanes(planes.pb)
-            case .removeLastLines(let lineCount):
-                $0.value = .removeLastLines(Int64(lineCount))
-            case .removeLastPlanes(let planesCount):
-                $0.value = .removeLastPlanes(Int64(planesCount))
             case .insertLines(let lineIndexValues):
                 $0.value = .insertLines(lineIndexValues.pb)
+            case .removeLastLines(let lineCount):
+                $0.value = .removeLastLines(Int64(lineCount))
+            case .removeLastKeyLines(let liv):
+                $0.value = .removeLastKeyLines(liv.pb)
+            case .appendPlanes(let planes):
+                $0.value = .appendPlanes(planes.pb)
+            case .removeLastPlanes(let planesCount):
+                $0.value = .removeLastPlanes(Int64(planesCount))
             case .insertPlanes(let planeIndexValues):
                 $0.value = .insertPlanes(planeIndexValues.pb)
             case .replaceLines(let livs):
@@ -2719,6 +2846,8 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .removePlanes(planeIndexes.pb)
             case .setPlaneValue(let planeValue):
                 $0.value = .setPlaneValue(planeValue.pb)
+            case .setKeyPlaneValues(let pvkvs):
+                $0.value = .setKeyPlaneValues(pvkvs.pb)
             case .changeToDraft(let isReverse):
                 $0.value = .changeToDraft(isReverse)
             case .setPicture(let picture):
@@ -2747,14 +2876,14 @@ extension SheetUndoItem: Protobuf {
                 $0.value = .insertBorders(borders.pb)
             case .removeBorders(let borderIndexes):
                 $0.value = .removeBorders(borderIndexes.pb)
-            case .setRootKeyframeIndex(let keyframeIndex):
-                $0.value = .setRootKeyframeIndex(Int64(keyframeIndex))
             case .insertKeyframes(let pivs):
                 $0.value = .insertKeyframes(pivs.pb)
             case .removeKeyframes(let indexes):
                 $0.value = .removeKeyframes(indexes.pb)
             case .setKeyframeOptions(let option):
                 $0.value = .setKeyframeOptions(option.pb)
+            case .setRootKeyframeI(let rootKI):
+                $0.value = .setRootKeyframeI(Int64(rootKI))
             case .insertKeyLines(let kvs):
                 $0.value = .insertKeyLines(kvs.pb)
             case .replaceKeyLines(let kvs):
@@ -2805,90 +2934,27 @@ extension SheetUndoItem: Protobuf {
         }
     }
 }
-extension SheetUndoItem: CustomStringConvertible {
-    var description: String {
-        switch self {
-        case .appendLine: "appendLine"
-        case .appendLines: "appendLines"
-        case .appendPlanes: "appendPlanes"
-        case .removeLastLines: "removeLastLines"
-        case .removeLastPlanes: "removeLastPlanes"
-        case .insertLines: "insertLines"
-        case .insertPlanes: "insertPlane"
-        case .replaceLines: "replaceLines"
-        case .replacePlanes: "replacePlanes"
-        case .removeLines: "removeLines"
-        case .removePlanes: "removePlanes"
-        case .setPlaneValue: "setPlaneValue"
-        case .changeToDraft: "changeToDraft"
-        case .setPicture: "setPicture"
-        case .insertDraftLines: "insertDraftLines"
-        case .insertDraftPlanes: "insertDraftPlanes"
-        case .removeDraftLines: "removeDraftLines"
-        case .removeDraftPlanes: "removeDraftPlanes"
-        case .setDraftPicture: "setDraftPicture"
-        case .insertTexts: "insertTexts"
-        case .replaceTexts: "replaceTexts"
-        case .removeTexts: "removeTexts"
-        case .replaceString: "replaceString"
-        case .changedColors: "changedColors"
-        case .insertBorders: "insertBorders"
-        case .removeBorders: "removeBorders"
-        case .setRootKeyframeIndex: "setRootKeyframeIndex"
-        case .insertKeyframes: "insertKeyframes"
-        case .removeKeyframes: "removeKeyframes"
-        case .setKeyframeOptions: "setKeyframeOptions"
-        case .insertKeyLines: "insertKeyLines"
-        case .replaceKeyLines: "replaceKeyLines"
-        case .removeKeyLines: "removeKeyLines"
-        case .insertKeyPlanes: "insertKeyPlanes"
-        case .replaceKeyPlanes: "replaceKeyPlanes"
-        case .removeKeyPlanes: "removeKeyPlanes"
-        case .insertDraftKeyLines: "insertDraftKeyLines"
-        case .removeDraftKeyLines: "removeDraftKeyLines"
-        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
-        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
-        case .setLineIDs: "setLineIDs"
-        case .setAnimationOption: "setAnimationOption"
-        case .insertNotes: "insertNotes"
-        case .replaceNotes: "replaceNotes"
-        case .removeNotes: "removeNotes"
-        case .insertDraftNotes: "insertDraftNotes"
-        case .removeDraftNotes: "removeDraftNotes"
-        case .insertContents: "insertContents"
-        case .replaceContents: "replaceContents"
-        case .removeContents: "removeContents"
-        case .setScoreOption: "setScoreOption"
-        case .setSheetOption: "setSheetOption"
-        case .setSelection: "setSelection"
-        }
-    }
-}
 
 typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
 extension Sheet {
-    func undoItemValue(with result: SheetHistory.UndoResult,
-                       in history: inout SheetHistory) throws -> UndoItemValue<SheetUndoItem> {
-        if let uiv = result.item.undoItemValue {
-            return uiv
+    func undoItem(with result: SheetHistory.UndoResult,
+                  in history: inout SheetHistory) throws -> SheetUndoItem {
+        if result.isEnabledFirst,
+           let firstUndoItem = history[result.version].loadFirstUndoItem() {
+            return firstUndoItem
+        }
+        if let uiv = result.undoDataValue.undoItemValue {
+            return result.undoItem(with: uiv)
         } else {
             do {
                 guard let uiv = history[result].loadRedoItem()
-                else { throw UndoError(load: result.item) }
-                
-                if enabledAnimation, history[result.version].isFirstReverse {
-                    if case .setRootKeyframeIndex? =  history[result.version].values.first?.loadedRedoItem()?.undoItem {
-                    } else {
-                        throw UndoError(first: history[result])
-                    }
-                }
-                
-                try loadCheck(redo: result.type == .undo ? uiv.redoItem : uiv.undoItem)
-                let undoitem = result.type == .undo ? uiv.undoItem : uiv.redoItem
+                else { throw UndoError(load: result.undoDataValue) }
+                try loadCheck(redo: uiv.item(at: result.type.reversed))
+                let undoitem = uiv.item(at: result.type)
                 try loadCheck(undo: undoitem)
                 setReverse(undo: undoitem, with: result, in: &history)
-                return history[result].undoItemValue!
+                return result.undoItem(with: history[result].undoItemValue!)
             } catch {
                 history[result].setError()
                 throw error
@@ -2906,6 +2972,24 @@ extension Sheet {
         func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
             idxs.filter { $0 < array.count + idxs.count }.sorted() == idxs
         }
+        func isSafe(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
+            guard planeValue.planes.count + planeValue.moveIndexValues.count
+                    == picture.planes.count else { return false }
+            var isArray = Array(repeating: false, count: picture.planes.count)
+            for v in planeValue.moveIndexValues {
+                guard v.index < isArray.count else { return false }
+                isArray[v.index] = true
+            }
+            var i = 0
+            for (j, isMoved) in isArray.enumerated() {
+                if !isMoved {
+                    guard i < planeValue.planes.count
+                            && planeValue.planes[i] == picture.planes[j] else { return false }
+                    i += 1
+                }
+            }
+            return true
+        }
         func error() -> UndoError<SheetUndoItem> {
             UndoError(redo: item)
         }
@@ -2913,16 +2997,21 @@ extension Sheet {
         switch item {
         case .appendLine(let line):
             guard let lastLine = picture.lines.last, lastLine == line else { throw error() }
+        case .appendKeyLine(let kv):
+            guard kv.index < animation.keyframes.count,
+                  let lastLine = picture.lines.last, lastLine == kv.value else { throw error() }
         case .appendLines(let lines):
             let di = picture.lines.count - lines.count
             guard di >= 0, Array(picture.lines[di...]) == lines else { throw error() }
+        case .insertLines(let livs):
+            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
+        case .removeLastLines: break
+        case .removeLastKeyLines(let kv):
+            guard kv.index < animation.keyframes.count else { throw error() }
+            
         case .appendPlanes(let planes):
             let di = picture.planes.count - planes.count
             guard di >= 0, Array(picture.planes[di...]) == planes else { throw error() }
-        case .removeLastLines: break
-        case .removeLastPlanes: break
-        case .insertLines(let livs):
-            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
         case .insertPlanes(let pivs):
             guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
         case .replaceLines(let livs):
@@ -2931,23 +3020,16 @@ extension Sheet {
             guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
         case .removeLines(let lis):
             guard isSafeRemove(lis, in: picture.lines) else { throw error() }
+        case .removeLastPlanes: break
         case .removePlanes(let pis):
             guard isSafeRemove(pis, in: picture.planes) else { throw error() }
         case .setPlaneValue(let planeValue):
-            guard planeValue.planes.count + planeValue.moveIndexValues.count
-                    == picture.planes.count else { throw error() }
-            var isArray = Array(repeating: false, count: picture.planes.count)
-            for v in planeValue.moveIndexValues {
-                guard v.index < isArray.count else { throw error() }
-                isArray[v.index] = true
-            }
-            var i = 0
-            for (j, isMoved) in isArray.enumerated() {
-                if !isMoved {
-                    guard i < planeValue.planes.count
-                            && planeValue.planes[i] == picture.planes[j] else { throw error() }
-                    i += 1
-                }
+            guard isSafe(planeValue, in: picture) else { throw error() }
+        case .setKeyPlaneValues(let pvkvs):
+            for kv in pvkvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafe(kv.value, in: animation.keyframes[kv.index].picture)
+                else { throw error() }
             }
         case .changeToDraft: break
         case .setPicture(let picture):
@@ -3020,7 +3102,6 @@ extension Sheet {
             guard isSafeInsert(bivs, in: borders) else { throw error() }
         case .removeBorders(let bis):
             guard isSafeRemove(bis, in: borders) else { throw error() }
-        case .setRootKeyframeIndex: break
         case .insertKeyframes(let kivs):
             guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
         case .removeKeyframes(let kis):
@@ -3031,6 +3112,7 @@ extension Sheet {
                       kv.value == animation.keyframes[kv.index].option
                         else { throw error() }
             }
+        case .setRootKeyframeI: break
         case .insertKeyLines(let kvs):
             for kv in kvs {
                 guard kv.index < animation.keyframes.count,
@@ -3145,38 +3227,54 @@ extension Sheet {
         func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
             idxs == idxs.filter { $0 < array.count }.sorted()
         }
+        func isSafe(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
+            for v in planeValue.moveIndexValues {
+                guard v.value < picture.planes.count else { return false }
+            }
+            var planesCount = planeValue.planes.count
+            for iv in planeValue.moveIndexValues {
+                guard iv.index <= planesCount else { return false }
+                planesCount += 1
+            }
+            return true
+        }
         func error() -> UndoError<SheetUndoItem> {
             UndoError(undo: item)
         }
         
         switch item {
         case .appendLine: break
+        case .appendKeyLine(let kv):
+            guard kv.index < animation.keyframes.count else { throw error() }
         case .appendLines: break
-        case .appendPlanes: break
-        case .removeLastLines(let count):
-            guard count <= picture.lines.count else { throw error() }
-        case .removeLastPlanes(let count):
-            guard count <= picture.planes.count else { throw error() }
         case .insertLines(let livs):
             guard isSafeInsert(livs, in: picture.lines) else { throw error() }
+        case .removeLastLines(let count):
+            guard count <= picture.lines.count else { throw error() }
+        case .removeLastKeyLines(let kv):
+            guard kv.index < animation.keyframes.count,
+                  kv.value <= animation.keyframes[kv.index].picture.lines.count else { throw error() }
+        case .removeLines(let lis):
+            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
+            
+        case .appendPlanes: break
+        case .removeLastPlanes(let count):
+            guard count <= picture.planes.count else { throw error() }
         case .insertPlanes(let pivs):
             guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
         case .replaceLines(let livs):
             guard isSafeReplace(livs, in: picture.lines) else { throw error() }
         case .replacePlanes(let pivs):
             guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
-        case .removeLines(let lis):
-            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
         case .removePlanes(let pis):
             guard isSafeRemove(pis, in: picture.planes) else { throw error() }
         case .setPlaneValue(let planeValue):
-            for v in planeValue.moveIndexValues {
-                guard v.value < picture.planes.count else { throw error() }
-            }
-            var planesCount = planeValue.planes.count
-            for iv in planeValue.moveIndexValues {
-                guard iv.index <= planesCount else { throw error() }
-                planesCount += 1
+            guard isSafe(planeValue, in: picture) else { throw error() }
+        case .setKeyPlaneValues(let pvkvs):
+            for kv in pvkvs {
+                guard kv.index < animation.keyframes.count,
+                      isSafe(kv.value, in: animation.keyframes[kv.index].picture)
+                else { throw error() }
             }
         case .changeToDraft: break
         case .setPicture: break
@@ -3227,7 +3325,6 @@ extension Sheet {
             guard isSafeInsert(bivs, in: borders) else { throw error() }
         case .removeBorders(let bis):
             guard isSafeRemove(bis, in: borders) else { throw error() }
-        case .setRootKeyframeIndex: break
         case .insertKeyframes(let kivs):
             guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
         case .removeKeyframes(let kis):
@@ -3236,6 +3333,7 @@ extension Sheet {
             for kv in kvs {
                 guard kv.index < animation.keyframes.count else { throw error() }
             }
+        case .setRootKeyframeI: break
         case .insertKeyLines(let kvs):
             for kv in kvs {
                 guard kv.index < animation.keyframes.count,
@@ -3333,25 +3431,7 @@ extension Sheet {
     private func setReverse(undo item: SheetUndoItem,
                             with result: SheetHistory.UndoResult,
                             in history: inout SheetHistory) {
-        switch item {
-        case .appendLine: break
-        case .appendLines: break
-        case .appendPlanes: break
-        case .removeLastLines: break
-        case .removeLastPlanes: break
-        case .insertLines: break
-        case .insertPlanes: break
-        case .replaceLines(let livs):
-            let oldLIVs = livs.map { IndexValue(value: picture.lines[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replaceLines(oldLIVs), with: result)
-        case .replacePlanes(let pivs):
-            let oldPIVs = pivs.map { IndexValue(value: picture.planes[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replacePlanes(oldPIVs), with: result)
-        case .removeLines: break
-        case .removePlanes: break
-        case .setPlaneValue(let planeValue):
+        func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
             var isArray = Array(repeating: false, count: picture.planes.count)
             for v in planeValue.moveIndexValues {
                 isArray[v.value] = true
@@ -3362,8 +3442,40 @@ extension Sheet {
             let oldVs = planeValue.moveIndexValues
                 .map { IndexValue(value: $0.index, index: $0.value) }
                 .sorted { $0.index < $1.index }
-            let oldPlaneValue = PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
+            return PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
+        }
+        
+        switch item {
+        case .appendLine: break
+        case .appendKeyLine: break
+        case .appendLines: break
+        case .insertLines: break
+        case .removeLastLines: break
+        case .removeLastKeyLines: break
+        case .removeLines: break
+            
+        case .appendPlanes: break
+        case .removeLastPlanes: break
+        case .insertPlanes: break
+        case .replaceLines(let livs):
+            let oldLIVs = livs.map { IndexValue(value: picture.lines[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replaceLines(oldLIVs), with: result)
+        case .replacePlanes(let pivs):
+            let oldPIVs = pivs.map { IndexValue(value: picture.planes[$0.index],
+                                                index: $0.index) }
+            history.setReverse(.replacePlanes(oldPIVs), with: result)
+        case .removePlanes: break
+        case .setPlaneValue(let planeValue):
+            let oldPlaneValue = oldPlaneValue(from: planeValue, in: picture)
             history.setReverse(.setPlaneValue(oldPlaneValue), with: result)
+        case .setKeyPlaneValues(let pvkvs):
+            let oldPVKVs = pvkvs.map {
+                let picture = animation.keyframes[$0.index].picture
+                let oldPlaneValue = oldPlaneValue(from: $0.value, in: picture)
+                return IndexValue(value: oldPlaneValue, index: $0.index)
+            }
+            history.setReverse(.setKeyPlaneValues(oldPVKVs), with: result)
         case .changeToDraft: break
         case .setPicture:
             history.setReverse(.setPicture(self.picture), with: result)
@@ -3430,16 +3542,18 @@ extension Sheet {
             }
             
             history.setReverse(.changedColors(oldCUV), with: result)
+        
         case .insertBorders: break
         case .removeBorders: break
-        case .setRootKeyframeIndex(let rootKI):
-            history.setReverse(.setRootKeyframeIndex(rootKeyframeIndex: rootKI), with: result)
+            
         case .insertKeyframes: break
         case .removeKeyframes: break
         case .setKeyframeOptions(let kvs):
             let oldKVs = kvs.map { IndexValue(value: animation.keyframes[$0.index].option,
                                               index: $0.index) }
             history.setReverse(.setKeyframeOptions(oldKVs), with: result)
+        case .setRootKeyframeI:
+            history.setReverse(.setRootKeyframeI(animation.rootIndex), with: result)
         case .insertKeyLines: break
         case .replaceKeyLines(let kvs):
             let oldKVs = kvs.map {

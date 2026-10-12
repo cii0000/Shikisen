@@ -1905,6 +1905,15 @@ nonisolated struct PBSheet: @unchecked Sendable {
   /// Clears the value of `selection`. Subsequent reads from it will return its default value.
   mutating func clearSelection() {_uniqueStorage()._selection = nil}
 
+  var keyframeAttitude: PBAttitude {
+    get {_storage._keyframeAttitude ?? PBAttitude()}
+    set {_uniqueStorage()._keyframeAttitude = newValue}
+  }
+  /// Returns true if `keyframeAttitude` has been explicitly set.
+  var hasKeyframeAttitude: Bool {_storage._keyframeAttitude != nil}
+  /// Clears the value of `keyframeAttitude`. Subsequent reads from it will return its default value.
+  mutating func clearKeyframeAttitude() {_uniqueStorage()._keyframeAttitude = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -2053,31 +2062,25 @@ nonisolated struct PBKeyframeOption: Sendable {
   /// Clears the value of `beat`. Subsequent reads from it will return its default value.
   mutating func clearBeat() {self._beat = nil}
 
-  var previousPosition: PBPoint {
-    get {_previousPosition ?? PBPoint()}
-    set {_previousPosition = newValue}
-  }
-  /// Returns true if `previousPosition` has been explicitly set.
-  var hasPreviousPosition: Bool {self._previousPosition != nil}
-  /// Clears the value of `previousPosition`. Subsequent reads from it will return its default value.
-  mutating func clearPreviousPosition() {self._previousPosition = nil}
-
-  var nextPosition: PBPoint {
-    get {_nextPosition ?? PBPoint()}
-    set {_nextPosition = newValue}
-  }
-  /// Returns true if `nextPosition` has been explicitly set.
-  var hasNextPosition: Bool {self._nextPosition != nil}
-  /// Clears the value of `nextPosition`. Subsequent reads from it will return its default value.
-  mutating func clearNextPosition() {self._nextPosition = nil}
-
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _beat: PBRational? = nil
-  fileprivate var _previousPosition: PBPoint? = nil
-  fileprivate var _nextPosition: PBPoint? = nil
+}
+
+nonisolated struct PBBoolIndexValue: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var value: Bool = false
+
+  var index: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
 }
 
 nonisolated struct PBIntIndexValue: Sendable {
@@ -2372,11 +2375,32 @@ nonisolated struct PBPlaneValue: Sendable {
 
   var moveIndexValues: [PBIntIndexValue] = []
 
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct PBPlaneValueIndexValue: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var value: PBPlaneValue {
+    get {_value ?? PBPlaneValue()}
+    set {_value = newValue}
+  }
+  /// Returns true if `value` has been explicitly set.
+  var hasValue: Bool {self._value != nil}
+  /// Clears the value of `value`. Subsequent reads from it will return its default value.
+  mutating func clearValue() {self._value = nil}
+
   var index: Int64 = 0
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
+
+  fileprivate var _value: PBPlaneValue? = nil
 }
 
 nonisolated struct PBTextValue: Sendable {
@@ -2740,6 +2764,18 @@ nonisolated struct PBPlaneIndexValueArray: Sendable {
   init() {}
 }
 
+nonisolated struct PBPlaneValueIndexValueArray: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var value: [PBPlaneValueIndexValue] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 nonisolated struct PBNoteIndexValueArray: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2827,6 +2863,14 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .appendLine(newValue)}
   }
 
+  var appendKeyLine: PBLineIndexValue {
+    get {
+      if case .appendKeyLine(let v)? = value {return v}
+      return PBLineIndexValue()
+    }
+    set {value = .appendKeyLine(newValue)}
+  }
+
   var appendLines: PBLineArray {
     get {
       if case .appendLines(let v)? = value {return v}
@@ -2843,22 +2887,6 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .appendPlanes(newValue)}
   }
 
-  var removeLastLines: Int64 {
-    get {
-      if case .removeLastLines(let v)? = value {return v}
-      return 0
-    }
-    set {value = .removeLastLines(newValue)}
-  }
-
-  var removeLastPlanes: Int64 {
-    get {
-      if case .removeLastPlanes(let v)? = value {return v}
-      return 0
-    }
-    set {value = .removeLastPlanes(newValue)}
-  }
-
   var insertLines: PBLineIndexValueArray {
     get {
       if case .insertLines(let v)? = value {return v}
@@ -2867,12 +2895,12 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .insertLines(newValue)}
   }
 
-  var insertPlanes: PBPlaneIndexValueArray {
+  var insertKeyLines: PBLineIndexValueArrayIndexValueArray {
     get {
-      if case .insertPlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArray()
+      if case .insertKeyLines(let v)? = value {return v}
+      return PBLineIndexValueArrayIndexValueArray()
     }
-    set {value = .insertPlanes(newValue)}
+    set {value = .insertKeyLines(newValue)}
   }
 
   var replaceLines: PBLineIndexValueArray {
@@ -2883,12 +2911,36 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .replaceLines(newValue)}
   }
 
-  var replacePlanes: PBPlaneIndexValueArray {
+  var replaceKeyLines: PBLineIndexValueArrayIndexValueArray {
     get {
-      if case .replacePlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArray()
+      if case .replaceKeyLines(let v)? = value {return v}
+      return PBLineIndexValueArrayIndexValueArray()
     }
-    set {value = .replacePlanes(newValue)}
+    set {value = .replaceKeyLines(newValue)}
+  }
+
+  var setLineIds: PBInterOptionIndexValueArrayIndexValueArray {
+    get {
+      if case .setLineIds(let v)? = value {return v}
+      return PBInterOptionIndexValueArrayIndexValueArray()
+    }
+    set {value = .setLineIds(newValue)}
+  }
+
+  var removeLastLines: Int64 {
+    get {
+      if case .removeLastLines(let v)? = value {return v}
+      return 0
+    }
+    set {value = .removeLastLines(newValue)}
+  }
+
+  var removeLastKeyLines: PBIntIndexValue {
+    get {
+      if case .removeLastKeyLines(let v)? = value {return v}
+      return PBIntIndexValue()
+    }
+    set {value = .removeLastKeyLines(newValue)}
   }
 
   var removeLines: PBInt64Array {
@@ -2899,6 +2951,54 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeLines(newValue)}
   }
 
+  var removeKeyLines: PBIntArrayIndexValueArray {
+    get {
+      if case .removeKeyLines(let v)? = value {return v}
+      return PBIntArrayIndexValueArray()
+    }
+    set {value = .removeKeyLines(newValue)}
+  }
+
+  var insertPlanes: PBPlaneIndexValueArray {
+    get {
+      if case .insertPlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArray()
+    }
+    set {value = .insertPlanes(newValue)}
+  }
+
+  var insertKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
+    get {
+      if case .insertKeyPlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArrayIndexValueArray()
+    }
+    set {value = .insertKeyPlanes(newValue)}
+  }
+
+  var replacePlanes: PBPlaneIndexValueArray {
+    get {
+      if case .replacePlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArray()
+    }
+    set {value = .replacePlanes(newValue)}
+  }
+
+  var replaceKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
+    get {
+      if case .replaceKeyPlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArrayIndexValueArray()
+    }
+    set {value = .replaceKeyPlanes(newValue)}
+  }
+
+  var removeLastPlanes: Int64 {
+    get {
+      if case .removeLastPlanes(let v)? = value {return v}
+      return 0
+    }
+    set {value = .removeLastPlanes(newValue)}
+  }
+
   var removePlanes: PBInt64Array {
     get {
       if case .removePlanes(let v)? = value {return v}
@@ -2907,12 +3007,28 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removePlanes(newValue)}
   }
 
+  var removeKeyPlanes: PBIntArrayIndexValueArray {
+    get {
+      if case .removeKeyPlanes(let v)? = value {return v}
+      return PBIntArrayIndexValueArray()
+    }
+    set {value = .removeKeyPlanes(newValue)}
+  }
+
   var setPlaneValue: PBPlaneValue {
     get {
       if case .setPlaneValue(let v)? = value {return v}
       return PBPlaneValue()
     }
     set {value = .setPlaneValue(newValue)}
+  }
+
+  var setKeyPlaneValues: PBPlaneValueIndexValueArray {
+    get {
+      if case .setKeyPlaneValues(let v)? = value {return v}
+      return PBPlaneValueIndexValueArray()
+    }
+    set {value = .setKeyPlaneValues(newValue)}
   }
 
   var changeToDraft: Bool {
@@ -2931,6 +3047,14 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .setPicture(newValue)}
   }
 
+  var setDraftPicture: PBPicture {
+    get {
+      if case .setDraftPicture(let v)? = value {return v}
+      return PBPicture()
+    }
+    set {value = .setDraftPicture(newValue)}
+  }
+
   var insertDraftLines: PBLineIndexValueArray {
     get {
       if case .insertDraftLines(let v)? = value {return v}
@@ -2939,12 +3063,12 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .insertDraftLines(newValue)}
   }
 
-  var insertDraftPlanes: PBPlaneIndexValueArray {
+  var insertDraftKeyLines: PBLineIndexValueArrayIndexValueArray {
     get {
-      if case .insertDraftPlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArray()
+      if case .insertDraftKeyLines(let v)? = value {return v}
+      return PBLineIndexValueArrayIndexValueArray()
     }
-    set {value = .insertDraftPlanes(newValue)}
+    set {value = .insertDraftKeyLines(newValue)}
   }
 
   var removeDraftLines: PBInt64Array {
@@ -2955,6 +3079,30 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeDraftLines(newValue)}
   }
 
+  var removeDraftKeyLines: PBIntArrayIndexValueArray {
+    get {
+      if case .removeDraftKeyLines(let v)? = value {return v}
+      return PBIntArrayIndexValueArray()
+    }
+    set {value = .removeDraftKeyLines(newValue)}
+  }
+
+  var insertDraftPlanes: PBPlaneIndexValueArray {
+    get {
+      if case .insertDraftPlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArray()
+    }
+    set {value = .insertDraftPlanes(newValue)}
+  }
+
+  var insertDraftKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
+    get {
+      if case .insertDraftKeyPlanes(let v)? = value {return v}
+      return PBPlaneIndexValueArrayIndexValueArray()
+    }
+    set {value = .insertDraftKeyPlanes(newValue)}
+  }
+
   var removeDraftPlanes: PBInt64Array {
     get {
       if case .removeDraftPlanes(let v)? = value {return v}
@@ -2963,12 +3111,60 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeDraftPlanes(newValue)}
   }
 
-  var setDraftPicture: PBPicture {
+  var removeDraftKeyPlanes: PBIntArrayIndexValueArray {
     get {
-      if case .setDraftPicture(let v)? = value {return v}
-      return PBPicture()
+      if case .removeDraftKeyPlanes(let v)? = value {return v}
+      return PBIntArrayIndexValueArray()
     }
-    set {value = .setDraftPicture(newValue)}
+    set {value = .removeDraftKeyPlanes(newValue)}
+  }
+
+  var changedColors: PBColorValue {
+    get {
+      if case .changedColors(let v)? = value {return v}
+      return PBColorValue()
+    }
+    set {value = .changedColors(newValue)}
+  }
+
+  var insertKeyframes: PBKeyframeIndexValueArray {
+    get {
+      if case .insertKeyframes(let v)? = value {return v}
+      return PBKeyframeIndexValueArray()
+    }
+    set {value = .insertKeyframes(newValue)}
+  }
+
+  var setKeyframeOptions: PBKeyframeOptionIndexValueArray {
+    get {
+      if case .setKeyframeOptions(let v)? = value {return v}
+      return PBKeyframeOptionIndexValueArray()
+    }
+    set {value = .setKeyframeOptions(newValue)}
+  }
+
+  var removeKeyframes: PBInt64Array {
+    get {
+      if case .removeKeyframes(let v)? = value {return v}
+      return PBInt64Array()
+    }
+    set {value = .removeKeyframes(newValue)}
+  }
+
+  var setRootKeyframeI: Int64 {
+    get {
+      if case .setRootKeyframeI(let v)? = value {return v}
+      return 0
+    }
+    set {value = .setRootKeyframeI(newValue)}
+  }
+
+  var setAnimationOption: PBAnimationOption {
+    get {
+      if case .setAnimationOption(let v)? = value {return v}
+      return PBAnimationOption()
+    }
+    set {value = .setAnimationOption(newValue)}
   }
 
   var insertTexts: PBTextIndexValueArray {
@@ -2987,14 +3183,6 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .replaceTexts(newValue)}
   }
 
-  var removeTexts: PBInt64Array {
-    get {
-      if case .removeTexts(let v)? = value {return v}
-      return PBInt64Array()
-    }
-    set {value = .removeTexts(newValue)}
-  }
-
   var replaceString: PBTextValueIndexValue {
     get {
       if case .replaceString(let v)? = value {return v}
@@ -3003,156 +3191,12 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .replaceString(newValue)}
   }
 
-  var changedColors: PBColorValue {
+  var removeTexts: PBInt64Array {
     get {
-      if case .changedColors(let v)? = value {return v}
-      return PBColorValue()
-    }
-    set {value = .changedColors(newValue)}
-  }
-
-  var insertBorders: PBBorderIndexValueArray {
-    get {
-      if case .insertBorders(let v)? = value {return v}
-      return PBBorderIndexValueArray()
-    }
-    set {value = .insertBorders(newValue)}
-  }
-
-  var removeBorders: PBInt64Array {
-    get {
-      if case .removeBorders(let v)? = value {return v}
+      if case .removeTexts(let v)? = value {return v}
       return PBInt64Array()
     }
-    set {value = .removeBorders(newValue)}
-  }
-
-  var setRootKeyframeIndex: Int64 {
-    get {
-      if case .setRootKeyframeIndex(let v)? = value {return v}
-      return 0
-    }
-    set {value = .setRootKeyframeIndex(newValue)}
-  }
-
-  var insertKeyframes: PBKeyframeIndexValueArray {
-    get {
-      if case .insertKeyframes(let v)? = value {return v}
-      return PBKeyframeIndexValueArray()
-    }
-    set {value = .insertKeyframes(newValue)}
-  }
-
-  var removeKeyframes: PBInt64Array {
-    get {
-      if case .removeKeyframes(let v)? = value {return v}
-      return PBInt64Array()
-    }
-    set {value = .removeKeyframes(newValue)}
-  }
-
-  var setKeyframeOptions: PBKeyframeOptionIndexValueArray {
-    get {
-      if case .setKeyframeOptions(let v)? = value {return v}
-      return PBKeyframeOptionIndexValueArray()
-    }
-    set {value = .setKeyframeOptions(newValue)}
-  }
-
-  var insertKeyLines: PBLineIndexValueArrayIndexValueArray {
-    get {
-      if case .insertKeyLines(let v)? = value {return v}
-      return PBLineIndexValueArrayIndexValueArray()
-    }
-    set {value = .insertKeyLines(newValue)}
-  }
-
-  var replaceKeyLines: PBLineIndexValueArrayIndexValueArray {
-    get {
-      if case .replaceKeyLines(let v)? = value {return v}
-      return PBLineIndexValueArrayIndexValueArray()
-    }
-    set {value = .replaceKeyLines(newValue)}
-  }
-
-  var removeKeyLines: PBIntArrayIndexValueArray {
-    get {
-      if case .removeKeyLines(let v)? = value {return v}
-      return PBIntArrayIndexValueArray()
-    }
-    set {value = .removeKeyLines(newValue)}
-  }
-
-  var insertKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
-    get {
-      if case .insertKeyPlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArrayIndexValueArray()
-    }
-    set {value = .insertKeyPlanes(newValue)}
-  }
-
-  var replaceKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
-    get {
-      if case .replaceKeyPlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArrayIndexValueArray()
-    }
-    set {value = .replaceKeyPlanes(newValue)}
-  }
-
-  var removeKeyPlanes: PBIntArrayIndexValueArray {
-    get {
-      if case .removeKeyPlanes(let v)? = value {return v}
-      return PBIntArrayIndexValueArray()
-    }
-    set {value = .removeKeyPlanes(newValue)}
-  }
-
-  var insertDraftKeyLines: PBLineIndexValueArrayIndexValueArray {
-    get {
-      if case .insertDraftKeyLines(let v)? = value {return v}
-      return PBLineIndexValueArrayIndexValueArray()
-    }
-    set {value = .insertDraftKeyLines(newValue)}
-  }
-
-  var removeDraftKeyLines: PBIntArrayIndexValueArray {
-    get {
-      if case .removeDraftKeyLines(let v)? = value {return v}
-      return PBIntArrayIndexValueArray()
-    }
-    set {value = .removeDraftKeyLines(newValue)}
-  }
-
-  var insertDraftKeyPlanes: PBPlaneIndexValueArrayIndexValueArray {
-    get {
-      if case .insertDraftKeyPlanes(let v)? = value {return v}
-      return PBPlaneIndexValueArrayIndexValueArray()
-    }
-    set {value = .insertDraftKeyPlanes(newValue)}
-  }
-
-  var removeDraftKeyPlanes: PBIntArrayIndexValueArray {
-    get {
-      if case .removeDraftKeyPlanes(let v)? = value {return v}
-      return PBIntArrayIndexValueArray()
-    }
-    set {value = .removeDraftKeyPlanes(newValue)}
-  }
-
-  var setLineIds: PBInterOptionIndexValueArrayIndexValueArray {
-    get {
-      if case .setLineIds(let v)? = value {return v}
-      return PBInterOptionIndexValueArrayIndexValueArray()
-    }
-    set {value = .setLineIds(newValue)}
-  }
-
-  var setAnimationOption: PBAnimationOption {
-    get {
-      if case .setAnimationOption(let v)? = value {return v}
-      return PBAnimationOption()
-    }
-    set {value = .setAnimationOption(newValue)}
+    set {value = .removeTexts(newValue)}
   }
 
   var insertNotes: PBNoteIndexValueArray {
@@ -3179,6 +3223,30 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeNotes(newValue)}
   }
 
+  var insertDraftNotes: PBNoteIndexValueArray {
+    get {
+      if case .insertDraftNotes(let v)? = value {return v}
+      return PBNoteIndexValueArray()
+    }
+    set {value = .insertDraftNotes(newValue)}
+  }
+
+  var removeDraftNotes: PBInt64Array {
+    get {
+      if case .removeDraftNotes(let v)? = value {return v}
+      return PBInt64Array()
+    }
+    set {value = .removeDraftNotes(newValue)}
+  }
+
+  var setScoreOption: PBScoreOption {
+    get {
+      if case .setScoreOption(let v)? = value {return v}
+      return PBScoreOption()
+    }
+    set {value = .setScoreOption(newValue)}
+  }
+
   var insertContents: PBContentIndexValueArray {
     get {
       if case .insertContents(let v)? = value {return v}
@@ -3203,28 +3271,20 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeContents(newValue)}
   }
 
-  var setScoreOption: PBScoreOption {
+  var insertBorders: PBBorderIndexValueArray {
     get {
-      if case .setScoreOption(let v)? = value {return v}
-      return PBScoreOption()
+      if case .insertBorders(let v)? = value {return v}
+      return PBBorderIndexValueArray()
     }
-    set {value = .setScoreOption(newValue)}
+    set {value = .insertBorders(newValue)}
   }
 
-  var insertDraftNotes: PBNoteIndexValueArray {
+  var removeBorders: PBInt64Array {
     get {
-      if case .insertDraftNotes(let v)? = value {return v}
-      return PBNoteIndexValueArray()
-    }
-    set {value = .insertDraftNotes(newValue)}
-  }
-
-  var removeDraftNotes: PBInt64Array {
-    get {
-      if case .removeDraftNotes(let v)? = value {return v}
+      if case .removeBorders(let v)? = value {return v}
       return PBInt64Array()
     }
-    set {value = .removeDraftNotes(newValue)}
+    set {value = .removeBorders(newValue)}
   }
 
   var setSheetOption: PBSheetOption {
@@ -3247,56 +3307,59 @@ nonisolated struct PBSheetUndoItem: Sendable {
 
   nonisolated enum OneOf_Value: Equatable, Sendable {
     case appendLine(PBLine)
+    case appendKeyLine(PBLineIndexValue)
     case appendLines(PBLineArray)
     case appendPlanes(PBPlaneArray)
-    case removeLastLines(Int64)
-    case removeLastPlanes(Int64)
     case insertLines(PBLineIndexValueArray)
-    case insertPlanes(PBPlaneIndexValueArray)
+    case insertKeyLines(PBLineIndexValueArrayIndexValueArray)
     case replaceLines(PBLineIndexValueArray)
-    case replacePlanes(PBPlaneIndexValueArray)
+    case replaceKeyLines(PBLineIndexValueArrayIndexValueArray)
+    case setLineIds(PBInterOptionIndexValueArrayIndexValueArray)
+    case removeLastLines(Int64)
+    case removeLastKeyLines(PBIntIndexValue)
     case removeLines(PBInt64Array)
+    case removeKeyLines(PBIntArrayIndexValueArray)
+    case insertPlanes(PBPlaneIndexValueArray)
+    case insertKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
+    case replacePlanes(PBPlaneIndexValueArray)
+    case replaceKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
+    case removeLastPlanes(Int64)
     case removePlanes(PBInt64Array)
+    case removeKeyPlanes(PBIntArrayIndexValueArray)
     case setPlaneValue(PBPlaneValue)
+    case setKeyPlaneValues(PBPlaneValueIndexValueArray)
     case changeToDraft(Bool)
     case setPicture(PBPicture)
-    case insertDraftLines(PBLineIndexValueArray)
-    case insertDraftPlanes(PBPlaneIndexValueArray)
-    case removeDraftLines(PBInt64Array)
-    case removeDraftPlanes(PBInt64Array)
     case setDraftPicture(PBPicture)
+    case insertDraftLines(PBLineIndexValueArray)
+    case insertDraftKeyLines(PBLineIndexValueArrayIndexValueArray)
+    case removeDraftLines(PBInt64Array)
+    case removeDraftKeyLines(PBIntArrayIndexValueArray)
+    case insertDraftPlanes(PBPlaneIndexValueArray)
+    case insertDraftKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
+    case removeDraftPlanes(PBInt64Array)
+    case removeDraftKeyPlanes(PBIntArrayIndexValueArray)
+    case changedColors(PBColorValue)
+    case insertKeyframes(PBKeyframeIndexValueArray)
+    case setKeyframeOptions(PBKeyframeOptionIndexValueArray)
+    case removeKeyframes(PBInt64Array)
+    case setRootKeyframeI(Int64)
+    case setAnimationOption(PBAnimationOption)
     case insertTexts(PBTextIndexValueArray)
     case replaceTexts(PBTextIndexValueArray)
-    case removeTexts(PBInt64Array)
     case replaceString(PBTextValueIndexValue)
-    case changedColors(PBColorValue)
-    case insertBorders(PBBorderIndexValueArray)
-    case removeBorders(PBInt64Array)
-    case setRootKeyframeIndex(Int64)
-    case insertKeyframes(PBKeyframeIndexValueArray)
-    case removeKeyframes(PBInt64Array)
-    case setKeyframeOptions(PBKeyframeOptionIndexValueArray)
-    case insertKeyLines(PBLineIndexValueArrayIndexValueArray)
-    case replaceKeyLines(PBLineIndexValueArrayIndexValueArray)
-    case removeKeyLines(PBIntArrayIndexValueArray)
-    case insertKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
-    case replaceKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
-    case removeKeyPlanes(PBIntArrayIndexValueArray)
-    case insertDraftKeyLines(PBLineIndexValueArrayIndexValueArray)
-    case removeDraftKeyLines(PBIntArrayIndexValueArray)
-    case insertDraftKeyPlanes(PBPlaneIndexValueArrayIndexValueArray)
-    case removeDraftKeyPlanes(PBIntArrayIndexValueArray)
-    case setLineIds(PBInterOptionIndexValueArrayIndexValueArray)
-    case setAnimationOption(PBAnimationOption)
+    case removeTexts(PBInt64Array)
     case insertNotes(PBNoteIndexValueArray)
     case replaceNotes(PBNoteIndexValueArray)
     case removeNotes(PBInt64Array)
+    case insertDraftNotes(PBNoteIndexValueArray)
+    case removeDraftNotes(PBInt64Array)
+    case setScoreOption(PBScoreOption)
     case insertContents(PBContentIndexValueArray)
     case replaceContents(PBContentIndexValueArray)
     case removeContents(PBInt64Array)
-    case setScoreOption(PBScoreOption)
-    case insertDraftNotes(PBNoteIndexValueArray)
-    case removeDraftNotes(PBInt64Array)
+    case insertBorders(PBBorderIndexValueArray)
+    case removeBorders(PBInt64Array)
     case setSheetOption(PBSheetOption)
     case setSelection(PBSheetSelection)
 
@@ -3370,6 +3433,8 @@ nonisolated struct PBUndoGroup: Sendable {
   var values: [PBUndoDataValue] = []
 
   var isFirstReverse: Bool = false
+
+  var firstUndoItemData: Data = Data()
 
   var date: PBDate {
     get {_date ?? PBDate()}
@@ -6426,7 +6491,7 @@ nonisolated extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheet"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}picture\0\u{1}draftPicture\0\u{1}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}picture\0\u{1}draftPicture\0\u{1}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0\u{1}keyframeAttitude\0")
 
   fileprivate class _StorageClass {
     var _animation: PBAnimation? = nil
@@ -6439,6 +6504,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     var _mainFrame: PBRect? = nil
     var _backgroundUucolor: PBUUColor? = nil
     var _selection: PBSheetSelection? = nil
+    var _keyframeAttitude: PBAttitude? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6459,6 +6525,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       _mainFrame = source._mainFrame
       _backgroundUucolor = source._backgroundUucolor
       _selection = source._selection
+      _keyframeAttitude = source._keyframeAttitude
     }
   }
 
@@ -6487,6 +6554,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._contents) }()
         case 12: try { try decoder.decodeSingularMessageField(value: &_storage._mainFrame) }()
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._selection) }()
+        case 14: try { try decoder.decodeSingularMessageField(value: &_storage._keyframeAttitude) }()
         default: break
         }
       }
@@ -6529,6 +6597,9 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       try { if let v = _storage._selection {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
+      try { if let v = _storage._keyframeAttitude {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6548,6 +6619,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         if _storage._mainFrame != rhs_storage._mainFrame {return false}
         if _storage._backgroundUucolor != rhs_storage._backgroundUucolor {return false}
         if _storage._selection != rhs_storage._selection {return false}
+        if _storage._keyframeAttitude != rhs_storage._keyframeAttitude {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -6762,7 +6834,7 @@ nonisolated extension PBFinding: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
 
 nonisolated extension PBKeyframeOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBKeyframeOption"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beat\0\u{2}\u{2}previousPosition\0\u{1}nextPosition\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beat\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6771,8 +6843,6 @@ nonisolated extension PBKeyframeOption: SwiftProtobuf.Message, SwiftProtobuf._Me
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._beat) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._previousPosition) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._nextPosition) }()
       default: break
       }
     }
@@ -6786,19 +6856,46 @@ nonisolated extension PBKeyframeOption: SwiftProtobuf.Message, SwiftProtobuf._Me
     try { if let v = self._beat {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    try { if let v = self._previousPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
-    try { if let v = self._nextPosition {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBKeyframeOption, rhs: PBKeyframeOption) -> Bool {
     if lhs._beat != rhs._beat {return false}
-    if lhs._previousPosition != rhs._previousPosition {return false}
-    if lhs._nextPosition != rhs._nextPosition {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension PBBoolIndexValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBBoolIndexValue"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}index\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.index) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.value != false {
+      try visitor.visitSingularBoolField(value: self.value, fieldNumber: 1)
+    }
+    if self.index != 0 {
+      try visitor.visitSingularInt64Field(value: self.index, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBBoolIndexValue, rhs: PBBoolIndexValue) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.index != rhs.index {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7342,7 +7439,7 @@ nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 nonisolated extension PBPlaneValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBPlaneValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}planes\0\u{1}moveIndexValues\0\u{1}index\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}planes\0\u{1}moveIndexValues\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7352,7 +7449,6 @@ nonisolated extension PBPlaneValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.planes) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.moveIndexValues) }()
-      case 3: try { try decoder.decodeSingularInt64Field(value: &self.index) }()
       default: break
       }
     }
@@ -7365,15 +7461,50 @@ nonisolated extension PBPlaneValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if !self.moveIndexValues.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.moveIndexValues, fieldNumber: 2)
     }
-    if self.index != 0 {
-      try visitor.visitSingularInt64Field(value: self.index, fieldNumber: 3)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBPlaneValue, rhs: PBPlaneValue) -> Bool {
     if lhs.planes != rhs.planes {return false}
     if lhs.moveIndexValues != rhs.moveIndexValues {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension PBPlaneValueIndexValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBPlaneValueIndexValue"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}index\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._value) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.index) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._value {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.index != 0 {
+      try visitor.visitSingularInt64Field(value: self.index, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBPlaneValueIndexValue, rhs: PBPlaneValueIndexValue) -> Bool {
+    if lhs._value != rhs._value {return false}
     if lhs.index != rhs.index {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -8117,6 +8248,36 @@ nonisolated extension PBPlaneIndexValueArray: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
+nonisolated extension PBPlaneValueIndexValueArray: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBPlaneValueIndexValueArray"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.value.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.value, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBPlaneValueIndexValueArray, rhs: PBPlaneValueIndexValueArray) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension PBNoteIndexValueArray: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBNoteIndexValueArray"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0")
@@ -8299,7 +8460,7 @@ nonisolated extension PBKeyframeOptionIndexValueArray: SwiftProtobuf.Message, Sw
 
 nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheetUndoItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}appendLine\0\u{1}appendLines\0\u{1}appendPlanes\0\u{1}removeLastLines\0\u{1}removeLastPlanes\0\u{1}insertLines\0\u{1}insertPlanes\0\u{1}removeLines\0\u{1}removePlanes\0\u{1}setPlaneValue\0\u{1}changeToDraft\0\u{1}setPicture\0\u{1}insertDraftLines\0\u{1}insertDraftPlanes\0\u{1}removeDraftLines\0\u{1}removeDraftPlanes\0\u{1}setDraftPicture\0\u{1}insertTexts\0\u{1}removeTexts\0\u{1}replaceString\0\u{1}changedColors\0\u{1}insertBorders\0\u{1}removeBorders\0\u{1}setRootKeyframeIndex\0\u{1}insertKeyframes\0\u{1}removeKeyframes\0\u{1}setKeyframeOptions\0\u{1}insertKeyLines\0\u{1}replaceKeyLines\0\u{1}removeKeyLines\0\u{1}setLineIDs\0\u{2}\u{3}insertKeyPlanes\0\u{1}removeKeyPlanes\0\u{1}insertDraftKeyLines\0\u{1}removeDraftKeyLines\0\u{1}insertDraftKeyPlanes\0\u{1}removeDraftKeyPlanes\0\u{1}setAnimationOption\0\u{1}replaceKeyPlanes\0\u{1}insertNotes\0\u{1}replaceNotes\0\u{1}removeNotes\0\u{2}\u{2}insertContents\0\u{1}replaceContents\0\u{1}removeContents\0\u{1}setScoreOption\0\u{1}insertDraftNotes\0\u{1}removeDraftNotes\0\u{1}setSheetOption\0\u{1}setSelection\0\u{1}replaceLines\0\u{1}replacePlanes\0\u{1}replaceTexts\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}appendLine\0\u{1}appendLines\0\u{1}appendPlanes\0\u{1}removeLastLines\0\u{1}removeLastPlanes\0\u{1}insertLines\0\u{1}insertPlanes\0\u{1}removeLines\0\u{1}removePlanes\0\u{1}setPlaneValue\0\u{1}changeToDraft\0\u{1}setPicture\0\u{1}insertDraftLines\0\u{1}insertDraftPlanes\0\u{1}removeDraftLines\0\u{1}removeDraftPlanes\0\u{1}setDraftPicture\0\u{1}insertTexts\0\u{1}removeTexts\0\u{1}replaceString\0\u{1}changedColors\0\u{1}insertBorders\0\u{1}removeBorders\0\u{1}setRootKeyframeI\0\u{1}insertKeyframes\0\u{1}removeKeyframes\0\u{1}setKeyframeOptions\0\u{1}insertKeyLines\0\u{1}replaceKeyLines\0\u{1}removeKeyLines\0\u{1}setLineIDs\0\u{1}appendKeyLine\0\u{1}removeLastKeyLines\0\u{1}insertKeyPlanes\0\u{1}removeKeyPlanes\0\u{1}insertDraftKeyLines\0\u{1}removeDraftKeyLines\0\u{1}insertDraftKeyPlanes\0\u{1}removeDraftKeyPlanes\0\u{1}setAnimationOption\0\u{1}replaceKeyPlanes\0\u{1}insertNotes\0\u{1}replaceNotes\0\u{1}removeNotes\0\u{1}setKeyPlaneValues\0\u{1}insertContents\0\u{1}replaceContents\0\u{1}removeContents\0\u{1}setScoreOption\0\u{1}insertDraftNotes\0\u{1}removeDraftNotes\0\u{1}setSheetOption\0\u{1}setSelection\0\u{1}replaceLines\0\u{1}replacePlanes\0\u{1}replaceTexts\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8596,7 +8757,7 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
         try decoder.decodeSingularInt64Field(value: &v)
         if let v = v {
           if self.value != nil {try decoder.handleConflictingOneOf()}
-          self.value = .setRootKeyframeIndex(v)
+          self.value = .setRootKeyframeI(v)
         }
       }()
       case 25: try {
@@ -8688,6 +8849,32 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.value = .setLineIds(v)
+        }
+      }()
+      case 32: try {
+        var v: PBLineIndexValue?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .appendKeyLine(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .appendKeyLine(v)
+        }
+      }()
+      case 33: try {
+        var v: PBIntIndexValue?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .removeLastKeyLines(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .removeLastKeyLines(v)
         }
       }()
       case 34: try {
@@ -8831,6 +9018,19 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
           self.value = .removeNotes(v)
+        }
+      }()
+      case 45: try {
+        var v: PBPlaneValueIndexValueArray?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .setKeyPlaneValues(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .setKeyPlaneValues(v)
         }
       }()
       case 46: try {
@@ -9079,8 +9279,8 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
       guard case .removeBorders(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
     }()
-    case .setRootKeyframeIndex?: try {
-      guard case .setRootKeyframeIndex(let v)? = self.value else { preconditionFailure() }
+    case .setRootKeyframeI?: try {
+      guard case .setRootKeyframeI(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularInt64Field(value: v, fieldNumber: 24)
     }()
     case .insertKeyframes?: try {
@@ -9110,6 +9310,14 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .setLineIds?: try {
       guard case .setLineIds(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 31)
+    }()
+    case .appendKeyLine?: try {
+      guard case .appendKeyLine(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 32)
+    }()
+    case .removeLastKeyLines?: try {
+      guard case .removeLastKeyLines(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 33)
     }()
     case .insertKeyPlanes?: try {
       guard case .insertKeyPlanes(let v)? = self.value else { preconditionFailure() }
@@ -9154,6 +9362,10 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .removeNotes?: try {
       guard case .removeNotes(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 44)
+    }()
+    case .setKeyPlaneValues?: try {
+      guard case .setKeyPlaneValues(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 45)
     }()
     case .insertContents?: try {
       guard case .insertContents(let v)? = self.value else { preconditionFailure() }
@@ -9332,7 +9544,7 @@ nonisolated extension PBUndoDataValue: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBUndoGroup"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}values\0\u{1}isFirstReverse\0\u{1}date\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}values\0\u{1}isFirstReverse\0\u{1}date\0\u{1}firstUndoItemData\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9343,6 +9555,7 @@ nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._Message
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.values) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.isFirstReverse) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._date) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.firstUndoItemData) }()
       default: break
       }
     }
@@ -9362,12 +9575,16 @@ nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._Message
     try { if let v = self._date {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if !self.firstUndoItemData.isEmpty {
+      try visitor.visitSingularBytesField(value: self.firstUndoItemData, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBUndoGroup, rhs: PBUndoGroup) -> Bool {
     if lhs.values != rhs.values {return false}
     if lhs.isFirstReverse != rhs.isFirstReverse {return false}
+    if lhs.firstUndoItemData != rhs.firstUndoItemData {return false}
     if lhs._date != rhs._date {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

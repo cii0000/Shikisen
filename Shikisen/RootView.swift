@@ -758,20 +758,16 @@ final class RootView: View, @unchecked Sendable {
     }
     
     @discardableResult
-    func undo(to toTopIndex: Int) -> (rect: Rect?, errors: [any Error]) {
-        var rect = Rect?.none, errors = [any Error]()
+    func undo(to toTopIndex: Int) throws -> Rect? {
+        var rect = Rect?.none
         let results = history.undoAndResults(to: toTopIndex)
         for result in results {
-            do {
-                let uiv = try world.undoItemValue(with: result, in: &history)
-                if let aRect = set(result.undoItem(with: uiv), isMakeRect: true) {
-                    rect += aRect
-                }
-            } catch {
-                errors.append(error)
+            let uiv = try world.undoItemValue(with: result, in: &history)
+            if let aRect = set(result.undoItem(with: uiv), isMakeRect: true) {
+                rect += aRect
             }
         }
-        return (rect, errors)
+        return rect
     }
     
     struct RestoreError: LocalizedError {

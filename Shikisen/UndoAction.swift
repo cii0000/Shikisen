@@ -169,70 +169,72 @@ final class ASelectVersionAction: Action {
         rootNode.append(child: currentKnobNode)
     }
     func undo(at p: Point, undoIndex: Int) {
-        var frame: Rect?, nodes = [Node](), errors = [any Error]()
-        if let sheetView = sheetView {
-            let (aFrame, aNodes, aErrors) = sheetView.undo(to: undoIndex)
-            if let aFrame = aFrame {
-                frame = sheetView.convertToWorld(aFrame)
+        do {
+            var frame: Rect?, nodes = [Node]()
+            if let sheetView = sheetView {
+                let (aFrame, aNodes) = try sheetView.undo(to: undoIndex)
+                if let aFrame = aFrame {
+                    frame = sheetView.convertToWorld(aFrame)
+                }
+                aNodes.forEach {
+                    $0.attitude = sheetView.node.attitude
+                }
+                nodes = aNodes
+            } else {
+                frame = try rootView.undo(to: undoIndex)
             }
-            aNodes.forEach {
-                $0.attitude = sheetView.node.attitude
-            }
-            nodes = aNodes
-            errors = aErrors
-        } else {
-            (frame, errors) = rootView.undo(to: undoIndex)
-        }
-        errors.forEach { rootAction.hudView.show($0) }
-        
-        if let frame = frame {
-            let f = rootView.screenBounds * rootView.screenToWorldTransform
-            if frame.width > 0 || frame.height > 0, !f.intersects(frame) {
-                let fp = f.centerPoint, lp = frame.centerPoint
-                let d = max(frame.width, frame.height)
-                let ps = f.intersection(Edge(fp, lp).extendedLast(withDistance: d))
-                if !ps.isEmpty {
-                    let np = ps[0]
-                    let nfp = Point.linear(fp, np, t: 0.6)
-                    let nlp = Point.linear(fp, np, t: 0.95)
-                    let angle = Edge(nfp, nlp).reversed().angle()
-                    var pathlines = [Pathline]()
-                    pathlines.append(Pathline([nfp, nlp]))
-                    let l = 10 / rootView.worldToScreenScale
-                    pathlines.append(Pathline([nlp.movedWith(distance: l,
-                                                             angle: angle - .pi / 6),
-                                               nlp,
-                                               nlp.movedWith(distance: l,
-                                                             angle: angle + .pi / 6)]))
-                    let path = Path(pathlines)
-                    outOfBoundsOutlineNode.path = path
-                    outOfBoundsNode.path = path
+            
+            if let frame = frame {
+                let f = rootView.screenBounds * rootView.screenToWorldTransform
+                if frame.width > 0 || frame.height > 0, !f.intersects(frame) {
+                    let fp = f.centerPoint, lp = frame.centerPoint
+                    let d = max(frame.width, frame.height)
+                    let ps = f.intersection(Edge(fp, lp).extendedLast(withDistance: d))
+                    if !ps.isEmpty {
+                        let np = ps[0]
+                        let nfp = Point.linear(fp, np, t: 0.6)
+                        let nlp = Point.linear(fp, np, t: 0.95)
+                        let angle = Edge(nfp, nlp).reversed().angle()
+                        var pathlines = [Pathline]()
+                        pathlines.append(Pathline([nfp, nlp]))
+                        let l = 10 / rootView.worldToScreenScale
+                        pathlines.append(Pathline([nlp.movedWith(distance: l,
+                                                                 angle: angle - .pi / 6),
+                                                   nlp,
+                                                   nlp.movedWith(distance: l,
+                                                                 angle: angle + .pi / 6)]))
+                        let path = Path(pathlines)
+                        outOfBoundsOutlineNode.path = path
+                        outOfBoundsNode.path = path
+                    } else {
+                        outOfBoundsOutlineNode.path = Path()
+                        outOfBoundsNode.path = Path()
+                    }
                 } else {
                     outOfBoundsOutlineNode.path = Path()
                     outOfBoundsNode.path = Path()
                 }
-            } else {
-                outOfBoundsOutlineNode.path = Path()
-                outOfBoundsNode.path = Path()
+                let nf = frame * rootView.worldToScreenTransform
+                if !rootView.isEditingSheet || (nf.width < 6 && nf.height < 6) {
+                    let s = 1 / rootView.worldToScreenScale
+                    let path = Path(frame.outset(by: 4 * s),
+                                    cornerRadius: 3 * s)
+                    selectingOutlineRootNode.path = path
+                    selectingRootNode.path = path
+                } else {
+                    selectingOutlineRootNode.path = Path()
+                    selectingRootNode.path = Path()
+                }
             }
-            let nf = frame * rootView.worldToScreenTransform
-            if !rootView.isEditingSheet || (nf.width < 6 && nf.height < 6) {
-                let s = 1 / rootView.worldToScreenScale
-                let path = Path(frame.outset(by: 4 * s),
-                                cornerRadius: 3 * s)
-                selectingOutlineRootNode.path = path
-                selectingRootNode.path = path
-            } else {
-                selectingOutlineRootNode.path = Path()
-                selectingRootNode.path = Path()
+            if !nodes.isEmpty {
+                selectingRootNode.children = nodes
+            } else if !selectingRootNode.children.isEmpty {
+                selectingRootNode.children = []
             }
+            rootView.updateSelectedFrame()
+        } catch {
+            rootAction.hudView.show(error)
         }
-        if !nodes.isEmpty {
-            selectingRootNode.children = nodes
-        } else if !selectingRootNode.children.isEmpty {
-            selectingRootNode.children = []
-        }
-        rootView.updateSelectedFrame()
     }
     
     func undo(with event: InputKeyEvent) {

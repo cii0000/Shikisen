@@ -800,11 +800,11 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             updateClippingNode()
         }
     }
-    func updateTimelime(atKeyframe ki: Int) {
+    func updateTimeline(atKeyframe ki: Int) {
         updateTimeline()//
     }
     func updateTimelineAtCurrentKeyframe() {
-        updateTimelime(atKeyframe: model.index)
+        updateTimeline(atKeyframe: model.index)
     }
     func timelineNodes() -> [Node] {
         let beatRange = model.beatRange, loopDurBeat = model.loopDurBeat
@@ -1069,18 +1069,11 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         func otherNode(color: Color, _ previousNext: PreviousNext, atRootInter i :Int) -> Node {
             let i = model.index(atRootInter: i)
             let keyframeView = elementViews[i]
-            let currentKeyframe = model.keyframe(atRootInter: model.rootInterIndex)
-            let dp = previousNext == .previous ?
-            currentKeyframe.previousPosition : currentKeyframe.nextPosition
             let nodes = keyframeView.linesView.elementViews.map {
                 let node = $0.node.clone
-                node.attitude.position = dp
                 node.lineType = .color(.background)
                 return node
-            } + (dp != .init() ? keyframeView.model.picture.lines.map {
-                Node(path: Path([$0.firstPoint, $0.firstPoint + dp]),
-                     lineWidth: $0.size * 0.25, lineType: .color(.background))
-            } : [])
+            }
             return Node(children: nodes, isClippingChildrenLines: true,
                         path: .init(bounds), fillType: .color(color))
         }
@@ -1270,40 +1263,6 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             []
         }
         
-        func draw(orki: Int, nrki: Int, ort: Double, nrt: Double,
-                  pnP: Point, in pnPs: inout [Int: Point]) {
-            let (pri, ot, nri, nt) = orki < nrki ? (orki, ort, nrki, nrt) : (nrki, nrt, orki, ort)
-            (pri ... nri).forEach {
-                let t = Double($0).clipped(min: .init(pri), max: .init(nri), newMin: ot, newMax: nt)
-                let i = model.index(atRoot: $0)
-                if let op = pnPs[i] {
-                    pnPs[i] = op + Point.linear(.init(), pnP, t: t)
-                } else {
-                    pnPs[i] = Point.linear(.init(), pnP, t: t)
-                }
-            }
-        }
-       
-        var pnPs = [Int: Point]()
-        let pP = model.currentKeyframe.previousPosition
-        if !pP.isEmpty {
-            let preRKI0 = model.rootIndex(atRootInter: model.rootInterIndex - 1)
-            let preRKI1 = model.rootIndex(atRootInter: model.rootInterIndex - 2)
-            draw(orki: preRKI1, nrki: preRKI0, ort: 0, nrt: 1, pnP: pP, in: &pnPs)
-            if preRKI0 + 1 < model.rootIndex {
-                draw(orki: preRKI0 + 1, nrki: model.rootIndex, ort: 1, nrt: 0, pnP: pP, in: &pnPs)
-            }
-        }
-        let nP = model.currentKeyframe.nextPosition
-        if !nP.isEmpty {
-            let nextRKI0 = model.rootIndex(atRootInter: model.rootInterIndex + 1)
-            let nextRKI1 = model.rootIndex(atRootInter: model.rootInterIndex + 2)
-            draw(orki: model.rootIndex, nrki: nextRKI0, ort: 0, nrt: 1, pnP: nP, in: &pnPs)
-            if nextRKI0 + 1 < nextRKI1 {
-                draw(orki: nextRKI0 + 1, nrki: nextRKI1, ort: 1, nrt: 0, pnP: nP, in: &pnPs)
-            }
-        }
-        
         let nlw = max(lw * 0.5, lw * scale), blw = lw * 4, nblw = lw * 2
         let color: Color = removeLineIndex != nil ?
             .removing : .subSelected
@@ -1321,10 +1280,8 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                     if let node = lineNodeDic[line.controls] {
                         node.lineWidth = blw
                     } else {
-                        let pnP = pnPs[i] ?? .init()
                         let nLine = isConvertToWorld ? convertToWorld(line) : line
-                        let node = Node(attitude: .init(position: pnP),
-                                        path: Path(nLine),
+                        let node = Node(path: Path(nLine),
                                         lineWidth: boldKISet.contains(i) ? nblw : nlw,
                                         lineType: .color(color))
                         nodes.append(node)
@@ -1675,25 +1632,35 @@ final class SheetView: View, @unchecked Sendable {
                 self?.updateSelection(from: ranges, textView)
             }
         }
+        
+        if !model.keyframeAttitude.isIdentity {
+            update(keyframeAttitude: model.keyframeAttitude)
+        }
     }
     
-    var keyframeAttitude = Attitude() {
-        didSet {
-            otherBottomNode.attitude = keyframeAttitude
-            animationView.node.attitude = keyframeAttitude
-            otherTopNode.attitude = keyframeAttitude
-            animationView.previousNextNode.attitude = keyframeAttitude
-            mainFrameNode.attitude = keyframeAttitude
-            if keyframeAttitude == .init() {
-                keyframeAttitudeNode.path = .init()
-            } else {
-                let typesetter = Text(string: "x: \(keyframeAttitude.position.x.string(digitsCount: 2)), y: \(keyframeAttitude.position.y.string(digitsCount: 2)), scale: \(keyframeAttitude.log2Scale.string(digitsCount: 2))").typesetter
-                keyframeAttitudeNode.path = .init(typesetter, isPolygon: false)
-                keyframeAttitudeNode.attitude = .init(position: .init(bounds.width - typesetter.width - 5, bounds.height - typesetter.height / 2 - 5))
-                keyframeAttitudeNode.fillType = .color(.content)
-            }
-            updateSelectedFrame()
+    var keyframeAttitude: Attitude {
+        get { model.keyframeAttitude }
+        set {
+            guard keyframeAttitude != newValue else { return }
+            unupdateModel.keyframeAttitude = newValue
+            update(keyframeAttitude: newValue)
         }
+    }
+    func update(keyframeAttitude: Attitude) {
+        otherBottomNode.attitude = keyframeAttitude
+        animationView.node.attitude = keyframeAttitude
+        otherTopNode.attitude = keyframeAttitude
+        animationView.previousNextNode.attitude = keyframeAttitude
+        mainFrameNode.attitude = keyframeAttitude
+        if keyframeAttitude.isIdentity {
+            keyframeAttitudeNode.path = .init()
+        } else {
+            let typesetter = Text(string: "x: \(keyframeAttitude.position.x.string(digitsCount: 2)), y: \(keyframeAttitude.position.y.string(digitsCount: 2)), scale: \(keyframeAttitude.log2Scale.string(digitsCount: 2))").typesetter
+            keyframeAttitudeNode.path = .init(typesetter, isPolygon: false)
+            keyframeAttitudeNode.attitude = .init(position: .init(bounds.width - typesetter.width - 5, bounds.height - typesetter.height / 2 - 5))
+            keyframeAttitudeNode.fillType = .color(.content)
+        }
+        updateSelectedFrame()
     }
     func containsKeyframeAttitude(_ p: Point) -> Bool {
         keyframeAttitudeNode.bounds?.outset(by: 5)
@@ -3091,81 +3058,6 @@ final class SheetView: View, @unchecked Sendable {
         binder.enableWrite()
     }
     
-    func set(_ colorValue: ColorValue) {
-        if !colorValue.planeIndexes.isEmpty {
-            var picture = model.picture
-            for pi in colorValue.planeIndexes {
-                picture.planes[pi].uuColor = colorValue.uuColor
-            }
-            unupdateModel.picture = picture
-            for pi in colorValue.planeIndexes {
-                planesView.elementViews[pi].updateColor()
-            }
-        } else if !colorValue.planeAnimationIndexes.isEmpty {
-            var keyframes = model.animation.keyframes
-            if colorValue.animationColors.count == colorValue.planeAnimationIndexes.count {
-                for (ki, v) in colorValue.planeAnimationIndexes.enumerated() {
-                    let uuColor = UUColor(colorValue.animationColors[ki],
-                                          id: colorValue.uuColor.id)
-                    for i in v.value {
-                        keyframes[v.index].picture.planes[i]
-                            .uuColor = uuColor
-                    }
-                }
-            } else {
-                for v in colorValue.planeAnimationIndexes {
-                    for i in v.value {
-                        keyframes[v.index].picture.planes[i].uuColor = colorValue.uuColor
-                    }
-                }
-            }
-            unupdateModel.animation.keyframes = keyframes
-            for v in colorValue.planeAnimationIndexes {
-                for i in v.value {
-                    animationView.elementViews[v.index].planesView.elementViews[i].updateColor()
-                }
-            }
-        }
-        
-        if !colorValue.lineIndexes.isEmpty {
-            var picture = model.picture
-            for li in colorValue.lineIndexes {
-                picture.lines[li].uuColor = colorValue.uuColor
-            }
-            unupdateModel.picture = picture
-            for li in colorValue.lineIndexes {
-                linesView.elementViews[li].updateColor()
-            }
-        } else if !colorValue.lineAnimationIndexes.isEmpty {
-            var keyframes = model.animation.keyframes
-            if colorValue.animationColors.count == colorValue.lineAnimationIndexes.count {
-                for (ki, v) in colorValue.lineAnimationIndexes.enumerated() {
-                    let uuColor = UUColor(colorValue.animationColors[ki],
-                                          id: colorValue.uuColor.id)
-                    for i in v.value {
-                        keyframes[v.index].picture.lines[i]
-                            .uuColor = uuColor
-                    }
-                }
-            } else {
-                for v in colorValue.lineAnimationIndexes {
-                    for i in v.value {
-                        keyframes[v.index].picture.lines[i].uuColor = colorValue.uuColor
-                    }
-                }
-            }
-            unupdateModel.animation.keyframes = keyframes
-            for v in colorValue.lineAnimationIndexes {
-                for i in v.value {
-                    animationView.elementViews[v.index].linesView.elementViews[i].updateColor()
-                }
-            }
-        }
-        
-        if colorValue.isBackground {
-            backgroundUUColor = colorValue.uuColor
-        }
-    }
     func worldColorPathValue(with colorValue: ColorValue,
                              toColor: Color?,
                              color: Color, subColor: Color) -> ColorPathValue {
@@ -3228,7 +3120,9 @@ final class SheetView: View, @unchecked Sendable {
     func removeAll() {
         guard !model.picture.isEmpty
                 || !model.draftPicture.isEmpty
-                || !model.texts.isEmpty else { return }
+                || !model.texts.isEmpty
+                || !model.contents.isEmpty
+                || !model.score.notes.isEmpty else { return }
         newUndoGroup()
         if !model.picture.isEmpty {
             set(Picture())
@@ -3237,7 +3131,13 @@ final class SheetView: View, @unchecked Sendable {
             removeDraft()
         }
         if !model.texts.isEmpty {
-            removeText(at: Array(0 ..< model.texts.count))
+            removeTexts(at: Array(0 ..< model.texts.count))
+        }
+        if !model.contents.isEmpty {
+            removeContents(at: Array(0 ..< model.contents.count))
+        }
+        if !model.score.notes.isEmpty {
+            removeNotes(at: Array(0 ..< model.score.notes.count))
         }
     }
     
@@ -3459,73 +3359,125 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func newUndoGroup() {
-        if model.enabledAnimation {
-            history.newUndoGroup(firstItem: .setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex))
-        } else {
-            history.newUndoGroup()
-        }
+        history.newUndoGroup()
     }
     
-    private func append(undo undoItem: SheetUndoItem,
-                        redo redoItem: SheetUndoItem) {
+    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
+                     isKeyframe: Bool = false) {
+        if isKeyframe && model.animation.enabled {
+            history.set(first: .setRootKeyframeI(model.animation.rootIndex))
+        }
         history.append(undo: undoItem, redo: redoItem)
     }
-    private func append(_ uiv: SheetUndoItemValue) {
-        history.append(uiv)
+    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
+                     rootKI: Int) {
+        history.set(first: .setRootKeyframeI(rootKI))
+        history.append(undo: undoItem, redo: redoItem)
     }
-    private func appendAndSet(_ uiv: SheetUndoItemValue) {
-        history.append(uiv)
-        set(uiv.redoItem)
+    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
+                     isKeyframe: Bool = false) {
+        if isKeyframe && model.animation.enabled {
+            history.set(first: .setRootKeyframeI(model.animation.rootIndex))
+        }
+        history.append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
+                     rootKI: Int) {
+        history.set(first: .setRootKeyframeI(rootKI))
+        history.append(undo: undoItem, redo: redoItem)
+        set(redoItem)
     }
     @discardableResult
     func undo(to toTopIndex: Int,
-              isMakeRect: Bool = true, isSleep: Bool = true) -> (rect: Rect?,
-                                                                 nodes: [Node],
-                                                                 errors: [any Error]) {
-        var rect = Rect?.none, nodes = [Node](), errors = [any Error]()
+              isMakeRect: Bool = true, isSleep: Bool = true) throws -> (rect: Rect?,
+                                                                        nodes: [Node]) {
+        var rect = Rect?.none, nodes = [Node]()
         let results = history.undoAndResults(to: toTopIndex)
         for result in results {
-            do {
-                let uiv = try model.undoItemValue(with: result, in: &history)
-                let (aRect, aNodes) = set(result.undoItem(with: uiv),
-                                          isMakeRect: isMakeRect, isSleep: isSleep)
-                rect += aRect
-                nodes += aNodes
-            } catch {
-                errors.append(error)
-            }
+            let (aRect, aNodes) = set(try model.undoItem(with: result, in: &history),
+                                      isMakeRect: isMakeRect, isSleep: isSleep)
+            rect += aRect
+            nodes += aNodes
         }
-        return (rect, nodes, errors)
+        return (rect, nodes)
     }
     @discardableResult
     func set(_ item: SheetUndoItem,
-             isMakeRect: Bool = false, isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
+             isMakeRect: Bool = false,
+             isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
         selectedTextView = nil
         stop()
+        
+        func rect(local b: Rect?) -> Rect? {
+            b != nil ? animationView.convert(b!, to: node) : nil
+        }
         switch item {
         case .appendLine(let line):
             let lineView = appendNode(line)
-            lineView.isHiddenPoints = animationView.editGrid != .full
-            animationView.updateTimelineAtCurrentKeyframe()
-            if isMakeRect, let b = lineView.node.bounds {
-                return (animationView.convert(b, to: node), [])
+            if isMakeRect {
+                return (rect(local: lineView.node.bounds), [])
+            }
+        case .appendKeyLine(let kv):
+            let lineView = appendNode(kv.value, atKeyframe: kv.index)
+            if isMakeRect {
+                return (rect(local: lineView.node.bounds), [])
             }
         case .appendLines(let lines):
             appendNode(lines)
             for lineView in linesView.elementViews[(linesView.elementViews.count - lines.count)...] {
                 lineView.isHiddenPoints = animationView.editGrid != .full
             }
-            
             animationView.updateTimelineAtCurrentKeyframe()
+            
             if isMakeRect {
                 let rect = linesView.elementViews[(linesView.elementViews.count - lines.count)...]
-                    .reduce(into: Rect?.none) {
-                        if let b = $1.node.bounds {
-                            $0 += animationView.convert(b, to: node)
-                        }
-                    }
+                    .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
                 return (rect, [])
             }
+        case .insertLines(let livs):
+            insertNode(livs)
+            for liv in livs {
+                let lineView = linesView.elementViews[liv.index]
+                lineView.isHiddenPoints = animationView.editGrid != .full
+            }
+            animationView.updateTimelineAtCurrentKeyframe()
+            
+            if isMakeRect {
+                let rect = livs.reduce(into: Rect?.none) {
+                    $0 += rect(local: linesView.elementViews[$1.index].node.bounds)
+                }
+                return (rect, [])
+            }
+        case .removeLastLines(let count):
+            if isMakeRect {
+                let rect = linesView.elementViews[(linesView.elementViews.count - count)...]
+                    .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
+                removeLastsLineNode(count: count)
+                return (rect, [])
+            } else {
+                removeLastsLineNode(count: count)
+            }
+        case .removeLastKeyLines(let countKV):
+            if isMakeRect {
+                let rect = linesView.elementViews[(linesView.elementViews.count - countKV.value)...]
+                    .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
+                removeLastsLineNode(count: countKV.value)
+                return (rect, [])
+            } else {
+                removeLastsLineNode(count: countKV.value)
+            }
+        case .removeLines(let lis):
+            if isMakeRect {
+                let rect = lis.reduce(into: Rect?.none) {
+                    $0 += rect(local: linesView.elementViews[$1].node.bounds)
+                }
+                removeLinesNode(at: lis)
+                return (rect, [])
+            } else {
+                removeLinesNode(at: lis)
+            }
+            
         case .appendPlanes(let planes):
             appendNode(planes)
             if isMakeRect {
@@ -3536,21 +3488,6 @@ final class SheetView: View, @unchecked Sendable {
                         }
                     }
                 return (rect, [])
-            }
-        case .removeLastLines(let count):
-            if isMakeRect {
-                let rect = linesView.elementViews[(linesView.elementViews.count - count)...]
-                    .reduce(into: Rect?.none) {
-                        if let b = $1.node.bounds {
-                            $0 += animationView.convert(b, to: node)
-                        }
-                    }
-                removeLastsLineNode(count: count)
-                animationView.updateTimelineAtCurrentKeyframe()
-                return (rect, [])
-            } else {
-                removeLastsLineNode(count: count)
-                animationView.updateTimelineAtCurrentKeyframe()
             }
         case .removeLastPlanes(let count):
             if isMakeRect {
@@ -3564,22 +3501,6 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 removeLastsPlaneNode(count: count)
-            }
-        case .insertLines(let livs):
-            insertNode(livs)
-            for liv in livs {
-                let lineView = linesView.elementViews[liv.index]
-                lineView.isHiddenPoints = animationView.editGrid != .full
-            }
-            
-            animationView.updateTimelineAtCurrentKeyframe()
-            if isMakeRect {
-                let rect = livs.reduce(into: Rect?.none) {
-                    if let b = linesView.elementViews[$1.index].node.bounds {
-                        $0 += animationView.convert(b, to: node)
-                    }
-                }
-                return (rect, [])
             }
         case .insertPlanes(let pivs):
             insertNode(pivs)
@@ -3625,20 +3546,6 @@ final class SheetView: View, @unchecked Sendable {
                     planesView.elementViews[piv.index].updateWithModel()
                 }
             }
-        case .removeLines(let lineIndexes):
-            if isMakeRect {
-                let rect = lineIndexes.reduce(into: Rect?.none) {
-                    if let b = linesView.elementViews[$1].node.bounds {
-                        $0 += animationView.convert(b, to: node)
-                    }
-                }
-                removeLinesNode(at: lineIndexes)
-                animationView.updateTimelineAtCurrentKeyframe()
-                return (rect, [])
-            } else {
-                removeLinesNode(at: lineIndexes)
-                animationView.updateTimelineAtCurrentKeyframe()
-            }
         case .removePlanes(let planeIndexes):
             if isMakeRect {
                 let rect = planeIndexes.reduce(into: Rect?.none) {
@@ -3667,6 +3574,36 @@ final class SheetView: View, @unchecked Sendable {
                 return (rect, [])
             } else {
                 insertNode(planeIndexes)
+            }
+        case .setKeyPlaneValues(let kvs):
+            var rect: Rect?, nodes = [Node]()
+            for kv in kvs {
+                let planeValue = kv.value, ki = kv.index
+                let planeIVs = planeValue.moveIndexValues.map {
+                    IndexValue(value: animationView.elementViews[ki]
+                        .planesView.elementViews[$0.value].model,
+                               index: $0.index)
+                }
+                animationView.elementViews[ki].planesView.model = planeValue.planes
+                if isMakeRect {
+                    animationView.elementViews[kv.index].planesView.insert(planeIVs)
+                    
+                    rect += planeIVs.reduce(into: Rect?.none) {
+                        let planeNode = animationView.elementViews[kv.index].planesView
+                            .elementViews[$1.index].node.clone
+                        planeNode.fillType = .color(.selected)
+                        if let b = planeNode.bounds {
+                            $0 += animationView.convert(b, to: node)
+                        }
+                        nodes.append(planeNode)
+                    }
+                    
+                } else {
+                    animationView.elementViews[kv.index].planesView.insert(planeIVs)
+                }
+            }
+            if isMakeRect {
+                return (rect, nodes)
             }
         case .changeToDraft(let isReverse):
             if isReverse {
@@ -3755,6 +3692,23 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 return (node.bounds, [])
             }
+            
+        case .changedColors(let colorValue):
+            changeColorsNode(colorValue)
+            
+            if isMakeRect {
+                let rect = colorValue.planeIndexes.reduce(into: Rect?.none) {
+                    if let b = planesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
+                } + colorValue.lineIndexes.reduce(into: Rect?.none) {
+                    if let b = linesView.elementViews[$1].node.bounds {
+                        $0 += animationView.convert(b, to: node)
+                    }
+                }
+                return (rect, [])
+            }
+            
         case .insertTexts(let tivs):
             insertNode(tivs)
             
@@ -3851,21 +3805,7 @@ final class SheetView: View, @unchecked Sendable {
                 
                 selectedTextView = textsView.elementViews[ituv.index]
             }
-        case .changedColors(let colorValue):
-            changeColorsNode(colorValue)
             
-            if isMakeRect {
-                let rect = colorValue.planeIndexes.reduce(into: Rect?.none) {
-                    if let b = planesView.elementViews[$1].node.bounds {
-                        $0 += animationView.convert(b, to: node)
-                    }
-                } + colorValue.lineIndexes.reduce(into: Rect?.none) {
-                    if let b = linesView.elementViews[$1].node.bounds {
-                        $0 += animationView.convert(b, to: node)
-                    }
-                }
-                return (rect, [])
-            }
         case .insertBorders(let bivs):
             insertNode(bivs)
             if isMakeRect {
@@ -3886,16 +3826,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 removeBordersNode(at: borderIndexes)
             }
-        case .setRootKeyframeIndex(let rootKeyframeIndex):
-            if model.animation.rootIndex != rootKeyframeIndex {
-                unupdateModel.animation.rootIndex = rootKeyframeIndex
-                updateWithKeyframeIndex()
-                updateTimeline()
-                node.draw()
-                if isSleep {
-                    Sleep.start(atTime: 0.04)
-                }
-            }
+            
         case .insertKeyframes(let kivs):
             if !kivs.isEmpty {
                 animationView.insert(kivs)
@@ -3946,6 +3877,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
                 return (rect, [])
             }
+            
         case .insertKeyLines(let kvs):
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
@@ -3958,13 +3890,13 @@ final class SheetView: View, @unchecked Sendable {
                     }
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].linesView
+                        let lineNode = animationView.elementViews[kv.index].linesView
                             .elementViews[$1.index].node.clone
-                        node.lineType = .color(.selected)
-                        if let b = node.bounds {
+                        lineNode.lineType = .color(.selected)
+                        if let b = lineNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(lineNode)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -3988,13 +3920,13 @@ final class SheetView: View, @unchecked Sendable {
                     }
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].linesView
+                        let lineNode = animationView.elementViews[kv.index].linesView
                             .elementViews[$1.index].node.clone
-                        node.lineType = .color(.selected)
-                        if let b = node.bounds {
+                        lineNode.lineType = .color(.selected)
+                        if let b = lineNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(lineNode)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -4016,13 +3948,13 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[iv.index].linesView
+                        let lineNode = animationView.elementViews[iv.index].linesView
                             .elementViews[$1].node.clone
-                        node.lineType = .color(.removing)
-                        if let b = node.bounds {
+                        lineNode.lineType = .color(.removing)
+                        if let b = lineNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(lineNode)
                     }
                     
                     animationView.elementViews[iv.index].linesView.remove(at: iv.value)
@@ -4038,6 +3970,7 @@ final class SheetView: View, @unchecked Sendable {
                 updateWithKeyframeIndex()
                 updateTimeline()
             }
+            
         case .insertKeyPlanes(let kvs):
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
@@ -4045,13 +3978,13 @@ final class SheetView: View, @unchecked Sendable {
                     animationView.elementViews[kv.index].planesView.insert(kv.value)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].planesView
+                        let planeNode = animationView.elementViews[kv.index].planesView
                             .elementViews[$1.index].node.clone
-                        node.fillType = .color(.selected)
-                        if let b = node.bounds {
+                        planeNode.fillType = .color(.selected)
+                        if let b = planeNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(planeNode)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -4073,13 +4006,13 @@ final class SheetView: View, @unchecked Sendable {
                     }
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].planesView
+                        let planeNode = animationView.elementViews[kv.index].planesView
                             .elementViews[$1.index].node.clone
-                        node.fillType = .color(.selected)
-                        if let b = node.bounds {
+                        planeNode.fillType = .color(.selected)
+                        if let b = planeNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(planeNode)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -4101,13 +4034,13 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[iv.index].planesView
+                        let planeNode = animationView.elementViews[iv.index].planesView
                             .elementViews[$1].node.clone
-                        node.fillType = .color(.removing)
-                        if let b = node.bounds {
+                        planeNode.fillType = .color(.removing)
+                        if let b = planeNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(planeNode)
                     }
                     
                     animationView.elementViews[iv.index].planesView.remove(at: iv.value)
@@ -4121,6 +4054,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
                 updateWithKeyframeIndex()
             }
+            
         case .insertDraftKeyLines(let kvs):
             if isMakeRect {
                 var rect: Rect?, nodes = [Node]()
@@ -4130,10 +4064,10 @@ final class SheetView: View, @unchecked Sendable {
                                      atKeyframeIndex: kv.index)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].draftLinesView
+                        let lineNode = animationView.elementViews[kv.index].draftLinesView
                             .elementViews[$1.index].node.clone
-                        node.lineType = .color(.selected)
-                        if let b = node.bounds {
+                        lineNode.lineType = .color(.selected)
+                        if let b = lineNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
                     }
@@ -4155,13 +4089,13 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[iv.index].draftLinesView
+                        let lineNode = animationView.elementViews[iv.index].draftLinesView
                             .elementViews[$1].node.clone
-                        node.lineType = .color(.removing)
-                        if let b = node.bounds {
+                        lineNode.lineType = .color(.removing)
+                        if let b = lineNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(lineNode)
                     }
                     
                     animationView.elementViews[iv.index].draftLinesView.remove(at: iv.value)
@@ -4186,13 +4120,13 @@ final class SheetView: View, @unchecked Sendable {
                                       atKeyframeIndex: kv.index)
                     
                     rect += kv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[kv.index].draftPlanesView
+                        let planeNode = animationView.elementViews[kv.index].draftPlanesView
                             .elementViews[$1.index].node.clone
-                        node.fillType = .color(.selected)
-                        if let b = node.bounds {
+                        planeNode.fillType = .color(.selected)
+                        if let b = planeNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(planeNode)
                     }
                 }
                 updateWithKeyframeIndex()
@@ -4212,13 +4146,13 @@ final class SheetView: View, @unchecked Sendable {
                 var rect: Rect?, nodes = [Node]()
                 for iv in iivs {
                     rect += iv.value.reduce(into: Rect?.none) {
-                        let node = animationView.elementViews[iv.index].draftPlanesView
+                        let planeNode = animationView.elementViews[iv.index].draftPlanesView
                             .elementViews[$1].node.clone
-                        node.fillType = .color(.removing)
-                        if let b = node.bounds {
+                        planeNode.fillType = .color(.removing)
+                        if let b = planeNode.bounds {
                             $0 += animationView.convert(b, to: node)
                         }
-                        nodes.append(node)
+                        nodes.append(planeNode)
                     }
                     
                     animationView.elementViews[iv.index].draftPlanesView.remove(at: iv.value)
@@ -4249,13 +4183,13 @@ final class SheetView: View, @unchecked Sendable {
                 let rect = model.animation.keyframes.enumerated().reduce(into: Rect?.none) { (n, v) in
                     n += v.element.picture.lines.enumerated().reduce(into: Rect?.none) {
                         if idSet.contains($1.element.interID) {
-                            let node = animationView.elementViews[v.offset].linesView
+                            let lineNode = animationView.elementViews[v.offset].linesView
                                 .elementViews[$1.offset].node.clone
-                            node.lineType = .color(.selected)
-                            if let b = node.bounds {
+                            lineNode.lineType = .color(.selected)
+                            if let b = lineNode.bounds {
                                 $0 += animationView.convert(b, to: node)
                             }
-                            nodes.append(node)
+                            nodes.append(lineNode)
                         }
                     }
                 }
@@ -4271,6 +4205,21 @@ final class SheetView: View, @unchecked Sendable {
                     }
                 }
             }
+            
+        case .setRootKeyframeI(let rootKI):
+            if model.animation.rootIndex != rootKI {
+                let i = model.animation.index
+                unupdateModel.animation.rootIndex = rootKI
+                if i != model.animation.index {
+                    updateWithKeyframeIndex()
+                    updateTimeline()
+                    node.draw()
+                    if isSleep {
+                        Sleep.start(atTime: 0.04)
+                    }
+                }
+            }
+            
         case .setAnimationOption(let option):
             unupdateModel.animation.option = option
             updateTimeline()
@@ -4278,6 +4227,7 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 return (animationView.transformedPaddingTimelineBounds ?? node.bounds, [])
             }
+            
         case .insertNotes(let nivs):
             insertNode(nivs)
             if isMakeRect {
@@ -4310,6 +4260,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 removeNotesNode(at: noteIndexes)
             }
+            
         case .insertDraftNotes(let nivs):
             insertDraftNode(nivs)
             if isMakeRect {
@@ -4328,6 +4279,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 removeDraftNotesNode(at: noteIndexes)
             }
+            
         case .insertContents(let civs):
             insertNode(civs)
             
@@ -4371,6 +4323,7 @@ final class SheetView: View, @unchecked Sendable {
             } else {
                 removeContentsNode(at: contentIndexes)
             }
+            
         case .setScoreOption(let option):
             scoreView.option = option
             if isMakeRect {
@@ -4396,16 +4349,31 @@ final class SheetView: View, @unchecked Sendable {
     }
     @discardableResult
     private func appendNode(_ line: Line) -> SheetLineView {
-        linesView.append(line)
+        let lineView = linesView.append(line)
+        lineView.isHiddenPoints = animationView.editGrid != .full
+        animationView.updateTimelineAtCurrentKeyframe()
+        return lineView
+    }
+    private func appendNode(_ line: Line, atKeyframe ki: Int) -> SheetLineView {
+        let lineView = animationView.elementViews[ki].linesView.append(line)
+        lineView.isHiddenPoints = animationView.editGrid != .full
+        animationView.updateTimeline(atKeyframe: ki)
+        return lineView
     }
     private func appendNode(_ lines: [Line]) {
         linesView.append(lines)
     }
-    private func appendNode(_ planes: [Plane]) {
-        planesView.append(planes)
-    }
     private func removeLastsLineNode(count: Int) {
         linesView.removeLasts(count: count)
+        animationView.updateTimelineAtCurrentKeyframe()
+    }
+    private func removeLinesNode(at lineIndexes: [Int]) {
+        linesView.remove(at: lineIndexes)
+        animationView.updateTimelineAtCurrentKeyframe()
+    }
+    
+    private func appendNode(_ planes: [Plane]) {
+        planesView.append(planes)
     }
     private func removeLastsPlaneNode(count: Int) {
         planesView.removeLasts(count: count)
@@ -4415,9 +4383,6 @@ final class SheetView: View, @unchecked Sendable {
     }
     private func insertNode(_ pivs: [IndexValue<Plane>]) {
         planesView.insert(pivs)
-    }
-    private func removeLinesNode(at lineIndexes: [Int]) {
-        linesView.remove(at: lineIndexes)
     }
     private func removePlanesNode(at planeIndexes: [Int]) {
         planesView.remove(at: planeIndexes)
@@ -4616,6 +4581,79 @@ final class SheetView: View, @unchecked Sendable {
             backgroundUUColor = colorValue.uuColor
         }
     }
+    func update(_ colorValue: ColorValue) {
+        if !colorValue.planeIndexes.isEmpty {
+            var picture = model.picture
+            for pi in colorValue.planeIndexes {
+                picture.planes[pi].uuColor = colorValue.uuColor
+            }
+            unupdateModel.picture = picture
+            for pi in colorValue.planeIndexes {
+                planesView.elementViews[pi].updateColor()
+            }
+        } else if !colorValue.planeAnimationIndexes.isEmpty {
+            var keyframes = model.animation.keyframes
+            if colorValue.animationColors.count == colorValue.planeAnimationIndexes.count {
+                for (ki, v) in colorValue.planeAnimationIndexes.enumerated() {
+                    let uuColor = UUColor(colorValue.animationColors[ki],
+                                          id: colorValue.uuColor.id)
+                    for i in v.value {
+                        keyframes[v.index].picture.planes[i].uuColor = uuColor
+                    }
+                }
+            } else {
+                for v in colorValue.planeAnimationIndexes {
+                    for i in v.value {
+                        keyframes[v.index].picture.planes[i].uuColor = colorValue.uuColor
+                    }
+                }
+            }
+            unupdateModel.animation.keyframes = keyframes
+            for v in colorValue.planeAnimationIndexes {
+                for i in v.value {
+                    animationView.elementViews[v.index].planesView.elementViews[i].updateColor()
+                }
+            }
+        }
+        
+        if !colorValue.lineIndexes.isEmpty {
+            var picture = model.picture
+            for li in colorValue.lineIndexes {
+                picture.lines[li].uuColor = colorValue.uuColor
+            }
+            unupdateModel.picture = picture
+            for li in colorValue.lineIndexes {
+                linesView.elementViews[li].updateColor()
+            }
+        } else if !colorValue.lineAnimationIndexes.isEmpty {
+            var keyframes = model.animation.keyframes
+            if colorValue.animationColors.count == colorValue.lineAnimationIndexes.count {
+                for (ki, v) in colorValue.lineAnimationIndexes.enumerated() {
+                    let uuColor = UUColor(colorValue.animationColors[ki],
+                                          id: colorValue.uuColor.id)
+                    for i in v.value {
+                        keyframes[v.index].picture.lines[i].uuColor = uuColor
+                    }
+                }
+            } else {
+                for v in colorValue.lineAnimationIndexes {
+                    for i in v.value {
+                        keyframes[v.index].picture.lines[i].uuColor = colorValue.uuColor
+                    }
+                }
+            }
+            unupdateModel.animation.keyframes = keyframes
+            for v in colorValue.lineAnimationIndexes {
+                for i in v.value {
+                    animationView.elementViews[v.index].linesView.elementViews[i].updateColor()
+                }
+            }
+        }
+        
+        if colorValue.isBackground {
+            backgroundUUColor = colorValue.uuColor
+        }
+    }
     
     private func insertNode(_ nivs: [IndexValue<Note>]) {
         scoreView.insert(nivs)
@@ -4657,278 +4695,450 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func append(_ line: Line) {
-        let undoItem = SheetUndoItem.removeLastLines(count: 1)
-        let redoItem = SheetUndoItem.appendLine(line)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeLastLines(count: 1), redo: .appendLine(line),
+            isKeyframe: true)
+    }
+    func append(_ line: Line, atRoot rootKI: Int) {
+        let ki = model.animation.index(atRoot: rootKI)
+        set(undo: .removeLastKeyLines(.init(value: 1, index: ki)),
+            redo: .appendKeyLine(.init(value: line, index: ki)),
+            rootKI: rootKI)
     }
     func append(_ lines: [Line]) {
         if lines.count == 1 {
             append(lines[0])
         } else {
-            let undoItem = SheetUndoItem.removeLastLines(count: lines.count)
-            let redoItem = SheetUndoItem.appendLines(lines)
-            append(undo: undoItem, redo: redoItem)
-            set(redoItem)
+            set(undo: .removeLastLines(count: lines.count), redo: .appendLines(lines),
+                isKeyframe: true)
         }
     }
-    func append(_ planes: [Plane]) {
-        let undoItem = SheetUndoItem.removeLastPlanes(count: planes.count)
-        let redoItem = SheetUndoItem.appendPlanes(planes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func append(_ kvs: [IndexValue<[Line]>]) {
+        let vs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].picture.lines
+            let livs = kv.value.enumerated().map {
+                IndexValue(value: $0.element, index: lines.count + $0.offset)
+            }
+            return IndexValue(value: livs, index: kv.index)
+        }
+        insertKeyLines(vs)
     }
     func insert(_ livs: [IndexValue<Line>]) {
-        let undoItem = SheetUndoItem.removeLines(lineIndexes: livs.map { $0.index })
-        let redoItem = SheetUndoItem.insertLines(livs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeLines(lineIndexes: livs.map { $0.index }),
+            redo: .insertLines(livs),
+            isKeyframe: true)
     }
-    func insert(_ pivs: [IndexValue<Plane>]) {
-        let undoItem = SheetUndoItem.removePlanes(planeIndexes: pivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertPlanes(pivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            insert(kvs[0].value)
+            return
+        }
+        
+        let ovs = kvs.map { kv in
+            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
+        }
+        set(undo: .removeKeyLines(ovs), redo: .insertKeyLines(kvs),
+            isKeyframe: true)
     }
-    
     func replace(_ line: Line, at i: Int) {
         replace(IndexValue(value: line, index: i))
     }
-    func replace(_ lineV: IndexValue<Line>) {
-        let undoItem = SheetUndoItem.replaceLines([IndexValue(value: model.picture.lines[lineV.index],
-                                                              index: lineV.index)])
-        let redoItem = SheetUndoItem.replaceLines([lineV])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ liv: IndexValue<Line>) {
+        set(undo: .replaceLines([IndexValue(value: model.picture.lines[liv.index],
+                                            index: liv.index)]),
+            redo: .replaceLines([liv]),
+            isKeyframe: true)
     }
-    func replace(_ lineVs: [IndexValue<Line>]) {
-        let undoItem = SheetUndoItem.replaceLines(lineVs.map { .init(value: model.picture.lines[$0.index], index: $0.index) })
-        let redoItem = SheetUndoItem.replaceLines(lineVs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ livs: [IndexValue<Line>]) {
+        set(undo: .replaceLines(livs.map { .init(value: model.picture.lines[$0.index],
+                                                 index: $0.index) }),
+            redo: .replaceLines(livs),
+            isKeyframe: true)
+    }
+    func replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            replace(kvs[0].value)
+            return
+        }
+        
+        let ovs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].picture.lines
+            let livs = kv.value.map { IndexValue(value: lines[$0.index], index: $0.index) }
+            return IndexValue(value: livs, index: kv.index)
+        }
+        set(undo: .replaceKeyLines(ovs), redo: .replaceKeyLines(kvs),
+            isKeyframe: true)
     }
     func capture(old oldLine: Line, at i: Int) {
         capture(old: IndexValue(value: oldLine, index: i))
     }
-    func capture(old oldLineV: IndexValue<Line>) {
-        let undoItem = SheetUndoItem.replaceLines([oldLineV])
-        let redoItem = SheetUndoItem.replaceLines([IndexValue(value: model.picture.lines[oldLineV.index],
-                                                              index: oldLineV.index)])
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldLIV: IndexValue<Line>) {
+        cap(undo: .replaceLines([oldLIV]),
+            redo: .replaceLines([IndexValue(value: model.picture.lines[oldLIV.index],
+                                            index: oldLIV.index)]),
+            isKeyframe: true)
     }
-    func capture(old oldLineVs: [IndexValue<Line>]) {
-        let undoItem = SheetUndoItem.replaceLines(oldLineVs)
-        let redoItem = SheetUndoItem.replaceLines(oldLineVs.map { .init(value: model.picture.lines[$0.index], index: $0.index) })
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldLIVs: [IndexValue<Line>]) {
+        cap(undo: .replaceLines(oldLIVs),
+            redo: .replaceLines(oldLIVs.map { .init(value: model.picture.lines[$0.index],
+                                                    index: $0.index) }),
+            isKeyframe: true)
+    }
+    func removeLines(at lis: [Int]) {
+        let livs = lis.map { IndexValue(value: model.picture.lines[$0], index: $0) }
+        set(undo: .insertLines(livs), redo: .removeLines(lineIndexes: lis),
+            isKeyframe: true)
+    }
+    func removeKeyLines(_ kvs: [IndexValue<[Int]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            removeLines(at: kvs[0].value)
+            return
+        }
+        
+        let ovs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].picture.lines
+            let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
+            return IndexValue(value: livs, index: kv.index)
+        }
+        set(undo: .insertKeyLines(ovs), redo: .removeKeyLines(kvs),
+            isKeyframe: true)
     }
     
+    func append(_ planes: [Plane]) {
+        set(undo: .removeLastPlanes(count: planes.count), redo: .appendPlanes(planes),
+            isKeyframe: true)
+    }
+    func append(_ kvs: [IndexValue<[Plane]>]) {
+        let vs = kvs.map { kv in
+            let planes = model.animation.keyframes[kv.index].picture.planes
+            let pivs = kv.value.enumerated().map {
+                IndexValue(value: $0.element, index: planes.count + $0.offset)
+            }
+            return IndexValue(value: pivs, index: kv.index)
+        }
+        insertKeyPlanes(vs)
+    }
+    func insert(_ pivs: [IndexValue<Plane>]) {
+        set(undo: .removePlanes(planeIndexes: pivs.map { $0.index }),
+            redo: .insertPlanes(pivs),
+            isKeyframe: true)
+    }
+    func insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            insert(kvs[0].value)
+            return
+        }
+        
+        let okvs = kvs.map { kv in
+            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
+        }
+        set(undo: .removeKeyPlanes(okvs), redo: .insertKeyPlanes(kvs),
+            isKeyframe: true)
+    }
     func replace(_ plane: Plane, at i: Int) {
         replace(IndexValue(value: plane, index: i))
     }
-    func replace(_ planeV: IndexValue<Plane>) {
-        let undoItem = SheetUndoItem.replacePlanes([IndexValue(value: model.picture.planes[planeV.index],
-                                                              index: planeV.index)])
-        let redoItem = SheetUndoItem.replacePlanes([planeV])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ piv: IndexValue<Plane>) {
+        set(undo: .replacePlanes([IndexValue(value: model.picture.planes[piv.index],
+                                             index: piv.index)]),
+            redo: .replacePlanes([piv]),
+            isKeyframe: true)
     }
-    func replace(_ planeVs: [IndexValue<Plane>]) {
-        let undoItem = SheetUndoItem.replacePlanes(planeVs.map { .init(value: model.picture.planes[$0.index], index: $0.index) })
-        let redoItem = SheetUndoItem.replacePlanes(planeVs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ pivs: [IndexValue<Plane>]) {
+        set(undo: .replacePlanes(pivs.map { .init(value: model.picture.planes[$0.index],
+                                                  index: $0.index) }),
+            redo: .replacePlanes(pivs),
+            isKeyframe: true)
+    }
+    func replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            replace(kvs[0].value)
+            return
+        }
+        
+        let okvs = kvs.map { kv in
+            let planes = model.animation.keyframes[kv.index].picture.planes
+            let pivs = kv.value.map {
+                IndexValue(value: planes[$0.index], index: $0.index)
+            }
+            return IndexValue(value: pivs, index: kv.index)
+        }
+        set(undo: .replaceKeyPlanes(okvs), redo: .replaceKeyPlanes(kvs),
+            isKeyframe: true)
     }
     func capture(old oldPlane: Plane, at i: Int) {
         capture(old: IndexValue(value: oldPlane, index: i))
     }
-    func capture(old oldPlaneV: IndexValue<Plane>) {
-        let undoItem = SheetUndoItem.replacePlanes([oldPlaneV])
-        let redoItem = SheetUndoItem.replacePlanes([IndexValue(value: model.picture.planes[oldPlaneV.index],
-                                                              index: oldPlaneV.index)])
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldPIV: IndexValue<Plane>) {
+        cap(undo: .replacePlanes([oldPIV]),
+            redo: .replacePlanes([IndexValue(value: model.picture.planes[oldPIV.index],
+                                             index: oldPIV.index)]),
+            isKeyframe: true)
     }
-    func capture(old oldPlaneVs: [IndexValue<Plane>]) {
-        let undoItem = SheetUndoItem.replacePlanes(oldPlaneVs)
-        let redoItem = SheetUndoItem.replacePlanes(oldPlaneVs.map { .init(value: model.picture.planes[$0.index], index: $0.index) })
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldPIVs: [IndexValue<Plane>]) {
+        cap(undo: .replacePlanes(oldPIVs),
+            redo: .replacePlanes(oldPIVs.map { .init(value: model.picture.planes[$0.index],
+                                                     index: $0.index) }),
+            isKeyframe: true)
     }
-    
-    func removeLines(at lineIndexes: [Int]) {
-        let livs = lineIndexes.map {
-            IndexValue(value: model.picture.lines[$0], index: $0)
+    func removePlanes(at pis: [Int]) {
+        let pivs = pis.map { IndexValue(value: model.picture.planes[$0], index: $0) }
+        set(undo: .insertPlanes(pivs), redo: .removePlanes(planeIndexes: pis),
+            isKeyframe: true)
+    }
+    func removeKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
+        if kvs.count == 1 && kvs[0].index == model.animation.index {
+            removePlanes(at: kvs[0].value)
+            return
         }
-        let undoItem = SheetUndoItem.insertLines(livs)
-        let redoItem = SheetUndoItem.removeLines(lineIndexes: lineIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removePlanes(at planeIndexes: [Int]) {
-        let pivs = planeIndexes.map {
-            IndexValue(value: model.picture.planes[$0], index: $0)
+        
+        let okvs = kvs.map { kv in
+            let planes = model.animation.keyframes[kv.index].picture.planes
+            let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
+            return IndexValue(value: pivs, index: kv.index)
         }
-        let undoItem = SheetUndoItem.insertPlanes(pivs)
-        let redoItem = SheetUndoItem.removePlanes(planeIndexes: planeIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertKeyPlanes(okvs), redo: .removeKeyPlanes(kvs),
+            isKeyframe: true)
     }
     
-    func set(_ picture: Picture) {
-        let undoItem = SheetUndoItem.setPicture(model.picture)
-        let redoItem = SheetUndoItem.setPicture(picture)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func set(_ planeValue: PlaneValue) {
-        var isArray = Array(repeating: false, count: model.picture.planes.count)
+    func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
+        var isArray = Array(repeating: false, count: picture.planes.count)
         for v in planeValue.moveIndexValues {
             isArray[v.value] = true
         }
-        let oldPlanes = model.picture.planes.enumerated().compactMap {
+        let oldPlanes = picture.planes.enumerated().compactMap {
             isArray[$0.offset] ? nil : $0.element
         }
         let oldVs = planeValue.moveIndexValues
             .map { IndexValue(value: $0.index, index: $0.value) }
             .sorted { $0.index < $1.index }
-        let oldPlaneValue = PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
-        let undoItem = SheetUndoItem.setPlaneValue(oldPlaneValue)
-        let redoItem = SheetUndoItem.setPlaneValue(planeValue)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        return PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
+    }
+    func set(_ planeValue: PlaneValue) {
+        set(undo: .setPlaneValue(oldPlaneValue(from: planeValue, in: model.picture)),
+            redo: .setPlaneValue(planeValue),
+            isKeyframe: true)
+    }
+    func set(_ pvkvs: [IndexValue<PlaneValue>]) {
+        let oldPVKVs = pvkvs.map {
+            let picture = model.animation.keyframes[$0.index].picture
+            let oldPlaneValue = oldPlaneValue(from: $0.value, in: picture)
+            return IndexValue(value: oldPlaneValue, index: $0.index)
+        }
+        set(undo: .setKeyPlaneValues(oldPVKVs),
+            redo: .setKeyPlaneValues(pvkvs),
+            isKeyframe: true)
     }
     
+    
+    func appendDraftKeyLines(_ kvs: [IndexValue<[Line]>]) {
+        let nkvs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].draftPicture.lines
+            let livs = kv.value.enumerated().map {
+                IndexValue(value: $0.element, index: lines.count + $0.offset)
+            }
+            return IndexValue(value: livs, index: kv.index)
+        }
+        insertDraftKeyLines(nkvs)
+    }
     func insertDraft(_ livs: [IndexValue<Line>]) {
-        let undoItem = SheetUndoItem.removeDraftLines(lineIndexes: livs.map { $0.index })
-        let redoItem = SheetUndoItem.insertDraftLines(livs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeDraftLines(lineIndexes: livs.map { $0.index }),
+            redo: .insertDraftLines(livs),
+            isKeyframe: true)
     }
-    func insertDraft(_ pivs: [IndexValue<Plane>]) {
-        let undoItem = SheetUndoItem.removeDraftPlanes(planeIndexes: pivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertDraftPlanes(pivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
+        let okvs = kvs.map { kv in
+            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
+        }
+        set(undo: .removeDraftKeyLines(okvs), redo: .insertDraftKeyLines(kvs),
+            isKeyframe: true)
     }
-    func removeDraftLines(at lineIndexes: [Int]) {
-        let livs = lineIndexes.map {
+    func set(_ kvs: [IndexValue<[IndexValue<InterOption>]>]) {
+        let okvs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].picture.lines
+            let iovs = kv.value.map {
+                IndexValue(value: lines[$0.index].interOption, index: $0.index)
+            }
+            return IndexValue(value: iovs, index: kv.index)
+        }
+        set(undo: .setLineIDs(okvs), redo: .setLineIDs(kvs),
+            isKeyframe: true)
+    }
+    func removeDraftLines(at lis: [Int]) {
+        let livs = lis.map {
             IndexValue(value: model.draftPicture.lines[$0], index: $0)
         }
-        let undoItem = SheetUndoItem.insertDraftLines(livs)
-        let redoItem = SheetUndoItem.removeDraftLines(lineIndexes: lineIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertDraftLines(livs), redo: .removeDraftLines(lineIndexes: lis),
+            isKeyframe: true)
     }
-    func removeDraftPlanes(at planeIndexes: [Int]) {
-        let pivs = planeIndexes.map {
-            IndexValue(value: model.draftPicture.planes[$0], index: $0)
+    func removeDraftKeyLines(_ kvs: [IndexValue<[Int]>]) {
+        let okvs = kvs.map { kv in
+            let lines = model.animation.keyframes[kv.index].draftPicture.lines
+            let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
+            return IndexValue(value: livs, index: kv.index)
         }
-        let undoItem = SheetUndoItem.insertDraftPlanes(pivs)
-        let redoItem = SheetUndoItem.removeDraftPlanes(planeIndexes: planeIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertDraftKeyLines(okvs), redo: .removeDraftKeyLines(kvs),
+            isKeyframe: true)
     }
     
+    func appendDraftKeyPlanes(_ kvs: [IndexValue<[Plane]>]) {
+        let nkvs = kvs.map { kv in
+            let planes = model.animation.keyframes[kv.index].draftPicture.planes
+            let pivs = kv.value.enumerated().map {
+                IndexValue(value: $0.element, index: planes.count + $0.offset)
+            }
+            return IndexValue(value: pivs, index: kv.index)
+        }
+        insertKeyPlanes(nkvs)
+    }
+    func insertDraft(_ pivs: [IndexValue<Plane>]) {
+        set(undo: .removeDraftPlanes(planeIndexes: pivs.map { $0.index }),
+            redo: .insertDraftPlanes(pivs),
+            isKeyframe: true)
+    }
+    func insertDraftKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
+        let ovs = values.map { kv in
+            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
+        }
+        set(undo: .removeDraftKeyPlanes(ovs), redo: .insertDraftKeyPlanes(values),
+            isKeyframe: true)
+    }
+    func removeDraftPlanes(at pis: [Int]) {
+        let pivs = pis.map {
+            IndexValue(value: model.draftPicture.planes[$0], index: $0)
+        }
+        set(undo: .insertDraftPlanes(pivs), redo: .removeDraftPlanes(planeIndexes: pis),
+            isKeyframe: true)
+    }
+    func removeDraftKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
+        let ovs = kvs.map { kv in
+            let planes = model.animation.keyframes[kv.index].draftPicture.planes
+            let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
+            return IndexValue(value: pivs, index: kv.index)
+        }
+        set(undo: .insertDraftKeyPlanes(ovs), redo: .removeDraftKeyPlanes(kvs),
+            isKeyframe: true)
+    }
+    
+    func set(_ picture: Picture) {
+        set(undo: .setPicture(model.picture), redo: .setPicture(picture),
+            isKeyframe: true)
+    }
+    func removeDraft() {
+        setDraft(Picture())
+    }
     func setDraft(_ draftPicture: Picture) {
-        let undoItem = SheetUndoItem.setDraftPicture(model.draftPicture)
-        let redoItem = SheetUndoItem.setDraftPicture(draftPicture)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .setDraftPicture(model.draftPicture), redo: .setDraftPicture(draftPicture),
+            isKeyframe: true)
     }
     func changeToDraft() {
         if !model.draftPicture.isEmpty {
             removeDraft()
         }
-        let undoItem = SheetUndoItem.changeToDraft(isReverse: true)
-        let redoItem = SheetUndoItem.changeToDraft(isReverse: false)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .changeToDraft(isReverse: true), redo: .changeToDraft(isReverse: false),
+            isKeyframe: true)
     }
-    func removeDraft() {
-        setDraft(Picture())
+    
+    func set(_ cv: ColorValue, oldColorValue: ColorValue) {//
+        set(undo: .changedColors(oldColorValue),
+            redo: .changedColors(cv),
+            isKeyframe: true)
+    }
+    func set(_ cv: ColorValue) {
+        set(undo: .changedColors(model.currentColorValue(from: cv)),
+            redo: .changedColors(cv),
+            isKeyframe: true)
+    }
+    func capture(_ cv: ColorValue, old oldCV: ColorValue) {
+        cap(undo: .changedColors(oldCV),
+            redo: .changedColors(cv),
+            isKeyframe: true)
+    }
+    
+    func insert(_ kivs: [IndexValue<Keyframe>]) {
+        set(undo: .removeKeyframes(kivs.map { $0.index }),
+            redo: .insertKeyframes(kivs))
+    }
+    func set(_ koivs: [IndexValue<KeyframeOption>]) {
+        let keyframes = model.animation.keyframes
+        let okoivs = koivs.map { IndexValue(value: keyframes[$0.index].option,
+                                            index: $0.index) }
+        set(undo: .setKeyframeOptions(okoivs), redo: .setKeyframeOptions(koivs))
+    }
+    func set(keyframeBeat beat: Rational, at ki: Int) {
+        let ko = model.animation.keyframes[ki].option
+        set(undo: .setKeyframeOptions([IndexValue(value: ko, index: ki)]),
+            redo: .setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
+    }
+    func capture(keyframeBeat beat: Rational, oldBeat: Rational, at ki: Int) {
+        let ko = model.animation.keyframes[ki].option
+        cap(undo: .setKeyframeOptions([IndexValue(value: ko.with(beat: oldBeat), index: ki)]),
+            redo: .setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
+    }
+    func capture(_ koivs: [IndexValue<KeyframeOption>], old okoivs: [IndexValue<KeyframeOption>]) {
+        cap(undo: .setKeyframeOptions(okoivs), redo: .setKeyframeOptions(koivs))
+    }
+    func removeKeyframes(at kis: [Int]) {
+        let kivs = kis.map { IndexValue(value: model.animation.keyframes[$0], index: $0) }
+        set(undo: .insertKeyframes(kivs), redo: .removeKeyframes(kis))
+    }
+    
+    func set(_ option: AnimationOption) {
+        set(undo: .setAnimationOption(model.animation.option),
+            redo: .setAnimationOption(option))
+    }
+    func capture(old oldOption: AnimationOption) {
+        cap(undo: .setAnimationOption(oldOption),
+            redo: .setAnimationOption(model.animation.option))
     }
     
     func append(_ text: Text) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: [model.texts.count])
-        let redoItem = SheetUndoItem.insertTexts([IndexValue(value: text,
-                                                             index: model.texts.count)])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeTexts([model.texts.count]),
+            redo: .insertTexts([.init(value: text, index: model.texts.count)]))
     }
     func append(_ texts: [Text]) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: Array(model.texts.count ..< (model.texts.count + texts.count)))
-        let redoItem = SheetUndoItem.insertTexts(texts.enumerated().map {
-            IndexValue(value: $0.element, index: model.texts.count + $0.offset)
-        })
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeTexts(Array(model.texts.count ..< (model.texts.count + texts.count))),
+            redo: .insertTexts(texts.enumerated().map { IndexValue(value: $0.element, index: model.texts.count + $0.offset) }))
     }
     func insert(_ tivs: [IndexValue<Text>]) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: tivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertTexts(tivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeText(at i: Int) {
-        let undoItem = SheetUndoItem.insertTexts([IndexValue(value: model.texts[i],
-                                                             index: i)])
-        let redoItem = SheetUndoItem.removeTexts(textIndexes: [i])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeTexts(tivs.map { $0.index }), redo: .insertTexts(tivs))
     }
     func replace(_ text: Text, at i: Int) {
         replace(IndexValue(value: text, index: i))
     }
-    func replace(_ textV: IndexValue<Text>) {
-        let undoItem = SheetUndoItem.replaceTexts([IndexValue(value: model.texts[textV.index],
-                                                              index: textV.index)])
-        let redoItem = SheetUndoItem.replaceTexts([textV])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ tiv: IndexValue<Text>) {
+        set(undo: .replaceTexts([.init(value: model.texts[tiv.index],
+                                       index: tiv.index)]),
+            redo: .replaceTexts([tiv]))
     }
-    func replace(_ textVs: [IndexValue<Text>]) {
-        let undoItem = SheetUndoItem.replaceTexts(textVs.map { .init(value: model.texts[$0.index], index: $0.index) })
-        let redoItem = SheetUndoItem.replaceTexts(textVs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ tivs: [IndexValue<Text>]) {
+        set(undo: .replaceTexts(tivs.map { .init(value: model.texts[$0.index],
+                                                 index: $0.index) }),
+            redo: .replaceTexts(tivs))
     }
     func capture(old oldText: Text, at i: Int) {
         capture(old: IndexValue(value: oldText, index: i))
     }
-    func capture(old oldTextV: IndexValue<Text>) {
-        let undoItem = SheetUndoItem.replaceTexts([oldTextV])
-        let redoItem = SheetUndoItem.replaceTexts([IndexValue(value: model.texts[oldTextV.index],
-                                                              index: oldTextV.index)])
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldTIV: IndexValue<Text>) {
+        cap(undo: .replaceTexts([oldTIV]),
+            redo: .replaceTexts([IndexValue(value: model.texts[oldTIV.index],
+                                            index: oldTIV.index)]))
     }
-    func capture(old oldTextVs: [IndexValue<Text>]) {
-        let undoItem = SheetUndoItem.replaceTexts(oldTextVs)
-        let redoItem = SheetUndoItem.replaceTexts(oldTextVs.map { .init(value: model.texts[$0.index], index: $0.index) })
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldTIVs: [IndexValue<Text>]) {
+        cap(undo: .replaceTexts(oldTIVs),
+            redo: .replaceTexts(oldTIVs.map { .init(value: model.texts[$0.index],
+                                                    index: $0.index) }))
     }
-    func removeText(at textIndexes: [Int]) {
-        let tivs = textIndexes.map {
-            IndexValue(value: model.texts[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertTexts(tivs)
-        let redoItem = SheetUndoItem.removeTexts(textIndexes: textIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func removeText(at ti: Int) {
+        set(undo: .insertTexts([IndexValue(value: model.texts[ti], index: ti)]),
+            redo: .removeTexts([ti]))
     }
-    func removeTexts(at textIndexes: [Int]) {
-        let tivs = textIndexes.map {
-            IndexValue(value: model.texts[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertTexts(tivs)
-        let redoItem = SheetUndoItem.removeTexts(textIndexes: textIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func removeTexts(at tis: [Int]) {
+        let tivs = tis.map { IndexValue(value: model.texts[$0], index: $0) }
+        set(undo: .insertTexts(tivs), redo: .removeTexts(tis))
     }
     
-    func capture(_ ituv: IndexValue<TextValue>,
-                 old oituv: IndexValue<TextValue>) {
-        let undoItem = SheetUndoItem.replaceString(oituv)
-        let redoItem = SheetUndoItem.replaceString(ituv)
-        append(undo: undoItem, redo: redoItem)
+    func capture(_ ituv: IndexValue<TextValue>, old oituv: IndexValue<TextValue>) {
+        cap(undo: .replaceString(oituv), redo: .replaceString(ituv))
     }
     func replace(_ ituv: IndexValue<TextValue>) {
         let oldText = textsView.elementViews[ituv.index].model
@@ -4943,499 +5153,140 @@ final class SheetView: View, @unchecked Sendable {
                               replacedRange: oldRange,
                               origin: oldOrigin, size: oldSize,
                               widthCount: oldWidthCount)
-        let undoItem = SheetUndoItem.replaceString(IndexValue(value: oituv,
-                                                              index: ituv.index))
-        let redoItem = SheetUndoItem.replaceString(ituv)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func capture(_ colorUndoValue: ColorValue, oldColorValue: ColorValue) {
-        let undoItem = SheetUndoItem.changedColors(oldColorValue)
-        let redoItem = SheetUndoItem.changedColors(colorUndoValue)
-        append(undo: undoItem, redo: redoItem)
-    }
-    func set(_ colorValue: ColorValue, oldColorValue: ColorValue) {
-        let undoItem = SheetUndoItem.changedColors(oldColorValue)
-        let redoItem = SheetUndoItem.changedColors(colorValue)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .replaceString(IndexValue(value: oituv, index: ituv.index)),
+            redo: .replaceString(ituv))
     }
     
     func append(_ note: Note) {
         append([note])
     }
     func append(_ notes: [Note]) {
-        let undoItem = SheetUndoItem.removeNotes(noteIndexes: Array(model.score.notes.count ..< (model.score.notes.count + notes.count)))
-        let redoItem = SheetUndoItem.insertNotes(notes.enumerated().map {
+        set(undo: .removeNotes(noteIndexes: Array(model.score.notes.count ..< (model.score.notes.count + notes.count))),
+            redo: .insertNotes(notes.enumerated().map {
             IndexValue(value: $0.element, index: model.score.notes.count + $0.offset)
-        })
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        }))
     }
     func captureAppend(_ note: Note) {
         captureAppend([note])
     }
     func captureAppend(_ notes: [Note]) {
-        let undoItem = SheetUndoItem.removeNotes(noteIndexes: Array((model.score.notes.count - notes.count) ..< (model.score.notes.count)))
-        let redoItem = SheetUndoItem.insertNotes(notes.enumerated().map {
+        cap(undo: .removeNotes(noteIndexes: Array((model.score.notes.count - notes.count) ..< (model.score.notes.count))),
+            redo: .insertNotes(notes.enumerated().map {
             IndexValue(value: $0.element, index: model.score.notes.count - notes.count + $0.offset)
-        })
-        append(undo: undoItem, redo: redoItem)
+        }))
     }
     func insert(_ nivs: [IndexValue<Note>]) {
-        let undoItem = SheetUndoItem.removeNotes(noteIndexes: nivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertNotes(nivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeNotes(noteIndexes: nivs.map { $0.index }),
+            redo: .insertNotes(nivs))
     }
-    
     func capture(_ note: Note, old oldNote: Note, at ni: Int) {
         capture([.init(value: note, index: ni)], old: [.init(value: oldNote, index: ni)])
     }
     func capture(_ values: [IndexValue<Note>], old oldValues: [IndexValue<Note>]) {
-        let undoItem = SheetUndoItem.replaceNotes(oldValues)
-        let redoItem = SheetUndoItem.replaceNotes(values)
-        append(undo: undoItem, redo: redoItem)
+        cap(undo: .replaceNotes(oldValues), redo: .replaceNotes(values))
     }
     func replace(_ note: Note, at ni: Int) {
         replace([.init(value: note, index: ni)])
     }
     func replace(_ values: [IndexValue<Note>]) {
-        let undoItem = SheetUndoItem.replaceNotes(values.map { IndexValue(value: model.score.notes[$0.index], index: $0.index) })
-        let redoItem = SheetUndoItem.replaceNotes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .replaceNotes(values.map { IndexValue(value: model.score.notes[$0.index],
+                                                        index: $0.index) }),
+            redo: .replaceNotes(values))
     }
-    
     func removeNote(at i: Int) {
-        let undoItem = SheetUndoItem.insertNotes([IndexValue(value: model.score.notes[i],
-                                                             index: i)])
-        let redoItem = SheetUndoItem.removeNotes(noteIndexes: [i])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertNotes([IndexValue(value: model.score.notes[i], index: i)]),
+            redo: .removeNotes(noteIndexes: [i]))
     }
-    func removeNote(at noteIndexes: [Int]) {
-        let nivs = noteIndexes.map {
-            IndexValue(value: model.score.notes[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertNotes(nivs)
-        let redoItem = SheetUndoItem.removeNotes(noteIndexes: noteIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func removeNotes(at noteIndexes: [Int]) {
+        let nivs = noteIndexes.map { IndexValue(value: model.score.notes[$0], index: $0) }
+        set(undo: .insertNotes(nivs), redo: .removeNotes(noteIndexes: noteIndexes))
     }
     
     func insertDraft(_ nivs: [IndexValue<Note>]) {
-        let undoItem = SheetUndoItem.removeDraftNotes(noteIndexes: nivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertDraftNotes(nivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeDraftNotes(noteIndexes: nivs.map { $0.index }),
+            redo: .insertDraftNotes(nivs))
     }
-    func removeDraftNotes(at noteIndexes: [Int]) {
-        let nivs = noteIndexes.map {
-            IndexValue(value: model.score.draftNotes[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertDraftNotes(nivs)
-        let redoItem = SheetUndoItem.removeDraftNotes(noteIndexes: noteIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func removeDraftNotes(at nis: [Int]) {
+        let nivs = nis.map { IndexValue(value: model.score.draftNotes[$0], index: $0) }
+        set(undo: .insertDraftNotes(nivs), redo: .removeDraftNotes(noteIndexes: nis))
+    }
+    
+    func set(_ option: ScoreOption) {
+        set(undo: .setScoreOption(model.score.option), redo: .setScoreOption(option))
+    }
+    func capture(_ option: ScoreOption, old oldOption: ScoreOption) {
+        cap(undo: .setScoreOption(oldOption), redo: .setScoreOption(option))
     }
     
     func append(_ content: Content) {
-        let undoItem = SheetUndoItem.removeContents(contentIndexes: [model.contents.count])
-        let redoItem = SheetUndoItem.insertContents([IndexValue(value: content,
-                                                                index: model.contents.count)])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .removeContents(contentIndexes: [model.contents.count]),
+            redo: .insertContents([IndexValue(value: content, index: model.contents.count)]))
     }
     func replace(_ content: Content, at i: Int) {
         replace(IndexValue(value: content, index: i))
     }
-    func replace(_ contentV: IndexValue<Content>) {
-        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: model.contents[contentV.index],
-                                                                 index: contentV.index)])
-        let redoItem = SheetUndoItem.replaceContents([contentV])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ civ: IndexValue<Content>) {
+        set(undo: .replaceContents([IndexValue(value: model.contents[civ.index],
+                                               index: civ.index)]),
+            redo: .replaceContents([civ]))
     }
-    func replace(_ contentVs: [IndexValue<Content>]) {
-        let undoItem = SheetUndoItem.replaceContents(contentVs.map { .init(value: model.contents[$0.index], index: $0.index) })
-        let redoItem = SheetUndoItem.replaceContents(contentVs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func replace(_ civs: [IndexValue<Content>]) {
+        set(undo: .replaceContents(civs.map { .init(value: model.contents[$0.index],
+                                                    index: $0.index) }),
+            redo: .replaceContents(civs))
     }
     func capture(old oldContent: Content, at i: Int) {
-        let undoItem = SheetUndoItem.replaceContents([IndexValue(value: oldContent, index: i)])
-        let redoItem = SheetUndoItem.replaceContents([IndexValue(value: model.contents[i], index: i)])
-        append(undo: undoItem, redo: redoItem)
+        cap(undo: .replaceContents([IndexValue(value: oldContent, index: i)]),
+            redo: .replaceContents([IndexValue(value: model.contents[i], index: i)]))
     }
-    func capture(old oldContentVs: [IndexValue<Content>]) {
-        let undoItem = SheetUndoItem.replaceContents(oldContentVs)
-        let redoItem = SheetUndoItem.replaceContents(oldContentVs.map { .init(value: model.contents[$0.index], index: $0.index) })
-        append(undo: undoItem, redo: redoItem)
+    func capture(old oldCIVs: [IndexValue<Content>]) {
+        cap(undo: .replaceContents(oldCIVs),
+            redo: .replaceContents(oldCIVs.map { .init(value: model.contents[$0.index],
+                                                       index: $0.index) }))
     }
     func removeContent(at i: Int) {
-        let undoItem = SheetUndoItem.insertContents([IndexValue(value: model.contents[i],
-                                                                index: i)])
-        let redoItem = SheetUndoItem.removeContents(contentIndexes: [i])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertContents([IndexValue(value: model.contents[i], index: i)]),
+            redo: .removeContents(contentIndexes: [i]))
     }
-    func removeContents(at contentIndexes: [Int]) {
-        let civs = contentIndexes.map {
-            IndexValue(value: model.contents[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertContents(civs)
-        let redoItem = SheetUndoItem.removeContents(contentIndexes: contentIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    func removeContents(at cis: [Int]) {
+        let civs = cis.map { IndexValue(value: model.contents[$0], index: $0) }
+        set(undo: .insertContents(civs), redo: .removeContents(contentIndexes: cis))
     }
     
-    func append(_ border: Border) {
-        let undoItem = SheetUndoItem.removeBorders(borderIndexes: [model.borders.count])
-        let redoItem = SheetUndoItem.insertBorders([IndexValue(value: border,
-                                                               index: model.borders.count)])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
     func removeBorder(at i: Int) {
         let undoItem = SheetUndoItem.insertBorders([IndexValue(value: model.borders[i],
                                                                index: i)])
         let redoItem = SheetUndoItem.removeBorders(borderIndexes: [i])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: undoItem, redo: redoItem)
     }
     func capture(_ border: Border, old oldBorder: Border, at i: Int) {
         let undoItem1 = SheetUndoItem.insertBorders([IndexValue(value: oldBorder, index: i)])
         let redoItem1 = SheetUndoItem.removeBorders(borderIndexes: [i])
-        append(undo: undoItem1, redo: redoItem1)
+        cap(undo: undoItem1, redo: redoItem1)
         
         let undoItem0 = SheetUndoItem.removeBorders(borderIndexes: [i])
         let redoItem0 = SheetUndoItem.insertBorders([IndexValue(value: border, index: i)])
-        append(undo: undoItem0, redo: redoItem0)
-    }
-    
-    func insert(_ kivs: [IndexValue<Keyframe>]) {
-        let undoItem = SheetUndoItem.removeKeyframes(keyframeIndexes: kivs.map { $0.index })
-        let redoItem = SheetUndoItem.insertKeyframes(kivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeKeyframes(at indexes: [Int]) {
-        let kivs = indexes.map {
-            IndexValue(value: model.animation.keyframes[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertKeyframes(kivs)
-        let redoItem = SheetUndoItem.removeKeyframes(keyframeIndexes: indexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func set(_ koivs: [IndexValue<KeyframeOption>]) {
-        let keyframes = model.animation.keyframes
-        let okoivs = koivs.map {
-            IndexValue(value: keyframes[$0.index].option,
-                       index: $0.index)
-        }
-        let undoItem = SheetUndoItem.setKeyframeOptions(okoivs)
-        let redoItem = SheetUndoItem.setKeyframeOptions(koivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func set(beat: Rational, previousPosition: Point, nextPosition: Point,
-             at i: Int) {
-        let ko = KeyframeOption(beat: beat,
-                                previousPosition: previousPosition, nextPosition: nextPosition)
-        set([IndexValue(value: ko, index: i)])
-    }
-    func set(beat: Rational, at i: Int) {
-        let oko = model.animation.keyframes[i].option
-        let opo = [IndexValue(value: oko, index: i)]
-        
-        var nko = oko
-        nko.beat = beat
-        let npo = [IndexValue(value: nko, index: i)]
-        
-        let undoItem = SheetUndoItem.setKeyframeOptions(opo)
-        let redoItem = SheetUndoItem.setKeyframeOptions(npo)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func capture(beat: Rational, oldBeat: Rational, at i: Int) {
-        var oko = model.animation.keyframes[i].option
-        oko.beat = oldBeat
-        let opo = [IndexValue(value: oko, index: i)]
-        
-        var nko = model.animation.keyframes[i].option
-        nko.beat = beat
-        let npo = [IndexValue(value: nko, index: i)]
-        
-        let undoItem = SheetUndoItem.setKeyframeOptions(opo)
-        let redoItem = SheetUndoItem.setKeyframeOptions(npo)
-        append(undo: undoItem, redo: redoItem)
-    }
-    func capture(_ koivs: [IndexValue<KeyframeOption>], old okoivs: [IndexValue<KeyframeOption>]) {
-        let undoItem = SheetUndoItem.setKeyframeOptions(okoivs)
-        let redoItem = SheetUndoItem.setKeyframeOptions(koivs)
-        append(undo: undoItem, redo: redoItem)
-    }
-    
-    func set(_ option: AnimationOption) {
-        let undoItem = SheetUndoItem.setAnimationOption(model.animation.option)
-        let redoItem = SheetUndoItem.setAnimationOption(option)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func capture(option: AnimationOption, oldOption: AnimationOption) {
-        let undoItem = SheetUndoItem.setAnimationOption(oldOption)
-        let redoItem = SheetUndoItem.setAnimationOption(option)
-        append(undo: undoItem, redo: redoItem)
-    }
-    
-    func set(_ option: ScoreOption) {
-        let undoItem = SheetUndoItem.setScoreOption(model.score.option)
-        let redoItem = SheetUndoItem.setScoreOption(option)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func capture(_ option: ScoreOption, old oldOption: ScoreOption) {
-        let undoItem = SheetUndoItem.setScoreOption(oldOption)
-        let redoItem = SheetUndoItem.setScoreOption(option)
-        append(undo: undoItem, redo: redoItem)
+        cap(undo: undoItem0, redo: redoItem0)
     }
     
     func set(_ option: SheetOption) {
-        let undoItem = SheetUndoItem.setSheetOption(model.option)
-        let redoItem = SheetUndoItem.setSheetOption(option)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .setSheetOption(model.option), redo: .setSheetOption(option))
     }
     func capture(_ option: SheetOption, old oldOption: SheetOption) {
-        let undoItem = SheetUndoItem.setSheetOption(oldOption)
-        let redoItem = SheetUndoItem.setSheetOption(option)
-        append(undo: undoItem, redo: redoItem)
-    }
-    
-    func appendKeyLines(_ values: [IndexValue<[Line]>]) {
-        let vs: [IndexValue<[IndexValue<Line>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let livs = kv.value.enumerated().map {
-                IndexValue(value: $0.element, index: lines.count + $0.offset)
-            }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        insertKeyLines(vs)
-    }
-    func insertKeyLines(_ values: [IndexValue<[IndexValue<Line>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[Int]>] = values.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.removeKeyLines(ovs)
-        let redoItem = SheetUndoItem.insertKeyLines(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func replaceKeyLines(_ values: [IndexValue<[IndexValue<Line>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Line>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let livs = kv.value.map {
-                IndexValue(value: lines[$0.index], index: $0.index)
-            }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.replaceKeyLines(ovs)
-        let redoItem = SheetUndoItem.replaceKeyLines(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeKeyLines(_ values: [IndexValue<[Int]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Line>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let livs = kv.value.map {
-                IndexValue(value: lines[$0], index: $0)
-            }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.insertKeyLines(ovs)
-        let redoItem = SheetUndoItem.removeKeyLines(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func appendKeyPlanes(_ values: [IndexValue<[Plane]>]) {
-        guard !values.isEmpty else { return }
-        
-        let vs: [IndexValue<[IndexValue<Plane>]>] = values.map { kv in
-            let planes = model.animation.keyframes[kv.index].picture.planes
-            let pivs = kv.value.enumerated().map {
-                IndexValue(value: $0.element, index: planes.count + $0.offset)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        insertKeyPlanes(vs)
-    }
-    func insertKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[Int]>] = values.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.removeKeyPlanes(ovs)
-        let redoItem = SheetUndoItem.insertKeyPlanes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func replaceKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Plane>]>] = values.map { kv in
-            let planes = model.animation.keyframes[kv.index].picture.planes
-            let pivs = kv.value.map {
-                IndexValue(value: planes[$0.index], index: $0.index)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.replaceKeyPlanes(ovs)
-        let redoItem = SheetUndoItem.replaceKeyPlanes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeKeyPlanes(_ values: [IndexValue<[Int]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Plane>]>] = values.map { kv in
-            let planes = model.animation.keyframes[kv.index].picture.planes
-            let pivs = kv.value.map {
-                IndexValue(value: planes[$0], index: $0)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.insertKeyPlanes(ovs)
-        let redoItem = SheetUndoItem.removeKeyPlanes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func appendDraftKeyLines(_ values: [IndexValue<[Line]>]) {
-        guard !values.isEmpty else { return }
-        
-        let vs: [IndexValue<[IndexValue<Line>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].draftPicture.lines
-            let livs = kv.value.enumerated().map {
-                IndexValue(value: $0.element, index: lines.count + $0.offset)
-            }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        insertDraftKeyLines(vs)
-    }
-    func insertDraftKeyLines(_ values: [IndexValue<[IndexValue<Line>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[Int]>] = values.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.removeDraftKeyLines(ovs)
-        let redoItem = SheetUndoItem.insertDraftKeyLines(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeDraftKeyLines(_ values: [IndexValue<[Int]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Line>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].draftPicture.lines
-            let livs = kv.value.map {
-                IndexValue(value: lines[$0], index: $0)
-            }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.insertDraftKeyLines(ovs)
-        let redoItem = SheetUndoItem.removeDraftKeyLines(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func appendDraftKeyPlanes(_ values: [IndexValue<[Plane]>]) {
-        guard !values.isEmpty else { return }
-        
-        let vs: [IndexValue<[IndexValue<Plane>]>] = values.map { kv in
-            let planes = model.animation.keyframes[kv.index].draftPicture.planes
-            let pivs = kv.value.enumerated().map {
-                IndexValue(value: $0.element, index: planes.count + $0.offset)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        insertKeyPlanes(vs)
-    }
-    func insertDraftKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[Int]>] = values.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.removeDraftKeyPlanes(ovs)
-        let redoItem = SheetUndoItem.insertDraftKeyPlanes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    func removeDraftKeyPlanes(_ values: [IndexValue<[Int]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<Plane>]>] = values.map { kv in
-            let planes = model.animation.keyframes[kv.index].draftPicture.planes
-            let pivs = kv.value.map {
-                IndexValue(value: planes[$0], index: $0)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        let undoItem = SheetUndoItem.insertDraftKeyPlanes(ovs)
-        let redoItem = SheetUndoItem.removeDraftKeyPlanes(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func set(_ values: [IndexValue<[IndexValue<InterOption>]>]) {
-        guard !values.isEmpty else { return }
-        
-        let ovs: [IndexValue<[IndexValue<InterOption>]>] = values.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            return .init(value: kv.value.map { .init(value: lines[$0.index].interOption, index: $0.index) },
-                         index: kv.index)
-        }
-        let undoItem = SheetUndoItem.setLineIDs(ovs)
-        let redoItem = SheetUndoItem.setLineIDs(values)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    func setRootKeyframeIndex(rootKeyframeIndex: Int) {
-        let undoItem = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: self.rootKeyframeIndex)
-        let redoItem = SheetUndoItem.setRootKeyframeIndex(rootKeyframeIndex: rootKeyframeIndex)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        cap(undo: .setSheetOption(oldOption), redo: .setSheetOption(option))
     }
     
     func set(_ selection: SheetSelection) {
-        let undoItem = SheetUndoItem.setSelection(model.selection)
-        let redoItem = SheetUndoItem.setSelection(selection)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .setSelection(model.selection), redo: .setSelection(selection))
     }
     func capture(old oldSelection: SheetSelection) {
-        let undoItem = SheetUndoItem.setSelection(oldSelection)
-        let redoItem = SheetUndoItem.setSelection(model.selection)
-        append(undo: undoItem, redo: redoItem)
+        cap(undo: .setSelection(oldSelection), redo: .setSelection(model.selection))
     }
     
     func textTuple(at p: Point, scale: Double) -> (textView: SheetTextView,
-                                    textIndex: Int,
-                                    stringIndex: String.Index,
-                                    cursorIndex: String.Index)? {
+                                                   textIndex: Int,
+                                                   stringIndex: String.Index,
+                                                   cursorIndex: String.Index)? {
         var n: (textView: SheetTextView,
                 textIndex: Int,
                 stringIndex: String.Index,
@@ -5842,9 +5693,8 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     @MainActor
-    func fillAll(withClipping cb: Rect?,
-                   selectedKeyframeIs: [Int], isOutClip: Bool) -> Bool {
-        if selectedKeyframeIs.isEmpty {
+    func fillAll(withClipping cb: Rect?, selectedKeyframeIs: [Int], isOutClip: Bool) -> Bool {
+        if selectedKeyframeIs.isEmpty || !model.enabledAnimation {
             return fillAllFromKeyframeIndex(withClipping: cb, isOutClip: isOutClip)
         }
         
@@ -5877,17 +5727,8 @@ final class SheetView: View, @unchecked Sendable {
             Task { @MainActor in
                 defer { progressPanel.closePanel() }
                 guard let nPolyss, nPolyss.count == selectedKeyframeIs.count else { return }
-                self.newUndoGroup()
-                for (j, i) in selectedKeyframeIs.enumerated() {
-                    autoreleasepool {
-                        self.setRootKeyframeIndex(rootKeyframeIndex: i)
-                        _ = self.fillAllFromKeyframeIndex(withClipping: cb,
-                                                            topolygons: nPolyss[j],
-                                                            isOutClip: isOutClip,
-                                                            isNewUndoGroup: false)
-                        self.setRootKeyframeIndex(rootKeyframeIndex: i)
-                    }
-                }
+                self.fillAll(withClipping: cb, isOutClip: isOutClip,
+                             at: selectedKeyframeIs, with: nPolyss)
             }
         }
         progressPanel.cancelHandler = { task.cancel() }
@@ -5904,37 +5745,80 @@ final class SheetView: View, @unchecked Sendable {
                                           isOutClip: isOutClip,
                                           isNewUndoGroup: isNewUndoGroup)
     }
-    func fillAllFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
-                                    isOutClip: Bool,
-                                    isNewUndoGroup: Bool = true) -> Bool {
-        func enabledPlanes(at otherKI: Int) -> [Plane]? {
-            let planes = model.animation.keyframes[otherKI].picture.planes
-            return planes.isEmpty ? nil : planes
-        }
-        let b = bounds
-        let result: Picture.AutoFillResult
-        if model.enabledAnimation {
-            func otherPlanes() -> [Plane]? {
-                guard model.picture.planes.isEmpty else { return nil }
-                let ki = model.animation.index
-                let preKI = ki - 1 >= 0 ?ki - 1 : model.animation.keyframes.count - 1
-                let nextKI = ki + 1 < model.animation.keyframes.count ?ki + 1 : 0
-                return ki == 0 ?
-                enabledPlanes(at: nextKI) ?? enabledPlanes(at: preKI) :
-                enabledPlanes(at: preKI) ?? enabledPlanes(at: nextKI)
+    private func fillAllEnabledPlanes(at otherKI: Int) -> [Plane]? {
+        let planes = model.animation.keyframes[otherKI].picture.planes
+        return planes.isEmpty ? nil : planes
+    }
+    private func fillAllOtherPlanes(at ki: Int) -> [Plane]? {
+        guard model.animation.keyframes[ki].picture.planes.isEmpty else { return nil }
+        let preKI = ki - 1 >= 0 ?ki - 1 : model.animation.keyframes.count - 1
+        let nextKI = ki + 1 < model.animation.keyframes.count ?ki + 1 : 0
+        return ki == 0 ?
+        fillAllEnabledPlanes(at: nextKI) ?? fillAllEnabledPlanes(at: preKI) :
+        fillAllEnabledPlanes(at: preKI) ?? fillAllEnabledPlanes(at: nextKI)
+    }
+    func fillAll(withClipping cb: Rect?, isOutClip: Bool,
+                 at kis: [Int], with topolygonss: [[Topolygon]]) {
+        var appendPKVs = [IndexValue<[Plane]>]()
+        var pvKVs = [IndexValue<PlaneValue>]()
+        var removePKVs = [IndexValue<[Int]>]()
+        var backgroundUUColor: UUColor?
+        for (j, ki) in kis.enumerated() {
+            let result = Picture.autoFill(fromOther: fillAllOtherPlanes(at: ki),
+                                          from: topolygonss[j],
+                                          from: model.animation.keyframes[ki].picture.planes,
+                                          in: bounds,
+                                          clippingBounds: cb, borders: model.borders,
+                                          isOutClip: isOutClip)
+            switch result {
+            case .planes(let planes):
+                appendPKVs.append(.init(value: planes, index: ki))
+            case .planeValue(let planeValue):
+                pvKVs.append(.init(value: planeValue, index: ki))
+            case .none: break
+            case .background(let uuColor):
+                if model.backgroundUUColor == Sheet.defalutBackgroundUUColor {
+                    let planes = model.animation.keyframes[ki].picture.planes
+                    if !planes.isEmpty {
+                        removePKVs.append(.init(value: .init(planes.count.range), index: ki))
+                    }
+                    backgroundUUColor = uuColor
+                }
             }
-            result = Picture.autoFill(fromOther: otherPlanes(),
-                                      from: topolygons,
-                                      from: model.picture.planes,
-                                      in: b,
-                                      clippingBounds: cb, borders: model.borders,
-                                      isOutClip: isOutClip)
+        }
+        if !appendPKVs.isEmpty || !pvKVs.isEmpty || !removePKVs.isEmpty
+            || backgroundUUColor != nil {
+            newUndoGroup()
+            unselect()
+            if !appendPKVs.isEmpty {
+                append(appendPKVs)
+            }
+            if !pvKVs.isEmpty {
+                set(pvKVs)
+            }
+            if !removePKVs.isEmpty {
+                removeKeyPlanes(removePKVs)
+            }
+            if let backgroundUUColor {
+                set(ColorValue(uuColor: backgroundUUColor, isBackground: true))
+            }
+        }
+    }
+    func fillAllFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
+                                  isOutClip: Bool, isNewUndoGroup: Bool = true) -> Bool {
+        let result = if model.enabledAnimation {
+            Picture.autoFill(fromOther: fillAllOtherPlanes(at: model.animation.index),
+                             from: topolygons,
+                             from: model.picture.planes,
+                             in: bounds,
+                             clippingBounds: cb, borders: model.borders,
+                             isOutClip: isOutClip)
         } else {
-            result = Picture.autoFill(from: topolygons,
-                                      from: model.picture.planes,
-                                      in: b,
-                                      clippingBounds: cb, borders: model.borders,
-                                      isOutClip: isOutClip)
+            Picture.autoFill(from: topolygons,
+                             from: model.picture.planes,
+                             in: bounds,
+                             clippingBounds: cb, borders: model.borders,
+                             isOutClip: isOutClip)
         }
         switch result {
         case .planes(let planes):
@@ -5962,8 +5846,7 @@ final class SheetView: View, @unchecked Sendable {
                 if !model.picture.planes.isEmpty {
                     removePlanes(at: .init(model.picture.planes.count.range))
                 }
-                let cv = ColorValue(uuColor: uuColor, isBackground: true)
-                set(cv, oldColorValue: model.currentColorValue(from: cv))
+                set(ColorValue(uuColor: uuColor, isBackground: true))
                 return true
             } else {
                 return false
@@ -5992,12 +5875,12 @@ final class SheetView: View, @unchecked Sendable {
                 removePlanes(at: removePlaneValues.map { $0.offset })
             }
             if isRemoveBackground {
-                let ncv = ColorValue(uuColor: Sheet.defalutBackgroundUUColor,
-                                     isBackground: true)
                 let ocv = ColorValue(uuColor: model.backgroundUUColor,
                                      isBackground: true)
+                let ncv = ColorValue(uuColor: Sheet.defalutBackgroundUUColor,
+                                     isBackground: true)
                 backgroundUUColor = ncv.uuColor
-                capture(ncv, oldColorValue: ocv)
+                capture(ncv, old: ocv)
             }
             return true
         }
@@ -6013,7 +5896,7 @@ final class SheetColorOwner {
         get { colorValue.uuColor }
         set {
             colorValue.uuColor = newValue
-            sheetView.set(colorValue)
+            sheetView.update(colorValue)
         }
     }
     var oldUUColor: UUColor {
@@ -6034,13 +5917,13 @@ final class SheetColorOwner {
     }
     
     func captureUUColor() {
-        sheetView.capture(colorValue, oldColorValue: oldColorValue)
+        sheetView.capture(colorValue, old: oldColorValue)
     }
     func captureUUColor(isNewUndoGroup: Bool) {
         if isNewUndoGroup {
             sheetView.newUndoGroup()
         }
-        sheetView.capture(colorValue, oldColorValue: oldColorValue)
+        sheetView.capture(colorValue, old: oldColorValue)
     }
     func colorPathValue(toColor: Color?,
                         color: Color, subColor: Color) -> ColorPathValue {

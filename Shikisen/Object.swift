@@ -16,283 +16,7 @@
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
 import struct Foundation.UUID
-
-struct OSheet {
-    var value: Sheet
-    var bounds: Rect
-    var undos: [UndoItemValue<SheetUndoItem>]
-}
-extension OSheet: Hashable {
-    static func == (lhs: OSheet, rhs: OSheet) -> Bool {
-        lhs.value == rhs.value
-    }
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(value)
-    }
-}
-extension OSheet {
-    init(_ v: Sheet, bounds: Rect) {
-        self.value = v
-        self.bounds = bounds
-        undos = []
-    }
-    private mutating func append(undo undoItem: SheetUndoItem,
-                        redo redoItem: SheetUndoItem) {
-        undos.append(UndoItemValue(undo: undoItem, redo: redoItem))
-    }
-    mutating func set(_ item: SheetUndoItem) {
-        switch item {
-        case .appendLine(let line):
-            value.picture.lines.append(line)
-        case .appendLines(let lines):
-            value.picture.lines += lines
-        case .insertLines(let livs):
-            value.picture.lines.insert(livs)
-        case .removeLines(let lineIndexes):
-            value.picture.lines.remove(at: lineIndexes)
-        case .appendPlanes(let planes):
-            value.picture.planes += planes
-        case .removePlanes(planeIndexes: let planeIndexes):
-            value.picture.planes.remove(at: planeIndexes)
-        case .insertTexts(let tivs):
-            value.texts.insert(tivs)
-        case .removeTexts(let textIndexes):
-            value.texts.remove(at: textIndexes)
-        case .changedColors(let colorValue):
-            if !colorValue.planeIndexes.isEmpty {
-                colorValue.planeIndexes.forEach {
-                    value.picture.planes[$0].uuColor = colorValue.uuColor
-                }
-            } else if !colorValue.planeAnimationIndexes.isEmpty {
-                if colorValue.animationColors.count == colorValue.planeAnimationIndexes.count {
-                    for (ki, v) in colorValue.planeAnimationIndexes.enumerated() {
-                        let uuColor = UUColor(colorValue.animationColors[ki],
-                                              id: colorValue.uuColor.id)
-                        for i in v.value {
-                            value.animation.keyframes[v.index].picture.planes[i]
-                                .uuColor = uuColor
-                        }
-                    }
-                } else {
-                    for v in colorValue.planeAnimationIndexes {
-                        for i in v.value {
-                            value.animation.keyframes[v.index].picture.planes[i].uuColor = colorValue.uuColor
-                        }
-                    }
-                }
-            }
-            
-            if !colorValue.lineIndexes.isEmpty {
-                colorValue.lineIndexes.forEach {
-                    value.picture.lines[$0].uuColor = colorValue.uuColor
-                }
-            } else if !colorValue.lineAnimationIndexes.isEmpty {
-                if colorValue.animationColors.count == colorValue.lineAnimationIndexes.count {
-                    for (ki, v) in colorValue.lineAnimationIndexes.enumerated() {
-                        let uuColor = UUColor(colorValue.animationColors[ki],
-                                              id: colorValue.uuColor.id)
-                        for i in v.value {
-                            value.animation.keyframes[v.index].picture.lines[i]
-                                .uuColor = uuColor
-                        }
-                    }
-                } else {
-                    for v in colorValue.lineAnimationIndexes {
-                        for i in v.value {
-                            value.animation.keyframes[v.index].picture.lines[i].uuColor = colorValue.uuColor
-                        }
-                    }
-                }
-            }
-            
-            if colorValue.isBackground {
-                value.backgroundUUColor = colorValue.uuColor
-            }
-        default: fatalError()
-        }
-    }
-    mutating func append(_ line: Line) {
-        let undoItem = SheetUndoItem.removeLastLines(count: 1)
-        let redoItem = SheetUndoItem.appendLine(line)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func append(_ lines: [Line]) {
-        if lines.count == 1 {
-            append(lines[0])
-        } else {
-            let undoItem = SheetUndoItem.removeLastLines(count: lines.count)
-            let redoItem = SheetUndoItem.appendLines(lines)
-            append(undo: undoItem, redo: redoItem)
-            set(redoItem)
-        }
-    }
-    mutating func insert(_ livs: [IndexValue<Line>]) {
-        let undoItem = SheetUndoItem
-            .removeLines(lineIndexes: livs.map { $0.index })
-        let redoItem = SheetUndoItem.insertLines(livs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func replace(_ livs: [IndexValue<Line>]) {
-        let ivs = livs.map { $0.index }
-        let olivs = livs
-            .map { IndexValue(value: value.picture.lines[$0.index],
-                              index: $0.index) }
-        let undoItem0 = SheetUndoItem.insertLines(olivs)
-        let redoItem0 = SheetUndoItem.removeLines(lineIndexes: ivs)
-        append(undo: undoItem0, redo: redoItem0)
-        
-        let undoItem1 = SheetUndoItem.removeLines(lineIndexes: ivs)
-        let redoItem1 = SheetUndoItem.insertLines(livs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        livs.forEach { value.picture.lines[$0.index] = $0.value }
-    }
-    mutating func removeLines(at lineIndexes: [Int]) {
-        let livs = lineIndexes.map {
-            IndexValue(value: value.picture.lines[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertLines(livs)
-        let redoItem = SheetUndoItem.removeLines(lineIndexes: lineIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    mutating func append(_ planes: [Plane]) {
-        let undoItem = SheetUndoItem.removeLastPlanes(count: planes.count)
-        let redoItem = SheetUndoItem.appendPlanes(planes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func replace(_ pivs: [IndexValue<Plane>]) {
-        let ivs = pivs.map { $0.index }
-        let opivs = pivs
-            .map { IndexValue(value: value.picture.planes[$0.index],
-                              index: $0.index) }
-        let undoItem0 = SheetUndoItem.insertPlanes(opivs)
-        let redoItem0 = SheetUndoItem.removePlanes(planeIndexes: ivs)
-        append(undo: undoItem0, redo: redoItem0)
-        
-        let undoItem1 = SheetUndoItem.removePlanes(planeIndexes: ivs)
-        let redoItem1 = SheetUndoItem.insertPlanes(pivs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        pivs.forEach { value.picture.planes[$0.index] = $0.value }
-    }
-    mutating func removePlanes(at planeIndexes: [Int]) {
-        let pivs = planeIndexes.map {
-            IndexValue(value: value.picture.planes[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertPlanes(pivs)
-        let redoItem = SheetUndoItem.removePlanes(planeIndexes: planeIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    mutating func append(_ text: Text) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: [value.texts.count])
-        let redoItem = SheetUndoItem
-            .insertTexts([IndexValue(value: text, index: value.texts.count)])
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func append(_ texts: [Text]) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: Array(value.texts.count ..< (value.texts.count + texts.count)))
-        let redoItem = SheetUndoItem.insertTexts(texts.enumerated().map {
-            IndexValue(value: $0.element, index: value.texts.count + $0.offset)
-        })
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func insert(_ tivs: [IndexValue<Text>]) {
-        let undoItem = SheetUndoItem.removeTexts(textIndexes: tivs
-                                                    .map { $0.index })
-        let redoItem = SheetUndoItem.insertTexts(tivs)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func replace(_ tivs: [IndexValue<Text>]) {
-        let ivs = tivs.map { $0.index }
-        let otivs = tivs
-            .map { IndexValue(value: value.texts[$0.index], index: $0.index) }
-        let undoItem0 = SheetUndoItem.insertTexts(otivs)
-        let redoItem0 = SheetUndoItem.removeTexts(textIndexes: ivs)
-        append(undo: undoItem0, redo: redoItem0)
-        
-        let undoItem1 = SheetUndoItem.removeTexts(textIndexes: ivs)
-        let redoItem1 = SheetUndoItem.insertTexts(tivs)
-        append(undo: undoItem1, redo: redoItem1)
-        
-        tivs.forEach { value.texts[$0.index] = $0.value }
-    }
-    mutating func removeText(at textIndex: Int) {
-        removeTexts(at: [textIndex])
-    }
-    mutating func removeTexts(at textIndexes: [Int]) {
-        let tivs = textIndexes.map {
-            IndexValue(value: value.texts[$0], index: $0)
-        }
-        let undoItem = SheetUndoItem.insertTexts(tivs)
-        let redoItem = SheetUndoItem.removeTexts(textIndexes: textIndexes)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    
-    mutating func removeAll() {
-        if !value.picture.lines.isEmpty {
-            removeLines(at: Array(0 ..< value.picture.lines.count))
-        }
-        if !value.texts.isEmpty {
-            removeTexts(at: Array(0 ..< value.texts.count))
-        }
-    }
-    mutating func set(_ uuColor: UUColor, atPlane pi: Int) {
-        let ocv = ColorValue(uuColor: value.picture.planes[pi].uuColor, planeIndexes: [pi])
-        let cv = ColorValue(uuColor: uuColor, planeIndexes: [pi])
-        let undoItem = SheetUndoItem.changedColors(ocv)
-        let redoItem = SheetUndoItem.changedColors(cv)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-    mutating func set(backgroundUUColor: UUColor) {
-        let ocv = ColorValue(uuColor: value.backgroundUUColor, isBackground: true)
-        let cv = ColorValue(uuColor: backgroundUUColor, isBackground: true)
-        let undoItem = SheetUndoItem.changedColors(ocv)
-        let redoItem = SheetUndoItem.changedColors(cv)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
-    }
-}
-extension Sheet {
-    func rounded(_ rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero) -> Sheet {
-        let lines = picture.lines.map { $0.rounded(rule) }
-        let texts = self.texts.map { Text(string: $0.string,
-                                          orientation: $0.orientation,
-                                          size: $0.size.rounded(rule),
-                                          origin: $0.origin.rounded(rule)) }
-        let kf = Keyframe(picture: Picture(lines: lines, planes: []))
-        return Sheet(animation: Animation(keyframes: [kf]),
-                     texts: texts,
-                     borders: borders,
-                     backgroundUUColor: backgroundUUColor)
-    }
-}
-extension OSheet {
-    func rounded(_ rule: FloatingPointRoundingRule
-                    = .toNearestOrAwayFromZero) -> OSheet {
-        let ss = value.rounded(rule)
-        var v = self
-        v.removeTexts(at: Array(0 ..< v.value.texts.count))
-        v.removeLines(at: Array(0 ..< v.value.picture.lines.count))
-        v.insert(ss.texts.enumerated()
-                    .map { IndexValue(value: $0.element, index: $0.offset) })
-        v.insert(ss.picture.lines.enumerated()
-                    .map { IndexValue(value: $0.element, index: $0.offset) })
-        return v
-    }
-}
+import struct Foundation.Locale
 
 struct OArray: Hashable, BidirectionalCollection {
     var value: [O], dimension: Int, nextCount: Int
@@ -676,7 +400,7 @@ struct F: Hashable, Sendable {
              not, floor, round, ceil, abs, sqrt, sin, cos, tan, asin, acos, atan, atan2, plus, minus,
              filiZ, filoZ, foliZ, foloZ, fiZ, foZ, liZ, loZ, filiR, filoR, foliR, foloR, fiR, foR, liR, loR, delta,
              counta, at, select, set, insert, remove, makeMatrix, releaseMatrix, `is`,
-             random, asLabel, asString, asError, isError,
+             random, asLabel, asCodeString, asError, isError,
              send, showAboutRun, showAllDefinitions,
              draw, drawAxes, plot, flip, translate, map, filter, reduce, custom
         
@@ -912,7 +636,7 @@ extension F {
         case .is: .isO(args[0], args[1])
         case .random: args[0].random
         case .asLabel: args[0].asLabel
-        case .asString: args[0].asStringO
+        case .asCodeString: args[0].asCodeStringO
         case .asError: args[0].asError
         case .isError: args[0].isErrorO
         case .flip: O.flip(args[0], args[1])
@@ -992,8 +716,8 @@ extension F: CustomStringConvertible {
             if case .label = $1 {
                 isLabel = true
             }
-            $0 += $0.isEmpty ? $1.asString : " "
-                + $1.asString
+            $0 += $0.isEmpty ? $1.asCodeString : " "
+                + $1.asCodeString
         }
         let oss = isLabel ? "(" + ooss + ")" : ooss
 
@@ -1104,7 +828,7 @@ extension OLabel {
 }
 extension OLabel: CustomStringConvertible {
     var description: String {
-        o.asString + ":"
+        o.asCodeString + ":"
     }
 }
 
@@ -1177,7 +901,7 @@ enum O: Sendable {
     indirect case range(ORange)
     indirect case dic([O: O])
     indirect case string(String)
-    indirect case sheet(OSheet)
+    indirect case sheet(Sheet)
     indirect case g(G)
     indirect case selected(Selected)
     indirect case f(F)
@@ -1186,6 +910,8 @@ enum O: Sendable {
     indirect case error(OError)
 }
 extension O {
+    static let empty = O(OArray([]))
+    
     init() { self = .f(F()) }
     init(_ v: Bool) { self = .bool(v) }
     init(_ v: Int) { self = .int(v) }
@@ -1196,7 +922,7 @@ extension O {
     init(_ v: ORange) { self = .range(v) }
     init(_ v: [O: O]) { self = .dic(v) }
     init(_ v: String) { self = .string(v) }
-    init(_ v: OSheet) { self = .sheet(v) }
+    init(_ v: Sheet) { self = .sheet(v) }
     init(_ v: G) { self = .g(v) }
     init(_ v: Selected) { self = .selected(v) }
     init(_ v: F) { self = .f(v) }
@@ -1204,56 +930,6 @@ extension O {
     init(_ v: ID) { self = .id(v) }
     init(_ v: OError) { self = .error(v) }
     
-    static let empty = O(OArray([]))
-    init(_ p: Point) {
-        self = .array(OArray([O(p.x), O(p.y)]))
-    }
-    init(_ shp: IntPoint) {
-        self = .array(OArray([O(shp.x), O(shp.y)]))
-    }
-    static let pointName = "point"
-    static let weightName = "weight"
-    static let pressureName = "pressure"
-    init(_ lc: Line.Control) {
-        self = O([O(O.pointName): O(lc.point),
-                  O(O.weightName): O(lc.weight),
-                  O(O.pressureName): O(lc.pressure)])
-    }
-    init(_ line: Line) {
-        self = .array(OArray(line.controls.map { O($0) }))
-    }
-    init(_ lines: [Line]) {
-        self = .array(OArray(lines.map { O($0) }))
-    }
-    init(_ o: Orientation) {
-        self = .string(o.rawValue)
-    }
-    init(textBased str: String) {
-        let s = str
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-        self = .string(s)
-    }
-    static let stringName = "string"
-    static let orientationName = "orientation"
-    static let sizeName = "size"
-    static let originName = "originName"
-    init(_ text: Text) {
-        self = O([O(O.stringName): O(textBased: text.string),
-                  O(O.orientationName): O(text.orientation),
-                  O(O.sizeName): O(text.size),
-                  O(O.originName): O(text.origin)])
-    }
-    init(_ texts: [Text]) {
-        self = .array(OArray(texts.map { O($0) }))
-    }
-    static let linesName = "lines"
-    static let planesName = "planes"
-    static let textsName = "texts"
-    init(_ sheet: Sheet) {
-        self = O([O(O.linesName): O(sheet.picture.lines),
-                  O(O.textsName): O(sheet.texts)])
-    }
     init(_ v: Int.OverResult) {
         switch v {
         case .int(let i): self = .int(i)
@@ -1266,8 +942,16 @@ extension O {
         case .double(let d): self = .double(d)
         }
     }
-    
+}
+extension O {
     static let sendName = "send"
+    static let horizontalName = "horizontal"
+    static let verticalName = "vertical"
+    static let sheetDicName = "sheetDic"
+    static let sheetName = "sheet"
+    static let sheetSizeName = "sheetSize"
+    static let cursorPName = "cursorP"
+    static let printPName = "printP"
 }
 extension O {
     static func defaultDictionary(with sheet: Sheet, bounds: Rect,
@@ -1440,15 +1124,15 @@ extension O {
         
         let orientationGroup = OKeyInfo.Group(name: "Orientation".localized)
         append(OKey(horizontalName, OKeyInfo(orientationGroup, "Horizontal.".localized)),
-               O(horizontalName))
+               O(Orientation.horizontal))
         append(OKey(verticalName, OKeyInfo(orientationGroup, "Vertical.".localized)),
-               O(verticalName))
+               O(Orientation.vertical))
         
         let sheetGroup = OKeyInfo.Group(name: "Sheet".localized)
         append(OKey(sheetDicName, OKeyInfo(sheetGroup, "Sheets dictionary where key is coordinates. Key of the sheet at the cursor position is the origin (0 0). The keys on the other sheets are relative to the origin.".localized)),
                O(ssDic))
         append(OKey(sheetName, OKeyInfo(sheetGroup, "Sheet at the cursor position.".localized)),
-               O(OSheet(sheet, bounds: bounds)))
+               O(sheet))
         append(OKey(sheetSizeName, OKeyInfo(sheetGroup, "Sheet size.".localized)),
                O([O("width"): O(bounds.width), O("height"): O(bounds.height)]))
         append(OKey(cursorPName, OKeyInfo(sheetGroup, "Cursor position.".localized)),
@@ -1473,8 +1157,8 @@ extension O {
         let otherGroup = OKeyInfo.Group(name: "Other".localized)
         append(asLabelName, OKeyInfo(otherGroup, "Make label.".localized),
                F(left: 1, .asLabel))
-        append(asStringName, OKeyInfo(otherGroup, "Make string.".localized),
-               F(right: 1, .asString))
+        append(asCodeStringName, OKeyInfo(otherGroup, "Make string.".localized),
+               F(right: 1, .asCodeString))
         append(asErrorName, OKeyInfo(otherGroup, "Make error.".localized),
                F(right: 1, .asError))
         append(isErrorName, OKeyInfo(otherGroup, "Error check.".localized),
@@ -1525,7 +1209,7 @@ extension O: CustomStringConvertible {
     }
     func displayString(fromLength l: Int = 1000,
                        isFirstAndLastBrackets: Bool = true) -> String {
-        var s = asString
+        var s = asCodeString
         if case .error = self {
         } else if isFirstAndLastBrackets {
             s = O.removeFirstAndLastBrackets(s)
@@ -1547,6 +1231,11 @@ protocol OInitializable {
 protocol ORepresentable {
     var asO: O { get }
 }
+extension O {
+    init<T: ORepresentable>(_ v: T) {
+        self = v.asO
+    }
+}
 typealias OConvertible = OInitializable & ORepresentable
 
 extension Array: OConvertible where Element: OConvertible {
@@ -1566,13 +1255,42 @@ extension Array: OConvertible where Element: OConvertible {
         O(OArray(map { $0.asO }))
     }
 }
-extension Point: OConvertible {
+extension Range: OConvertible where Bound: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .range(let a):
+            if case .filo(let lowerBoundO, let upperBoundO) = a.type,
+            let lowerBound = Bound(lowerBoundO), let upperBound = Bound(upperBoundO) {
+                self = lowerBound ..< upperBound
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {
+        O(ORange(.filo(lowerBound.asO, upperBound.asO), delta: O(1)))
+    }
+}
+extension Rational: OConvertible {
+    init?(_ o: O) {
+        if let rational = o.asRational {
+            self = rational
+        } else {
+            return nil
+        }
+    }
+    var asO: O {
+        .init(self)
+    }
+}
+extension IntPoint: OConvertible {
     init?(_ o: O) {
         switch o {
         case .array(let a):
             if a.count == 2,
-                let x = try? a[0].asDouble?.notNaN(),
-                let y = try? a[1].asDouble?.notNaN() {
+                let x = a[0].asInt,
+                let y = a[1].asInt {
                 self.init(x, y)
             } else {
                 return nil
@@ -1581,7 +1299,124 @@ extension Point: OConvertible {
         }
     }
     var asO: O {
-        .init(self)
+        .init(OArray([O(x), O(y)]))
+    }
+}
+extension Point: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .array(let a):
+            if a.count == 2,
+               let x = try? a[0].asDouble?.notInfiniteAndNAN(),
+                let y = try? a[1].asDouble?.notInfiniteAndNAN() {
+                
+                self.init(x, y)
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init(OArray([O(x), O(y)]))
+    }
+}
+extension Size: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            if let width = try? dic[O("width")]?.asDouble?.notInfiniteAndNAN(),
+                let height = try? dic[O("height")]?.asDouble?.notInfiniteAndNAN() {
+                
+                self.init(width: width, height: height)
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("width"): O(width), O("height"): O(height)])
+    }
+}
+extension Rect: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            if let originO = dic[O("origin")], let origin = Point(originO),
+                let sizeO = dic[O("size")], let size = Size(sizeO) {
+                
+                self.init(origin: origin, size: size)
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("origin"): origin.asO, O("size"): size.asO])
+    }
+}
+extension Line.Control: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let pointO = dic[O("point")], let point = Point(pointO),
+                  let weightO = dic[O("weight")],
+                    let weight = try? weightO.asDouble?.notInfiniteAndNAN().clipped(min: 0, max: 1),
+                  let pressureO = dic[O("pressure")],
+                    let pressure = try? pressureO.asDouble?.notNaN().clipped(min: 0, max: 1)
+             else { return nil }
+            self.init(point: point, weight: weight, pressure: pressure)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("point"): O(point),
+               O("weight"): O(weight),
+               O("pressure"): O(pressure)])
+    }
+}
+extension InterType: OConvertible {
+    init?(_ o: O) {
+        switch o.asString {
+        case "none": self = .none
+        case "key": self = .key
+        case "interpolated": self = .interpolated
+        default: return nil
+        }
+    }
+    var asO: O {
+        switch self {
+        case .none: O("none")
+        case .key: O("key")
+        case .interpolated: O("interpolated")
+        }
+    }
+}
+extension Line: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let controlsO = dic[O("controls")], let controls = [Line.Control](controlsO),
+                  let sizeO = dic[O("size")],
+                    let size = try? sizeO.asDouble?.notZeroAndNaN(),
+                  let interIDO = dic[O("interID")], let interID = UUID(interIDO),
+                  let interTypeO = dic[O("interType")], let interType = InterType(interTypeO),
+                  let uuColorO = dic[O("uuColor")], let uuColor = UUColor(uuColorO)
+             else { return nil }
+            
+            self.init(controls: controls, size: size.clipped(min: 0, max: Line.maxLineWidth),
+                      interID: interID, interType: interType, uuColor: uuColor)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("controls"): controls.asO,
+               O("size"): O(size),
+               O("interID"): interID.asO,
+               O("interType"): interType.asO,
+               O("uuColor"): uuColor.asO])
     }
 }
 extension Polygon: OConvertible {
@@ -1646,7 +1481,8 @@ extension ColorSpace: OConvertible {
 }
 extension UUID: OConvertible {
     init?(_ o: O) {
-        self.init(uuidString: o.asString)
+        guard let str = o.asString else { return nil }
+        self.init(uuidString: str)
     }
     var asO: O {
         .init(self.uuidString)
@@ -1677,22 +1513,26 @@ extension UUColor: OConvertible {
     init?(_ o: O) {
         switch o {
         case .dic(let dic):
-            guard let lightnessO = dic[O("lightness")],
-                  let lightness = try? lightnessO.asDouble?.notNaN()
-                    .clipped(min: Color.minLightness, max: Color.whiteLightness),
-                  let hueO = dic[O("hue")],
-                    let hue = try? hueO.asDouble?.notInfiniteAndNAN().loopedRotation,
-                  let chromaO = dic[O("chroma")],
-                  let chroma = try? chromaO.asDouble?.notNaN()
-                    .clipped(min: Color.minChroma, max: Color.maxChroma),
-                  let opacityO = dic[O("opacity")],
-                  let opacity = try? opacityO.asDouble?.notNaN().clipped(min: 0, max: 1),
-                  let colorSpaceO = dic[O("colorSpace")], let colorSpace = ColorSpace(colorSpaceO),
-                  let idO = dic[O("id")], let id = UUID(idO)
-             else { return nil }
-            
-            self.init(.init(lightness: lightness, nearestChroma: chroma,
-                            hue: hue, opacity: opacity, colorSpace), id: id)
+            if let rgbaO = dic[O("newRGBA")], let rgba = RGBA(rgbaO),
+                         let colorSpaceO = dic[O("colorSpace")], let colorSpace = ColorSpace(colorSpaceO),
+               let idO = dic[O("id")], let id = UUID(idO) {
+                self.init(.init(rgba, colorSpace), id: id)
+            } else if let lightnessO = dic[O("lightness")],
+               let lightness = try? lightnessO.asDouble?.notNaN()
+                .clipped(min: Color.minLightness, max: 1000),
+               let hueO = dic[O("hue")],
+               let hue = try? hueO.asDouble?.notInfiniteAndNAN().loopedRotation,
+               let chromaO = dic[O("chroma")],
+               let chroma = try? chromaO.asDouble?.notNaN()
+                .clipped(min: Color.minChroma, max: Color.maxChroma),
+               let opacityO = dic[O("opacity")],
+               let opacity = try? opacityO.asDouble?.notNaN().clipped(min: 0, max: 1),
+               let colorSpaceO = dic[O("colorSpace")], let colorSpace = ColorSpace(colorSpaceO),
+               let idO = dic[O("id")], let id = UUID(idO) {
+                
+                self.init(.init(lightness: lightness, nearestChroma: chroma,
+                                hue: hue, opacity: opacity, colorSpace), id: id)
+            } else { return nil }
         default: return nil
         }
     }
@@ -1701,6 +1541,7 @@ extension UUColor: OConvertible {
                O("hue"): O(value.hue),
                O("chroma"): O(value.chroma),
                O("opacity"): O(value.opacity),
+               O("rgba"): O(value.rgba),
                O("colorSpace"): value.colorSpace.asO,
                O("id"): id.asO])
     }
@@ -1721,8 +1562,223 @@ extension Plane: OConvertible {
                O("uuColor"): uuColor.asO])
     }
 }
+extension Picture: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let linesO = dic[O("lines")], let lines = [Line](linesO),
+                  let planesO = dic[O("planes")], let planes = [Plane](planesO)
+             else { return nil }
+            self.init(lines: lines, planes: planes)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("lines"): lines.asO,
+               O("planes"): planes.asO])
+    }
+}
+extension Keyframe: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let pictureO = dic[O("picture")], let picture = Picture(pictureO),
+                  let draftPictureO = dic[O("draftPicture")], let draftPicture = Picture(draftPictureO),
+                  let beatO = dic[O("beat")], let beat = beatO.asRational,
+                  let idO = dic[O("id")], let id = UUID(idO)
+             else { return nil }
+            self.init(picture: picture, draftPicture: draftPicture, beat: beat, id: id)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("picture"): picture.asO,
+               O("draftPicture"): draftPicture.asO,
+               O("beat"): O(beat),
+               O("id"): id.asO])
+    }
+}
+extension PreviousNext: OConvertible {
+    init?(_ o: O) {
+        switch o.asString {
+        case "none": self = .none
+        case "previous": self = .previous
+        case "next": self = .next
+        case "previousAndNext": self = .previousAndNext
+        default: return nil
+        }
+    }
+    var asO: O {
+        switch self {
+        case .none: O("none")
+        case .previous: O("previous")
+        case .next: O("next")
+        case .previousAndNext: O("previousAndNext")
+        }
+    }
+}
+extension Animation: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let keyframesO = dic[O("keyframes")], let keyframes = [Keyframe](keyframesO),
+                  let rootBeatO = dic[O("rootBeat")], let rootBeat = rootBeatO.asRational,
+                  let beatRangeO = dic[O("beatRange")], let beatRange = Range<Rational>(beatRangeO),
+                  let loopDurBeatO = dic[O("loopDurBeat")], let loopDurBeat = loopDurBeatO.asRational,
+                  let tempoO = dic[O("tempo")], let tempo = tempoO.asRational?.clipped(Music.tempoRange),
+                  let previousNextO = dic[O("previousNext")], let previousNext = PreviousNext(previousNextO),
+                  let keyBeatsO = dic[O("keyBeats")], let keyBeats = [Rational](keyBeatsO),
+                  let timelineYO = dic[O("timelineY")], let timelineY = timelineYO.asDouble?
+                .clipped(min: Sheet.timelineY, max: Sheet.height - Sheet.timelineY),
+                  let enabledO = dic[O("enabled")], let enabled = enabledO.asBool
+             else { return nil }
+            
+            self.init(keyframes: keyframes, rootBeat: rootBeat,
+                      beatRange: beatRange, loopDurBeat: loopDurBeat, tempo: tempo,
+                      previousNext: previousNext, keyBeats: keyBeats, timelineY: timelineY,
+                      enabled: enabled)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("keyframes"): keyframes.asO, O("rootBeat"): O(rootBeat),
+               O("beatRange"): beatRange.asO, O("loopDurBeat"): O(loopDurBeat),
+               O("tempo"): O(tempo),
+               O("previousNext"): previousNext.asO, O("keyBeats"): keyBeats.asO,
+               O("timelineY"): O(timelineY), O("enabled"): O(enabled)])
+    }
+}
+extension Locale: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let identifierO = dic[O("identifier")], case .string(let identifier) = identifierO
+             else { return nil }
+            self.init(identifier: identifier)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("identifier"): O(identifier)])
+    }
+}
+extension TextTimeOption: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            guard let beatRangeO = dic[O("beatRange")], let beatRange = Range<Rational>(beatRangeO),
+                  let tempoO = dic[O("tempo")], let tempo = tempoO.asRational?.clipped(Music.tempoRange)
+             else { return nil }
+            self.init(beatRange: beatRange, tempo: tempo)
+        default: return nil
+        }
+    }
+    var asO: O {
+        .init([O("beatRange"): O(beatRange), O("tempo"): O(tempo)])
+    }
+}
+extension Text: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .dic(let dic):
+            var asTextBasedString: String {
+                if case .string(let s) = dic[O("string")] {
+                    return s
+                        .replacingOccurrences(of: "\\\"", with: "\"")
+                        .replacingOccurrences(of: "\\n", with: "\n")
+                } else {
+                    return o.asCodeString
+                }
+            }
+            if let strO = dic[O("string")], case .string(let str) = strO,
+               let orientationO = dic[O("orientation")], let orientation = Orientation(orientationO),
+               let size = dic[O("size")]?.asDouble?.clipped(min: 0, max: Font.maxSize),
+               let widthCountO = dic[O("widthCount")], let widthCount = (try? widthCountO.asDouble?.notZeroAndNaN())?
+                .clipped(min: Typobute.minWidthCount, max: Typobute.mainWidthCount),
+               let originO = dic[O("origin")], let origin = Point(originO),
+               let localeO = dic[O("locale")], let locale = Locale(localeO),
+               let timeOptionO = dic[O("timeOption")] {
+                
+                let string = str
+                    .replacingOccurrences(of: "\\\"", with: "\"")
+                    .replacingOccurrences(of: "\\n", with: "\n")
+                
+                self.init(string:string, orientation: orientation, size: size,
+                          widthCount: widthCount, origin: origin, locale: locale,
+                          timeOption: TextTimeOption(timeOptionO))
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {
+        let str = string
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return .init([O("string"): O(str),
+                      O("orientation"): O(orientation),
+                      O("size"): O(size),
+                      O("widthCount"): O(widthCount),
+                      O("origin"): O(origin),
+                      O("locale"): O(locale),
+                      O("timeOption"): timeOption != nil ? O(timeOption!) : O.empty])
+    }
+}
+extension Sheet: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .sheet(let sheet): self = sheet
+        case .dic(let dic):
+            if let animationO = dic[O("animation")], let animation = Animation(animationO),
+               let mainFrameO = dic[O("mainFrame")], let mainFrame = Rect(mainFrameO),
+               let backgroundUUColorO = dic[O("backgroundUUColor")], let backgroundUUColor = UUColor(backgroundUUColorO),
+               let textsO = dic[O("texts")], let texts = [Text](textsO) {
+                
+                self.init(animation: animation,
+                          score: .init(),//
+                          texts: texts,
+                          contents: .init(),//
+                          mainFrame: mainFrame,
+                          backgroundUUColor: backgroundUUColor,
+                          selection: .init(),//
+                          keyframeAttitude: .init())//
+            } else {
+                return nil
+            }
+        default: return nil
+        }
+    }
+    var asO: O {//
+        .init([O("animation"): animation.asO,
+               O("texts"): texts.asO,
+               O("mainFrame"): mainFrame.asO,
+               O("backgroundUUColor"): backgroundUUColor.asO])
+    }
+}
+extension Orientation: OConvertible {
+    init?(_ o: O) {
+        switch o {
+        case .string(let str):
+            self.init(rawValue: str)
+        default: return nil
+        }
+    }
+    var asO: O {
+        switch self {
+        case .horizontal: O("horizontal")
+        case .vertical: O("vertical")
+        }
+    }
+}
 
 extension O {
+    var asBool: Bool? {
+        switch self {
+        case .bool(let a): return a
+        default: return nil
+        }
+    }
     var asInt: Int? {
         switch self {
         case .bool(let a): return Int(a)
@@ -1740,7 +1796,15 @@ extension O {
         default: return nil
         }
     }
-    
+    var asRational: Rational? {
+        switch self {
+        case .bool(let a): return Rational(a)
+        case .int(let a): return Rational(a)
+        case .rational(let a): return a
+        case .double(let a): return Rational(a)
+        default: return nil
+        }
+    }
     var asDouble: Double? {
         switch self {
         case .bool(let a): return Double(a)
@@ -1750,133 +1814,16 @@ extension O {
         default: return nil
         }
     }
-    
-    var asPoint: Point? {
+    var asString: String? {
         switch self {
-        case .array(let a):
-            if a.count == 2, let x = a[0].asDouble, let y = a[1].asDouble {
-                return Point(x, y)
-            } else {
-                return nil
-            }
+        case .string(let a): return a
         default: return nil
         }
     }
-    
     var asArray: [O] {
         switch self {
         case .array(let a): return a.value
         default: return [self]
-        }
-    }
-    
-    var asPoints: [Point] {
-        switch self {
-        case .array(let a): return a.compactMap { $0.asPoint }
-        default: return []
-        }
-    }
-    
-    var asOrientation: Orientation? {
-        guard case .string(let str) = self else { return nil }
-        return Orientation(rawValue: str)
-    }
-    
-    var asTextBasedString: String {
-        if case .string(let s) = self {
-            return s
-                .replacingOccurrences(of: "\\\"", with: "\"")
-                .replacingOccurrences(of: "\\n", with: "\n")
-        } else {
-            return asString
-        }
-    }
-    
-    var asText: Text? {
-        switch self {
-        case .dic(let a):
-            if a.count == 4,
-               let string = a[O(O.stringName)]?.asTextBasedString,
-               let orientation = a[O(O.orientationName)]?.asOrientation,
-               let size = a[O(O.sizeName)]?.asDouble,
-               let origin = a[O(O.originName)]?.asPoint {
-                
-                return Text(string: string, orientation: orientation,
-                            size: size, origin: origin)
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-    
-    var asLineControl: Line.Control? {
-        switch self {
-        case .dic(let a):
-            if a.count == 3,
-               let point = a[O(O.pointName)]?.asPoint,
-               let weight = a[O(O.weightName)]?.asDouble,
-               let pressure = a[O(O.pressureName)]?.asDouble {
-                
-                return Line.Control(point: point,
-                                    weight: weight,
-                                    pressure: pressure)
-            } else {
-                return nil
-            }
-        default: return nil
-        }
-    }
-    
-    var asLine: Line? {
-        switch self {
-        case .array(let a):
-            var cs = [Line.Control]()
-            cs.reserveCapacity(a.count)
-            for i in 0 ..< a.count {
-                guard let lc = a[i].asLineControl else {
-                    return nil
-                }
-                cs.append(lc)
-            }
-            return Line(controls: cs)
-        default: return nil
-        }
-    }
-    
-    var asSheet: Sheet? {
-        switch self {
-        case .sheet(let a): return a.value
-        case .dic(let a):
-            if let oLines = a[O(O.linesName)]?.asArray,
-               let oTexts = a[O(O.textsName)]?.asArray {
-                
-                var lines = [Line]()
-                lines.reserveCapacity(oLines.count)
-                for i in 0 ..< oLines.count {
-                    guard let l = oLines[i].asLine else {
-                        return nil
-                    }
-                    lines.append(l)
-                }
-                
-                var texts = [Text]()
-                texts.reserveCapacity(oTexts.count)
-                for i in 0 ..< oTexts.count {
-                    guard let t = oTexts[i].asText else {
-                        return nil
-                    }
-                    texts.append(t)
-                }
-                
-                let keyframe = Keyframe(picture: Picture(lines: lines,
-                                                         planes: []))
-                return Sheet(animation: Animation(keyframes: [keyframe]),
-                             texts: texts)
-            } else {
-                return nil
-            }
-        default: return nil
         }
     }
 }
@@ -2726,7 +2673,7 @@ extension O: Equatable {
             default: return false
             }
         case .string:
-            return lhs.asString == rhs.asString
+            return lhs.asCodeString == rhs.asCodeString
         case .sheet(let a):
             switch rhs {
             case .sheet(let b): return a == b
@@ -2830,7 +2777,7 @@ extension O: Comparable {
             default: return nil
             }
         case .string:
-            return lhs.asString < rhs.asString
+            return lhs.asCodeString < rhs.asCodeString
         default: return nil
         }
     }
@@ -3003,7 +2950,7 @@ extension O {
         case .range(let a): return O(a.rounded(rule))
         case .dic(let a): return O(a.rounded(rule))
         case .string: return self
-        case .sheet(let a): return O(a.rounded(rule))
+        case .sheet(let a): return O(a).rounded(rule)
         case .g: return self
         case .selected(let a): return O(a.rounded(rule))
         case .f(let a): return O(a.rounded(rule))
@@ -3054,7 +3001,7 @@ extension O {
                 }
             }
             return n.sqrt
-        case .sheet(let a): return O(a.value).absV
+        case .sheet(let a): return O(a).absV
         case .error: return self
         default: return O(OError.undefined(with: "\(O.absName) \(name)"))
         }
@@ -3188,7 +3135,7 @@ extension O {
     }
     static let atan2Name = "atan2"
     var atan2: O {
-        if let p = asPoint {
+        if let p = Point(self) {
             return O(.atan2(y: p.y, x: p.x))
         } else {
             return O(OError.undefined(with: "\(O.atan2Name) \(name)"))
@@ -3229,7 +3176,7 @@ extension O {
                 }
             }
             return O(n)
-        case .sheet(let a): return -O(a.value)
+        case .sheet(let a): return -O(a)
         case .error: return ao
         default: return O(OError.undefined(with: "\(minusName)\(ao.name)"))
         }
@@ -3515,18 +3462,7 @@ extension O {
                 guard let n = a[bo] else { return .empty }
                 return n
             }
-        case .sheet(let a):
-            switch bo {
-            case .string(let b):
-                switch b {
-                case linesName: return O(a.value.picture.lines)
-                case textsName: return O(a.value.texts)
-                default: break
-                }
-            case .error: return bo
-            default: break
-            }
-            return O(OError(String(format: "'%1$@' is out of bounds dictionary range".localized, bo.name)))
+        case .sheet(let a): return at(a.asO, bo)
         case .error: return ao
         default:
             switch bo {
@@ -3580,59 +3516,8 @@ extension O {
         case .dic(var a):
             a[io] = bo
             return O(a)
-        case .sheet(var a):
-            switch io {
-            case .string(let i):
-                switch i {
-                case linesName:
-                    switch bo {
-                    case .array(let b):
-                        let ls = b.compactMap { $0.asLine }
-                        if b.count != ls.count {
-                            return O([O(linesName): bo,
-                                      O(textsName): O(a.value.texts)])
-                        } else {
-                            guard !ls.isEmpty else { break }
-                            a.removeLines(at: Array(0 ..< a.value.picture.lines.count))
-                            a.append(ls)
-                            return O(a)
-                        }
-                    case .dic:
-                        if let l = bo.asLine {
-                            a.removeLines(at: Array(0 ..< a.value.picture.lines.count))
-                            a.append([l])
-                            return O(a)
-                        }
-                    default: break
-                    }
-                case textsName:
-                    switch bo {
-                    case .array(let b):
-                        let ts = b.compactMap { $0.asText }
-                        if b.count != ts.count {
-                            return O([O(linesName): O(a.value.picture.lines),
-                                      O(textsName): bo])
-                        } else {
-                            guard !ts.isEmpty else { break }
-                            a.removeTexts(at: Array(0 ..< a.value.texts.count))
-                            a.append(ts)
-                            return O(a)
-                        }
-                    case .dic:
-                        if let t = bo.asText {
-                            a.removeTexts(at: Array(0 ..< a.value.picture.lines.count))
-                            a.append([t])
-                            return O(a)
-                        }
-                    default: break
-                    }
-                default: break
-                }
-                let n = O(a.value)
-                return set(bo, in: n, at: io, errorHandler)
-            default: break
-            }
-            return O(OError(String(format: "'%1$@' is out of bounds dictionary range".localized, bo.name)))
+        case .sheet(let a):
+            return set(bo, in: a.asO, at: io, errorHandler)
         default:
             switch ao {
             case .range(let a):
@@ -3695,338 +3580,7 @@ extension O {
         var no = nao
         var oss = [(o: O, i: O)]()
         oss.reserveCapacity(ios.count)
-        iosLoop: for (i, io) in ios.enumerated() {
-            
-            if case .sheet(var ss) = no,//
-               case .string(let str) = io, i < ios.count, str == linesName {
-                
-                let array = bo.asArray
-                if array.count > 1 {
-                    let nLines = array.compactMap({ $0.asLine })
-                    let nnLines = zip(nLines, ss.value.picture.lines).map {
-                        var nLine = $0.1
-                        nLine.controls = $0.0.controls
-                        return nLine
-                    }
-                    ss.removeLines(at: Array(ss.value.picture.lines.count.range))
-                    ss.append(nnLines)
-                    if oss.isEmpty {
-                        return O(ss)
-                    } else {
-                        oss[.last].i = O(ss)
-                    }
-                    break iosLoop
-                }
-            } else if case .sheet(var ss) = no,
-               case .string(let str) = io, i < ios.count - 1 {
-                if str == "backgroundColor" {
-                    if i + 1 == ios.count - 1,
-                       case .string(let cStr) = ios[i + 1] {
-                        if cStr == "opacity" {
-                            if let v = bo.asDouble {
-                                let v = ((try? v.notNaN()) ?? 0)
-                                    .clipped(min: 0, max: 1)
-                                var nColor = ss.value.backgroundUUColor
-                                if v != nColor.value.opacity {
-                                    nColor.value.opacity = v
-                                    ss.set(backgroundUUColor: nColor)
-                                }
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if cStr == "rgba" {
-                            if let rgba = RGBA(bo) {
-                                var nColor = ss.value.backgroundUUColor
-                                nColor.value = Color(rgba, nColor.value.colorSpace)
-                                if ss.value.backgroundUUColor != nColor {
-                                    ss.set(backgroundUUColor: nColor)
-                                }
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        }
-                    }
-                } else if str == linesName {
-                    if let li = ios[i + 1].asInt, li < ss.value.picture.lines.count {
-                        if i + 1 == ios.count - 1 {
-                            if let line = bo.asLine {
-                                ss.replace([IndexValue(value: line, index: li)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 2 == ios.count - 1,
-                                  let lci = ios[i + 2].asInt, lci < ss.value.picture.lines[li].controls.count {
-                            
-                            if let lc = bo.asLineControl {
-                                var line = ss.value.picture.lines[li]
-                                line.controls[lci] = lc
-                                ss.replace([IndexValue(value: line, index: li)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 3 == ios.count - 1,
-                                  let lci = ios[i + 2].asInt, lci < ss.value.picture.lines[li].controls.count,
-                                  case .string(let lcci) = ios[i + 3] {
-                            
-                            switch lcci {
-                            case "point":
-                                if let origin = bo.asPoint {
-                                    var line = ss.value.picture.lines[li]
-                                    line.controls[lci].point = origin
-                                    ss.replace([IndexValue(value: line, index: li)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            case "weight":
-                                if let weight = bo.asDouble {
-                                    var line = ss.value.picture.lines[li]
-                                    line.controls[lci].weight = weight
-                                    ss.replace([IndexValue(value: line, index: li)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            case "pressure":
-                                if let pressure = bo.asDouble {
-                                    var line = ss.value.picture.lines[li]
-                                    line.controls[lci].pressure = pressure
-                                    ss.replace([IndexValue(value: line, index: li)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            default: break
-                            }
-                        } else if i + 4 == ios.count - 1,
-                                  let lci = ios[i + 2].asInt,
-                                  case .string(let lcci) = ios[i + 3], lcci == "point",
-                                  let lccpi = ios[i + 4].asInt {
-                            
-                            switch lccpi {
-                            case 0:
-                                if let v = bo.asDouble {
-                                    var line = ss.value.picture.lines[li]
-                                    line.controls[lci].point.x = v
-                                    ss.replace([IndexValue(value: line, index: li)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            case 1:
-                                if let v = bo.asDouble {
-                                    var line = ss.value.picture.lines[li]
-                                    line.controls[lci].point.y = v
-                                    ss.replace([IndexValue(value: line, index: li)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            default: break
-                            }
-                        }
-                    }
-                } else if str == planesName {
-                    if let pi = ios[i + 1].asInt, pi < ss.value.picture.planes.count {
-                        if i + 1 == ios.count - 1 {
-                            if let plane = Plane(bo) {
-                                ss.replace([IndexValue(value: plane, index: pi)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 3 == ios.count - 1,
-                                  case .string(let colorStr) = ios[i + 2], colorStr == "color",
-                                  case .string(let cStr) = ios[i + 3] {
-                            if cStr == "opacity" {
-                                if let v = bo.asDouble {
-                                    let v = ((try? v.notNaN()) ?? 0)
-                                        .clipped(min: 0, max: 1)
-                                    var nColor = ss.value.picture.planes[pi].uuColor
-                                    if v != nColor.value.opacity {
-                                        nColor.value.opacity = v
-                                        ss.set(nColor, atPlane: pi)
-                                    }
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            } else if cStr == "rgba" {
-                                if let rgba = RGBA(bo) {
-                                    var nColor = ss.value.picture.planes[pi].uuColor
-                                    nColor.value = Color(rgba, nColor.value.colorSpace)
-                                    if ss.value.backgroundUUColor != nColor {
-                                        ss.set(nColor, atPlane: pi)
-                                    }
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            }
-                        }
-                    }
-                } else if str == "texts" {
-                    if let ti = ios[i + 1].asInt, ti < ss.value.texts.count {
-                        if i + 1 == ios.count - 1 {
-                            if let text = bo.asText {
-                                ss.replace([IndexValue(value: text, index: ti)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 2 == ios.count - 1 {
-                            switch ios[i + 2] {
-                            case O("string"):
-                                if case .string(let str) = bo {
-                                    var text = ss.value.texts[ti]
-                                    text.string = str
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                } else {
-                                    return O(OError(String(format: "'%1$@' is not '%2$@'".localized, bo.name, G.string.rawValue)))
-                                }
-                            case O("orientation"):
-                                if let orientation = bo.asOrientation {
-                                    var text = ss.value.texts[ti]
-                                    text.orientation = orientation
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                } else {
-                                    return O(OError(String(format: "'%1$d' is not '%2$d'".localized, bo.name, "Orientation".localized)))
-                                }
-                            case O("size"):
-                                if let size = bo.asDouble {
-                                    var text = ss.value.texts[ti]
-                                    text.size = size
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                } else {
-                                    return O(OError("'' is not ''"))
-                                }
-                            case O("origin"):
-                                if let origin = bo.asPoint {
-                                    var text = ss.value.texts[ti]
-                                    text.origin = origin
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            default: break
-                            }
-                        } else if i + 3 == ios.count - 1,
-                                  ios[i + 2] == O("string"),
-                                  let ttsi = ios[i + 3].asInt, ttsi < ss.value.texts[ti].string.count {
-                            
-                            if case .string(let str) = bo, str.count == 1 {
-                                var text = ss.value.texts[ti]
-                                let si = text.string.index(text.string.startIndex, offsetBy: ttsi)
-                                text.string.replaceSubrange(si ... si, with: str)
-                                ss.replace([IndexValue(value: text, index: ti)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 3 == ios.count - 1,
-                                  ios[i + 2] == O("origin"),
-                                  let ttoi = ios[i + 3].asInt {
-                            
-                            switch ttoi {
-                            case 0:
-                                if let v = bo.asDouble {
-                                    var text = ss.value.texts[ti]
-                                    text.origin.x = v
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            case 1:
-                                if let v = bo.asDouble {
-                                    var text = ss.value.texts[ti]
-                                    text.origin.y = v
-                                    ss.replace([IndexValue(value: text, index: ti)])
-                                    if oss.isEmpty {
-                                        return O(ss)
-                                    } else {
-                                        oss[.last].i = O(ss)
-                                    }
-                                    break iosLoop
-                                }
-                            default: break
-                            }
-                        }
-                    }
-                }
-            }
-            
+        for io in ios {
             oss.append((no, io))
             no = O.at(no, io)
         }
@@ -4111,72 +3665,7 @@ extension O {
         var no = nao
         var oss = [(o: O, i: O)]()
         oss.reserveCapacity(ios.count)
-        iosLoop: for (i, io) in ios.enumerated() {
-            
-            if case .sheet(var ss) = no,
-               case .string(let str) = io, i < ios.count - 1 {
-                
-                if str == linesName {
-                    if let li = ios[i + 1].asInt {
-                        if i + 1 == ios.count - 1 {
-                            if let line = bo.asLine, li <= ss.value.picture.lines.count {
-                                ss.insert([IndexValue(value: line, index: li)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 2 == ios.count - 1,
-                                  let lci = ios[i + 2].asInt, li < ss.value.picture.lines.count, lci <= ss.value.picture.lines[li].controls.count {
-                            
-                            if let lc = bo.asLineControl {
-                                var line = ss.value.picture.lines[li]
-                                line.controls.insert(lc, at: lci)
-                                ss.replace([IndexValue(value: line, index: li)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        }
-                    }
-                } else if str == textsName {
-                    if let ti = ios[i + 1].asInt {
-                        if i + 1 == ios.count - 1 {
-                            if let text = bo.asText, ti <= ss.value.texts.count {
-                                ss.insert([IndexValue(value: text, index: ti)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        } else if i + 3 == ios.count - 1, ti < ss.value.texts.count,
-                                  case .string(let tti) = ios[i + 2], tti == stringName,
-                                  let ttsi = ios[i + 3].asInt, ttsi <= ss.value.texts[ti].string.count {
-                            
-                            if case .string(let str) = bo, str.count == 1 {
-                                var text = ss.value.texts[ti]
-                                let si = text.string.index(text.string.startIndex, offsetBy: ttsi)
-                                text.string.insert(contentsOf: str, at: si)
-                                ss.replace([IndexValue(value: text, index: ti)])
-                                if oss.isEmpty {
-                                    return O(ss)
-                                } else {
-                                    oss[.last].i = O(ss)
-                                }
-                                break iosLoop
-                            }
-                        }
-                    }
-                }
-            }
-            
+        for io in ios {
             oss.append((no, io))
             no = O.at(no, io)
         }
@@ -4252,18 +3741,7 @@ extension O {
                     a[io] = nil
                     return O(a)
                 case .sheet(let a):
-                    switch io {
-                    case .string(let i):
-                        switch i {
-                        case linesName:
-                            return O([O(textsName): O(a.value.texts)])
-                        case textsName:
-                            return O([O(linesName): O(a.value.picture.lines)])
-                        default:
-                            return O(OError(String(format: "'%1$@' is out of bounds dictionary range".localized, io.name)))
-                        }
-                    default: break
-                    }
+                    return remove(in: O(a), at: io)
                 default: break
                 }
             }
@@ -4273,64 +3751,7 @@ extension O {
         var no = nao
         var oss = [(o: O, i: O)]()
         oss.reserveCapacity(ios.count)
-        iosLoop: for (i, io) in ios.enumerated() {
-            
-            if case .sheet(var ss) = no,
-               case .string(let str) = io, i < ios.count - 1 {
-                
-                if str == linesName {
-                    if let li = ios[i + 1].asInt, li < ss.value.picture.lines.count {
-                        if i + 1 == ios.count - 1 {
-                            ss.removeLines(at: [li])
-                            if oss.isEmpty {
-                                return O(ss)
-                            } else {
-                                oss[.last].i = O(ss)
-                            }
-                            break iosLoop
-                        } else if i + 2 == ios.count - 1,
-                                  let lci = ios[i + 2].asInt, lci < ss.value.picture.lines[li].controls.count {
-                            
-                            var line = ss.value.picture.lines[li]
-                            line.controls.remove(at: lci)
-                            ss.replace([IndexValue(value: line, index: li)])
-                            if oss.isEmpty {
-                                return O(ss)
-                            } else {
-                                oss[.last].i = O(ss)
-                            }
-                            break iosLoop
-                        }
-                    }
-                } else if str == textsName {
-                    if let ti = ios[i + 1].asInt, ti < ss.value.texts.count {
-                        if i + 1 == ios.count - 1 {
-                            ss.removeText(at: ti)
-                            if oss.isEmpty {
-                                return O(ss)
-                            } else {
-                                oss[.last].i = O(ss)
-                            }
-                            break iosLoop
-                        } else if i + 3 == ios.count - 1,
-                                  case .string(let tti) = ios[i + 2], tti == stringName,
-                                  let ttsi = ios[i + 3].asInt, ttsi < ss.value.texts[ti].string.count {
-                            
-                            var text = ss.value.texts[ti]
-                            let si = text.string.index(text.string.startIndex, offsetBy: ttsi)
-                            text.string.remove(at: si)
-                            ss.replace([IndexValue(value: text, index: ti)])
-                            if oss.isEmpty {
-                                return O(ss)
-                            } else {
-                                oss[.last].i = O(ss)
-                            }
-                            break iosLoop
-                        }
-                    }
-                }
-            }
-            
+        for io in ios {
             oss.append((no, io))
             no = O.at(no, io)
         }
@@ -5112,19 +4533,15 @@ extension O {
 }
 
 extension O {
-    static let horizontalName = "horizontal"
-    static let verticalName = "vertical"
-    
-    static let sheetDicName = "sheetDic"
-    static let sheetName = "sheet"
-    static let sheetSizeName = "sheetSize"
-    static let cursorPName = "cursorP"
-    static let printPName = "printP"
-}
-extension O {
+    var asSheet: Sheet? {
+        switch self {
+        case .sheet(let sheet): sheet
+        default: Sheet(self)
+        }
+    }
     static let showAboutRunName = "showAboutRun"
     static func showAboutRun(_ ao: O) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard case .sheet(let sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
         let b = sheet.bounds
         let lPadding = 20.0
@@ -5292,16 +4709,13 @@ extension O {
         let t = Transform(scale: scale)
             * Transform(translation: b.minXMaxYPoint + Point(lPadding * scale + dx, -lPadding * scale))
         let nts = ts.map { $0 * t }
-        
-        sheet.removeAll()
-        sheet.append(nts)
-        return O(sheet)
+        return O(Sheet(texts: nts))
     }
     
     static let showAllDefinitionsName = "showAllDefinitions"
     static func showAllDefinitions(_ ao: O, _ oDic: inout [OKey: O],
                                    enableCustom: Bool = true) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard case .sheet(let sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         let b = sheet.bounds
         
         let customGroup = OKeyInfo.Group(name: "Custom".localized, index: -1)
@@ -5461,10 +4875,8 @@ extension O {
         var line = Line(edge: Edge(Point(-groupW - lPadding, (typeH + lPadding) / 2), Point(w - groupW, (typeH + lPadding) / 2))) * t
         line.size *= scale
         
-        sheet.removeAll()
-        sheet.append(line)
-        sheet.append(ts)
-        return O(sheet)
+        return O(Sheet(animation: .init(keyframes: [.init(picture: .init(lines: [line]))]),
+                       texts: ts))
     }
     
     static let drawName = "draw"
@@ -5521,7 +4933,7 @@ extension O {
             return no(from: a)
         case .error: return bo
         default:
-            let ps = bo.asPoints
+            let ps = [Point](bo) ?? []
             if ps.isEmpty {
                 return O(OError.undefined(with: "\(self) \(O.drawName)"))
             } else if ps.count == 1 {
@@ -5535,9 +4947,9 @@ extension O {
     
     static let drawAxesName = "drawAxes"
     static func drawAxes(_ ao: O, base bo: O, _ xo: O, _ yo: O) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         guard let base = bo.asDouble, base > 0 else { return O(OError(String(format: "'%1$@' is not positive real".localized, bo.name))) }
-        let xName = xo.asTextBasedString, yName = yo.asTextBasedString
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        let xName = xo.asCodeString, yName = yo.asCodeString
         
         let b = sheet.bounds
         let cp = b.centerPoint, r = 200.0, d = 5.0
@@ -5574,9 +4986,9 @@ extension O {
                          origin: baseP + Point(-bs.width / 2, -bs.height - 5))
         
         let texts = [x, y, baseS].filter { !$0.isEmpty }
-        sheet.append([xAxis, xArrow0, xArrow1,
-                      yAxis, yArrow0, yArrow1, baseLine])
-        sheet.append(texts)
+        sheet.picture.lines += [xAxis, xArrow0, xArrow1,
+                                yAxis, yArrow0, yArrow1, baseLine]
+        sheet.texts += texts
         return O(sheet)
     }
     
@@ -5587,9 +4999,11 @@ extension O {
         switch co {
         case .error: return co
         default:
-            let ps = co.asPoints
+            let ps = [Point](co) ?? []
             let s = 180 / base
-            if ps.count == 1 {
+            if ps.count == 0 {
+                return O(OError("Line points count >= 1"))
+            } else if ps.count == 1 {
                 let np = ps[0] * s + Point(256, 362)
                 return drawPoint(ao, np, name: co.name)
             } else {
@@ -5602,7 +5016,7 @@ extension O {
         }
     }
     static func drawPoint(_ ao: O, _ np: Point, name: String? = nil) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
         let b = sheet.bounds
         let xs = String(intBased: np.x), ys = String(intBased: np.y)
@@ -5610,28 +5024,28 @@ extension O {
             let line = Line.circle(centerPosition: np, radius: 1)
             let t = Text(string: name ?? "(\(xs) \(ys))",
                          origin: np + Point(7, 0))
-            sheet.append(line)
-            sheet.append(t)
+            sheet.picture.lines.append(line)
+            sheet.texts.append(t)
             return O(sheet)
         }
         return O(OError(String(format: "'%1$@' is out of bounds".localized, "(\(xs) \(ys))")))
     }
     static func drawLine(_ ao: O, _ l: Line) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
         if l.controls.count >= 2 {
             let l = l.controls.count > 10000 ? Line(controls: Array(l.controls[0 ..< 10000])) : l
-            sheet.append(l)
+            sheet.picture.lines.append(l)
             return O(sheet)
         }
         return O(OError("Line points count >= 2"))
     }
     static func drawText(_ ao: O, _ t: Text) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
         let b = sheet.bounds
         if let frame = t.frame, b.intersects(frame) {
-            sheet.append(t)
+            sheet.texts.append(t)
             return O(sheet)
         }
         return O(OError("Text is out of bounds".localized))
@@ -5639,21 +5053,9 @@ extension O {
     
     static let flipName = "flip"
     static func flip(_ ao: O, _ orientationO: O) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
-        guard case .string(let oString) = orientationO else { return O(OError(String(format: "'%1$@' is not string".localized, orientationO.name))) }
-        let orientation: Orientation
-        if oString == horizontalName {
-            orientation = .horizontal
-        } else if oString == verticalName {
-            orientation = .vertical
-        } else {
-            return O(OError(String(format: "'%1$@' is not horizontal or vertical".localized, orientationO.name)))
-        }
+        guard let orientation = Orientation(orientationO) else { return O(OError(String(format: "'%1$@' is not horizontal or vertical".localized, orientationO.name))) }
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
-        let lines = sheet.value.picture.lines
-        let planes = sheet.value.picture.planes
-        sheet.removeLines(at: Array(0 ..< lines.count))
-        sheet.removePlanes(at: Array(0 ..< planes.count))
         var t = Transform.identity
         switch orientation {
         case .horizontal:
@@ -5666,28 +5068,25 @@ extension O {
             t.scaleBy(x: 1, y: -1)
             t.translate(by: sheet.bounds.centerPoint)
         }
-        sheet.append(lines.map { $0 * t })
-        sheet.append(planes.map {
+        
+        sheet.picture.lines = sheet.picture.lines.map { $0 * t }
+        sheet.picture.planes = sheet.picture.planes.map {
             var n = $0 * t
             n.topolygon = n.topolygon.sortedTopCounterClockwise()
             return n
-        })
+        }
         return O(sheet)
     }
     
     static let translateName = "translate"
     static func translate(_ ao: O, _ xo: O, _ yo: O, scaleXO: O, scaleYO: O, rotationO: O) -> O {
-        guard case .sheet(var sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         guard let x = xo.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, xo.name))) }
         guard let y = yo.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, yo.name))) }
         guard let scaleX = scaleXO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleXO.name))) }
         guard let scaleY = scaleYO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleYO.name))) }
         guard let rotation = rotationO.asDouble else { return O(OError(String(format: "'%1$@' is not double".localized, scaleYO.name))) }
+        guard var sheet = ao.asSheet else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         
-        let lines = sheet.value.picture.lines
-        let planes = sheet.value.picture.planes
-        sheet.removeLines(at: Array(0 ..< lines.count))
-        sheet.removePlanes(at: Array(0 ..< planes.count))
         var t = Transform.identity
         t.translate(by: -sheet.bounds.centerPoint)
         if scaleX != 1 || scaleY != 1 {
@@ -5697,8 +5096,13 @@ extension O {
             t.rotate(by: rotation)
         }
         t.translate(by: sheet.bounds.centerPoint + .init(x, y))
-        sheet.append(lines.map { $0 * t })
-        sheet.append(planes.map { $0 * t })
+        
+        sheet.picture.lines = sheet.picture.lines.map { $0 * t }
+        sheet.picture.planes = sheet.picture.planes.map {
+            var n = $0 * t
+            n.topolygon = n.topolygon.sortedTopCounterClockwise()
+            return n
+        }
         return O(sheet)
     }
 }
@@ -5714,8 +5118,8 @@ extension O {
 }
 
 extension O {
-    static let asStringName = "\\"
-    var asString: String {
+    static let asCodeStringName = "\\"
+    var asCodeString: String {
         func lineStr(_ a: Line) -> String {
             let s = a.controls.reduce(into: "") {
                 var ns = ""
@@ -5751,7 +5155,7 @@ extension O {
         case .double(let a): return String(oBased: a)
         case .array(let a):
             let bs = a.reduce(into: "") {
-                let s = $1.asString
+                let s = $1.asCodeString
                 $0 += $0.isEmpty ? s : (s.count > 10 ? "\n" : " ") + s
             }
             return a.dimension > 1 ? "((" + bs + ") \(O.makeMatrixName))" : "(" + bs + ")"
@@ -5790,9 +5194,9 @@ extension O {
             func dicString(key: O, value: O) -> String {
                 switch key {
                 case .string(let s):
-                    return s + ": " + value.asString
+                    return s + ": " + value.asCodeString
                 default:
-                    return key.asString + ": " + value.asString
+                    return key.asCodeString + ": " + value.asCodeString
                 }
             }
             let bs = a.reduce(into: "") {
@@ -5806,33 +5210,14 @@ extension O {
                 .replacingOccurrences(of: "\"", with: "\\\"")
                 .replacingOccurrences(of: "\n", with: "\\n")
             return "\"\(s)\""
-        case .sheet(let ss):
-            var s = ""
-            if !ss.value.picture.lines.isEmpty {
-                var ns = ""
-                for line in ss.value.picture.lines {
-                    ns += ns.isEmpty ? "" : "\n"
-                    ns += lineStr(line)
-                }
-                s += "lines: " + "(" + ns + ")"
-            }
-            if !ss.value.texts.isEmpty {
-                s += s.isEmpty ? "" : "\n"
-                var ns = ""
-                for text in ss.value.texts {
-                    ns += ns.isEmpty ? "" : "\n"
-                    ns += textStr(text)
-                }
-                s += "texts: " + "(" + ns + ")"
-            }
-            return "(" + s + ")"
+        case .sheet(let sheet): return sheet.asO.asCodeString
         case .g(let a): return a.rawValue
         case .selected(let a):
             if a.ranges.count == 1 {
-                return a.o.asString + O.selectName + a.ranges[0].asString
+                return a.o.asCodeString + O.selectName + a.ranges[0].asCodeString
             } else {
-                return a.o.asString
-                + a.ranges.reduce(into: "") { $0 += O.selectName + $1.asString }
+                return a.o.asCodeString
+                + a.ranges.reduce(into: "") { $0 += O.selectName + $1.asCodeString }
             }
         case .f(let a): return a.description
         case .label(let a): return a.description
@@ -5840,8 +5225,8 @@ extension O {
         case .error(let a): return a.description
         }
     }
-    var asStringO: O {
-        O(asString)
+    var asCodeStringO: O {
+        O(asCodeString)
     }
 }
 

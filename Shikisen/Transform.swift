@@ -351,6 +351,8 @@ extension Array: AppliableTransform where Element: AppliableTransform {
 }
 
 struct Attitude: Hashable, Codable {
+    static let identity = Self()
+    
     var position = Point(), scale = Size(square: 1), rotation = 0.0
 }
 extension Attitude {
@@ -395,6 +397,9 @@ extension Attitude {
         self.scale = Size(width: transform.absXScale,
                           height: transform.absYScale)
         self.rotation = transform.angle
+    }
+    var isIdentity: Bool {
+        self == Self.identity
     }
     var transform: Transform {
         if scale == Size(square: 1) {

@@ -441,7 +441,7 @@ final class LineAction: Action {
                 if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
                     sheetView.newUndoGroup()
                 }
-                sheetView.removeNote(at: nis)
+                sheetView.removeNotes(at: nis)
                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
             }
         }
@@ -1133,27 +1133,18 @@ final class LineAction: Action {
                let sheetView = rootView.madeSheetView(at: centerSHP) {
                 
                 let tempLine = sheetView.animationView.convert(tempLine, from: sheetView.node)
+                
+                if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
+                    sheetView.newUndoGroup()
+                    sheetView.unselect()
+                }
                 if sheetView.model.enabledAnimation, sheetView.id == beganSheetID,
                    beganAnimationRootIndex != sheetView.model.animation.rootIndex {
                     
-                    let oldRootI = sheetView.model.animation.rootIndex
-                    sheetView.rootKeyframeIndex = beganAnimationRootIndex
-                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
-                        sheetView.newUndoGroup()
-                        sheetView.unselect()
-                    }
-                    sheetView.append(tempLine)
-                    sheetView.rootKeyframeIndex = oldRootI
+                    sheetView.append(tempLine, atRoot: beganAnimationRootIndex)
                 } else {
-                    if !isUpdatedNewUndoGroupSheetViews.contains(sheetView) {
-                        sheetView.newUndoGroup()
-                        sheetView.unselect()
-                    }
                     sheetView.append(tempLine)
                 }
-//                if sheetView.isSound {
-//                    rootView.updateAudio()
-//                }
             } else {
                 var isWorldNewUndoGroup = true
                 for shp in nearestShps {

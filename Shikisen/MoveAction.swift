@@ -629,8 +629,7 @@ final class MoveAnimationAction: DragEventAction {
                 case .all, .startBeat, .endBeat, .loopDurBeat, .previousNext:
                     if let beganAnimationOption, sheetView.model.animation.option != beganAnimationOption {
                         updateUndoGroup()
-                        sheetView.capture(option: sheetView.model.animation.option,
-                                          oldOption: beganAnimationOption)
+                        sheetView.capture(old: beganAnimationOption)
                     }
                     if type == .startBeat {
                         updateKeyframe()
@@ -2291,8 +2290,7 @@ final class MoveTempoAction: DragEventAction {
                 
                 if let beganAnimationOption, sheetView.model.animation.option != beganAnimationOption {
                     updateUndoGroup()
-                    sheetView.capture(option: sheetView.model.animation.option,
-                                      oldOption: beganAnimationOption)
+                    sheetView.capture(old: beganAnimationOption)
                 }
                 if let beganScoreOption, sheetView.model.score.option != beganScoreOption {
                     updateUndoGroup()

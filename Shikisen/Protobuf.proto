@@ -387,6 +387,7 @@ message PBSheet {
     PBRect mainFrame = 12;
     PBUUColor backgroundUUColor = 5;
     PBSheetSelection selection = 13;
+    optional PBAttitude keyframeAttitude = 14;
 }
 
 message PBWorldSelection {
@@ -423,10 +424,12 @@ message PBFinding {
 
 message PBKeyframeOption {
     PBRational beat = 1;
-    PBPoint previousPosition = 3;
-    PBPoint nextPosition = 4;
 }
 
+message PBBoolIndexValue {
+    bool value = 1;
+    int64 index = 2;
+}
 message PBIntIndexValue {
     int64 value = 1;
     int64 index = 2;
@@ -480,7 +483,10 @@ message PBColorValue {
 message PBPlaneValue {
     repeated PBPlane planes = 1;
     repeated PBIntIndexValue moveIndexValues = 2;
-    int64 index = 3;
+}
+message PBPlaneValueIndexValue {
+    PBPlaneValue value = 1;
+    int64 index = 2;
 }
 message PBTextValue {
     string string = 1;
@@ -568,6 +574,9 @@ message PBInterOptionIndexValueArrayIndexValueArray {
 message PBPlaneIndexValueArray {
     repeated PBPlaneIndexValue value = 1;
 }
+message PBPlaneValueIndexValueArray {
+    repeated PBPlaneValueIndexValue value = 1;
+}
 message PBNoteIndexValueArray {
     repeated PBNoteIndexValue value = 1;
 }
@@ -590,56 +599,73 @@ message PBKeyframeOptionIndexValueArray {
 message PBSheetUndoItem {
     oneof value {
         PBLine appendLine = 1;
+        PBLineIndexValue appendKeyLine = 32;
         PBLineArray appendLines = 2;
         PBPlaneArray appendPlanes = 3;
-        int64 removeLastLines = 4;
-        int64 removeLastPlanes = 5;
         PBLineIndexValueArray insertLines = 6;
-        PBPlaneIndexValueArray insertPlanes = 7;
+        PBLineIndexValueArrayIndexValueArray insertKeyLines = 28;
         PBLineIndexValueArray replaceLines = 54;
-        PBPlaneIndexValueArray replacePlanes = 55;
+        PBLineIndexValueArrayIndexValueArray replaceKeyLines = 29;
+        PBInterOptionIndexValueArrayIndexValueArray setLineIDs = 31;
+        int64 removeLastLines = 4;
+        PBIntIndexValue removeLastKeyLines = 33;
         PBInt64Array removeLines = 8;
+        PBIntArrayIndexValueArray removeKeyLines = 30;
+        
+        PBPlaneIndexValueArray insertPlanes = 7;
+        PBPlaneIndexValueArrayIndexValueArray insertKeyPlanes = 34;
+        PBPlaneIndexValueArray replacePlanes = 55;
+        PBPlaneIndexValueArrayIndexValueArray replaceKeyPlanes = 41;
+        int64 removeLastPlanes = 5;
         PBInt64Array removePlanes = 9;
+        PBIntArrayIndexValueArray removeKeyPlanes = 35;
         PBPlaneValue setPlaneValue = 10;
+        PBPlaneValueIndexValueArray setKeyPlaneValues = 45;
+        
         bool changeToDraft = 11;
         PBPicture setPicture = 12;
-        PBLineIndexValueArray insertDraftLines = 13;
-        PBPlaneIndexValueArray insertDraftPlanes = 14;
-        PBInt64Array removeDraftLines = 15;
-        PBInt64Array removeDraftPlanes = 16;
         PBPicture setDraftPicture = 17;
+        
+        PBLineIndexValueArray insertDraftLines = 13;
+        PBLineIndexValueArrayIndexValueArray insertDraftKeyLines = 36;
+        PBInt64Array removeDraftLines = 15;
+        PBIntArrayIndexValueArray removeDraftKeyLines = 37;
+        
+        PBPlaneIndexValueArray insertDraftPlanes = 14;
+        PBPlaneIndexValueArrayIndexValueArray insertDraftKeyPlanes = 38;
+        PBInt64Array removeDraftPlanes = 16;
+        PBIntArrayIndexValueArray removeDraftKeyPlanes = 39;
+        
+        PBColorValue changedColors = 21;
+        
+        PBKeyframeIndexValueArray insertKeyframes = 25;
+        PBKeyframeOptionIndexValueArray setKeyframeOptions = 27;
+        PBInt64Array removeKeyframes = 26;
+        
+        int64 setRootKeyframeI = 24;
+        PBAnimationOption setAnimationOption = 40;
+        
         PBTextIndexValueArray insertTexts = 18;
         PBTextIndexValueArray replaceTexts = 56;
-        PBInt64Array removeTexts = 19;
         PBTextValueIndexValue replaceString = 20;
-        PBColorValue changedColors = 21;
-        PBBorderIndexValueArray insertBorders = 22;
-        PBInt64Array removeBorders = 23;
-        int64 setRootKeyframeIndex = 24;
-        PBKeyframeIndexValueArray insertKeyframes = 25;
-        PBInt64Array removeKeyframes = 26;
-        PBKeyframeOptionIndexValueArray setKeyframeOptions = 27;
-        PBLineIndexValueArrayIndexValueArray insertKeyLines = 28;
-        PBLineIndexValueArrayIndexValueArray replaceKeyLines = 29;
-        PBIntArrayIndexValueArray removeKeyLines = 30;
-        PBPlaneIndexValueArrayIndexValueArray insertKeyPlanes = 34;
-        PBPlaneIndexValueArrayIndexValueArray replaceKeyPlanes = 41;
-        PBIntArrayIndexValueArray removeKeyPlanes = 35;
-        PBLineIndexValueArrayIndexValueArray insertDraftKeyLines = 36;
-        PBIntArrayIndexValueArray removeDraftKeyLines = 37;
-        PBPlaneIndexValueArrayIndexValueArray insertDraftKeyPlanes = 38;
-        PBIntArrayIndexValueArray removeDraftKeyPlanes = 39;
-        PBInterOptionIndexValueArrayIndexValueArray setLineIDs = 31;
-        PBAnimationOption setAnimationOption = 40;
+        PBInt64Array removeTexts = 19;
+        
         PBNoteIndexValueArray insertNotes = 42;
         PBNoteIndexValueArray replaceNotes = 43;
         PBInt64Array removeNotes = 44;
+        
+        PBNoteIndexValueArray insertDraftNotes = 50;
+        PBInt64Array removeDraftNotes = 51;
+        
+        PBScoreOption setScoreOption = 49;
+        
         PBContentIndexValueArray insertContents = 46;
         PBContentIndexValueArray replaceContents = 47;
         PBInt64Array removeContents = 48;
-        PBScoreOption setScoreOption = 49;
-        PBNoteIndexValueArray insertDraftNotes = 50;
-        PBInt64Array removeDraftNotes = 51;
+        
+        PBBorderIndexValueArray insertBorders = 22;
+        PBInt64Array removeBorders = 23;
+        
         PBSheetOption setSheetOption = 52;
         PBSheetSelection setSelection = 53;
     }
@@ -659,6 +685,7 @@ message PBUndoDataValue {
 message PBUndoGroup {
     repeated PBUndoDataValue values = 1;
     bool isFirstReverse = 2;
+    bytes firstUndoItemData = 4;
     PBDate date = 3;
 }
 message PBBranch {

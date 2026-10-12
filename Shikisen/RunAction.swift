@@ -238,7 +238,7 @@ extension RunAction {
             guard let sheet = rootView.readSheet(at: sid) else { continue }
             let sheetBounds = rootView.sheetFrame(with: nshp).bounds
             let dshp = nshp - shp
-            ssDic[O(dshp)] = O(OSheet(sheet, bounds: sheetBounds))
+            ssDic[O(dshp)] = O(sheet)
             
             let texts = sheet.texts
             var nTexts = [Text]()
@@ -270,6 +270,7 @@ extension RunAction {
         
         let printOrigin = nodePoint(from: text)
         self.worldPrintOrigin = sheetView.convertToWorld(printOrigin)
+        
         
         var oDic = O.defaultDictionary(with: sheetView.model,
                                        bounds: sf.bounds,
@@ -375,22 +376,26 @@ extension RunAction {
               in sheetView: SheetView, _ shp: IntPoint) {
         switch o {
         case .dic(let a):
-            var ssDic = [IntPoint: OSheet]()
-            for (key, value) in a {
-                if case .array(let idxs) = key, idxs.count == 2,
-                    case .int(let x) = idxs[0], case .int(let y) = idxs[1],
-                    case .sheet(let sheet) = value {
-                    
-                    let nshp = IntPoint(x, y) + shp
-                    ssDic[nshp] = sheet
-                }
-            }
-            if !ssDic.isEmpty {
-                for (key, value) in ssDic {
-                    draw(value, from: text, at: key)
-                }
+            if let sheet = Sheet(o) {
+                draw(sheet, from: text, at: shp)
             } else {
-                draw(o.description, at: nodePoint(from: text), in: sheetView)
+                var ssDic = [IntPoint: Sheet]()
+                for (key, value) in a {
+                    if case .array(let idxs) = key, idxs.count == 2,
+                       case .int(let x) = idxs[0], case .int(let y) = idxs[1],
+                       case .sheet(let sheet) = value {
+                        
+                        let nshp = IntPoint(x, y) + shp
+                        ssDic[nshp] = sheet
+                    }
+                }
+                if !ssDic.isEmpty {
+                    for (key, value) in ssDic {
+                        draw(value, from: text, at: key)
+                    }
+                } else {
+                    draw(o.description, at: nodePoint(from: text), in: sheetView)
+                }
             }
         case .sheet(let a):
             draw(a, from: text, at: shp)
@@ -404,14 +409,20 @@ extension RunAction {
             drawTime(time, from: text, in: sheetView, shp)
         }
     }
-    func draw(_ ss: OSheet, from text: Text, at shp: IntPoint) {
-        guard !ss.undos.isEmpty, let sheetView = rootView.readSheetView(at: shp) else { return }
-        sheetView.newUndoGroup()
+    func draw(_ nSheet: Sheet, from text: Text, at shp: IntPoint) {
+        guard let sheetView = rootView.readSheetView(at: shp) else { return }
+        
         func lineCount(_ line: Line) -> Int {
             line.controls.count * MemoryLayout<Point>.size
         }
         func planeCount(_ plane: Plane) -> Int {
             (plane.topolygon.holePolygons.sum { $0.points.count } + plane.topolygon.polygon.points.count) * MemoryLayout<Point>.size
+        }
+        func pictureCount(_ picture: Picture) -> Int {
+            picture.lines.sum { lineCount($0) } + picture.planes.sum { planeCount($0) }
+        }
+        func keyframeCount(_ keyframe: Keyframe) -> Int {
+            pictureCount(keyframe.picture) + pictureCount(keyframe.draftPicture)
         }
         func textCount(_ text: Text) -> Int {
             text.string.utf8.count * MemoryLayout<UInt8>.size
@@ -428,41 +439,142 @@ extension RunAction {
                 return false
             }
         }
-        for item in ss.undos {
-            switch item.redoItem {
-            case .appendLine(let line):
-                si += lineCount(line)
-                if isMax() { return }
-                sheetView.append(line)
-            case .appendLines(let lines):
-                si += lines.reduce(0) { $0 + lineCount($1) }
-                if isMax() { return }
-                sheetView.append(lines)
-            case .insertLines(let livs):
-                si += livs.reduce(0) { $0 + lineCount($1.value) }
-                if isMax() { return }
-                sheetView.insert(livs)
-            case .removeLines(let lineIndexes):
-                sheetView.removeLines(at: lineIndexes)
-            case .appendPlanes(let planes):
-                si += planes.reduce(0) { $0 + planeCount($1) }
-                if isMax() { return }
-                sheetView.append(planes)
-            case .removePlanes(let planeIndexes):
-                sheetView.removePlanes(at: planeIndexes)
-            case .insertTexts(let tivs):
-                si += tivs.reduce(0) { $0 + textCount($1.value) }
-                if isMax() { return }
-                sheetView.insert(tivs)
-            case .removeTexts(let textIndexes):
-                sheetView.removeText(at: textIndexes)
-            case .changedColors(let colorValue):
-                let oldColorValue = sheetView.model.currentColorValue(from: colorValue)
-                if colorValue != oldColorValue {
-                    sheetView.set(colorValue, oldColorValue: oldColorValue)
-                }
-            default: fatalError()
+        
+        var isNewUndoGroup = true
+        func updateNewUndoGroup() {
+            if isNewUndoGroup {
+                sheetView.newUndoGroup()
             }
+            isNewUndoGroup = false
+        }
+        
+        let oSheet = sheetView.model
+        let diffKeyframes = ArrayDiff(from: oSheet.animation.keyframes,
+                                      to: nSheet.animation.keyframes)
+        if !diffKeyframes.replaces.isEmpty {
+            si += diffKeyframes.replaces.reduce(0) { $0 + keyframeCount($1.value) }
+            if isMax() { return }
+            
+            var keyframeOptions = [IndexValue<KeyframeOption>]()
+            var repKLIVs = [IndexValue<[IndexValue<Line>]>](),
+                removeKLIVs = [IndexValue<[Int]>](),
+                insertKLIVs = [IndexValue<[IndexValue<Line>]>]()
+            var repKPIVs = [IndexValue<[IndexValue<Plane>]>](),
+                removeKPIVs = [IndexValue<[Int]>](),
+                insertKPIVs = [IndexValue<[IndexValue<Plane>]>]()
+            for kv in diffKeyframes.replaces {
+                let oldKeyframe = oSheet.animation.keyframes[kv.index]
+                let newKeyframe = kv.value
+                
+                if oldKeyframe.option != newKeyframe.option {
+                    keyframeOptions.append(.init(value: newKeyframe.option, index: kv.index))
+                }
+                
+                let diffLines = ArrayDiff(from: oldKeyframe.picture.lines,
+                                          to: newKeyframe.picture.lines)
+                if !diffLines.replaces.isEmpty {
+                    si += diffLines.replaces.reduce(0) { $0 + lineCount($1.value) }
+                    if isMax() { return }
+                    repKLIVs.append(.init(value: diffLines.replaces, index: kv.index))
+                }
+                if !diffLines.removes.isEmpty {
+                    updateNewUndoGroup()
+                    removeKLIVs.append(.init(value: diffLines.removes, index: kv.index))
+                }
+                if !diffLines.inserts.isEmpty {
+                    si += diffLines.inserts.reduce(0) { $0 + lineCount($1.value) }
+                    if isMax() { return }
+                    insertKLIVs.append(.init(value: diffLines.inserts, index: kv.index))
+                }
+                
+                let diffPlanes = ArrayDiff(from: oldKeyframe.picture.planes,
+                                           to: newKeyframe.picture.planes)
+                if !diffPlanes.replaces.isEmpty {
+                    si += diffPlanes.replaces.reduce(0) { $0 + planeCount($1.value) }
+                    if isMax() { return }
+                    repKPIVs.append(.init(value: diffPlanes.replaces, index: kv.index))
+                }
+                if !diffPlanes.removes.isEmpty {
+                    updateNewUndoGroup()
+                    removeKPIVs.append(.init(value: diffPlanes.removes, index: kv.index))
+                }
+                if !diffPlanes.inserts.isEmpty {
+                    si += diffPlanes.inserts.reduce(0) { $0 + planeCount($1.value) }
+                    if isMax() { return }
+                    insertKPIVs.append(.init(value: diffPlanes.inserts, index: kv.index))
+                }
+            }
+            if !keyframeOptions.isEmpty {
+                updateNewUndoGroup()
+                sheetView.set(keyframeOptions)
+            }
+            
+            if !repKLIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.replaceKeyLines(repKLIVs)
+            }
+            if !removeKLIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.removeKeyLines(removeKLIVs)
+            }
+            if !insertKLIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.insertKeyLines(insertKLIVs)
+            }
+            if !repKPIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.replaceKeyPlanes(repKPIVs)
+            }
+            if !removeKPIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.removeKeyPlanes(removeKPIVs)
+            }
+            if !insertKPIVs.isEmpty {
+                updateNewUndoGroup()
+                sheetView.insertKeyPlanes(insertKPIVs)
+            }
+        }
+        if !diffKeyframes.removes.isEmpty {
+            updateNewUndoGroup()
+            sheetView.removeTexts(at: diffKeyframes.removes)
+        }
+        if !diffKeyframes.inserts.isEmpty {
+            si += diffKeyframes.inserts.reduce(0) { $0 + keyframeCount($1.value) }
+            if isMax() { return }
+            updateNewUndoGroup()
+            sheetView.insert(diffKeyframes.inserts)
+        }
+        
+        let diffTexts = ArrayDiff(from: oSheet.texts, to: nSheet.texts)
+        if !diffTexts.replaces.isEmpty {
+            si += diffTexts.replaces.reduce(0) { $0 + textCount($1.value) }
+            if isMax() { return }
+            updateNewUndoGroup()
+            sheetView.replace(diffTexts.replaces)
+        }
+        if !diffTexts.removes.isEmpty {
+            updateNewUndoGroup()
+            sheetView.removeTexts(at: diffTexts.removes)
+        }
+        if !diffTexts.inserts.isEmpty {
+            si += diffTexts.inserts.reduce(0) { $0 + textCount($1.value) }
+            if isMax() { return }
+            updateNewUndoGroup()
+            sheetView.insert(diffTexts.inserts)
+        }
+        
+        if oSheet.score.option != nSheet.score.option {
+            updateNewUndoGroup()
+            sheetView.set(nSheet.score.option)
+        }
+        if oSheet.option != nSheet.option {
+            updateNewUndoGroup()
+            sheetView.set(nSheet.option)
+        }
+        if oSheet.backgroundUUColor.value != nSheet.backgroundUUColor.value {
+            let uuColor = UUColor(nSheet.backgroundUUColor.value, id: .init())
+            updateNewUndoGroup()
+            sheetView.set(ColorValue(uuColor: uuColor, isBackground: true))
         }
     }
     func draw(_ s: String,

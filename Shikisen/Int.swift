@@ -297,6 +297,11 @@ extension Range where Bound == Int {
 struct IndexValue<Value> {
     var value: Value
     var index: Int
+    
+//    init(_ value: Value, at i: Int) {
+//        self.value = value
+//        index = i
+//    }
 }
 extension IndexValue: Sendable where Value: Sendable {}
 extension IndexValue: Equatable where Value: Equatable {}

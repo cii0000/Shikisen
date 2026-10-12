@@ -1501,7 +1501,7 @@ final class DraftAction: Action {
                     sheetView.newUndoGroup()
                     sheetView.unselect()
                     let notes = sheetView.model.score.notes[nis]
-                    sheetView.removeNote(at: nis)
+                    sheetView.removeNotes(at: nis)
                     let ni = sheetView.model.score.draftNotes.count
                     sheetView.insertDraft(notes.enumerated().map {
                         IndexValue(value: $0.element, index: ni + $0.offset)
@@ -1517,7 +1517,7 @@ final class DraftAction: Action {
                             sheetView.newUndoGroup()
                             sheetView.unselect()
                             let notes = sheetView.model.score.notes[nis]
-                            sheetView.removeNote(at: nis)
+                            sheetView.removeNotes(at: nis)
                             let ni = sheetView.model.score.draftNotes.count
                             sheetView.insertDraft(notes.enumerated().map {
                                 IndexValue(value: $0.element, index: ni + $0.offset)
@@ -1946,7 +1946,7 @@ final class AddTimeAction: InputKeyEventAction {
                    } else {
                        sheetView.newUndoGroup()
                        sheetView.unselect()
-                       sheetView.set(beat: 0, at: 0)
+                       sheetView.set(keyframeBeat: 0, at: 0)
                        var option = sheetView.model.animation.option
                        option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                        option.timelineY = sheetP.y.clipped(min: Sheet.timelineY,

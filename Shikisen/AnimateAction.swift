@@ -1012,7 +1012,7 @@ final class InterpolateAction: InputKeyEventAction {
                     }
                     if isAppend {
                         sheetView.newUndoGroup()
-                        sheetView.removeNote(at: noteIAndNotes.map { $0.0 }.sorted())
+                        sheetView.removeNotes(at: noteIAndNotes.map { $0.0 }.sorted())
                         sheetView.append(nNote)
                     } else {
                         rootView.cursor = .arrowWith(string: "Empty".localized)
@@ -1401,11 +1401,6 @@ final class InterpolateAction: InputKeyEventAction {
                     return IndexValue(value: interOption, index: lis[$0])
                 }
                 
-                let pnP = nKI != sheetView.model.animation.index ?
-                (oRootKI < nRootKI ?
-                 sheetView.model.animation.currentKeyframe.nextPosition :
-                 sheetView.model.animation.currentKeyframe.previousPosition) : .init()
-                
                 let scale = rootView.screenToWorldScale
                 let lw = Line.defaultLineWidth
                 let blw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
@@ -1416,8 +1411,7 @@ final class InterpolateAction: InputKeyEventAction {
                     let linePath = sheetView.animationView.elementViews[nKI]
                         .linesView.elementViews[li].node.path
                     let worldLinePath = sheetView.animationView.convertToWorld(linePath)
-                    noNodes.append(Node(attitude: .init(position: pnP),
-                                        path: worldLinePath,
+                    noNodes.append(Node(path: worldLinePath,
                                         lineWidth: blw,
                                         lineType: .color(.removing)))
                 }
@@ -1434,27 +1428,23 @@ final class InterpolateAction: InputKeyEventAction {
                         || (idLines.count == 1 && idLines[0] == line) {
                         
                         let lwScale = (oRootKI == nRootKI && !isInterpolated ? 3.0 : 1.0)
-                        nodes.append(Node(attitude: .init(position: pnP),
-                                          path: worldLinePath,
+                        nodes.append(Node(path: worldLinePath,
                                           lineWidth: blw * lwScale,
                                           lineType: .color(.selected)))
                         return true
                     } else if idLines.isEmpty && isInterpolated {
-                        noNodes.append(Node(attitude: .init(position: pnP),
-                                            path: worldLinePath,
+                        noNodes.append(Node(path: worldLinePath,
                                             lineWidth: blw,
                                             lineType: .color(.warning)))
                         return true
                     } else {
-                        noNodes.append(Node(attitude: .init(position: pnP),
-                                            path: worldLinePath,
+                        noNodes.append(Node(path: worldLinePath,
                                             lineWidth: blw,
                                             lineType: .color(.removing)))
                         for line in idLines {
                             let linePath = Path(line)
                             let worldLinePath = sheetView.animationView.convertToWorld(linePath)
-                            noNodes.append(Node(attitude: .init(position: pnP),
-                                                path: worldLinePath,
+                            noNodes.append(Node(path: worldLinePath,
                                                 lineWidth: blw,
                                                 lineType: .color(.removing)))
                         }
@@ -1815,7 +1805,7 @@ extension SheetView {
                     let appendValues = insertValues.map {
                         IndexValue(value: $0.value.map { $0.value }, index: $0.index)
                     }
-                    appendKeyLines(appendValues)
+                    append(appendValues)
                 } else {
                     insertKeyLines(insertValues)
                 }
@@ -2115,7 +2105,7 @@ final class DisconnectAction: InputKeyEventAction {
                         }
                         if !appendValues.isEmpty {
                             appendValues.sort(by: { $0.index < $1.index })
-                            sheetView.appendKeyLines(appendValues)
+                            sheetView.append(appendValues)
                         }
                     }
                     

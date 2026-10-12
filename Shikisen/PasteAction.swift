@@ -1344,7 +1344,7 @@ final class APasteAction: Action {
                 sheetView.replace(replaceNIVs)
             }
             if !removeNoteIs.isEmpty {
-                sheetView.removeNote(at: removeNoteIs)
+                sheetView.removeNotes(at: removeNoteIs)
             }
             
             sheetView.updatePlaying()
@@ -2906,19 +2906,19 @@ final class APasteAction: Action {
                     }
                 }
                 
-                let kivs = keyLines(isDraft: false)
+                let lkivs = keyLines(isDraft: false)
                 let pkivs = keyPlanes(isDraft: false)
                 let dkivs = keyLines(isDraft: true)
                 let dpkivs = keyPlanes(isDraft: true)
-                if !kivs.isEmpty || !pkivs.isEmpty
+                if !lkivs.isEmpty || !pkivs.isEmpty
                     || !dkivs.isEmpty || !dpkivs.isEmpty {
                     
                     sheetView.newUndoGroup()
-                    if !kivs.isEmpty {
-                        sheetView.appendKeyLines(kivs)
+                    if !lkivs.isEmpty {
+                        sheetView.append(lkivs)
                     }
                     if !pkivs.isEmpty {
-                        sheetView.appendKeyPlanes(pkivs)
+                        sheetView.append(pkivs)
                     }
                     if !dkivs.isEmpty {
                         sheetView.appendDraftKeyLines(dkivs)

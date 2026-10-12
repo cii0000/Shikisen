@@ -78,6 +78,8 @@
 "Undo Error" = "取り消しエラー";
 "Redo Error" = "やり直しエラー";
 "History Load Error" = "履歴ロードエラー";
+"History Error" = "履歴エラー";
+"Failed to load" = "ロードに失敗しました";
 
 "No Update" = "更新なし";
 "Making Faces" = "面を作成中";

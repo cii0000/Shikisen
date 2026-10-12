@@ -37,9 +37,16 @@ struct Version: Hashable, Codable {
 enum UndoItemType {
     case unreversible, lazyReversible, reversible
 }
-protocol UndoItem: Sendable, Protobuf, Codable {
+protocol UndoItem: Sendable, Protobuf, Hashable, Codable {
     var type: UndoItemType { get }
     func reversed() -> Self?
+    func isEqualCase(_ other: Self) -> Bool
+    var caseName: String { get }
+}
+extension UndoItem {
+    func isEqualCase(_ other: Self) -> Bool {
+        caseName == other.caseName
+    }
 }
 
 struct UndoItemValue<T: UndoItem>: Codable {
@@ -107,26 +114,30 @@ struct UndoItemValue<T: UndoItem>: Codable {
             return (redoItem, .redo)
         }
     }
+    func item(at type: UndoType) -> T {
+        switch type {
+        case .undo: undoItem
+        case .redo: redoItem
+        }
+    }
 }
 extension UndoItemValue: CustomStringConvertible {
     var description: String {
         "\nundo: \(undoItem),\nredo: \(redoItem)\n"
     }
 }
+
 struct UndoError<T: UndoItem>: LocalizedError {
     var errorDescription: String?
     
     init(load udv: UndoDataValue<T>) {
-        errorDescription = "History Load Error".localized
+        errorDescription = "\("History Error".localized): \("Failed to load".localized)"
     }
     init(undo undoItem: T) {
-        errorDescription = "\("Undo Error".localized): \(String(describing: undoItem))"
+        errorDescription = "\("History Error".localized): undo \(undoItem.caseName)"
     }
     init(redo redoItem: T) {
-        errorDescription = "\("Redo Error".localized): \(String(describing: redoItem))"
-    }
-    init(first udv: UndoDataValue<T>) {
-        errorDescription = "First Reverse Error"
+        errorDescription = "\("History Error".localized): redo \(redoItem.caseName)"
     }
 }
 struct UndoDataValue<T: UndoItem>: Codable {
@@ -142,15 +153,6 @@ struct UndoDataValue<T: UndoItem>: Codable {
     mutating func setError() {
         loadType = .error
         undoItemValue = nil
-    }
-    var saveUndoItemValue: UndoItemValue<T>? {
-        get {
-            undoItemValue
-        }
-        set {
-            undoItemValue = newValue
-            save()
-        }
     }
 }
 extension UndoDataValue {
@@ -253,34 +255,49 @@ extension UndoDataValue: Protobuf {
 
 struct UndoGroup<T: UndoItem>: Codable {
     var values = [UndoDataValue<T>]()
-    var isFirstReverse = false
+    var firstUndoItem: T?, firstUndoItemData = Data()
     var date = Date()
 }
 extension UndoGroup {
     func reverse(_ handler: (EnumeratedSequence<[UndoDataValue<T>]>.Element) -> ()) {
-        if isFirstReverse && values.count > 1 {
-            handler((0, values[0]))
-            for i in (1 ..< values.count).reversed() {
-                handler((i, values[i]))
-            }
-        } else {
-            values.enumerated().reversed().forEach {
-                handler($0)
-            }
+        values.enumerated().reversed().forEach {
+            handler($0)
         }
+    }
+    var isEnableFirst: Bool {
+        firstUndoItem != nil || !firstUndoItemData.isEmpty
+    }
+    mutating func loadFirstUndoItem() -> T? {
+        if let firstUndoItem {
+            return firstUndoItem
+        } else if !firstUndoItemData.isEmpty {
+            let undoItem = try? T(serializedData: firstUndoItemData)
+            firstUndoItem = undoItem
+            return undoItem
+        }
+        return nil
     }
 }
 extension UndoGroup: Protobuf {
     typealias PB = PBUndoGroup
     init(_ pb: PBUndoGroup) throws {
         values = try pb.values.map { try UndoDataValue($0) }
-        isFirstReverse = pb.isFirstReverse
+        
+        if pb.isFirstReverse, values.count >= 1 {
+            self.firstUndoItemData = values[0].undoItemData
+            values.removeFirst()
+        } else {
+            firstUndoItemData = pb.firstUndoItemData
+        }
+        
         date = (try? Date(pb.date)) ?? Date(timeIntervalSinceReferenceDate: 0)
     }
     var pb: PBUndoGroup {
         .with {
             $0.values = values.map { $0.pb }
-            $0.isFirstReverse = isFirstReverse
+            if !firstUndoItemData.isEmpty {
+                $0.firstUndoItemData = firstUndoItemData
+            }
             $0.date = date.pb
         }
     }
@@ -375,12 +392,13 @@ extension _Branch {
     func appendInLastGroup(_ uiv: UndoItemValue<T>) {
         groups[.last].values.append(.init(save: uiv))
     }
-    func setFirstInLastGroup(item: T) {
-        let uiv = UndoItemValue(undo: item, redo: item)
-        let udv = UndoDataValue(save: uiv)
-        groups[.last].values = [udv]
-        groups[.last].isFirstReverse = true
+    func replaceInLastGroup(redo redoItem: T) {
+        groups[.last].values[.last].undoItemValue?.redoItem = redoItem
     }
+    func setInLastGroup(first undoItem: T) {
+        groups[.last].firstUndoItem = undoItem
+    }
+    
     subscript(version: Version) -> UndoGroup<T> {
         get { self[version.indexPath].groups[version.groupIndex] }
         set { self[version.indexPath].groups[version.groupIndex] = newValue }
@@ -541,6 +559,14 @@ extension BranchCoder {
 enum UndoType {
     case undo, redo
 }
+extension UndoType {
+    var reversed: Self {
+        switch self {
+        case .undo: .redo
+        case .redo: .undo
+        }
+    }
+}
 
 struct History<T: UndoItem> {
     private var rootBranch = _Branch<T>()
@@ -650,7 +676,7 @@ extension History {
             }
         }
     }
-    mutating func newUndoGroup(firstItem: T? = nil) {
+    mutating func newUndoGroup() {
         copyIfShared()
         
         if !isLeafUndo {
@@ -666,10 +692,6 @@ extension History {
                 currentVersion = Version(indexPath: .init(), groupIndex: 0)
             }
         }
-        if let item = firstItem {
-            rootBranch[currentVersion!.indexPath]
-                .setFirstInLastGroup(item: item)
-        }
     }
     mutating func append(undo undoItem: T, redo redoItem: T) {
         copyIfShared()
@@ -682,11 +704,53 @@ extension History {
         
         rootBranch[currentVersion!.indexPath].appendInLastGroup(uiv)
     }
+    mutating func set(first undoItem: T) {
+        copyIfShared()
+        
+        rootBranch[currentVersion!.indexPath].setInLastGroup(first: undoItem)
+    }
+    
+    mutating func newUndoGroupAndAppend(undo undoItem: T) {
+        copyIfShared()
+        
+        if let currentVersion,
+           let lastUndoItem = rootBranch[currentVersion.indexPath].groups.last?
+            .values.last?.undoItemValue?.undoItem,
+           undoItem.isEqualCase(lastUndoItem) {
+            
+            rootBranch[currentVersion.indexPath].replaceInLastGroup(redo: lastUndoItem)
+        } else {
+            newUndoGroup()
+            rootBranch[currentVersion!.indexPath].appendInLastGroup(undo: undoItem,
+                                                                    redo: undoItem)
+        }
+    }
+    mutating func replace(redo redoItem: T) {
+        guard let lastUndoItem = rootBranch[currentVersion!.indexPath].groups.last?
+            .values.last?.undoItemValue?.undoItem,
+              redoItem.isEqualCase(lastUndoItem) else { return }
+        
+        copyIfShared()
+        rootBranch[currentVersion!.indexPath].replaceInLastGroup(redo: redoItem)
+    }
+    mutating func removeLastIfEqual(redo redoItem: T) {
+        guard let uiv = rootBranch[currentVersion!.indexPath].groups.last?
+            .values.last?.undoItemValue, redoItem.isEqualCase(uiv.undoItem) else { return }
+        if uiv.undoItem == uiv.redoItem {
+            copyIfShared()
+            rootBranch[currentVersion!.indexPath].groups[.last].values.removeLast()
+        }
+    }
     
     struct UndoResult {
-        var item: UndoDataValue<T>, type: UndoType
+        var isEnabledFirst: Bool = false
+        var undoDataValue: UndoDataValue<T>, type: UndoType
         var version: Version, valueIndex: Int
         
+        static func enabledFirst(version: Version) -> Self {
+            Self.init(isEnabledFirst: true, undoDataValue: .init(),
+                      type: .undo, version: version, valueIndex: 0)
+        }
         func undoItem(with iv: UndoItemValue<T>) -> T {
             switch type {
             case .undo: iv.undoItem
@@ -714,8 +778,12 @@ extension History {
         var results = [UndoResult]()
         if fromTopIndex < toTopIndex {
             enumerated(minI: fromTopIndex + 1, maxI: toTopIndex) { (version) in
-                rootBranch[version].values.enumerated().forEach {
-                    results.append(UndoResult(item: $0.element,
+                let group = rootBranch[version]
+                if group.isEnableFirst {
+                    results.append(UndoResult.enabledFirst(version: version))
+                }
+                group.values.enumerated().forEach {
+                    results.append(UndoResult(undoDataValue: $0.element,
                                               type: .redo,
                                               version: version,
                                               valueIndex: $0.offset))
@@ -733,8 +801,12 @@ extension History {
                     var nVersion = version
                     nVersion.groupIndex = 0
                     nVersion.indexPath.append(branch.selectedChildIndex!)
-                    branch.children[branch.selectedChildIndex!].groups[0].reverse {
-                        results.append(UndoResult(item: $0.element,
+                    let group = branch.children[branch.selectedChildIndex!].groups[0]
+                    if group.isEnableFirst {
+                        results.append(UndoResult.enabledFirst(version: nVersion))
+                    }
+                    group.reverse {
+                        results.append(UndoResult(undoDataValue: $0.element,
                                                   type: .undo,
                                                   version: nVersion,
                                                   valueIndex: $0.offset))
@@ -742,8 +814,12 @@ extension History {
                 } else {
                     var nVersion = version
                     nVersion.groupIndex = version.groupIndex + 1
-                    rootBranch[nVersion].reverse {
-                        results.append(UndoResult(item: $0.element,
+                    let group = rootBranch[nVersion]
+                    if group.isEnableFirst {
+                        results.append(UndoResult.enabledFirst(version: nVersion))
+                    }
+                    group.reverse {
+                        results.append(UndoResult(undoDataValue: $0.element,
                                                   type: .undo,
                                                   version: nVersion,
                                                   valueIndex: $0.offset))
