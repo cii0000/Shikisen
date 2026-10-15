@@ -1437,9 +1437,9 @@ final class LineAction: Action {
     }
     
     func lassoCopy(isRemove: Bool,
-                   isEnableLine: Bool = true,
-                   isEnablePlane: Bool = true,
-                   isEnableText: Bool = true,
+                   isEnabledLine: Bool = true,
+                   isEnabledPlane: Bool = true,
+                   isEnabledText: Bool = true,
                    distance: Double = 0, at p: Point) {
         guard let lb = tempLine.bounds else { return }
         if centerBounds.contains(lb),
@@ -1449,9 +1449,9 @@ final class LineAction: Action {
             let d = distance * rootView.screenToWorldScale
             if let value = sheetView.lassoErase(with: Lasso(line: nLine),
                                                 isRemove: isRemove,
-                                                isEnableLine: isEnableLine,
-                                                isEnablePlane: isEnablePlane,
-                                                isEnableText: isEnableText,
+                                                isEnabledLine: isEnabledLine,
+                                                isEnabledPlane: isEnabledPlane,
+                                                isEnabledText: isEnabledText,
                                                 isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView),
                                                 distance: d) {
                 let np = sheetView.convertFromWorld(p)
@@ -1475,9 +1475,9 @@ final class LineAction: Action {
                     if let aValue
                         = sheetView.lassoErase(with: Lasso(line: nLine),
                                                isRemove: isRemove,
-                                               isEnableLine: isEnableLine,
-                                               isEnablePlane: isEnablePlane,
-                                               isEnableText: isEnableText,
+                                               isEnabledLine: isEnabledLine,
+                                               isEnabledPlane: isEnabledPlane,
+                                               isEnabledText: isEnabledText,
                                                isUpdatedNewUndoGroup: isUpdatedNewUndoGroupSheetViews.contains(sheetView)) {
                         let t = sheetView.animationView.node.localTransform
                         * Transform(translation: -sheetView.convertFromWorld(p))

@@ -1164,7 +1164,7 @@ extension Sheet: Protobuf {
         backgroundUUColor = (try? UUColor(pb.backgroundUucolor))
             ?? Sheet.defalutBackgroundUUColor
         selection = (try? .init(pb.selection)) ?? .empty
-        if !checkConsistency(selection) {
+        if !canSet(selection) {
             selection = .empty
         }
         keyframeAttitude = pb.hasKeyframeAttitude ?
@@ -1239,7 +1239,7 @@ extension Sheet {
         selection.keyframeSelections[animation.index]
     }
     
-    func checkConsistency(_ selection: SheetSelection) -> Bool {
+    func canSet(_ selection: SheetSelection) -> Bool {
         if let maxKeyframeI = selection.keyframeSelections.keys.max() {
             if !animation.keyframes.count.range.contains(maxKeyframeI) {
                 return false
@@ -2450,258 +2450,6 @@ enum SheetUndoItem {
     
     case setSelection(_ selection: SheetSelection)
 }
-extension SheetUndoItem: UndoItem {
-    var type: UndoItemType {
-        switch self {
-        case .appendLine: .reversible
-        case .appendKeyLine: .reversible
-        case .appendLines: .reversible
-        case .insertLines: .reversible
-        case .insertKeyLines: .reversible
-        case .removeLastLines: .unreversible
-        case .removeLastKeyLines: .unreversible
-            
-        case .appendPlanes: .reversible
-        case .removeLastPlanes: .unreversible
-        case .insertPlanes: .reversible
-        case .replaceLines: .lazyReversible
-        case .replacePlanes: .lazyReversible
-        case .removeLines: .unreversible
-        case .removePlanes: .unreversible
-        case .setPlaneValue: .lazyReversible
-        case .setKeyPlaneValues: .lazyReversible
-        case .changeToDraft: .reversible
-        case .setPicture: .lazyReversible
-        case .insertDraftLines: .reversible
-        case .insertDraftPlanes: .reversible
-        case .removeDraftLines: .unreversible
-        case .removeDraftPlanes: .unreversible
-        case .setDraftPicture: .lazyReversible
-        case .insertTexts: .reversible
-        case .replaceTexts: .lazyReversible
-        case .removeTexts: .unreversible
-        case .replaceString: .lazyReversible
-        case .changedColors: .lazyReversible
-        case .insertBorders: .reversible
-        case .removeBorders: .unreversible
-        case .insertKeyframes: .reversible
-        case .removeKeyframes: .unreversible
-        case .setKeyframeOptions: .lazyReversible
-        case .setRootKeyframeI: .lazyReversible
-        case .replaceKeyLines: .lazyReversible
-        case .removeKeyLines: .unreversible
-        case .insertKeyPlanes: .reversible
-        case .replaceKeyPlanes: .lazyReversible
-        case .removeKeyPlanes: .unreversible
-        case .insertDraftKeyLines: .reversible
-        case .removeDraftKeyLines: .unreversible
-        case .insertDraftKeyPlanes: .reversible
-        case .removeDraftKeyPlanes: .unreversible
-        case .setLineIDs: .lazyReversible
-        case .setAnimationOption: .lazyReversible
-        case .insertNotes: .reversible
-        case .replaceNotes: .lazyReversible
-        case .removeNotes: .unreversible
-        case .insertDraftNotes: .reversible
-        case .removeDraftNotes: .unreversible
-        case .insertContents: .reversible
-        case .replaceContents: .lazyReversible
-        case .removeContents: .unreversible
-        case .setScoreOption: .lazyReversible
-        case .setSheetOption: .lazyReversible
-        case .setSelection: .lazyReversible
-        }
-    }
-    
-    func reversed() -> SheetUndoItem? {
-        switch self {
-        case .appendLine:
-             .removeLastLines(count: 1)
-        case .appendKeyLine(let kv):
-            .removeLastKeyLines(.init(value: 1, index: kv.index))
-        case .appendLines(let lines):
-             .removeLastLines(count: lines.count)
-        case .removeLastLines:
-             nil
-        case .removeLastKeyLines:
-             nil
-            
-        case .appendPlanes(let planes):
-             .removeLastPlanes(count: planes.count)
-        case .removeLastPlanes:
-             nil
-        case .insertLines(let livs):
-             .removeLines(lineIndexes: livs.map { $0.index })
-        case .insertPlanes(let pivs):
-             .removePlanes(planeIndexes: pivs.map { $0.index })
-        case .replaceLines:
-             self
-        case .replacePlanes:
-             self
-        case .removeLines:
-             nil
-        case .removePlanes:
-             nil
-        case .setPlaneValue:
-             self
-        case .setKeyPlaneValues:
-             self
-        case .changeToDraft(let isReverse):
-             .changeToDraft(isReverse: !isReverse)
-        case .setPicture(_):
-             self
-        case .insertDraftLines(let livs):
-             .removeDraftLines(lineIndexes: livs.map { $0.index })
-        case .insertDraftPlanes(let pivs):
-             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
-        case .removeDraftLines:
-             nil
-        case .removeDraftPlanes:
-             nil
-        case .setDraftPicture(_):
-             self
-        case .insertTexts(let tivs):
-             .removeTexts(tivs.map { $0.index })
-        case .replaceTexts:
-             self
-        case .removeTexts:
-             nil
-        case .replaceString(_):
-             self
-        case .changedColors(_):
-             self
-        case .insertBorders(let bivs):
-             .removeBorders(borderIndexes: bivs.map { $0.index })
-        case .removeBorders:
-             nil
-        case .insertKeyframes(let kivs):
-             .removeKeyframes(kivs.map { $0.index })
-        case .removeKeyframes:
-             nil
-        case .setKeyframeOptions:
-             self
-        case .setRootKeyframeI:
-             self
-        case .insertKeyLines(let kivs):
-             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .replaceKeyLines:
-             self
-        case .removeKeyLines:
-             nil
-        case .insertKeyPlanes(let kivs):
-             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .replaceKeyPlanes:
-             self
-        case .removeKeyPlanes:
-             nil
-        case .insertDraftKeyLines(let kivs):
-             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .removeDraftKeyLines:
-             nil
-        case .insertDraftKeyPlanes(let kivs):
-             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .removeDraftKeyPlanes:
-             nil
-        case .setLineIDs:
-             self
-        case .setAnimationOption:
-             self
-        
-        case .insertNotes(let nivs):
-             .removeNotes(noteIndexes: nivs.map { $0.index })
-        case .replaceNotes:
-             self
-        case .removeNotes:
-             nil
-            
-        case .insertDraftNotes(let nivs):
-             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
-        case .removeDraftNotes:
-             nil
-            
-        case .insertContents(let civs):
-             .removeContents(contentIndexes: civs.map { $0.index })
-        case .replaceContents:
-             self
-        case .removeContents:
-             nil
-            
-        case .setScoreOption:
-             self
-            
-        case .setSheetOption:
-             self
-            
-        case .setSelection:
-             self
-        }
-    }
-    
-    var caseName: String {
-        switch self {
-        case .appendLine: "appendLine"
-        case .appendKeyLine: "appendKeyLine"
-        case .appendLines: "appendLines"
-        case .insertLines: "insertLines"
-        case .removeLastLines: "removeLastLines"
-        case .removeLastKeyLines: "removeLastKeyLines"
-        case .appendPlanes: "appendPlanes"
-        case .removeLastPlanes: "removeLastPlanes"
-        case .insertPlanes: "insertPlane"
-        case .replaceLines: "replaceLines"
-        case .replacePlanes: "replacePlanes"
-        case .removeLines: "removeLines"
-        case .removePlanes: "removePlanes"
-        case .setPlaneValue: "setPlaneValue"
-        case .setKeyPlaneValues: "setKeyPlaneValues"
-        case .changeToDraft: "changeToDraft"
-        case .setPicture: "setPicture"
-        case .insertDraftLines: "insertDraftLines"
-        case .insertDraftPlanes: "insertDraftPlanes"
-        case .removeDraftLines: "removeDraftLines"
-        case .removeDraftPlanes: "removeDraftPlanes"
-        case .setDraftPicture: "setDraftPicture"
-        case .insertTexts: "insertTexts"
-        case .replaceTexts: "replaceTexts"
-        case .removeTexts: "removeTexts"
-        case .replaceString: "replaceString"
-        case .changedColors: "changedColors"
-        case .insertBorders: "insertBorders"
-        case .removeBorders: "removeBorders"
-        case .insertKeyframes: "insertKeyframes"
-        case .removeKeyframes: "removeKeyframes"
-        case .setKeyframeOptions: "setKeyframeOptions"
-        case .setRootKeyframeI: "setRootKeyframeI"
-        case .insertKeyLines: "insertKeyLines"
-        case .replaceKeyLines: "replaceKeyLines"
-        case .removeKeyLines: "removeKeyLines"
-        case .insertKeyPlanes: "insertKeyPlanes"
-        case .replaceKeyPlanes: "replaceKeyPlanes"
-        case .removeKeyPlanes: "removeKeyPlanes"
-        case .insertDraftKeyLines: "insertDraftKeyLines"
-        case .removeDraftKeyLines: "removeDraftKeyLines"
-        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
-        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
-        case .setLineIDs: "setLineIDs"
-        case .setAnimationOption: "setAnimationOption"
-        case .insertNotes: "insertNotes"
-        case .replaceNotes: "replaceNotes"
-        case .removeNotes: "removeNotes"
-        case .insertDraftNotes: "insertDraftNotes"
-        case .removeDraftNotes: "removeDraftNotes"
-        case .insertContents: "insertContents"
-        case .replaceContents: "replaceContents"
-        case .removeContents: "removeContents"
-        case .setScoreOption: "setScoreOption"
-        case .setSheetOption: "setSheetOption"
-        case .setSelection: "setSelection"
-        }
-    }
-}
 extension SheetUndoItem: Protobuf {
     init(_ pb: PBSheetUndoItem) throws {
         guard let value = pb.value else { throw ProtobufError() }
@@ -2939,21 +2687,275 @@ extension SheetUndoItem: Protobuf {
         }
     }
 }
+extension SheetUndoItem: UndoItem {
+    var caseName: String {
+        switch self {
+        case .appendLine: "appendLine"
+        case .appendKeyLine: "appendKeyLine"
+        case .appendLines: "appendLines"
+        case .insertLines: "insertLines"
+        case .removeLastLines: "removeLastLines"
+        case .removeLastKeyLines: "removeLastKeyLines"
+        case .appendPlanes: "appendPlanes"
+        case .removeLastPlanes: "removeLastPlanes"
+        case .insertPlanes: "insertPlane"
+        case .replaceLines: "replaceLines"
+        case .replacePlanes: "replacePlanes"
+        case .removeLines: "removeLines"
+        case .removePlanes: "removePlanes"
+        case .setPlaneValue: "setPlaneValue"
+        case .setKeyPlaneValues: "setKeyPlaneValues"
+        case .changeToDraft: "changeToDraft"
+        case .setPicture: "setPicture"
+        case .insertDraftLines: "insertDraftLines"
+        case .insertDraftPlanes: "insertDraftPlanes"
+        case .removeDraftLines: "removeDraftLines"
+        case .removeDraftPlanes: "removeDraftPlanes"
+        case .setDraftPicture: "setDraftPicture"
+        case .insertTexts: "insertTexts"
+        case .replaceTexts: "replaceTexts"
+        case .removeTexts: "removeTexts"
+        case .replaceString: "replaceString"
+        case .changedColors: "changedColors"
+        case .insertBorders: "insertBorders"
+        case .removeBorders: "removeBorders"
+        case .insertKeyframes: "insertKeyframes"
+        case .removeKeyframes: "removeKeyframes"
+        case .setKeyframeOptions: "setKeyframeOptions"
+        case .setRootKeyframeI: "setRootKeyframeI"
+        case .insertKeyLines: "insertKeyLines"
+        case .replaceKeyLines: "replaceKeyLines"
+        case .removeKeyLines: "removeKeyLines"
+        case .insertKeyPlanes: "insertKeyPlanes"
+        case .replaceKeyPlanes: "replaceKeyPlanes"
+        case .removeKeyPlanes: "removeKeyPlanes"
+        case .insertDraftKeyLines: "insertDraftKeyLines"
+        case .removeDraftKeyLines: "removeDraftKeyLines"
+        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
+        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
+        case .setLineIDs: "setLineIDs"
+        case .setAnimationOption: "setAnimationOption"
+        case .insertNotes: "insertNotes"
+        case .replaceNotes: "replaceNotes"
+        case .removeNotes: "removeNotes"
+        case .insertDraftNotes: "insertDraftNotes"
+        case .removeDraftNotes: "removeDraftNotes"
+        case .insertContents: "insertContents"
+        case .replaceContents: "replaceContents"
+        case .removeContents: "removeContents"
+        case .setScoreOption: "setScoreOption"
+        case .setSheetOption: "setSheetOption"
+        case .setSelection: "setSelection"
+        }
+    }
+    
+    var type: UndoItemType {
+        switch self {
+        case .appendLine: .reversible
+        case .appendKeyLine: .reversible
+        case .appendLines: .reversible
+        case .insertLines: .reversible
+        case .insertKeyLines: .reversible
+        case .removeLastLines: .unreversible
+        case .removeLastKeyLines: .unreversible
+        case .appendPlanes: .reversible
+        case .removeLastPlanes: .unreversible
+        case .insertPlanes: .reversible
+        case .replaceLines: .lazyReversible
+        case .replacePlanes: .lazyReversible
+        case .removeLines: .unreversible
+        case .removePlanes: .unreversible
+        case .setPlaneValue: .lazyReversible
+        case .setKeyPlaneValues: .lazyReversible
+        case .changeToDraft: .reversible
+        case .setPicture: .lazyReversible
+        case .insertDraftLines: .reversible
+        case .insertDraftPlanes: .reversible
+        case .removeDraftLines: .unreversible
+        case .removeDraftPlanes: .unreversible
+        case .setDraftPicture: .lazyReversible
+        case .insertTexts: .reversible
+        case .replaceTexts: .lazyReversible
+        case .removeTexts: .unreversible
+        case .replaceString: .lazyReversible
+        case .changedColors: .lazyReversible
+        case .insertBorders: .reversible
+        case .removeBorders: .unreversible
+        case .insertKeyframes: .reversible
+        case .removeKeyframes: .unreversible
+        case .setKeyframeOptions: .lazyReversible
+        case .setRootKeyframeI: .lazyReversible
+        case .replaceKeyLines: .lazyReversible
+        case .removeKeyLines: .unreversible
+        case .insertKeyPlanes: .reversible
+        case .replaceKeyPlanes: .lazyReversible
+        case .removeKeyPlanes: .unreversible
+        case .insertDraftKeyLines: .reversible
+        case .removeDraftKeyLines: .unreversible
+        case .insertDraftKeyPlanes: .reversible
+        case .removeDraftKeyPlanes: .unreversible
+        case .setLineIDs: .lazyReversible
+        case .setAnimationOption: .lazyReversible
+        case .insertNotes: .reversible
+        case .replaceNotes: .lazyReversible
+        case .removeNotes: .unreversible
+        case .insertDraftNotes: .reversible
+        case .removeDraftNotes: .unreversible
+        case .insertContents: .reversible
+        case .replaceContents: .lazyReversible
+        case .removeContents: .unreversible
+        case .setScoreOption: .lazyReversible
+        case .setSheetOption: .lazyReversible
+        case .setSelection: .lazyReversible
+        }
+    }
+    
+    func reversed() -> SheetUndoItem? {
+        switch self {
+        case .appendLine:
+             .removeLastLines(count: 1)
+        case .appendKeyLine(let kv):
+            .removeLastKeyLines(.init(value: 1, index: kv.index))
+        case .appendLines(let lines):
+             .removeLastLines(count: lines.count)
+        case .removeLastLines:
+             nil
+        case .removeLastKeyLines:
+             nil
+        case .appendPlanes(let planes):
+             .removeLastPlanes(count: planes.count)
+        case .removeLastPlanes:
+             nil
+        case .insertLines(let livs):
+             .removeLines(lineIndexes: livs.map { $0.index })
+        case .insertPlanes(let pivs):
+             .removePlanes(planeIndexes: pivs.map { $0.index })
+        case .replaceLines:
+             self
+        case .replacePlanes:
+             self
+        case .removeLines:
+             nil
+        case .removePlanes:
+             nil
+        case .setPlaneValue:
+             self
+        case .setKeyPlaneValues:
+             self
+        case .changeToDraft(let isReverse):
+             .changeToDraft(isReverse: !isReverse)
+        case .setPicture(_):
+             self
+        case .insertDraftLines(let livs):
+             .removeDraftLines(lineIndexes: livs.map { $0.index })
+        case .insertDraftPlanes(let pivs):
+             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
+        case .removeDraftLines:
+             nil
+        case .removeDraftPlanes:
+             nil
+        case .setDraftPicture(_):
+             self
+        case .insertTexts(let tivs):
+             .removeTexts(tivs.map { $0.index })
+        case .replaceTexts:
+             self
+        case .removeTexts:
+             nil
+        case .replaceString(_):
+             self
+        case .changedColors(_):
+             self
+        case .insertBorders(let bivs):
+             .removeBorders(borderIndexes: bivs.map { $0.index })
+        case .removeBorders:
+             nil
+        case .insertKeyframes(let kivs):
+             .removeKeyframes(kivs.map { $0.index })
+        case .removeKeyframes:
+             nil
+        case .setKeyframeOptions:
+             self
+        case .setRootKeyframeI:
+             self
+        case .insertKeyLines(let kivs):
+             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                   index: $0.index) })
+        case .replaceKeyLines:
+             self
+        case .removeKeyLines:
+             nil
+        case .insertKeyPlanes(let kivs):
+             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                    index: $0.index) })
+        case .replaceKeyPlanes:
+             self
+        case .removeKeyPlanes:
+             nil
+        case .insertDraftKeyLines(let kivs):
+             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                        index: $0.index) })
+        case .removeDraftKeyLines:
+             nil
+        case .insertDraftKeyPlanes(let kivs):
+             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .removeDraftKeyPlanes:
+             nil
+        case .setLineIDs:
+             self
+        case .setAnimationOption:
+             self
+        
+        case .insertNotes(let nivs):
+             .removeNotes(noteIndexes: nivs.map { $0.index })
+        case .replaceNotes:
+             self
+        case .removeNotes:
+             nil
+            
+        case .insertDraftNotes(let nivs):
+             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
+        case .removeDraftNotes:
+             nil
+            
+        case .insertContents(let civs):
+             .removeContents(contentIndexes: civs.map { $0.index })
+        case .replaceContents:
+             self
+        case .removeContents:
+             nil
+            
+        case .setScoreOption:
+             self
+            
+        case .setSheetOption:
+             self
+            
+        case .setSelection:
+             self
+        }
+    }
+}
 
 typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
 extension Sheet: HisotryOwner {
-    func loadCheck(redo item: SheetUndoItem) throws {
-        func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+    func canLoad(redo item: SheetUndoItem) -> Bool {
+        func canAppend<T: Equatable>(_ ns: [T], in array: [T]) -> Bool {
+            let di = array.count - ns.count
+            return di >= 0 && Array(array[di...]) == ns
+        }
+        func canInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             ivs.allSatisfy { $0.index < array.count && $0.value == array[$0.index] }
         }
-        func isSafeReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+        func canReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             ivs.allSatisfy { $0.index < array.count && $0.value == array[$0.index] }
         }
-        func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
+        func canRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
             idxs.filter { $0 < array.count + idxs.count }.sorted() == idxs
         }
-        func isSafe(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
+        func canSet(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
             guard planeValue.planes.count + planeValue.moveIndexValues.count
                     == picture.planes.count else { return false }
             var isArray = Array(repeating: false, count: picture.planes.count)
@@ -2971,231 +2973,219 @@ extension Sheet: HisotryOwner {
             }
             return true
         }
-        
-        func error() -> UndoError {
-            UndoError(redo: item)
-        }
-        
-        switch item {
-        case .appendLine(let line):
-            guard picture.lines.last == line else { throw error() }
-        case .appendKeyLine(let kv):
-            guard kv.index < animation.keyframes.count,
-                  picture.lines.last == kv.value else { throw error() }
-        case .appendLines(let lines):
-            let di = picture.lines.count - lines.count
-            guard di >= 0, Array(picture.lines[di...]) == lines else { throw error() }
-        case .insertLines(let livs):
-            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
-        case .removeLastLines: break
-        case .removeLastKeyLines(let kv):
-            guard kv.index < animation.keyframes.count else { throw error() }
-            
-        case .appendPlanes(let planes):
-            let di = picture.planes.count - planes.count
-            guard di >= 0, Array(picture.planes[di...]) == planes else { throw error() }
-        case .insertPlanes(let pivs):
-            guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
-        case .replaceLines(let livs):
-            guard isSafeReplace(livs, in: picture.lines) else { throw error() }
-        case .replacePlanes(let pivs):
-            guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
-        case .removeLines(let lis):
-            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
-        case .removeLastPlanes: break
-        case .removePlanes(let pis):
-            guard isSafeRemove(pis, in: picture.planes) else { throw error() }
-        case .setPlaneValue(let planeValue):
-            guard isSafe(planeValue, in: picture) else { throw error() }
-        case .setKeyPlaneValues(let pvkvs):
-            for kv in pvkvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafe(kv.value, in: animation.keyframes[kv.index].picture)
-                else { throw error() }
-            }
-        case .changeToDraft: break
-        case .setPicture(let picture):
-            guard self.picture == picture else { throw error() }
-        case .insertDraftLines(let livs):
-            guard isSafeInsert(livs, in: draftPicture.lines) else { throw error() }
-        case .insertDraftPlanes(let pivs):
-            guard isSafeInsert(pivs, in: draftPicture.planes) else { throw error() }
-        case .removeDraftLines(let lis):
-            guard isSafeRemove(lis, in: draftPicture.lines) else { throw error() }
-        case .removeDraftPlanes(let pis):
-            guard isSafeRemove(pis, in: draftPicture.planes) else { throw error() }
-        case .setDraftPicture(let draftPicture):
-            guard self.draftPicture == draftPicture else { throw error() }
-        case .insertTexts(let tivs):
-            guard isSafeInsert(tivs, in: texts) else { throw error() }
-        case .replaceTexts(let tivs):
-            guard isSafeReplace(tivs, in: texts) else { throw error() }
-        case .removeTexts(let tis):
-            guard isSafeRemove(tis, in: texts) else { throw error() }
-        case .replaceString(let tuiv):
-            guard tuiv.index < texts.count else { throw error() }
+        func canSet(_ tuiv: IndexValue<TextValue>) -> Bool {
+            guard tuiv.index < texts.count else { return false }
             let text = texts[tuiv.index], intRange = tuiv.value.newRange
             guard intRange.lowerBound >= 0
-                    && intRange.upperBound <= text.string.count else { throw error() }
+                    && intRange.upperBound <= text.string.count else { return false }
             let range = text.string.range(fromInt: intRange)
             let oldString = text.string[range]
             let oldOrigin = tuiv.value.origin != nil ? text.origin : nil
             let oldSize = tuiv.value.size != nil ? text.size : nil
             let oldWidthCount = tuiv.value.widthCount != nil ? text.widthCount : nil
-            guard oldString == tuiv.value.string
-                && oldOrigin == tuiv.value.origin
-                && oldSize == tuiv.value.size
-                    && oldWidthCount == tuiv.value.widthCount else { throw error() }
-        case .changedColors(let cuv):
-            if !cuv.planeIndexes.isEmpty {
-                guard cuv.planeIndexes.allSatisfy({
+            return oldString == tuiv.value.string
+            && oldOrigin == tuiv.value.origin
+            && oldSize == tuiv.value.size
+            && oldWidthCount == tuiv.value.widthCount
+        }
+        func canSet(_ cv: ColorValue) -> Bool {
+            if !cv.planeIndexes.isEmpty {
+                guard cv.planeIndexes.allSatisfy ({
                     $0 < picture.planes.count
-                    && cuv.uuColor == picture.planes[$0].uuColor
-                }) else { throw error() }
-            } else if !cuv.planeAnimationIndexes.isEmpty {
-                for k in cuv.planeAnimationIndexes {
-                    guard k.index < animation.keyframes.count else { throw error() }
+                    && cv.uuColor == picture.planes[$0].uuColor
+                }) else { return false }
+            } else if !cv.planeAnimationIndexes.isEmpty {
+                guard cv.planeAnimationIndexes.allSatisfy({ k in
+                    guard k.index < animation.keyframes.count else { return false }
                     let planes = animation.keyframes[k.index].picture.planes
-                    guard k.value.allSatisfy({
-                        $0 < planes.count && planes[$0].uuColor == cuv.uuColor
-                    }) else { throw error() }
-                }
+                    return k.value.allSatisfy {
+                        $0 < planes.count && planes[$0].uuColor == cv.uuColor
+                    }
+                }) else { return false }
             }
             
-            if !cuv.lineIndexes.isEmpty {
-                guard cuv.lineIndexes.allSatisfy({
+            if !cv.lineIndexes.isEmpty {
+                guard cv.lineIndexes.allSatisfy({
                     $0 < picture.lines.count
-                    && cuv.uuColor == picture.lines[$0].uuColor
-                }) else { throw error() }
-            } else if !cuv.lineAnimationIndexes.isEmpty {
-                for k in cuv.lineAnimationIndexes {
-                    guard k.index < animation.keyframes.count else { throw error() }
+                    && cv.uuColor == picture.lines[$0].uuColor
+                }) else { return false }
+            } else if !cv.lineAnimationIndexes.isEmpty {
+                guard cv.lineAnimationIndexes.allSatisfy({ k in
+                    guard k.index < animation.keyframes.count else { return false }
                     let lines = animation.keyframes[k.index].picture.lines
-                    guard k.value.allSatisfy({
-                        $0 < lines.count && lines[$0].uuColor == cuv.uuColor
-                    }) else { throw error() }
-                }
+                    return k.value.allSatisfy {
+                        $0 < lines.count && lines[$0].uuColor == cv.uuColor
+                    }
+                }) else { return false }
             }
             
-            if cuv.isBackground {
-                guard backgroundUUColor == cuv.uuColor else { throw error() }
+            if cv.isBackground {
+                guard backgroundUUColor == cv.uuColor else { return false }
             }
+            return true
+        }
+        
+        return switch item {
+        case .appendLine(let line):
+            picture.lines.last == line
+        case .appendKeyLine(let kv):
+            kv.index < animation.keyframes.count && picture.lines.last == kv.value
+        case .appendLines(let lines):
+            canAppend(lines, in: picture.lines)
+        case .insertLines(let livs):
+            canInsert(livs, in: picture.lines)
+        case .removeLastLines:
+            true
+        case .removeLastKeyLines(let kv):
+            kv.index < animation.keyframes.count
+        case .appendPlanes(let planes):
+            canAppend(planes, in: picture.planes)
+        case .insertPlanes(let pivs):
+            canInsert(pivs, in: picture.planes)
+        case .replaceLines(let livs):
+            canReplace(livs, in: picture.lines)
+        case .replacePlanes(let pivs):
+            canReplace(pivs, in: picture.planes)
+        case .removeLines(let lis):
+            canRemove(lis, in: picture.lines)
+        case .removeLastPlanes:
+            true
+        case .removePlanes(let pis):
+            canRemove(pis, in: picture.planes)
+        case .setPlaneValue(let planeValue):
+            canSet(planeValue, in: picture)
+        case .setKeyPlaneValues(let kvs):
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canSet(kv.value, in: animation.keyframes[kv.index].picture)
+            }
+        case .changeToDraft:
+            true
+        case .setPicture(let picture):
+            self.picture == picture
+        case .insertDraftLines(let livs):
+            canInsert(livs, in: draftPicture.lines)
+        case .insertDraftPlanes(let pivs):
+            canInsert(pivs, in: draftPicture.planes)
+        case .removeDraftLines(let lis):
+            canRemove(lis, in: draftPicture.lines)
+        case .removeDraftPlanes(let pis):
+            canRemove(pis, in: draftPicture.planes)
+        case .setDraftPicture(let draftPicture):
+            self.draftPicture == draftPicture
+        case .insertTexts(let tivs):
+            canInsert(tivs, in: texts)
+        case .replaceTexts(let tivs):
+            canReplace(tivs, in: texts)
+        case .removeTexts(let tis):
+            canRemove(tis, in: texts)
+        case .replaceString(let tuiv):
+            canSet(tuiv)
+        case .changedColors(let cv):
+            canSet(cv)
         case .insertBorders(let bivs):
-            guard isSafeInsert(bivs, in: borders) else { throw error() }
+            canInsert(bivs, in: borders)
         case .removeBorders(let bis):
-            guard isSafeRemove(bis, in: borders) else { throw error() }
+            canRemove(bis, in: borders)
         case .insertKeyframes(let kivs):
-            guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
+            canInsert(kivs, in: animation.keyframes)
         case .removeKeyframes(let kis):
-            guard isSafeRemove(kis, in: animation.keyframes) else { throw error() }
+            canRemove(kis, in: animation.keyframes)
         case .setKeyframeOptions(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      kv.value == animation.keyframes[kv.index].option
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && kv.value == animation.keyframes[kv.index].option
             }
-        case .setRootKeyframeI: break
+        case .setRootKeyframeI:
+            true
         case .insertKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .replaceKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .removeKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .insertKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .replaceKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .removeKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .insertDraftKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.lines)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value,
+                                in: animation.keyframes[kv.index].draftPicture.lines)
             }
         case .removeDraftKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.lines)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].draftPicture.lines)
             }
         case .insertDraftKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.planes)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].draftPicture.planes)
             }
         case .removeDraftKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.planes)
-                        else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].draftPicture.planes)
             }
         case .setLineIDs(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count else { throw error() }
+            kvs.allSatisfy { kv in
+                guard kv.index < animation.keyframes.count else { return false }
                 let lines = animation.keyframes[kv.index].picture.lines
-                guard kv.value.allSatisfy({
+                return kv.value.allSatisfy {
                     $0.index < lines.count && $0.value == lines[$0.index].interOption
-                }) else { throw error() }
+                }
             }
         case .setAnimationOption(let option):
-            guard animation.option == option else { throw error() }
+            animation.option == option
         case .insertNotes(let nivs):
-            guard isSafeInsert(nivs, in: score.notes) else { throw error() }
+            canInsert(nivs, in: score.notes)
         case .replaceNotes(let nivs):
-            guard isSafeReplace(nivs, in: score.notes) else { throw error() }
+            canReplace(nivs, in: score.notes)
         case .removeNotes(let nis):
-            guard isSafeRemove(nis, in: score.notes) else { throw error() }
+            canRemove(nis, in: score.notes)
         case .insertDraftNotes(let nivs):
-            guard isSafeInsert(nivs, in: score.draftNotes) else { throw error() }
+            canInsert(nivs, in: score.draftNotes)
         case .removeDraftNotes(let nis):
-            guard isSafeRemove(nis, in: score.draftNotes) else { throw error() }
+            canRemove(nis, in: score.draftNotes)
         case .insertContents(let civs):
-            guard isSafeInsert(civs, in: contents) else { throw error() }
+            canInsert(civs, in: contents)
         case .replaceContents(let civs):
-            guard isSafeReplace(civs, in: contents) else { throw error() }
+            canReplace(civs, in: contents)
         case .removeContents(let cis):
-            guard isSafeRemove(cis, in: contents) else { throw error() }
+            canRemove(cis, in: contents)
         case .setScoreOption(let option):
-            guard score.option == option else { throw error() }
+            score.option == option
         case .setSheetOption(let option):
-            guard self.option == option else { throw error() }
+            self.option == option
         case .setSelection(let selection):
-            guard self.selection == selection else { throw error() }
+            self.selection == selection
         }
     }
     
-    func loadCheck(undo item: SheetUndoItem) throws {
-        func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+    func canLoad(undo item: SheetUndoItem) -> Bool {
+        func canInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             var count = array.count
             return ivs.allSatisfy {
                 if $0.index > count { return false }
@@ -3203,13 +3193,13 @@ extension Sheet: HisotryOwner {
                 return true
             }
         }
-        func isSafeReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
+        func canReplace<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             ivs.allSatisfy { $0.index < array.count }
         }
-        func isSafeRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
+        func canRemove<T>(_ idxs: [Int], in array: [T]) -> Bool {
             idxs == idxs.filter { $0 < array.count }.sorted()
         }
-        func isSafe(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
+        func canSet(_ planeValue: PlaneValue, in picture: Picture) -> Bool {
             for v in planeValue.moveIndexValues {
                 guard v.value < picture.planes.count else { return false }
             }
@@ -3220,193 +3210,192 @@ extension Sheet: HisotryOwner {
             }
             return true
         }
-        func error() -> UndoError {
-            UndoError(undo: item)
+        func canSet(_ tviv: IndexValue<TextValue>) -> Bool {
+            guard !texts.isEmpty, tviv.index < texts.count else { return false }
+            let oldString = texts[tviv.index].string
+            return tviv.value.replacedRange.lowerBound >= 0
+            && tviv.value.replacedRange.lowerBound <= oldString.count
+            && tviv.value.replacedRange.upperBound <= oldString.count
+        }
+        func canSet(_ cv: ColorValue) -> Bool {
+            if !cv.planeIndexes.isEmpty {
+                guard cv.planeIndexes
+                    .allSatisfy({ $0 < picture.planes.count }) else { return false }
+            } else if !cv.planeAnimationIndexes.isEmpty {
+                for k in cv.planeAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { return false }
+                    let planes = animation.keyframes[k.index].picture.planes
+                    guard k.value.allSatisfy({ $0 < planes.count }) else { return false }
+                }
+            }
+            
+            if !cv.lineIndexes.isEmpty {
+                guard cv.lineIndexes
+                    .allSatisfy({ $0 < picture.lines.count }) else { return false }
+            } else if !cv.lineAnimationIndexes.isEmpty {
+                for k in cv.lineAnimationIndexes {
+                    guard k.index < animation.keyframes.count else { return false }
+                    let lines = animation.keyframes[k.index].picture.lines
+                    guard k.value.allSatisfy({ $0 < lines.count }) else { return false }
+                }
+            }
+            
+            return true
         }
         
-        switch item {
-        case .appendLine: break
+        return switch item {
+        case .appendLine:
+            true
         case .appendKeyLine(let kv):
-            guard kv.index < animation.keyframes.count else { throw error() }
-        case .appendLines: break
+            kv.index < animation.keyframes.count
+        case .appendLines:
+            true
         case .insertLines(let livs):
-            guard isSafeInsert(livs, in: picture.lines) else { throw error() }
+            canInsert(livs, in: picture.lines)
         case .removeLastLines(let count):
-            guard count <= picture.lines.count else { throw error() }
+            count <= picture.lines.count
         case .removeLastKeyLines(let kv):
-            guard kv.index < animation.keyframes.count,
-                  kv.value <= animation.keyframes[kv.index].picture.lines.count else { throw error() }
+            kv.index < animation.keyframes.count
+            && kv.value <= animation.keyframes[kv.index].picture.lines.count
         case .removeLines(let lis):
-            guard isSafeRemove(lis, in: picture.lines) else { throw error() }
-            
-        case .appendPlanes: break
+            canRemove(lis, in: picture.lines)
+        case .appendPlanes:
+            true
         case .removeLastPlanes(let count):
-            guard count <= picture.planes.count else { throw error() }
+            count <= picture.planes.count
         case .insertPlanes(let pivs):
-            guard isSafeInsert(pivs, in: picture.planes) else { throw error() }
+            canInsert(pivs, in: picture.planes)
         case .replaceLines(let livs):
-            guard isSafeReplace(livs, in: picture.lines) else { throw error() }
+            canReplace(livs, in: picture.lines)
         case .replacePlanes(let pivs):
-            guard isSafeReplace(pivs, in: picture.planes) else { throw error() }
+            canReplace(pivs, in: picture.planes)
         case .removePlanes(let pis):
-            guard isSafeRemove(pis, in: picture.planes) else { throw error() }
+            canRemove(pis, in: picture.planes)
         case .setPlaneValue(let planeValue):
-            guard isSafe(planeValue, in: picture) else { throw error() }
-        case .setKeyPlaneValues(let pvkvs):
-            for kv in pvkvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafe(kv.value, in: animation.keyframes[kv.index].picture)
-                else { throw error() }
+            canSet(planeValue, in: picture)
+        case .setKeyPlaneValues(let kvs):
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canSet(kv.value, in: animation.keyframes[kv.index].picture)
             }
-        case .changeToDraft: break
-        case .setPicture: break
+        case .changeToDraft:
+            true
+        case .setPicture:
+            true
         case .insertDraftLines(let livs):
-            guard isSafeInsert(livs, in: draftPicture.lines) else { throw error() }
+            canInsert(livs, in: draftPicture.lines)
         case .insertDraftPlanes(let pivs):
-            guard isSafeInsert(pivs, in: draftPicture.planes) else { throw error() }
+            canInsert(pivs, in: draftPicture.planes)
         case .removeDraftLines(let lis):
-            guard isSafeRemove(lis, in: draftPicture.lines) else { throw error() }
+            canRemove(lis, in: draftPicture.lines)
         case .removeDraftPlanes(let pis):
-            guard isSafeRemove(pis, in: draftPicture.planes) else { throw error() }
-        case .setDraftPicture: break
+            canRemove(pis, in: draftPicture.planes)
+        case .setDraftPicture:
+            true
         case .insertTexts(let tivs):
-            guard isSafeInsert(tivs, in: texts) else { throw error() }
+            canInsert(tivs, in: texts)
         case .replaceTexts(let tivs):
-            guard isSafeReplace(tivs, in: texts) else { throw error() }
+            canReplace(tivs, in: texts)
         case .removeTexts(let tis):
-            guard isSafeRemove(tis, in: texts) else { throw error() }
+            canRemove(tis, in: texts)
         case .replaceString(let tviv):
-            guard !texts.isEmpty, tviv.index < texts.count else { throw error() }
-            let oldString = texts[tviv.index].string
-            guard tviv.value.replacedRange.lowerBound >= 0,
-                  tviv.value.replacedRange.lowerBound <= oldString.count,
-                  tviv.value.replacedRange.upperBound <= oldString.count else { throw error() }
-        case .changedColors(let cuv):
-            if !cuv.planeIndexes.isEmpty {
-                guard cuv.planeIndexes
-                    .allSatisfy({ $0 < picture.planes.count }) else { throw error() }
-            } else if !cuv.planeAnimationIndexes.isEmpty {
-                for k in cuv.planeAnimationIndexes {
-                    guard k.index < animation.keyframes.count else { throw error() }
-                    let planes = animation.keyframes[k.index].picture.planes
-                    guard k.value.allSatisfy({ $0 < planes.count }) else { throw error() }
-                }
-            }
-            
-            if !cuv.lineIndexes.isEmpty {
-                guard cuv.lineIndexes
-                    .allSatisfy({ $0 < picture.lines.count }) else { throw error() }
-            } else if !cuv.lineAnimationIndexes.isEmpty {
-                for k in cuv.lineAnimationIndexes {
-                    guard k.index < animation.keyframes.count else { throw error() }
-                    let lines = animation.keyframes[k.index].picture.lines
-                    guard k.value.allSatisfy({ $0 < lines.count }) else { throw error() }
-                }
-            }
+            canSet(tviv)
+        case .changedColors(let cv):
+            canSet(cv)
         case .insertBorders(let bivs):
-            guard isSafeInsert(bivs, in: borders) else { throw error() }
+            canInsert(bivs, in: borders)
         case .removeBorders(let bis):
-            guard isSafeRemove(bis, in: borders) else { throw error() }
+            canRemove(bis, in: borders)
         case .insertKeyframes(let kivs):
-            guard isSafeInsert(kivs, in: animation.keyframes) else { throw error() }
+            canInsert(kivs, in: animation.keyframes)
         case .removeKeyframes(let kis):
-            guard isSafeRemove(kis, in: animation.keyframes) else { throw error() }
+            canRemove(kis, in: animation.keyframes)
         case .setKeyframeOptions(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
             }
-        case .setRootKeyframeI: break
+        case .setRootKeyframeI:
+            true
         case .insertKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .replaceKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canReplace(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .removeKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].picture.lines)
             }
         case .insertKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .replaceKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canReplace(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .removeKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].picture.planes)
             }
         case .insertDraftKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.lines)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].draftPicture.lines)
             }
         case .removeDraftKeyLines(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.lines)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].draftPicture.lines)
             }
         case .insertDraftKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeInsert(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.planes)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canInsert(kv.value, in: animation.keyframes[kv.index].draftPicture.planes)
             }
         case .removeDraftKeyPlanes(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count,
-                      isSafeRemove(kv.value,
-                                   in: animation.keyframes[kv.index].draftPicture.planes)
-                else { throw error() }
+            kvs.allSatisfy { kv in
+                kv.index < animation.keyframes.count
+                && canRemove(kv.value, in: animation.keyframes[kv.index].draftPicture.planes)
             }
         case .setLineIDs(let kvs):
-            for kv in kvs {
-                guard kv.index < animation.keyframes.count else { throw error() }
+            kvs.allSatisfy { kv in
+                guard kv.index < animation.keyframes.count else { return false }
                 let lines = animation.keyframes[kv.index].picture.lines
-                guard kv.value.allSatisfy({ $0.index < lines.count }) else { throw error() }
+                return kv.value.allSatisfy { $0.index < lines.count }
             }
-        case .setAnimationOption: break
+        case .setAnimationOption:
+            true
         case .insertNotes(let nivs):
-            guard isSafeInsert(nivs, in: score.notes) else { throw error() }
+            canInsert(nivs, in: score.notes)
         case .replaceNotes(let nivs):
-            guard isSafeReplace(nivs, in: score.notes) else { throw error() }
+            canReplace(nivs, in: score.notes)
         case .removeNotes(let nis):
-            guard isSafeRemove(nis, in: score.notes) else { throw error() }
+            canRemove(nis, in: score.notes)
         case .insertDraftNotes(let nivs):
-            guard isSafeInsert(nivs, in: score.draftNotes) else { throw error() }
+            canInsert(nivs, in: score.draftNotes)
         case .removeDraftNotes(let nis):
-            guard isSafeRemove(nis, in: score.draftNotes) else { throw error() }
+            canRemove(nis, in: score.draftNotes)
         case .insertContents(let civs):
-            guard isSafeInsert(civs, in: contents) else { throw error() }
+            canInsert(civs, in: contents)
         case .replaceContents(let civs):
-            guard isSafeReplace(civs, in: contents) else { throw error() }
+            canReplace(civs, in: contents)
         case .removeContents(let cis):
-            guard isSafeRemove(cis, in: contents) else { throw error() }
-        case .setScoreOption: break
-        case .setSheetOption: break
+            canRemove(cis, in: contents)
+        case .setScoreOption:
+            true
+        case .setSheetOption:
+            true
         case .setSelection(let selection):
-            guard checkConsistency(selection) else { throw error() }
+            self.canSet(selection)
         }
     }
     

@@ -105,28 +105,29 @@ struct ArrayDiff<T: Equatable> {
     var removes: [Int]
     var inserts: [IndexValue<T>]
     
-    init(from oldArray: [T], to newArray: [T]) {
-        if oldArray.isEmpty {
+    /// O(fromArray * tiArray)
+    init(from fromArray: [T], to toArray: [T]) {
+        if fromArray.isEmpty {
             replaces = []
             removes = []
-            self.inserts = newArray.enumerated().map { .init(value: $0.element,
+            self.inserts = toArray.enumerated().map { .init(value: $0.element,
                                                              index: $0.offset) }
             return
         }
-        if newArray.isEmpty {
+        if toArray.isEmpty {
             replaces = []
-            removes = Array(0 ..< oldArray.count)
+            removes = Array(0 ..< fromArray.count)
             self.inserts = []
             return
         }
-        let m = oldArray.count, n = newArray.count
+        let m = fromArray.count, n = toArray.count
         var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
         for i in 0 ... m { dp[i][0] = 1 }
         for j in 0 ... n { dp[0][j] = j }
         
         for i in 1 ... m {
             for j in 1 ... n {
-                if oldArray[i - 1] == newArray[j - 1] {
+                if fromArray[i - 1] == toArray[j - 1] {
                     dp[i][j] = dp[i - 1][j - 1]
                 } else {
                     dp[i][j] = min(dp[i - 1][j - 1] + 1,
@@ -141,14 +142,14 @@ struct ArrayDiff<T: Equatable> {
         var inserts = [IndexValue<T>]()
         var i = m, j = n
         while i > 0 || j > 0 {
-            if i > 0, j > 0, oldArray[i - 1] == newArray[j - 1],
+            if i > 0, j > 0, fromArray[i - 1] == toArray[j - 1],
                dp[i][j] == dp[i - 1][j - 1] {
                 i -= 1
                 j -= 1
                 continue
             }
             if i > 0, j > 0, dp[i][j] == dp[i - 1][j - 1] + 1 {
-                replaces.append(.init(value: newArray[j - 1], index: j - 1))
+                replaces.append(.init(value: toArray[j - 1], index: j - 1))
                 i -= 1
                 j -= 1
                 continue
@@ -159,7 +160,7 @@ struct ArrayDiff<T: Equatable> {
                 continue
             }
             if j > 0, dp[i][j] == dp[i][j - 1] + 1 {
-                inserts.append(.init(value: newArray[j - 1], index: j - 1))
+                inserts.append(.init(value: toArray[j - 1], index: j - 1))
                 j -= 1
                 continue
             }

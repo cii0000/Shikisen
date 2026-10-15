@@ -468,37 +468,9 @@ enum WorldUndoItem {
     case removeSheets(_ shps: [IntPoint])
     case setSelection(_ selection: WorldSelection)
 }
-extension WorldUndoItem: UndoItem {
-    var type: UndoItemType {
-        switch self {
-        case .insertSheets: .reversible
-        case .removeSheets: .unreversible
-        case .setSelection: .lazyReversible
-        }
-    }
-    func reversed() -> Self? {
-        switch self {
-        case .insertSheets(let shps):
-            .removeSheets(shps.map { $0.key })
-        case .removeSheets:
-            nil
-        case .setSelection:
-            self
-        }
-    }
-    var caseName: String {
-        switch self {
-        case .insertSheets: "insertSheets"
-        case .removeSheets: "removeSheets"
-        case .setSelection: "setSelection"
-        }
-    }
-}
 extension WorldUndoItem: Protobuf {
     init(_ pb: PBWorldUndoItem) throws {
-        guard let value = pb.value else {
-            throw ProtobufError()
-        }
+        guard let value = pb.value else { throw ProtobufError() }
         switch value {
         case .insertSheets(let sids):
             self = .insertSheets(try [IntPoint: UUID](sids))
@@ -521,26 +493,49 @@ extension WorldUndoItem: Protobuf {
         }
     }
 }
-typealias WorldHistory = History<WorldUndoItem>
-extension World: HisotryOwner {
-    func loadCheck(redo item: WorldUndoItem) throws {
-        func error() -> UndoError {
-            UndoError(redo: item)
-        }
-        
-        switch item {
-        case .insertSheets(let sids):
-            guard sids.allSatisfy({ sheetIDs[$0.key] == $0.value }) else { throw error() }
-        case .removeSheets: break
-        case .setSelection(let selection):
-            guard self.selection == selection else { throw error() }
+extension WorldUndoItem: UndoItem {
+    var caseName: String {
+        switch self {
+        case .insertSheets: "insertSheets"
+        case .removeSheets: "removeSheets"
+        case .setSelection: "setSelection"
         }
     }
-    func loadCheck(undo item: WorldUndoItem) throws {
+    var type: UndoItemType {
+        switch self {
+        case .insertSheets: .reversible
+        case .removeSheets: .unreversible
+        case .setSelection: .lazyReversible
+        }
+    }
+    func reversed() -> Self? {
+        switch self {
+        case .insertSheets(let shps):
+            .removeSheets(shps.map { $0.key })
+        case .removeSheets:
+            nil
+        case .setSelection:
+            self
+        }
+    }
+}
+typealias WorldHistory = History<WorldUndoItem>
+extension World: HisotryOwner {
+    func canLoad(redo item: WorldUndoItem) -> Bool {
         switch item {
-        case .insertSheets: break
-        case .removeSheets: break
-        case .setSelection: break
+        case .insertSheets(let sids):
+            sids.allSatisfy { sheetIDs[$0.key] == $0.value }
+        case .removeSheets:
+            true
+        case .setSelection(let selection):
+            self.selection == selection
+        }
+    }
+    func canLoad(undo item: WorldUndoItem) -> Bool {
+        switch item {
+        case .insertSheets: true
+        case .removeSheets: true
+        case .setSelection: true
         }
     }
     func setReverse(undo item: WorldUndoItem,

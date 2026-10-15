@@ -585,7 +585,7 @@ extension Bezier {
             isUp0 = p0.y < cp.y
             isUp1 = cp.y < p1.y
         }
-        func isContainsT(_ t: Double) -> Bool {
+        func contains(t: Double) -> Bool {
             let isFT = isUp0 ? t >= 0 : t > 0
             let isLT = isUp1 ? t < 1 : t <= 1
             return isFT && isLT
@@ -599,7 +599,7 @@ extension Bezier {
                 return 0
             } else {
                 let t = -c / b
-                if isContainsT(t) {
+                if contains(t: t) {
                     return position(withT: t).x < p.x ? 1 : 0
                 } else {
                     return 0
@@ -609,7 +609,7 @@ extension Bezier {
             let d = b * b - 4 * a * c
             if abs(d) < .ulpOfOne {
                 let t = -b / (2 * a)
-                if isContainsT(t) {
+                if contains(t: t) {
                     return position(withT: t).x < p.x ? 1 : 0
                 } else {
                     return 0
@@ -623,10 +623,10 @@ extension Bezier {
                     (-b + sd) / (2 * a) : 2 * c / nd
                 let t1 = nd / (2 * a)
                 var count = 0
-                if isContainsT(t0) {
+                if contains(t: t0) {
                     count += position(withT: t0).x < p.x ? 1 : 0
                 }
-                if isContainsT(t1) {
+                if contains(t: t1) {
                     count += position(withT: t1).x < p.x ? 1 : 0
                 }
                 return count
@@ -649,7 +649,7 @@ extension Bezier {
             isUp0 = p0.y < cp.y
             isUp1 = cp.y < p1.y
         }
-        func isContainsT(_ t: Double) -> Bool {
+        func contains(t: Double) -> Bool {
             return isUp0 ?
                 (isUp1 ? t >= 0 && t < 1 : t >= 0 && t <= 1) :
                 (isUp1 ? t > 0 && t < 1 : t > 0 && t <= 1)
@@ -664,14 +664,14 @@ extension Bezier {
         let sd = d.squareRoot(), ra = 1 / a
         let t0 = 0.5 * (sd - b) * ra, t1 = 0.5 * (-sd - b) * ra
         var pointTuples = [(Double, CrossDirection, Point)]()
-        if isContainsT(t0) {
+        if contains(t: t0) {
             let npx = position(withT: t0).x
             if npx < p.x {
                 pointTuples.append((t0, CrossDirection(-difference(withT: t0).y),
                                     Point(npx, p.y)))
             }
         }
-        if isContainsT(t1) {
+        if contains(t: t1) {
             let npx = position(withT: t1).x
             if npx < p.x {
                 pointTuples.append((t1, CrossDirection(-difference(withT: t1).y),
@@ -710,15 +710,15 @@ extension Bezier {
             isUp0 = p0.x < cp.x
             isUp1 = cp.x < p1.x
         }
-        func isContainsT(_ t: Double) -> Bool {
+        func contains(t: Double) -> Bool {
             return isUp0 ?
                 (isUp1 ? t >= 0 && t < 1 : t >= 0 && t <= 1) :
                 (isUp1 ? t > 0 && t < 1 : t > 0 && t <= 1)
         }
-        if isContainsT(t0) {
+        if contains(t: t0) {
             ts.append(t0)
         }
-        if isContainsT(t1) {
+        if contains(t: t1) {
             ts.append(t1)
         }
         return ts

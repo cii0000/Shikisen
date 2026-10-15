@@ -1433,39 +1433,31 @@ final class InterpolateAction: InputKeyEventAction {
                     struct UUKey: Hashable {
                         var fromUUColor, toUUColor: UUColor
                     }
-                    var colorValuesDic = [UUKey: ColorValue]()
+                    var cvsDic = [UUKey: ColorValue]()
                     for idiv in nidivs {
                         let line = animationView.model.keyframes[nKI].picture.lines[idiv.index]
                         if let oldLine = oldLineDic[line.interID], oldLine.uuColor != line.uuColor {
                             let uuKey = UUKey(fromUUColor: line.uuColor, toUUColor: oldLine.uuColor)
-                            if colorValuesDic[uuKey] != nil {
+                            if cvsDic[uuKey] != nil {
                                 if nKI == animationView.model.index {
-                                    colorValuesDic[uuKey]?.lineIndexes.append(idiv.index)
+                                    cvsDic[uuKey]?.lineIndexes.append(idiv.index)
                                 } else {
-                                    colorValuesDic[uuKey]?.lineAnimationIndexes[nKI].value.append(idiv.index)
+                                    cvsDic[uuKey]?.lineAnimationIndexes[nKI]
+                                        .value.append(idiv.index)
                                 }
                             } else {
-                                if nKI == animationView.model.index {
-                                    colorValuesDic[uuKey] = .init(uuColor: oldLine.uuColor,
-                                                                  planeIndexes: [],
-                                                                  lineIndexes: [idiv.index],
-                                                                  isBackground: false,
-                                                                  planeAnimationIndexes: [],
-                                                                  lineAnimationIndexes: [],
-                                                                  animationColors: [])
+                                cvsDic[uuKey] = if nKI == animationView.model.index {
+                                    .init(uuColor: oldLine.uuColor,
+                                          lineIndexes: [idiv.index])
                                 } else {
-                                    colorValuesDic[uuKey] = .init(uuColor: oldLine.uuColor,
-                                                                  planeIndexes: [],
-                                                                  lineIndexes: [],
-                                                                  isBackground: false,
-                                                                  planeAnimationIndexes: [],
-                                                                  lineAnimationIndexes: [.init(value: [idiv.index], index: nKI)],
-                                                                  animationColors: [])
+                                    .init(uuColor: oldLine.uuColor,
+                                          lineAnimationIndexes: [.init(value: [idiv.index],
+                                                                       index: nKI)])
                                 }
                             }
                         }
                     }
-                    for (uuKey, cv) in colorValuesDic {
+                    for (uuKey, cv) in cvsDic {
                         var oldCV = cv
                         oldCV.uuColor = uuKey.fromUUColor
                         updateUndoGroup()

@@ -409,7 +409,7 @@ final class Node: @unchecked Sendable {
     }
     
     var isClippingChildrenLines = false
-    var isEnableCloneChildren = true
+    var isEnabledCloneChildren = true
     
     var isCPUFillAntialias = true
     
@@ -484,7 +484,7 @@ final class Node: @unchecked Sendable {
     init(name: String = "",
          children: [Node] = [],
          isHidden: Bool = false, isClippingChildrenLines: Bool = false,
-         isEnableCloneChildren: Bool = true,
+         isEnabledCloneChildren: Bool = true,
          attitude: Attitude = Attitude(),
          path: Path = Path(),
          lineWidth: Double = 0, lineType: LineType? = nil,
@@ -494,7 +494,7 @@ final class Node: @unchecked Sendable {
         backingChildren = children
         self.isHidden = isHidden
         self.isClippingChildrenLines = isClippingChildrenLines
-        self.isEnableCloneChildren = isEnableCloneChildren
+        self.isEnabledCloneChildren = isEnabledCloneChildren
         self.aPath = path
         self.attitude = attitude
         self.localTransform = attitude.transform
@@ -588,7 +588,7 @@ final class Node: @unchecked Sendable {
     }
     var clone: Node {
         Node(name: name,
-             backingChildren: isEnableCloneChildren ? backingChildren.map { $0.clone } : [],
+             backingChildren: isEnabledCloneChildren ? backingChildren.map { $0.clone } : [],
              isHidden: isHidden,
              isClippingChildrenLines: isClippingChildrenLines,
              attitude: attitude,

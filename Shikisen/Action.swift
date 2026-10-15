@@ -473,16 +473,16 @@ final class RootAction: Action {
         }
     }
     
-    func stopAllEvents(isEnableText: Bool = true) {
+    func stopAllEvents(isEnabledText: Bool = true) {
         stopPinchEvent()
         stopScrollEvent()
         stopSwipeEvent()
         stopDragEvent()
-        if isEnableText {
+        if isEnabledText {
             stopInputTextEvent()
         }
         stopInputKeyEvent()
-        if isEnableText {
+        if isEnabledText {
             textAction.moveEndInputKey()
         }
         modifierKeys = []

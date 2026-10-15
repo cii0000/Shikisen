@@ -114,7 +114,7 @@ struct Font: Hashable {
     var isProportional: Bool {
         didSet {
             updateWith(name: name, cascadeNames: cascadeNames, size: size,
-                       isEnableProportional: false)
+                       isEnabledProportional: false)
         }
     }
     private(set) var ascent: Double, descent: Double,
@@ -126,9 +126,9 @@ struct Font: Hashable {
     
     private mutating func updateWith(name: String,
                                      cascadeNames: [String], size: Double,
-                                     isEnableProportional: Bool = true) {
+                                     isEnabledProportional: Bool = true) {
         defaultRatio = size / Font.defaultSize
-        if isEnableProportional {
+        if isEnabledProportional {
             isProportional = defaultRatio > Font.proportionalScale
         }
         ctFont = Font.ctFont(name: name,
@@ -1224,7 +1224,7 @@ extension Typeline {
 }
 
 struct Typerun: Hashable {
-    fileprivate let ctRun: CTRun, ctFont: CTFont?, isEnableFont: Bool
+    fileprivate let ctRun: CTRun, ctFont: CTFont?, isEnabledFont: Bool
     init(ctRun: CTRun, mainFont: Font) {
         let attributes = CTRunGetAttributes(ctRun)
             as? [NSAttributedString.Key: Any] ?? [:]
@@ -1232,11 +1232,11 @@ struct Typerun: Hashable {
             let ctFont = (fontAttribute as! CTFont)
             let name = CTFontCopyPostScriptName(ctFont) as String
             self.ctFont = ctFont
-            isEnableFont = name == mainFont.name
+            isEnabledFont = name == mainFont.name
                 || mainFont.cascadeNamesSet.contains(name)
         } else {
             ctFont = nil
-            isEnableFont = false
+            isEnabledFont = false
         }
         self.ctRun = ctRun
     }
@@ -1245,7 +1245,7 @@ extension Typerun {
     var cfRange: CFRange { CTRunGetStringRange(ctRun) }
     
     func append(for origin: Point, in ctx: CGContext) {
-        guard let font = self.ctFont, isEnableFont else {
+        guard let font = self.ctFont, isEnabledFont else {
             for i in 0 ..< CTRunGetGlyphCount(ctRun) {
                 let cfRange = CFRangeMake(i, 1)
                 var position = CGPoint()
@@ -1288,7 +1288,7 @@ extension Typerun {
     }
     
     func pathlines(for origin: Point) -> [Pathline] {
-        guard let font = self.ctFont, isEnableFont else {
+        guard let font = self.ctFont, isEnabledFont else {
             var pathlines = [Pathline]()
             for i in 0 ..< CTRunGetGlyphCount(ctRun) {
                 let cfRange = CFRangeMake(i, 1)
@@ -1373,7 +1373,7 @@ extension Typerun {
 }
 extension Typerun {
     func draw(in ctx: CGContext) {
-        guard isEnableFont else {
+        guard isEnabledFont else {
             for i in 0 ..< CTRunGetGlyphCount(ctRun) {
                 let cfRange = CFRangeMake(i, 1)
                 var position = CGPoint()

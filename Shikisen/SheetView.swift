@@ -23,7 +23,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
     typealias Binder = T
     let binder: Binder
     var keyPath: BinderKeyPath
-    let node: Node, pointNode = Node(isHidden: true, isEnableCloneChildren: false)
+    let node: Node, pointNode = Node(isHidden: true, isEnabledCloneChildren: false)
     fileprivate var captureColor: Color?
     
     init(binder: Binder, keyPath: BinderKeyPath) {
@@ -3407,14 +3407,11 @@ final class SheetView: View, @unchecked Sendable {
             return piDic.map {
                 if model.enabledAnimation {
                     let cv = ColorValue(uuColor: $0.key,
-                                        isBackground: false,
                                         planeAnimationIndexes: [IndexValue(value: $0.value,
                                                            index: model.animation.index)])
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 } else {
-                    let cv = ColorValue(uuColor: $0.key,
-                                        planeIndexes: $0.value,
-                                        isBackground: false)
+                    let cv = ColorValue(uuColor: $0.key, planeIndexes: $0.value)
                     return SheetColorOwner(sheetView: self, colorValue: cv)
                 }
             }
@@ -5493,10 +5490,10 @@ final class SheetView: View, @unchecked Sendable {
     
     func lassoErase(with lasso: Lasso,
                     isRemove: Bool,
-                    isEnableLine: Bool = true,
-                    isEnablePlane: Bool = true,
-                    isEnableText: Bool = true,
-                    isEnableContent: Bool = true,
+                    isEnabledLine: Bool = true,
+                    isEnabledPlane: Bool = true,
+                    isEnabledText: Bool = true,
+                    isEnabledContent: Bool = true,
                     isDraft: Bool = false,
                     isUpdatedNewUndoGroup: Bool = false,
                     distance d: Double = 0) -> SheetValue? {
@@ -5518,7 +5515,7 @@ final class SheetView: View, @unchecked Sendable {
         
         let nPath = lasso.line.path(isClosed: true, isPolygon: false)
         
-        if isEnableLine {
+        if isEnabledLine {
             let linesView = isDraft ? self.draftLinesView : self.linesView
             var removeLines = [Line](), splitedLines = [Line]()
             var removeLineIndexes = [Int]()
@@ -5603,7 +5600,7 @@ final class SheetView: View, @unchecked Sendable {
             ssValue.lines = removeLines
         }
         
-        if isEnablePlane {
+        if isEnabledPlane {
             let planesView = isDraft ? self.draftPlanesView : self.planesView
             let indexValues = planesView.elementViews.enumerated().compactMap { (pi, planeView) in
                 nPath.contains(planeView.node.path) ?
@@ -5648,7 +5645,7 @@ final class SheetView: View, @unchecked Sendable {
             }
         }
         
-        if isEnableText {
+        if isEnabledText {
             for (ti, textView) in textsView.elementViews.enumerated().reversed() {
                 
                 guard textView.transformedBounds.intersects(nlb) else { continue }
@@ -5748,7 +5745,7 @@ final class SheetView: View, @unchecked Sendable {
             }
         }
         
-        if isEnableContent {
+        if isEnabledContent {
             let indexValues = contentsView.elementViews.enumerated().compactMap { (ci, contentView) in
                 if let f = contentView.imageFrame, nPath.intersects(f) {
                     IndexValue(value: contentView.model, index: ci)

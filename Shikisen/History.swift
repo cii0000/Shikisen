@@ -270,7 +270,7 @@ extension UndoGroup {
             handler($0)
         }
     }
-    var isEnableFirst: Bool {
+    var isEnabledFirst: Bool {
         firstUndoItem != nil || !firstUndoItemData.isEmpty
     }
     mutating func loadFirstUndoItem() -> T? {
@@ -789,7 +789,7 @@ extension History {
         if fromTopIndex < toTopIndex {
             enumerated(minI: fromTopIndex + 1, maxI: toTopIndex) { (version) in
                 let group = rootBranch[version]
-                if group.isEnableFirst {
+                if group.isEnabledFirst {
                     results.append(UndoResult.enabledFirst(version: version))
                 }
                 group.values.enumerated().forEach {
@@ -812,7 +812,7 @@ extension History {
                     nVersion.groupIndex = 0
                     nVersion.indexPath.append(branch.selectedChildIndex!)
                     let group = branch.children[branch.selectedChildIndex!].groups[0]
-                    if group.isEnableFirst {
+                    if group.isEnabledFirst {
                         results.append(UndoResult.enabledFirst(version: nVersion))
                     }
                     group.reverse {
@@ -825,7 +825,7 @@ extension History {
                     var nVersion = version
                     nVersion.groupIndex = version.groupIndex + 1
                     let group = rootBranch[nVersion]
-                    if group.isEnableFirst {
+                    if group.isEnabledFirst {
                         results.append(UndoResult.enabledFirst(version: nVersion))
                     }
                     group.reverse {
@@ -1019,8 +1019,8 @@ extension History {
 
 protocol HisotryOwner {
     associatedtype OwnerUndoItem: UndoItem
-    func loadCheck(redo item: OwnerUndoItem) throws
-    func loadCheck(undo item: OwnerUndoItem) throws
+    func canLoad(redo item: OwnerUndoItem) -> Bool
+    func canLoad(undo item: OwnerUndoItem) -> Bool
     func setReverse(undo item: OwnerUndoItem,
                     with result: History<OwnerUndoItem>.UndoResult,
                     in history: inout History<OwnerUndoItem>)
@@ -1041,9 +1041,10 @@ extension History {
                     return firstUndoItem
                 }
                 guard let uiv = self[result].loadRedoItem() else { throw UndoError.load }
-                try owner.loadCheck(redo: uiv.item(at: result.type.reversed))
+                let redoItem = uiv.item(at: result.type.reversed)
+                guard owner.canLoad(redo: redoItem) else { throw UndoError(redo: redoItem) }
                 let undoItem = uiv.item(at: result.type)
-                try owner.loadCheck(undo: undoItem)
+                guard owner.canLoad(undo: undoItem) else { throw UndoError(undo: redoItem) }
                 owner.setReverse(undo: undoItem, with: result, in: &self)
                 return result.undoItem(with: self[result].undoItemValue!)
             } catch {

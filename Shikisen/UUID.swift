@@ -92,12 +92,12 @@ struct UU<Value: Codable>: Codable {
         self.id = id
     }
 }
-extension UU: Equatable {
+extension UU: Equatable where Value: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id
+        lhs.id == rhs.id ? lhs.value == rhs.value : false
     }
 }
-extension UU: Hashable {
+extension UU: Hashable where Value: Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }

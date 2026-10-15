@@ -322,11 +322,11 @@ final class SubNSApplication: NSApplication {
         updateDocumentFromWindow()
     }
     func windowDidResignKey(_ notification: Notification) {
-        view.rootAction.stopAllEvents(isEnableText: false)
+        view.rootAction.stopAllEvents(isEnabledText: false)
         view.rootView.endSeqencer()
     }
     func updateDocumentFromWindow() {
-        view.rootAction.stopAllEvents(isEnableText: false)
+        view.rootAction.stopAllEvents(isEnabledText: false)
         view.rootView.cursorPoint = view.screenPointFromCursor.my
         view.rootView.updateTextCursor()
     }
