@@ -134,12 +134,8 @@ final class GoPreviousAction: Action {
         }
     }
     
-    func goPrevious(from sheetView: SheetView?, isKey: Bool, at sp: Point) {
-        if isKey {
-            sheetView?.goPreviousKey()
-        } else {
-            sheetView?.goPrevious()
-        }
+    func goPrevious(from sheetView: SheetView, isKey: Bool, at sp: Point) {
+        sheetView.goPrevious(isKey: isKey)
         rootAction.updateActionNode()
         rootView.updateSelectedFrame()
     }
@@ -259,12 +255,8 @@ final class GoNextAction: Action {
         }
     }
     
-    func goNext(from sheetView: SheetView?, isKey: Bool, at sp: Point) {
-        if isKey {
-            sheetView?.goNextKey()
-        } else {
-            sheetView?.goNext()
-        }
+    func goNext(from sheetView: SheetView, isKey: Bool, at sp: Point) {
+        sheetView.goNext(isKey: isKey)
         rootAction.updateActionNode()
         rootView.updateSelectedFrame()
     }
@@ -303,8 +295,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                 beganRootI = 0, beganRootBeat: Rational = 0, beganBeat = Rational(0),
                 beganSelectedFrameIndexes = [Int](), beganEventTime = 0.0, preEventTime: Double?
     private var allDX = 0.0, co = 0
-    private var snapEventTime: Double?, otherIAndNodes = [SheetView: (i: Int, isBottom: Bool,
-                                                                      node: Node)]()
+    private var snapEventTime: Double?
     private let progressWidth = {
         let text = Text(string: "00.00", size: Font.defaultSize)
         return text.frame?.width ?? 40
@@ -395,83 +386,12 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                         let animationView = sheetView.animationView
                         let animation = animationView.model
                         
-                        func updateFromVertical() {
-                            let allSec = animationView.model.mainSec
-                            let bounds = sheetView.bounds
-                            var otherBottomChildren = [Node](), otherTopChildren = [Node]()
-                            let shp = rootView.sheetPosition(at: p)
-                            rootView.sheetPositionFromVertical(at: shp) { nShp in
-                                if shp != nShp,
-                                   let oSheetView = rootView.sheetView(at: nShp),
-                                   oSheetView.model.enabledAnimation, oSheetView.model.animation.allSecRange.contains(allSec) {
-                                    
-                                    let i = oSheetView.animationView.model.index(atSec: allSec)
-                                    if otherIAndNodes[oSheetView] == nil || otherIAndNodes[oSheetView]?.i != i {
-                                        let keyframeView = oSheetView.animationView.elementViews[i]
-                                        let nodes = keyframeView.linesView.elementViews.map {
-                                            let node = $0.node.clone
-                                            node.lineType = .color(.background)
-                                            return node
-                                        }
-                                        let planeNodes = keyframeView.planesView.elementViews.map {
-                                            let node = $0.node.clone
-                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.5))
-                                            return node
-                                        }
-                                        let dNodes = keyframeView.draftLinesView.elementViews.map {
-                                            let node = $0.node.clone
-                                            node.lineType = .color(.background)
-                                            return node
-                                        }
-                                        let dPlaneNodes = keyframeView.draftPlanesView.elementViews.map {
-                                            let node = $0.node.clone
-                                            node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
-                                            return node
-                                        }
-                                        let opacity = !planeNodes.isEmpty ? 0.5 : 0.125
-                                        let node = Node(children: dPlaneNodes + [Node(children: dNodes, isClippingChildrenLines: true,
-                                                                        path: .init(bounds), fillType: .color(.draft.with(opacity: opacity)))] + planeNodes +
-                                                                   
-                                                                   [Node(children: nodes, isClippingChildrenLines: true,
-                                                                               path: .init(bounds), fillType: .color(Color(white: 0, opacity: opacity)))])
-                                        
-                                        let isBottom = nShp.y < shp.y
-                                        if isBottom {
-                                            otherBottomChildren.append(node)
-                                        } else {
-                                            otherTopChildren.append(node)
-                                        }
-                                        
-                                        otherIAndNodes[oSheetView] = (i, isBottom, node)
-                                    } else if let (_, isBottom, node) = otherIAndNodes[oSheetView] {
-                                        if isBottom {
-                                            otherBottomChildren.append(node)
-                                        } else {
-                                            otherTopChildren.append(node)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if !otherBottomChildren.isEmpty {
-                                sheetView.otherBottomNode.children = otherBottomChildren
-                            } else if !sheetView.otherBottomNode.children.isEmpty {
-                                sheetView.otherBottomNode.children = []
-                            }
-                            if !otherTopChildren.isEmpty {
-                                sheetView.otherTopNode.children = otherTopChildren
-                            } else if !sheetView.otherTopNode.children.isEmpty {
-                                sheetView.otherTopNode.children = []
-                            }
-                        }
-                        
                         if sheetView.isPlaying {
                             sheetView.stop()
                             rootView.showSelected()
                         }
                         
                         let oldKI = animationView.model.index
-                        let oldRB = animationView.rootBeat
                         let oldRKI = animationView.rootKeyframeIndex
                         var isChangedRootI = false
                         switch type {
@@ -496,9 +416,6 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                         sheetView.updateTimeNodesWithMainSec()
                         if oldRKI != sheetView.rootKeyframeIndex {
                             isChangedRootI = true
-                        }
-                        if oldRB != sheetView.rootBeat {
-                            updateFromVertical()
                         }
                         
                         if isChangedRootI {

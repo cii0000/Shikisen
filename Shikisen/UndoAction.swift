@@ -233,6 +233,7 @@ final class ASelectVersionAction: Action {
             }
             rootView.updateSelectedFrame()
         } catch {
+            if let error = error as? UndoError, error == .errored { return }
             rootAction.hudView.show(error)
         }
     }
@@ -295,17 +296,6 @@ final class ASelectVersionAction: Action {
             }
             let ni = currentVersionIndex + (isRedo ? 1 : -1)
             let nsi = ni.clipped(min: 0, max: currentMaxVersionIndex)
-            if nsi == 0 {
-                setup(firstPathline: Pathline([Point(0, 0),
-                                               Point(undoXWidth, 0)]),
-                      topIndex: nsi)
-                rootView.cursor = .arrowWith(string: "Oldest".localized)
-            } else if nsi == currentMaxVersionIndex {
-                setup(firstPathline: Pathline([Point(undoXWidth * Double(nsi - 1), 0),
-                                               Point(undoXWidth * Double(nsi), 0)]),
-                      topIndex: nsi)
-                rootView.cursor = .arrowWith(string: "Newest".localized)
-            }
             if currentVersionIndex != nsi {
                 undo(at: p, undoIndex: nsi)
                 selectingOutlineRootNode.lineWidth = rootView.worldLineWidth * 3
@@ -316,6 +306,17 @@ final class ASelectVersionAction: Action {
                 rootView.node.append(child: selectingRootNode)
                 rootView.node.append(child: outOfBoundsOutlineNode)
                 rootView.node.append(child: outOfBoundsNode)
+            }
+            if nsi == 0 {
+                setup(firstPathline: Pathline([Point(0, 0),
+                                               Point(undoXWidth, 0)]),
+                      topIndex: nsi)
+                rootView.cursor = .arrowWith(string: "Oldest".localized)
+            } else if nsi == currentMaxVersionIndex {
+                setup(firstPathline: Pathline([Point(undoXWidth * Double(nsi - 1), 0),
+                                               Point(undoXWidth * Double(nsi), 0)]),
+                      topIndex: nsi)
+                rootView.cursor = .arrowWith(string: "Newest".localized)
             }
         }
         if !rootView.isEditingSheet {

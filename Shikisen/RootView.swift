@@ -609,9 +609,24 @@ final class RootView: View, @unchecked Sendable {
         history.newUndoGroup()
     }
     
-    private func append(undo undoItem: WorldUndoItem,
-                        redo redoItem: WorldUndoItem) {
+    private func cap(undo undoItem: WorldUndoItem, redo redoItem: WorldUndoItem) {
         history.append(undo: undoItem, redo: redoItem)
+    }
+    private func set(undo undoItem: WorldUndoItem, redo redoItem: WorldUndoItem) {
+        history.append(undo: undoItem, redo: redoItem)
+        set(redoItem)
+    }
+    @discardableResult
+    func undo(to toTopIndex: Int) throws -> Rect? {
+        var rect = Rect?.none
+        let results = history.undoResults(to: toTopIndex)
+        for result in results {
+            if let aRect = set(try history.undoItem(with: result, world),
+                               isMakeRect: true) {
+                rect += aRect
+            }
+        }
+        return rect
     }
     @discardableResult
     private func set(_ item: WorldUndoItem, enableNode: Bool = true,
@@ -731,7 +746,7 @@ final class RootView: View, @unchecked Sendable {
     func append(_ sids: [IntPoint: UUID], enableNode: Bool = true) {
         let undoItem = WorldUndoItem.removeSheets(sids.map { $0.key })
         let redoItem = WorldUndoItem.insertSheets(sids)
-        append(undo: undoItem, redo: redoItem)
+        cap(undo: undoItem, redo: redoItem)
         set(redoItem, enableNode: enableNode)
     }
     func removeSheets(at shps: [IntPoint]) {
@@ -739,35 +754,14 @@ final class RootView: View, @unchecked Sendable {
         shps.forEach {
             sids[$0] = world.sheetIDs[$0]
         }
-        let undoItem = WorldUndoItem.insertSheets(sids)
-        let redoItem = WorldUndoItem.removeSheets(shps)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .insertSheets(sids), redo: .removeSheets(shps))
     }
     
     func set(_ selection: WorldSelection) {
-        let undoItem = WorldUndoItem.setSelection(world.selection)
-        let redoItem = WorldUndoItem.setSelection(selection)
-        append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        set(undo: .setSelection(world.selection), redo: .setSelection(selection))
     }
     func capture(old oldSelection: WorldSelection) {
-        let undoItem = WorldUndoItem.setSelection(oldSelection)
-        let redoItem = WorldUndoItem.setSelection(world.selection)
-        append(undo: undoItem, redo: redoItem)
-    }
-    
-    @discardableResult
-    func undo(to toTopIndex: Int) throws -> Rect? {
-        var rect = Rect?.none
-        let results = history.undoAndResults(to: toTopIndex)
-        for result in results {
-            let uiv = try world.undoItemValue(with: result, in: &history)
-            if let aRect = set(result.undoItem(with: uiv), isMakeRect: true) {
-                rect += aRect
-            }
-        }
-        return rect
+        cap(undo: .setSelection(oldSelection), redo: .setSelection(world.selection))
     }
     
     struct RestoreError: LocalizedError {
@@ -2267,8 +2261,8 @@ final class RootView: View, @unchecked Sendable {
     func thumbnailMipmap(from sheetView: SheetView) -> ThumbnailMipmap? {
         var size = sheetView.bounds.size.snapped(min: .init(square: 512)) * (2.0 ** 1)
         let bColor = sheetView.model.backgroundUUColor.value
-        let baseImage = sheetView.node.imageInBounds(size: size, backgroundColor: bColor,
-                                                     ColorSpace.export)
+        let baseImage = (sheetView.clonePlayNode ?? sheetView.node)
+            .imageInBounds(size: size, backgroundColor: bColor, ColorSpace.export)
         guard let thumbnail1024 = baseImage else { return nil }
         size = size / 4
         let thumbnail256 = thumbnail1024.resize(with: size)
@@ -2835,6 +2829,9 @@ final class RootView: View, @unchecked Sendable {
                         sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
                             self?.updateSelectedFrame()
                         }
+                        
+                        self.updateFromAroundWithTimeline(at: shp)
+                        sheetView.updateAllTopAndBottom()
                     }
                 } onCancel: {
                     Task { @MainActor in

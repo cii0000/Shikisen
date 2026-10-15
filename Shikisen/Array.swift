@@ -174,6 +174,8 @@ struct ArrayDiff<T: Equatable> {
 struct WeakElement<Element: AnyObject> {
     weak var element: Element?
 }
+extension WeakElement: Equatable where Element: Equatable {}
+extension WeakElement: Hashable where Element: Hashable {}
 
 extension Sequence {
     func sum<Result>(_ nextPartialResult: (Element) throws -> Result)

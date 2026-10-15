@@ -618,11 +618,8 @@ final class MoveAnimationAction: DragEventAction {
                         .sorted { $0.key < $1.key }
                         .map { IndexValue(value: $0.value, index: $0.key) }
                     if !okos.isEmpty {
-                        let kos = okos.map {
-                            IndexValue(value: animationView.model.keyframes[$0.index].option, index: $0.index)
-                        }
                         updateUndoGroup()
-                        sheetView.capture(kos, old: okos)
+                        sheetView.capture(old: okos)
                     }
                 }
                 switch type {
@@ -1731,8 +1728,7 @@ final class MoveScoreAction: DragEventAction {
                         if isNewUndoGroup {
                             sheetView.newUndoGroup()
                         }
-                        sheetView.capture(sheetView.model.score.option,
-                                          old: beganScoreOption)
+                        sheetView.capture(old: beganScoreOption)
                     }
                 } else {
                     func updateUndoGroup() {
@@ -1760,8 +1756,7 @@ final class MoveScoreAction: DragEventAction {
                     
                     if let beganScoreOption, sheetView.model.score.option != beganScoreOption {
                         updateUndoGroup()
-                        sheetView.capture(sheetView.model.score.option,
-                                          old: beganScoreOption)
+                        sheetView.capture(old: beganScoreOption)
                     }
                     
                     if !beganNotePits.isEmpty {
@@ -2294,8 +2289,7 @@ final class MoveTempoAction: DragEventAction {
                 }
                 if let beganScoreOption, sheetView.model.score.option != beganScoreOption {
                     updateUndoGroup()
-                    sheetView.capture(sheetView.model.score.option,
-                                      old: beganScoreOption)
+                    sheetView.capture(old: beganScoreOption)
                 }
                 if !beganContents.isEmpty || !beganTexts.isEmpty {
                     for (ci, beganContent) in beganContents {
@@ -3224,7 +3218,7 @@ final class MoveMainFrameAction: DragEventAction {
                     if isNewUndoGroup {
                         sheetView.newUndoGroup()
                     }
-                    sheetView.capture(sheetView.model.option, old: beganOption)
+                    sheetView.capture(old: beganOption)
                 }
             }
             

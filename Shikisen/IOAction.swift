@@ -1830,19 +1830,18 @@ final class IOAction: Action {
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
-                        } topIHandler: { topIndex in
+                        } topIHandler: { toTopIndex in
                             defer { currentI += 1 }
-                            let isFirst = vi == 0 && topIndex != 0
-                            let results = sheetView.history.undoAndResults(to: topIndex)
+                            let isFirst = vi == 0 && toTopIndex != 0
+                            let results = sheetView.history.undoResults(to: toTopIndex)
                             for result in results {
-                                let item = try sheetView.model
-                                    .undoItem(with: result, in: &sheetView.history)
+                                let undoItem = try sheetView.history.undoItem(with: result, sheetView.model)
                                 let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
                                 
-                                sheetView.set(item, isMakeRect: false, isSleep: false)
+                                sheetView.set(undoItem, isMakeRect: false, isSleep: false)
                                 
                                 if !isFirst && isEnabledAnimation {
-                                    switch item {
+                                    switch undoItem {
                                     case .insertDraftKeyLines(let kvs):
                                         kiSet.formUnion(kvs.map { $0.index })
                                     case .insertDraftKeyPlanes(let kvs):
@@ -1892,7 +1891,7 @@ final class IOAction: Action {
                             }
                             
                             if !(currentI == 0
-                                 || (vi == vs.count - 1 && topIndex == currentTopI)
+                                 || (vi == vs.count - 1 && toTopIndex == currentTopI)
                                  || (currentI - 1) % speed == 0) { return }
                             
                             let origin = rendering.mainItem.frame.origin

@@ -127,16 +127,18 @@ extension UndoItemValue: CustomStringConvertible {
     }
 }
 
-struct UndoError<T: UndoItem>: LocalizedError {
+struct UndoError: LocalizedError, Equatable {
     var errorDescription: String?
     
-    init(load udv: UndoDataValue<T>) {
-        errorDescription = "\("History Error".localized): \("Failed to load".localized)"
+    private init(errorDescription: String?) {
+        self.errorDescription = errorDescription
     }
-    init(undo undoItem: T) {
+    static let load = Self.init(errorDescription: "\("History Error".localized): \("Failed to load".localized)")
+    static let errored = Self.init(errorDescription: "errored")
+    init<T: UndoItem>(undo undoItem: T) {
         errorDescription = "\("History Error".localized): undo \(undoItem.caseName)"
     }
-    init(redo redoItem: T) {
+    init<T: UndoItem>(redo redoItem: T) {
         errorDescription = "\("History Error".localized): redo \(redoItem.caseName)"
     }
 }
@@ -238,6 +240,10 @@ extension UndoDataValue {
             }
         }
     }
+    mutating func save(redo redoItem: T) {
+        self.undoItemValue?.redoItem = redoItem
+        save()
+    }
 }
 extension UndoDataValue: Protobuf {
     typealias PB = PBUndoDataValue
@@ -255,7 +261,7 @@ extension UndoDataValue: Protobuf {
 
 struct UndoGroup<T: UndoItem>: Codable {
     var values = [UndoDataValue<T>]()
-    var firstUndoItem: T?, firstUndoItemData = Data()
+    private(set) var firstUndoItem: T?, firstUndoItemData = Data()
     var date = Date()
 }
 extension UndoGroup {
@@ -276,6 +282,10 @@ extension UndoGroup {
             return undoItem
         }
         return nil
+    }
+    mutating func save(first undoItem: T) {
+        self.firstUndoItem = undoItem
+        firstUndoItemData = (try? undoItem.serializedData()) ?? .init()
     }
 }
 extension UndoGroup: Protobuf {
@@ -393,10 +403,10 @@ extension _Branch {
         groups[.last].values.append(.init(save: uiv))
     }
     func replaceInLastGroup(redo redoItem: T) {
-        groups[.last].values[.last].undoItemValue?.redoItem = redoItem
+        groups[.last].values[.last].save(redo: redoItem)
     }
     func setInLastGroup(first undoItem: T) {
-        groups[.last].firstUndoItem = undoItem
+        groups[.last].save(first: undoItem)
     }
     
     subscript(version: Version) -> UndoGroup<T> {
@@ -758,7 +768,7 @@ extension History {
             }
         }
     }
-    mutating func undoAndResults(to toTopIndex: Int) -> [UndoResult] {
+    mutating func undoResults(to toTopIndex: Int) -> [UndoResult] {
         copyIfShared()
         
         let fromTopIndex = currentVersionIndex
@@ -910,6 +920,8 @@ extension History {
     }
     
     mutating func setReverse(_ item: T, with result: UndoResult) {
+        copyIfShared()
+        
         switch result.type {
         case .undo: self[result].undoItemValue?.redoItem = item
         case .redo: self[result].undoItemValue?.undoItem = item
@@ -1000,6 +1012,45 @@ extension History {
         } else if let fromVersion {
             for i in (0 ..< topIndex(from: fromVersion)).reversed() {
                 try await topIHandler(i)
+            }
+        }
+    }
+}
+
+protocol HisotryOwner {
+    associatedtype OwnerUndoItem: UndoItem
+    func loadCheck(redo item: OwnerUndoItem) throws
+    func loadCheck(undo item: OwnerUndoItem) throws
+    func setReverse(undo item: OwnerUndoItem,
+                    with result: History<OwnerUndoItem>.UndoResult,
+                    in history: inout History<OwnerUndoItem>)
+}
+extension History {
+    mutating func undoItem<S: HisotryOwner>(with result: History<T>.UndoResult,
+                                            _ owner: S) throws -> T where S.OwnerUndoItem == T {
+        copyIfShared()
+        
+        if let uiv = result.undoDataValue.undoItemValue {
+            return result.undoItem(with: uiv)
+        } else {
+            do {
+                guard result.undoDataValue.loadType != .error else { throw UndoError.errored }
+                if result.isEnabledFirst {
+                    guard let firstUndoItem = self[result.version].loadFirstUndoItem()
+                    else { throw UndoError.load }
+                    return firstUndoItem
+                }
+                guard let uiv = self[result].loadRedoItem() else { throw UndoError.load }
+                try owner.loadCheck(redo: uiv.item(at: result.type.reversed))
+                let undoItem = uiv.item(at: result.type)
+                try owner.loadCheck(undo: undoItem)
+                owner.setReverse(undo: undoItem, with: result, in: &self)
+                return result.undoItem(with: self[result].undoItemValue!)
+            } catch {
+                self[result].setError()
+                currentVersion = result.version
+                currentVersionIndex = topIndex(from: result.version)
+                throw error
             }
         }
     }

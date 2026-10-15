@@ -609,25 +609,23 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             updateTimeline()
         }
     }
-    func goNext() {
-        unupdateModel.goNext()
+    func goNext(isKey: Bool) {
+        if isKey {
+            unupdateModel.rootInterIndex
+            = model.rootInterIndex.addingReportingOverflow(1).partialValue
+        } else {
+            unupdateModel.goNext()
+        }
         updateWithKeyframeIndex()
         updateTimeline()
     }
-    func goPrevious() {
-        unupdateModel.goPrevious()
-        updateWithKeyframeIndex()
-        updateTimeline()
-    }
-    func goNextKey() {
-        unupdateModel.rootInterIndex
-        = model.rootInterIndex.addingReportingOverflow(1).partialValue
-        updateWithKeyframeIndex()
-        updateTimeline()
-    }
-    func goPreviousKey() {
-        unupdateModel.rootInterIndex
-        = model.rootInterIndex.subtractingReportingOverflow(1).partialValue
+    func goPrevious(isKey: Bool) {
+        if isKey {
+            unupdateModel.rootInterIndex
+            = model.rootInterIndex.subtractingReportingOverflow(1).partialValue
+        } else {
+            unupdateModel.goPrevious()
+        }
         updateWithKeyframeIndex()
         updateTimeline()
     }
@@ -1492,6 +1490,7 @@ final class SheetView: View, @unchecked Sendable {
     var id = UUID()
     
     let node: Node
+    var otherIAndNodes = [WeakElement<SheetView>: (i: Int, isBottom: Bool, node: Node)]()
     let opacityNode = Node(), otherBottomNode = Node(), otherTopNode = Node()
     let animationView: AnimationView
     var keyframeView: KeyframeView {
@@ -2258,7 +2257,22 @@ final class SheetView: View, @unchecked Sendable {
     }
     var rootBeat: Rational {
         get { animationView.rootBeat }
-        set { animationView.rootBeat = newValue }
+        set {
+            if rootBeat != newValue {
+                animationView.rootBeat = newValue
+                updateAllTopAndBottomWithMainSec()
+            }
+        }
+    }
+    private func setNoUpdateTopAndBottom(mainSec: Rational) {
+        guard model.animation.enabled,
+              model.animation.allSecRange.contains(mainSec)
+                else { return }
+        
+        let localSec = mainSec - model.animation.secRange.start
+        var bp = model.animation.rootBeatPosition
+        bp.beat = model.animation.beat(fromSec: localSec)
+        animationView.rootBeat = model.animation.rootBeat(at: bp)
     }
     
     var currentKeyframe: Keyframe {
@@ -2266,31 +2280,27 @@ final class SheetView: View, @unchecked Sendable {
         set { animationView.currentKeyframe = newValue }
     }
     
-    func goNext() {
+    func goNext(isKey: Bool) {
         stop()
-        animationView.goNext()
+        animationView.goNext(isKey: isKey)
+        updateAllTopAndBottomWithMainSec()
     }
-    func goPrevious() {
+    func goPrevious(isKey: Bool) {
         stop()
-        animationView.goPrevious()
-    }
-    func goNextKey() {
-        stop()
-        animationView.goNextKey()
-    }
-    func goPreviousKey() {
-        stop()
-        animationView.goPreviousKey()
+        animationView.goPrevious(isKey: isKey)
+        updateAllTopAndBottomWithMainSec()
     }
     func goNextFrame() {
         stop()
         let deltaTime = Rational(1, animationView.frameRate)
         self.rootBeat = Rational.saftyAdd(rootBeat, deltaTime)
+        updateAllTopAndBottomWithMainSec()
     }
     func goPreviousFrame() {
         stop()
         let deltaTime = Rational(-1, animationView.frameRate)
         self.rootBeat = Rational.saftyAdd(rootBeat, deltaTime)
+        updateAllTopAndBottomWithMainSec()
     }
     
     func showSelected() {
@@ -2344,6 +2354,101 @@ final class SheetView: View, @unchecked Sendable {
         }
         if let bottom {
             bottom.updateScoreViewFromAround()
+        }
+    }
+    
+    func updateAllTopAndBottomWithMainSec() {
+        updateTopAndBottom()
+        let mainSec = animationView.model.mainSec
+        topSheetViews.forEach {
+            $0.element?.setNoUpdateTopAndBottom(mainSec: mainSec)
+            $0.element?.updateTopAndBottom()
+        }
+        bottomSheetViews.forEach {
+            $0.element?.setNoUpdateTopAndBottom(mainSec: mainSec)
+            $0.element?.updateTopAndBottom()
+        }
+    }
+    func updateAllTopAndBottom() {
+        updateTopAndBottom()
+        topSheetViews.forEach { $0.element?.updateTopAndBottom() }
+        bottomSheetViews.forEach { $0.element?.updateTopAndBottom() }
+    }
+    func updateTopAndBottom() {
+        guard model.enabledAnimation else { return }
+        let allSec = animationView.model.mainSec, bounds = bounds
+        var otherBottomChildren = [Node](), otherTopChildren = [Node]()
+        
+        func update(_ oSheetView: SheetView, isBottom: Bool) {
+            if oSheetView.model.enabledAnimation, oSheetView.model.animation.allSecRange.contains(allSec) {
+                
+                let weakElement = WeakElement(element: oSheetView)
+                let ki = oSheetView.animationView.model.index(atSec: allSec)
+                if otherIAndNodes[weakElement] == nil || otherIAndNodes[weakElement]?.i != ki {
+                    let keyframeView = oSheetView.animationView.elementViews[ki]
+                    let nodes = keyframeView.linesView.elementViews.map {
+                        let node = $0.node.clone
+                        node.lineType = .color(.background)
+                        return node
+                    }
+                    let planeNodes = keyframeView.planesView.elementViews.map {
+                        let node = $0.node.clone
+                        node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.5))
+                        return node
+                    }
+                    let dNodes = keyframeView.draftLinesView.elementViews.map {
+                        let node = $0.node.clone
+                        node.lineType = .color(.background)
+                        return node
+                    }
+                    let dPlaneNodes = keyframeView.draftPlanesView.elementViews.map {
+                        let node = $0.node.clone
+                        node.fillType = .color($0.uuColor.value.with(multiplyOpacity: 0.125))
+                        return node
+                    }
+                    let opacity = !planeNodes.isEmpty ? 0.5 : 0.125
+                    let node = Node(children: dPlaneNodes + [Node(children: dNodes, isClippingChildrenLines: true,
+                                                    path: .init(bounds), fillType: .color(.draft.with(opacity: opacity)))] + planeNodes +
+                                               
+                                               [Node(children: nodes, isClippingChildrenLines: true,
+                                                           path: .init(bounds), fillType: .color(Color(white: 0, opacity: opacity)))])
+                    
+                    if isBottom {
+                        otherBottomChildren.append(node)
+                    } else {
+                        otherTopChildren.append(node)
+                    }
+                    
+                    otherIAndNodes[weakElement] = (ki, isBottom, node)
+                } else if let (_, isBottom, node) = otherIAndNodes[weakElement] {
+                    if isBottom {
+                        otherBottomChildren.append(node)
+                    } else {
+                        otherTopChildren.append(node)
+                    }
+                }
+            }
+        }
+        topSheetViews.forEach {
+            if let sheetView = $0.element {
+                update(sheetView, isBottom: false)
+            }
+        }
+        bottomSheetViews.forEach {
+            if let sheetView = $0.element {
+                update(sheetView, isBottom: true)
+            }
+        }
+        
+        if !otherBottomChildren.isEmpty {
+            otherBottomNode.children = otherBottomChildren
+        } else if !otherBottomNode.children.isEmpty {
+            otherBottomNode.children = []
+        }
+        if !otherTopChildren.isEmpty {
+            otherTopNode.children = otherTopChildren
+        } else if !otherTopNode.children.isEmpty {
+            otherTopNode.children = []
         }
     }
     
@@ -2404,6 +2509,7 @@ final class SheetView: View, @unchecked Sendable {
     private var beganPlaySec: SuspendingClock.Instant?
     private var audioPauseTask: Task<(), any Error>?
     private var mainDurSec: Rational = 0
+    private(set) var clonePlayNode: Node?
     let frameRate = Keyframe.defaultFrameRate
     var isPlaying = false {
         didSet {
@@ -2415,6 +2521,9 @@ final class SheetView: View, @unchecked Sendable {
         audioPauseTask?.cancel()
         playingTimer?.cancel()
         playingTimer = nil
+        if isPlaying {
+            clonePlayNode = node.clone
+        }
         animationView.isPlaying = isPlaying
         animationView.previousNextNode.isHidden = isPlaying
         otherBottomNode.isHidden = isPlaying
@@ -2559,6 +2668,8 @@ final class SheetView: View, @unchecked Sendable {
 //            sequencer = nil
             
             showSelected()
+            
+            clonePlayNode = nil
         }
     }
     var playingSec: Rational? {
@@ -3362,9 +3473,8 @@ final class SheetView: View, @unchecked Sendable {
         history.newUndoGroup()
     }
     
-    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
-                     isKeyframe: Bool = false) {
-        if isKeyframe && model.animation.enabled {
+    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
+        if model.animation.enabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
         history.append(undo: undoItem, redo: redoItem)
@@ -3374,9 +3484,8 @@ final class SheetView: View, @unchecked Sendable {
         history.set(first: .setRootKeyframeI(rootKI))
         history.append(undo: undoItem, redo: redoItem)
     }
-    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
-                     isKeyframe: Bool = false) {
-        if isKeyframe && model.animation.enabled {
+    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
+        if model.animation.enabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
         history.append(undo: undoItem, redo: redoItem)
@@ -3390,12 +3499,12 @@ final class SheetView: View, @unchecked Sendable {
     }
     @discardableResult
     func undo(to toTopIndex: Int,
-              isMakeRect: Bool = true, isSleep: Bool = true) throws -> (rect: Rect?,
-                                                                        nodes: [Node]) {
+              isMakeRect: Bool = true,
+              isSleep: Bool = true) throws -> (rect: Rect?, nodes: [Node]) {
         var rect = Rect?.none, nodes = [Node]()
-        let results = history.undoAndResults(to: toTopIndex)
+        let results = history.undoResults(to: toTopIndex)
         for result in results {
-            let (aRect, aNodes) = set(try model.undoItem(with: result, in: &history),
+            let (aRect, aNodes) = set(try history.undoItem(with: result, model),
                                       isMakeRect: isMakeRect, isSleep: isSleep)
             rect += aRect
             nodes += aNodes
@@ -4695,8 +4804,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func append(_ line: Line) {
-        set(undo: .removeLastLines(count: 1), redo: .appendLine(line),
-            isKeyframe: true)
+        set(undo: .removeLastLines(count: 1), redo: .appendLine(line))
     }
     func append(_ line: Line, atRoot rootKI: Int) {
         let ki = model.animation.index(atRoot: rootKI)
@@ -4708,8 +4816,7 @@ final class SheetView: View, @unchecked Sendable {
         if lines.count == 1 {
             append(lines[0])
         } else {
-            set(undo: .removeLastLines(count: lines.count), redo: .appendLines(lines),
-                isKeyframe: true)
+            set(undo: .removeLastLines(count: lines.count), redo: .appendLines(lines))
         }
     }
     func append(_ kvs: [IndexValue<[Line]>]) {
@@ -4724,8 +4831,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     func insert(_ livs: [IndexValue<Line>]) {
         set(undo: .removeLines(lineIndexes: livs.map { $0.index }),
-            redo: .insertLines(livs),
-            isKeyframe: true)
+            redo: .insertLines(livs))
     }
     func insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4736,8 +4842,7 @@ final class SheetView: View, @unchecked Sendable {
         let ovs = kvs.map { kv in
             IndexValue(value: kv.value.map { $0.index }, index: kv.index)
         }
-        set(undo: .removeKeyLines(ovs), redo: .insertKeyLines(kvs),
-            isKeyframe: true)
+        set(undo: .removeKeyLines(ovs), redo: .insertKeyLines(kvs))
     }
     func replace(_ line: Line, at i: Int) {
         replace(IndexValue(value: line, index: i))
@@ -4745,14 +4850,12 @@ final class SheetView: View, @unchecked Sendable {
     func replace(_ liv: IndexValue<Line>) {
         set(undo: .replaceLines([IndexValue(value: model.picture.lines[liv.index],
                                             index: liv.index)]),
-            redo: .replaceLines([liv]),
-            isKeyframe: true)
+            redo: .replaceLines([liv]))
     }
     func replace(_ livs: [IndexValue<Line>]) {
         set(undo: .replaceLines(livs.map { .init(value: model.picture.lines[$0.index],
                                                  index: $0.index) }),
-            redo: .replaceLines(livs),
-            isKeyframe: true)
+            redo: .replaceLines(livs))
     }
     func replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4765,8 +4868,7 @@ final class SheetView: View, @unchecked Sendable {
             let livs = kv.value.map { IndexValue(value: lines[$0.index], index: $0.index) }
             return IndexValue(value: livs, index: kv.index)
         }
-        set(undo: .replaceKeyLines(ovs), redo: .replaceKeyLines(kvs),
-            isKeyframe: true)
+        set(undo: .replaceKeyLines(ovs), redo: .replaceKeyLines(kvs))
     }
     func capture(old oldLine: Line, at i: Int) {
         capture(old: IndexValue(value: oldLine, index: i))
@@ -4774,19 +4876,16 @@ final class SheetView: View, @unchecked Sendable {
     func capture(old oldLIV: IndexValue<Line>) {
         cap(undo: .replaceLines([oldLIV]),
             redo: .replaceLines([IndexValue(value: model.picture.lines[oldLIV.index],
-                                            index: oldLIV.index)]),
-            isKeyframe: true)
+                                            index: oldLIV.index)]))
     }
     func capture(old oldLIVs: [IndexValue<Line>]) {
         cap(undo: .replaceLines(oldLIVs),
             redo: .replaceLines(oldLIVs.map { .init(value: model.picture.lines[$0.index],
-                                                    index: $0.index) }),
-            isKeyframe: true)
+                                                    index: $0.index) }))
     }
     func removeLines(at lis: [Int]) {
         let livs = lis.map { IndexValue(value: model.picture.lines[$0], index: $0) }
-        set(undo: .insertLines(livs), redo: .removeLines(lineIndexes: lis),
-            isKeyframe: true)
+        set(undo: .insertLines(livs), redo: .removeLines(lineIndexes: lis))
     }
     func removeKeyLines(_ kvs: [IndexValue<[Int]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4799,13 +4898,11 @@ final class SheetView: View, @unchecked Sendable {
             let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
             return IndexValue(value: livs, index: kv.index)
         }
-        set(undo: .insertKeyLines(ovs), redo: .removeKeyLines(kvs),
-            isKeyframe: true)
+        set(undo: .insertKeyLines(ovs), redo: .removeKeyLines(kvs))
     }
     
     func append(_ planes: [Plane]) {
-        set(undo: .removeLastPlanes(count: planes.count), redo: .appendPlanes(planes),
-            isKeyframe: true)
+        set(undo: .removeLastPlanes(count: planes.count), redo: .appendPlanes(planes))
     }
     func append(_ kvs: [IndexValue<[Plane]>]) {
         let vs = kvs.map { kv in
@@ -4819,8 +4916,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     func insert(_ pivs: [IndexValue<Plane>]) {
         set(undo: .removePlanes(planeIndexes: pivs.map { $0.index }),
-            redo: .insertPlanes(pivs),
-            isKeyframe: true)
+            redo: .insertPlanes(pivs))
     }
     func insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4831,8 +4927,7 @@ final class SheetView: View, @unchecked Sendable {
         let okvs = kvs.map { kv in
             IndexValue(value: kv.value.map { $0.index }, index: kv.index)
         }
-        set(undo: .removeKeyPlanes(okvs), redo: .insertKeyPlanes(kvs),
-            isKeyframe: true)
+        set(undo: .removeKeyPlanes(okvs), redo: .insertKeyPlanes(kvs))
     }
     func replace(_ plane: Plane, at i: Int) {
         replace(IndexValue(value: plane, index: i))
@@ -4840,14 +4935,12 @@ final class SheetView: View, @unchecked Sendable {
     func replace(_ piv: IndexValue<Plane>) {
         set(undo: .replacePlanes([IndexValue(value: model.picture.planes[piv.index],
                                              index: piv.index)]),
-            redo: .replacePlanes([piv]),
-            isKeyframe: true)
+            redo: .replacePlanes([piv]))
     }
     func replace(_ pivs: [IndexValue<Plane>]) {
         set(undo: .replacePlanes(pivs.map { .init(value: model.picture.planes[$0.index],
                                                   index: $0.index) }),
-            redo: .replacePlanes(pivs),
-            isKeyframe: true)
+            redo: .replacePlanes(pivs))
     }
     func replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4862,8 +4955,7 @@ final class SheetView: View, @unchecked Sendable {
             }
             return IndexValue(value: pivs, index: kv.index)
         }
-        set(undo: .replaceKeyPlanes(okvs), redo: .replaceKeyPlanes(kvs),
-            isKeyframe: true)
+        set(undo: .replaceKeyPlanes(okvs), redo: .replaceKeyPlanes(kvs))
     }
     func capture(old oldPlane: Plane, at i: Int) {
         capture(old: IndexValue(value: oldPlane, index: i))
@@ -4871,19 +4963,16 @@ final class SheetView: View, @unchecked Sendable {
     func capture(old oldPIV: IndexValue<Plane>) {
         cap(undo: .replacePlanes([oldPIV]),
             redo: .replacePlanes([IndexValue(value: model.picture.planes[oldPIV.index],
-                                             index: oldPIV.index)]),
-            isKeyframe: true)
+                                             index: oldPIV.index)]))
     }
     func capture(old oldPIVs: [IndexValue<Plane>]) {
         cap(undo: .replacePlanes(oldPIVs),
             redo: .replacePlanes(oldPIVs.map { .init(value: model.picture.planes[$0.index],
-                                                     index: $0.index) }),
-            isKeyframe: true)
+                                                     index: $0.index) }))
     }
     func removePlanes(at pis: [Int]) {
         let pivs = pis.map { IndexValue(value: model.picture.planes[$0], index: $0) }
-        set(undo: .insertPlanes(pivs), redo: .removePlanes(planeIndexes: pis),
-            isKeyframe: true)
+        set(undo: .insertPlanes(pivs), redo: .removePlanes(planeIndexes: pis))
     }
     func removeKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
@@ -4896,8 +4985,7 @@ final class SheetView: View, @unchecked Sendable {
             let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
             return IndexValue(value: pivs, index: kv.index)
         }
-        set(undo: .insertKeyPlanes(okvs), redo: .removeKeyPlanes(kvs),
-            isKeyframe: true)
+        set(undo: .insertKeyPlanes(okvs), redo: .removeKeyPlanes(kvs))
     }
     
     func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
@@ -4915,8 +5003,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     func set(_ planeValue: PlaneValue) {
         set(undo: .setPlaneValue(oldPlaneValue(from: planeValue, in: model.picture)),
-            redo: .setPlaneValue(planeValue),
-            isKeyframe: true)
+            redo: .setPlaneValue(planeValue))
     }
     func set(_ pvkvs: [IndexValue<PlaneValue>]) {
         let oldPVKVs = pvkvs.map {
@@ -4925,8 +5012,7 @@ final class SheetView: View, @unchecked Sendable {
             return IndexValue(value: oldPlaneValue, index: $0.index)
         }
         set(undo: .setKeyPlaneValues(oldPVKVs),
-            redo: .setKeyPlaneValues(pvkvs),
-            isKeyframe: true)
+            redo: .setKeyPlaneValues(pvkvs))
     }
     
     
@@ -4942,15 +5028,13 @@ final class SheetView: View, @unchecked Sendable {
     }
     func insertDraft(_ livs: [IndexValue<Line>]) {
         set(undo: .removeDraftLines(lineIndexes: livs.map { $0.index }),
-            redo: .insertDraftLines(livs),
-            isKeyframe: true)
+            redo: .insertDraftLines(livs))
     }
     func insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
         let okvs = kvs.map { kv in
             IndexValue(value: kv.value.map { $0.index }, index: kv.index)
         }
-        set(undo: .removeDraftKeyLines(okvs), redo: .insertDraftKeyLines(kvs),
-            isKeyframe: true)
+        set(undo: .removeDraftKeyLines(okvs), redo: .insertDraftKeyLines(kvs))
     }
     func set(_ kvs: [IndexValue<[IndexValue<InterOption>]>]) {
         let okvs = kvs.map { kv in
@@ -4960,15 +5044,13 @@ final class SheetView: View, @unchecked Sendable {
             }
             return IndexValue(value: iovs, index: kv.index)
         }
-        set(undo: .setLineIDs(okvs), redo: .setLineIDs(kvs),
-            isKeyframe: true)
+        set(undo: .setLineIDs(okvs), redo: .setLineIDs(kvs))
     }
     func removeDraftLines(at lis: [Int]) {
         let livs = lis.map {
             IndexValue(value: model.draftPicture.lines[$0], index: $0)
         }
-        set(undo: .insertDraftLines(livs), redo: .removeDraftLines(lineIndexes: lis),
-            isKeyframe: true)
+        set(undo: .insertDraftLines(livs), redo: .removeDraftLines(lineIndexes: lis))
     }
     func removeDraftKeyLines(_ kvs: [IndexValue<[Int]>]) {
         let okvs = kvs.map { kv in
@@ -4976,8 +5058,7 @@ final class SheetView: View, @unchecked Sendable {
             let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
             return IndexValue(value: livs, index: kv.index)
         }
-        set(undo: .insertDraftKeyLines(okvs), redo: .removeDraftKeyLines(kvs),
-            isKeyframe: true)
+        set(undo: .insertDraftKeyLines(okvs), redo: .removeDraftKeyLines(kvs))
     }
     
     func appendDraftKeyPlanes(_ kvs: [IndexValue<[Plane]>]) {
@@ -4992,22 +5073,19 @@ final class SheetView: View, @unchecked Sendable {
     }
     func insertDraft(_ pivs: [IndexValue<Plane>]) {
         set(undo: .removeDraftPlanes(planeIndexes: pivs.map { $0.index }),
-            redo: .insertDraftPlanes(pivs),
-            isKeyframe: true)
+            redo: .insertDraftPlanes(pivs))
     }
     func insertDraftKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
         let ovs = values.map { kv in
             IndexValue(value: kv.value.map { $0.index }, index: kv.index)
         }
-        set(undo: .removeDraftKeyPlanes(ovs), redo: .insertDraftKeyPlanes(values),
-            isKeyframe: true)
+        set(undo: .removeDraftKeyPlanes(ovs), redo: .insertDraftKeyPlanes(values))
     }
     func removeDraftPlanes(at pis: [Int]) {
         let pivs = pis.map {
             IndexValue(value: model.draftPicture.planes[$0], index: $0)
         }
-        set(undo: .insertDraftPlanes(pivs), redo: .removeDraftPlanes(planeIndexes: pis),
-            isKeyframe: true)
+        set(undo: .insertDraftPlanes(pivs), redo: .removeDraftPlanes(planeIndexes: pis))
     }
     func removeDraftKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
         let ovs = kvs.map { kv in
@@ -5015,43 +5093,36 @@ final class SheetView: View, @unchecked Sendable {
             let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
             return IndexValue(value: pivs, index: kv.index)
         }
-        set(undo: .insertDraftKeyPlanes(ovs), redo: .removeDraftKeyPlanes(kvs),
-            isKeyframe: true)
+        set(undo: .insertDraftKeyPlanes(ovs), redo: .removeDraftKeyPlanes(kvs))
     }
     
     func set(_ picture: Picture) {
-        set(undo: .setPicture(model.picture), redo: .setPicture(picture),
-            isKeyframe: true)
+        set(undo: .setPicture(model.picture), redo: .setPicture(picture))
     }
     func removeDraft() {
         setDraft(Picture())
     }
     func setDraft(_ draftPicture: Picture) {
-        set(undo: .setDraftPicture(model.draftPicture), redo: .setDraftPicture(draftPicture),
-            isKeyframe: true)
+        set(undo: .setDraftPicture(model.draftPicture), redo: .setDraftPicture(draftPicture))
     }
     func changeToDraft() {
         if !model.draftPicture.isEmpty {
             removeDraft()
         }
-        set(undo: .changeToDraft(isReverse: true), redo: .changeToDraft(isReverse: false),
-            isKeyframe: true)
+        set(undo: .changeToDraft(isReverse: true), redo: .changeToDraft(isReverse: false))
     }
     
     func set(_ cv: ColorValue, oldColorValue: ColorValue) {//
         set(undo: .changedColors(oldColorValue),
-            redo: .changedColors(cv),
-            isKeyframe: true)
+            redo: .changedColors(cv))
     }
     func set(_ cv: ColorValue) {
         set(undo: .changedColors(model.currentColorValue(from: cv)),
-            redo: .changedColors(cv),
-            isKeyframe: true)
+            redo: .changedColors(cv))
     }
     func capture(_ cv: ColorValue, old oldCV: ColorValue) {
         cap(undo: .changedColors(oldCV),
-            redo: .changedColors(cv),
-            isKeyframe: true)
+            redo: .changedColors(cv))
     }
     
     func insert(_ kivs: [IndexValue<Keyframe>]) {
@@ -5074,7 +5145,10 @@ final class SheetView: View, @unchecked Sendable {
         cap(undo: .setKeyframeOptions([IndexValue(value: ko.with(beat: oldBeat), index: ki)]),
             redo: .setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
     }
-    func capture(_ koivs: [IndexValue<KeyframeOption>], old okoivs: [IndexValue<KeyframeOption>]) {
+    func capture(old okoivs: [IndexValue<KeyframeOption>]) {
+        let koivs = okoivs.map {
+            IndexValue(value: animationView.model.keyframes[$0.index].option, index: $0.index)
+        }
         cap(undo: .setKeyframeOptions(okoivs), redo: .setKeyframeOptions(koivs))
     }
     func removeKeyframes(at kis: [Int]) {
@@ -5214,8 +5288,8 @@ final class SheetView: View, @unchecked Sendable {
     func set(_ option: ScoreOption) {
         set(undo: .setScoreOption(model.score.option), redo: .setScoreOption(option))
     }
-    func capture(_ option: ScoreOption, old oldOption: ScoreOption) {
-        cap(undo: .setScoreOption(oldOption), redo: .setScoreOption(option))
+    func capture(old oldOption: ScoreOption) {
+        cap(undo: .setScoreOption(oldOption), redo: .setScoreOption(model.score.option))
     }
     
     func append(_ content: Content) {
@@ -5272,8 +5346,8 @@ final class SheetView: View, @unchecked Sendable {
     func set(_ option: SheetOption) {
         set(undo: .setSheetOption(model.option), redo: .setSheetOption(option))
     }
-    func capture(_ option: SheetOption, old oldOption: SheetOption) {
-        cap(undo: .setSheetOption(oldOption), redo: .setSheetOption(option))
+    func capture(old oldOption: SheetOption) {
+        cap(undo: .setSheetOption(oldOption), redo: .setSheetOption(model.option))
     }
     
     func set(_ selection: SheetSelection) {

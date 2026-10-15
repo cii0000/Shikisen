@@ -522,28 +522,9 @@ extension WorldUndoItem: Protobuf {
     }
 }
 typealias WorldHistory = History<WorldUndoItem>
-extension World {
-    func undoItemValue(with result: WorldHistory.UndoResult,
-                       in history: inout WorldHistory) throws -> UndoItemValue<WorldUndoItem> {
-        if let uiv = result.undoDataValue.undoItemValue {
-            return uiv
-        } else {
-            do {
-                guard let uiv = history[result].loadRedoItem()
-                else { throw UndoError(load: result.undoDataValue) }
-                try loadCheck(redo: result.type == .undo ? uiv.redoItem : uiv.undoItem)
-                try loadCheck(undo: result.type == .undo ? uiv.undoItem : uiv.redoItem)
-                setReverse(undo: result.type == .undo ? uiv.undoItem : uiv.redoItem,
-                           with: result, in: &history)
-                return history[result].undoItemValue!
-            } catch {
-                history[result].setError()
-                throw error
-            }
-        }
-    }
-    private func loadCheck(redo item: WorldUndoItem) throws {
-        func error() -> UndoError<WorldUndoItem> {
+extension World: HisotryOwner {
+    func loadCheck(redo item: WorldUndoItem) throws {
+        func error() -> UndoError {
             UndoError(redo: item)
         }
         
@@ -555,16 +536,16 @@ extension World {
             guard self.selection == selection else { throw error() }
         }
     }
-    private func loadCheck(undo item: WorldUndoItem) throws {
+    func loadCheck(undo item: WorldUndoItem) throws {
         switch item {
         case .insertSheets: break
         case .removeSheets: break
         case .setSelection: break
         }
     }
-    private func setReverse(undo item: WorldUndoItem,
-                            with result: WorldHistory.UndoResult,
-                            in history: inout WorldHistory) {
+    func setReverse(undo item: WorldUndoItem,
+                    with result: WorldHistory.UndoResult,
+                    in history: inout WorldHistory) {
         switch item {
         case .insertSheets: break
         case .removeSheets: break

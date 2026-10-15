@@ -1496,17 +1496,24 @@ extension Sheet {
         var str = ""
         str += "((\(mainFrame.minX.shortString), \(mainFrame.minY.shortString)) (\(mainFrame.size.width.shortString) x \(mainFrame.size.height.shortString)))"
         str += "\n\n\n"
-        var tempos = Set<Rational>()
-        if animation.enabled { tempos.insert(animation.tempo) }
-        if score.enabled { tempos.insert(score.tempo) }
+        func timelineStr(sec range: Range<Rational>, tempo: Rational) -> String {
+            "\(range.start)..<\(range.end) sec, \(tempo) bpm\n"
+        }
+        if animation.enabled {
+            str += timelineStr(sec: animation.allSecRange, tempo: animation.tempo)
+        }
+        if score.enabled {
+            str += timelineStr(sec: score.allSecRange, tempo: score.tempo)
+        }
         texts.forEach {
-            if let tempo = $0.timeOption?.tempo { tempos.insert(tempo) }
+            if let timeOption = $0.timeOption {
+                str += timelineStr(sec: timeOption.secRange, tempo: timeOption.tempo)
+            }
         }
         contents.forEach {
-            if let tempo = $0.timeOption?.tempo { tempos.insert(tempo) }
-        }
-        for tempo in tempos {
-            str += "\(tempo) bpm, \(Self.tempoNameFromStandardFrameRate(withTempo: tempo))\n"
+            if let timeOption = $0.timeOption {
+                str += timelineStr(sec: timeOption.secRange, tempo: timeOption.tempo)
+            }
         }
         str += "\n\n\n"
         if score.enabled {
@@ -2697,9 +2704,7 @@ extension SheetUndoItem: UndoItem {
 }
 extension SheetUndoItem: Protobuf {
     init(_ pb: PBSheetUndoItem) throws {
-        guard let value = pb.value else {
-            throw ProtobufError()
-        }
+        guard let value = pb.value else { throw ProtobufError() }
         switch value {
         case .appendLine(let line):
             self = .appendLine(try Line(line))
@@ -2937,32 +2942,8 @@ extension SheetUndoItem: Protobuf {
 
 typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
-extension Sheet {
-    func undoItem(with result: SheetHistory.UndoResult,
-                  in history: inout SheetHistory) throws -> SheetUndoItem {
-        if result.isEnabledFirst,
-           let firstUndoItem = history[result.version].loadFirstUndoItem() {
-            return firstUndoItem
-        }
-        if let uiv = result.undoDataValue.undoItemValue {
-            return result.undoItem(with: uiv)
-        } else {
-            do {
-                guard let uiv = history[result].loadRedoItem()
-                else { throw UndoError(load: result.undoDataValue) }
-                try loadCheck(redo: uiv.item(at: result.type.reversed))
-                let undoitem = uiv.item(at: result.type)
-                try loadCheck(undo: undoitem)
-                setReverse(undo: undoitem, with: result, in: &history)
-                return result.undoItem(with: history[result].undoItemValue!)
-            } catch {
-                history[result].setError()
-                throw error
-            }
-        }
-    }
-    
-    private func loadCheck(redo item: SheetUndoItem) throws {
+extension Sheet: HisotryOwner {
+    func loadCheck(redo item: SheetUndoItem) throws {
         func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             ivs.allSatisfy { $0.index < array.count && $0.value == array[$0.index] }
         }
@@ -2990,16 +2971,17 @@ extension Sheet {
             }
             return true
         }
-        func error() -> UndoError<SheetUndoItem> {
+        
+        func error() -> UndoError {
             UndoError(redo: item)
         }
         
         switch item {
         case .appendLine(let line):
-            guard let lastLine = picture.lines.last, lastLine == line else { throw error() }
+            guard picture.lines.last == line else { throw error() }
         case .appendKeyLine(let kv):
             guard kv.index < animation.keyframes.count,
-                  let lastLine = picture.lines.last, lastLine == kv.value else { throw error() }
+                  picture.lines.last == kv.value else { throw error() }
         case .appendLines(let lines):
             let di = picture.lines.count - lines.count
             guard di >= 0, Array(picture.lines[di...]) == lines else { throw error() }
@@ -3212,7 +3194,7 @@ extension Sheet {
         }
     }
     
-    private func loadCheck(undo item: SheetUndoItem) throws {
+    func loadCheck(undo item: SheetUndoItem) throws {
         func isSafeInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             var count = array.count
             return ivs.allSatisfy {
@@ -3238,7 +3220,7 @@ extension Sheet {
             }
             return true
         }
-        func error() -> UndoError<SheetUndoItem> {
+        func error() -> UndoError {
             UndoError(undo: item)
         }
         
@@ -3428,9 +3410,9 @@ extension Sheet {
         }
     }
     
-    private func setReverse(undo item: SheetUndoItem,
-                            with result: SheetHistory.UndoResult,
-                            in history: inout SheetHistory) {
+    func setReverse(undo item: SheetUndoItem,
+                    with result: SheetHistory.UndoResult,
+                    in history: inout SheetHistory) {
         func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
             var isArray = Array(repeating: false, count: picture.planes.count)
             for v in planeValue.moveIndexValues {
