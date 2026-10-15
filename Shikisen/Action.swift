@@ -428,14 +428,14 @@ final class RootAction: Action {
     }
     
     @discardableResult
-    func closeAllPanelsAndStop(at p: Point, enabledAlwaysSheet: Bool = true) -> Bool {
+    func closeAllPanelsAndStop(at p: Point, isEnabledAlwaysSheet: Bool = true) -> Bool {
         rootView.finding = .init()
-        return closeLookingUpAndStop(at: p, enabledAlwaysSheet: enabledAlwaysSheet)
+        return closeLookingUpAndStop(at: p, isEnabledAlwaysSheet: isEnabledAlwaysSheet)
     }
     @discardableResult
-    func closeLookingUpAndStop(at p: Point, enabledAlwaysSheet: Bool = true) -> Bool {
+    func closeLookingUpAndStop(at p: Point, isEnabledAlwaysSheet: Bool = true) -> Bool {
         rootView.closeLookingUp()
-        if enabledAlwaysSheet {
+        if isEnabledAlwaysSheet {
             for (_, v) in rootView.sheetViewValues {
                 if let sheetView = v.sheetView, sheetView.isPlaying {
                     sheetView.stop()
@@ -449,7 +449,7 @@ final class RootAction: Action {
                 if let sheetView = v.sheetView, sheetView.isPlaying {
                     sheetView.stop()
                     if sheetView == cSheetView, rootView.isEditingSheet,
-                       !sheetView.model.score.enabled {
+                       !sheetView.model.score.isEnabled {
                         let timelineP = sheetView.animationView.timelineNode
                             .convertFromWorld(p)
                         if !sheetView.animationView.containsTimeline(timelineP,
@@ -1017,7 +1017,7 @@ final class SelectAction: Action {
                     let sheetRect = sheetView.convertFromWorld(rect)
                     
                     let scoreView = sheetView.scoreView
-                    if scoreView.model.enabled {
+                    if scoreView.model.isEnabled {
                         let score = sheetView.scoreView.model
                         let scoreP = scoreView.convertFromWorld(firstP)
                         let scoreRect = scoreView.convertFromWorld(rect)
@@ -1511,7 +1511,7 @@ final class DraftAction: Action {
                 }
             } else {
                 if let sheetView = rootView.sheetView(at: p) {
-                    if sheetView.model.score.enabled {
+                    if sheetView.model.score.isEnabled {
                         let nis = (0 ..< sheetView.model.score.notes.count).map { $0 }
                         if !nis.isEmpty {
                             sheetView.newUndoGroup()
@@ -1605,7 +1605,7 @@ final class DraftAction: Action {
                     isChanged = true
                 }
             } else if let sheetView = rootView.sheetView(at: p) {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     let nis = (0 ..< sheetView.model.score.draftNotes.count).map { $0 }
                     if !nis.isEmpty {
                         let scoreView = sheetView.scoreView
@@ -1719,7 +1719,7 @@ final class FillAction: Action {
                 isChanged = sheetView.fillAll(withClipping: sheetView.model.mainFrame,
                                                 selectedKeyframeIs: kis, isOutClip: false)
                 rootView.updateSelectedFrame()
-            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled {
                 let score = sheetView.scoreView.model
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
                 let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
@@ -1812,7 +1812,7 @@ final class FillAction: Action {
                 rootView.updateSelectedFrame()
                 
                 isChanged = true
-            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled {
                 let score = sheetView.scoreView.model
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
                 let ois = sheetView.scoreView.noteIs(at: scoreP, scale: rootView.screenToWorldScale)
@@ -1939,8 +1939,8 @@ final class AddTimeAction: InputKeyEventAction {
                        sheetView.unselectAndNewUndoGroupIfNeeded()
                        rootView.cursor = .arrowWith(string: "Added".localized)
                    }
-               } else if !sheetView.model.enabledAnimation {
-                   if sheetView.model.score.enabled {
+               } else if !sheetView.model.isEnabledAnimation {
+                   if sheetView.model.score.isEnabled {
                        sheetView.unselectAndNewUndoGroupIfNeeded()
                        rootView.cursor = .arrowWith(string: "Conflict with Score".localized)
                    } else {
@@ -1951,7 +1951,7 @@ final class AddTimeAction: InputKeyEventAction {
                        option.tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
                        option.timelineY = sheetP.y.clipped(min: Sheet.timelineY,
                                                            max: Sheet.height - Sheet.timelineY)
-                       option.enabled = true
+                       option.isEnabled = true
                        sheetView.set(option)
                        
                        rootAction.updateActionNode()
@@ -1995,14 +1995,14 @@ final class AddScoreAction: InputKeyEventAction {
             rootAction.closeLookingUpAndStop(at: p)
             
             if let sheetView = rootView.madeSheetView(at: p) {
-                if !sheetView.model.score.enabled {
-                    if sheetView.model.animation.enabled {
+                if !sheetView.model.score.isEnabled {
+                    if sheetView.model.animation.isEnabled {
                         sheetView.unselectAndNewUndoGroupIfNeeded()
                         rootView.cursor = .arrowWith(string: "Conflict with Timeline".localized)
                     } else {
                         let sheetP = sheetView.convertFromWorld(p)
                         let tempo = sheetView.nearestTempo(at: sheetP) ?? rootView.nearestAroundTempo(at: p)
-                        let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, enabled: true)
+                        let option = ScoreOption(tempo: tempo, timelineY: Sheet.timelineY, isEnabled: true)
                         
                         sheetView.newUndoGroup()
                         sheetView.unselect()

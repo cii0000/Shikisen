@@ -1630,13 +1630,13 @@ extension Animation: OConvertible {
                   let keyBeatsO = dic[O("keyBeats")], let keyBeats = [Rational](keyBeatsO),
                   let timelineYO = dic[O("timelineY")], let timelineY = timelineYO.asDouble?
                 .clipped(min: Sheet.timelineY, max: Sheet.height - Sheet.timelineY),
-                  let enabledO = dic[O("enabled")], let enabled = enabledO.asBool
+                  let isEnabledO = dic[O("isEnabled")], let isEnabled = isEnabledO.asBool
              else { return nil }
             
             self.init(keyframes: keyframes, rootBeat: rootBeat,
                       beatRange: beatRange, loopDurBeat: loopDurBeat, tempo: tempo,
                       previousNext: previousNext, keyBeats: keyBeats, timelineY: timelineY,
-                      enabled: enabled)
+                      isEnabled: isEnabled)
         default: return nil
         }
     }
@@ -1645,7 +1645,7 @@ extension Animation: OConvertible {
                O("beatRange"): beatRange.asO, O("loopDurBeat"): O(loopDurBeat),
                O("tempo"): O(tempo),
                O("previousNext"): previousNext.asO, O("keyBeats"): keyBeats.asO,
-               O("timelineY"): O(timelineY), O("enabled"): O(enabled)])
+               O("timelineY"): O(timelineY), O("isEnabled"): O(isEnabled)])
     }
 }
 extension Locale: OConvertible {

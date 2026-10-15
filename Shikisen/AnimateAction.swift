@@ -80,7 +80,7 @@ final class GoPreviousAction: Action {
             
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     scoreView = sheetView.scoreView
                     rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
                     Feedback.beep()
@@ -202,7 +202,7 @@ final class GoNextAction: Action {
             sheetView = rootView.sheetView(at: p)
         
             if let sheetView {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     scoreView = sheetView.scoreView
                     rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
                     return
@@ -327,7 +327,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
             preEventTime = nil
             sheetView = rootView.sheetView(at: p)
             if let sheetView {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     scoreView = sheetView.scoreView
                     rootView.cursor = .ban(string: "The time selection of the score is under development".localized)
                     return
@@ -344,7 +344,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                 }
                 
                 if contentIndex == nil {
-                    if sheetView.model.enabledAnimation {
+                    if sheetView.model.isEnabledAnimation {
                         let animationView = sheetView.animationView
                         beganRootI = animationView.rootKeyframeIndex
                         beganRootBeat = animationView.rootBeat
@@ -382,7 +382,7 @@ final class SelectTimeAction: SwipeEventAction, DragEventAction {
                     }
                 } else {
                     allDX += event.scrollDeltaPoint.x * correction
-                    if sheetView.model.enabledAnimation {
+                    if sheetView.model.isEnabledAnimation {
                         let animationView = sheetView.animationView
                         let animation = animationView.model
                         
@@ -520,9 +520,9 @@ final class PlayAction: InputKeyEventAction {
                     let sec = contentView.model.sec(fromBeat: contentView.model.beat)
                     sheetView.play(atSec: sec)
                 } else if !(rootAction.containsAllTimelines(with: event)
-                    || (!sheetView.model.enabledAnimation && sheetView.model.isEnabledAudio)) {
+                    || (!sheetView.model.isEnabledAnimation && sheetView.model.isEnabledAudio)) {
                     
-                    if sheetView.model.enabledTimeline {
+                    if sheetView.model.isEnabledTimeline {
                         var secRange = sheetView.model.animation.secRange
                         let secRanges = sheetView.bottomSheetViews
                             .compactMap { $0.element?.model.animation.secRange }
@@ -536,11 +536,11 @@ final class PlayAction: InputKeyEventAction {
                     } else {
                         rootView.cursor = .arrowWith(string: "Empty".localized)
                     }
-                } else if sheetView.model.enabledTimeline {
+                } else if sheetView.model.isEnabledTimeline {
                     let sheetP = sheetView.convertFromWorld(p)
                     let scoreView = sheetView.scoreView
                     let sec: Rational
-                    if scoreView.model.enabled,
+                    if scoreView.model.isEnabled,
                        let (noteI, pitI) = scoreView.noteAndPitI(at: scoreView.convertFromWorld(p),
                                                                  scale: scale) {
                         let score = scoreView.model
@@ -768,12 +768,12 @@ final class InsertAction: InputKeyEventAction {
                                                       isArrow: true,
                                                       progress: sheetView.currentTimeProgress(),
                                                       progressWidth: progressWidth)
-                } else if sheetView.model.score.enabled {
+                } else if sheetView.model.score.isEnabled {
                     let scoreView = sheetView.scoreView
                     let scoreP = sheetView.scoreView.convertFromWorld(p)
                     if let noteI = sheetView.scoreView.noteIndex(at: scoreP,
                                                                  scale: rootView.screenToWorldScale,
-                                                                 enabledTone: true) {
+                                                                 isEnabledTone: true) {
                         let score = scoreView.model
                         let scoreP = scoreView.convertFromWorld(p)
                         if let (pitI, _) = scoreView.pitIAndSprolI(at: scoreP, at: noteI, scale: rootView.screenToWorldScale) {
@@ -885,7 +885,7 @@ final class InterpolateAction: InputKeyEventAction {
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled {
                 let sheetP = sheetView.scoreView.convertFromWorld(p)
                 let nis: [Int]
                 if sheetView.containsSelectedNote(sheetP,
@@ -1304,7 +1304,7 @@ final class InterpolateAction: InputKeyEventAction {
                     if idSet.contains(line.interOption.id) {
                         interOption = line.interOption
                     } else {
-                        if !animationView.enabledFirstOrLastInterpolated(atLineI: lis[$0],
+                        if !animationView.isEnabledFirstOrLastInterpolated(atLineI: lis[$0],
                                                                          atRootKI: nRootKI,
                                                                          fromRootKI: oRootKI)
                             || lineIDSet.contains(ios[$0].id) {
@@ -1579,11 +1579,11 @@ extension SheetView {
             
             var (fki, lki) = isUp ? (fromKI, toKI) : (toKI, fromKI)
             
-            var enabledKIs = Set<Int>()
+            var isEnabledKIs = Set<Int>()
             var eki = fki
             if fromRKI != toRKI {
                 repeat {
-                    enabledKIs.insert(eki)
+                    isEnabledKIs.insert(eki)
                     eki = eki + 1 >= kts.count ? 0 : eki + 1
                 } while eki != lki
             }
@@ -1597,7 +1597,7 @@ extension SheetView {
                     count += 1
                     if count >= 3 { break }
                 }
-                if count < 2 { enabledKIs.insert(aki) }
+                if count < 2 { isEnabledKIs.insert(aki) }
             } while aki != lki
             if count > 0 && aki == lki {
                 isLoop = true
@@ -1612,7 +1612,7 @@ extension SheetView {
                         count += 1
                         if count >= 3 { break }
                     }
-                    if count < 2 { enabledKIs.insert(aki) }
+                    if count < 2 { isEnabledKIs.insert(aki) }
                 } while aki != fki
                 if aki == fki {
                     isLoop = true
@@ -1649,7 +1649,7 @@ extension SheetView {
                         fromKeyI = keys.count - 1
                     }
                 } else {
-                    if enabledKIs.contains(ki) {
+                    if isEnabledKIs.contains(ki) {
                         kiAndTimes.append((ki, dur))
                     }
                     isLastKey = false
@@ -1747,12 +1747,12 @@ final class DisconnectAction: InputKeyEventAction {
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+            if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled {
                 let scoreView = sheetView.scoreView
                 let scoreP = sheetView.scoreView.convertFromWorld(p)
                 if let noteI = sheetView.scoreView.noteIndex(at: scoreP,
                                                              scale: rootView.screenToWorldScale,
-                                                             enabledTone: true) {
+                                                             isEnabledTone: true) {
                     let scoreP = scoreView.convertFromWorld(p)
                     
                     let nis = [noteI]

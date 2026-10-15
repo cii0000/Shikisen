@@ -871,7 +871,7 @@ final class RootView: View, @unchecked Sendable {
             autoreleasepool {
                 let record = sheetRecorder.sheetRecord
                 guard let sheet = record.decodedValue else { return }
-                if sheet.enabledAnimation {
+                if sheet.isEnabledAnimation {
                     record.value = sheet
                     record.isWillwrite = true
                     syncSave()
@@ -1706,13 +1706,13 @@ final class RootView: View, @unchecked Sendable {
                 }
             }
             
-            if sheetView.model.animation.enabled, sheetView.model.animation.tempo != tempo {
+            if sheetView.model.animation.isEnabled, sheetView.model.animation.tempo != tempo {
                 updateUndoGroup()
                 var option = sheetView.model.animation.option
                 option.tempo = tempo
                 sheetView.set(option)
             }
-            if sheetView.model.score.enabled, sheetView.model.score.tempo != tempo {
+            if sheetView.model.score.isEnabled, sheetView.model.score.tempo != tempo {
                 updateUndoGroup()
                 var option = sheetView.model.score.option
                 option.tempo = tempo
@@ -2372,7 +2372,7 @@ final class RootView: View, @unchecked Sendable {
         var maxShp: IntPoint?
         sheetPositionFromVertical(at: shp) { nShp in
             let dShp = IntPoint(nShp.x + deltaX, nShp.y)
-            if let sheetView = sheetView(at: dShp), sheetView.model.enabledTimeline {
+            if let sheetView = sheetView(at: dShp), sheetView.model.isEnabledTimeline {
                 maxShp = maxShp != nil ? (dShp.y > maxShp!.y ? dShp : maxShp!) : dShp
             }
         }
@@ -3560,21 +3560,21 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func madeColorOwner(at p: Point,
-                        enabledLine: Bool = true,
-                        enabledAlwaysAnimation: Bool = false,
+                        isEnabledLine: Bool = true,
+                        isEnabledAlwaysAnimation: Bool = false,
                         removingUUColor: UUColor? = Line.defaultUUColor) -> [SheetColorOwner] {
         guard let sheetView = madeSheetView(at: p) else {
             return []
         }
         let sheetP = sheetView.convertFromWorld(p)
         return [sheetView.sheetColorOwner(at: sheetP,
-                                          enabledLine: enabledLine,
-                                          enabledAlwaysAnimation: enabledAlwaysAnimation,
+                                          isEnabledLine: isEnabledLine,
+                                          isEnabledAlwaysAnimation: isEnabledAlwaysAnimation,
                                           removingUUColor: removingUUColor,
                                           scale: screenToWorldScale).value]
     }
     func madeColorOwnersWithSelection(at p: Point,
-                                      enabledLinePlane: Bool = true,
+                                      isEnabledLinePlane: Bool = true,
                                       removingUUColor: UUColor? = Line.defaultUUColor) -> (firstUUColor: UUColor,
                                                                                            owners: [SheetColorOwner])? {
         guard let sheetView = madeSheetView(at: p) else {
@@ -3583,7 +3583,7 @@ final class RootView: View, @unchecked Sendable {
         
         let sheetP = sheetView.convertFromWorld(p)
         let (isLine, topOwner) = sheetView.sheetColorOwner(at: sheetP,
-                                                           enabledLinePlane: enabledLinePlane,
+                                                           isEnabledLinePlane: isEnabledLinePlane,
                                                            removingUUColor: removingUUColor,
                                                            scale: screenToWorldScale)
         let uuColor = topOwner.uuColor
@@ -3667,13 +3667,13 @@ final class RootView: View, @unchecked Sendable {
             return []
         }
     }
-    func colorOwners(at p: Point, enabledAlwaysAnimation: Bool = false) -> [SheetColorOwner] {
+    func colorOwners(at p: Point, isEnabledAlwaysAnimation: Bool = false) -> [SheetColorOwner] {
         guard let sheetView = readSheetView(at: p) else {
             return []
         }
         let sheetP = sheetView.convertFromWorld(p)
         return [sheetView.sheetColorOwner(at: sheetP,
-                                          enabledAlwaysAnimation: enabledAlwaysAnimation,
+                                          isEnabledAlwaysAnimation: isEnabledAlwaysAnimation,
                                           scale: screenToWorldScale).value]
     }
     func isDefaultUUColor(at p: Point) -> Bool {
@@ -3693,7 +3693,7 @@ final class RootView: View, @unchecked Sendable {
             var nncShp = ncShp, npsvs = [WeakElement<SheetView>]()
             nncShp.y -= 1
             while let aaSheetView = sheetView(at: nncShp),
-                  aaSheetView.model.enabledTimeline {
+                  aaSheetView.model.isEnabledTimeline {
                 npsvs.append(.init(element: aaSheetView))
                 nncShp.y -= 1
             }
@@ -3702,7 +3702,7 @@ final class RootView: View, @unchecked Sendable {
             npsvs = []
             nncShp.y += 1
             while let aaSheetView = sheetView(at: nncShp),
-                  aaSheetView.model.enabledTimeline {
+                  aaSheetView.model.isEnabledTimeline {
                 npsvs.append(.init(element: aaSheetView))
                 nncShp.y += 1
             }
@@ -3717,7 +3717,7 @@ final class RootView: View, @unchecked Sendable {
             var ncShp = cShp, psvs = [WeakElement<SheetView>]()
             while let preShp = nearestVerticalSheetPosition(at: ncShp, deltaX: -1) {
                 guard let ncSheetView = sheetView(at: preShp),
-                      ncSheetView.model.enabledTimeline else { break }
+                      ncSheetView.model.isEnabledTimeline else { break }
                 psvs.append(.init(element: ncSheetView))
                 ncShp = preShp
             }
@@ -3727,7 +3727,7 @@ final class RootView: View, @unchecked Sendable {
             var nsvs = [WeakElement<SheetView>]()
             while let nextShp = nearestVerticalSheetPosition(at: ncShp, deltaX: 1) {
                 guard let ncSheetView = sheetView(at: nextShp),
-                      ncSheetView.model.enabledTimeline else { break }
+                      ncSheetView.model.isEnabledTimeline else { break }
                 nsvs.append(.init(element: ncSheetView))
                 ncShp = nextShp
             }

@@ -340,7 +340,7 @@ extension TimelineView {
     }
     func makeBeatPathlines(in beatRange: Range<Rational>,
                            sy: Double, ey: Double, subBorderBeats: Set<Rational> = [],
-                           enabledBeatExtension: Bool = true,
+                           isEnabledBeatExtension: Bool = true,
                            subBorderPathlines: inout [Pathline],
                            fullEditBorderPathlines: inout [Pathline],
                            secondEditBorderPathlines: inout [Pathline],
@@ -353,7 +353,7 @@ extension TimelineView {
                 let lw = Self.beatLineWidth(atBeat: cBeat)
                 let beatX = x(atBeat: cBeat)
                 
-                let dlh = enabledBeatExtension && lw == 0.5 ? 3.0 : 0.0
+                let dlh = isEnabledBeatExtension && lw == 0.5 ? 3.0 : 0.0
                 let rect = Rect(x: beatX - lw / 2, y: sy - dlh,
                                 width: lw, height: ey - sy + dlh * 2)
                 if subBorderBeats.contains(cBeat) {
@@ -683,7 +683,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     }
     
     func containsTimeline(_ p: Point, scale: Double) -> Bool {
-        model.enabled ?
+        model.isEnabled ?
         ((paddingTimelineBounds?.contains(p) ?? false)
          || containsPreviousNext(p, scale: scale)) : false
     }
@@ -772,7 +772,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
     }
     
     func updateTimeline() {
-        if model.enabled {
+        if model.isEnabled {
             let btsx = x(atBeat: model.beatRange.lowerBound)
             let btex = x(atBeat: model.endLoopDurBeat)
             let timelineBounds = Rect(x: btsx, y: -Sheet.timelineHalfHeight,
@@ -1204,7 +1204,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             })
         })
     }
-    func enabledFirstOrLastInterpolated(atLineI li: Int,
+    func isEnabledFirstOrLastInterpolated(atLineI li: Int,
                                         atRootKI: Int, fromRootKI: Int) -> Bool {
         guard model.keyframes.count >= 2 else { return false }
         let ki = model.index(atRoot: atRootKI)
@@ -1428,9 +1428,9 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             }
         }
         
-        let enabledStartBeat = model.keyframes[0].beat == 0
+        let isEnabledStartBeat = model.keyframes[0].beat == 0
         let sd = abs(p.x - x(atBeat: model.beatRange.start))
-        if sd < minD && sd < 10.0 * scale && enabledStartBeat {
+        if sd < minD && sd < 10.0 * scale && isEnabledStartBeat {
             minD = sd
             minResult = .startBeat
         }
@@ -1443,7 +1443,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         
         let md = Sheet.keyframeEditDistance * scale
         if let (minI, d) = slidableKeyframeIndex(at: p, maxDistance: md) {
-            if enabledStartBeat ? minI != 0 : true, d < minD {
+            if isEnabledStartBeat ? minI != 0 : true, d < minD {
                 minD = d
                 minResult = .key(i: minI)
             }
@@ -1546,7 +1546,7 @@ final class SheetView: View, @unchecked Sendable {
         let rect = convertToWorld(selectedFrame)
         let lastP: Point? = if let p = model.selection.lastPosition { convertToWorld(p) } else { nil }
         selectedFrameNode = Node(children: Self.selectedFrameNodes(fom: rect, lastP: lastP,
-                                                                   isKnob: !model.score.enabled,
+                                                                   isKnob: !model.score.isEnabled,
                                                                    scale: scale))
     }
     static func selectedFrameNodes(fom rect: Rect, lastP: Point?, isKnob: Bool,
@@ -1864,7 +1864,7 @@ final class SheetView: View, @unchecked Sendable {
         selectedContentIs.forEach {
             rect += contentsView.elementViews[$0].transformedBounds
         }
-        if model.score.enabled, let selectedFrame = scoreView.selectedFrame {
+        if model.score.isEnabled, let selectedFrame = scoreView.selectedFrame {
             rect += convert(selectedFrame, from: scoreView.node)
         }
         return rect?.outset(by: 10 * scale)
@@ -1945,7 +1945,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     func containsSelectedFrame(_ p: Point, scale: Double) -> Bool {
         guard let frame = selectedFrame(scale: scale) else { return false }
-        if model.score.enabled {
+        if model.score.isEnabled {
             let edSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
             return frame.edges.contains { $0.distanceSquared(from: p) < edSq }
         } else {
@@ -1960,7 +1960,7 @@ final class SheetView: View, @unchecked Sendable {
         let maxDSq = (Sheet.moveKnobEditDistance * scale).squared
         let maxEDSq = (Sheet.moveKnobEditDistance / 2 * scale).squared
         var minDSq = Double.infinity
-        if !model.score.enabled {
+        if !model.score.isEnabled {
             frame.allPoints.forEach {
                 let dSq = $0.distanceSquared(p)
                 if dSq < minDSq && dSq < maxDSq {
@@ -2043,7 +2043,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func containsSelectedNote(_ p: Point, scale: Double) -> Bool {
-        guard model.score.enabled,
+        guard model.score.isEnabled,
                 let v = scoreView.hitTestPoint(scoreView.convert(p, from: node),
                                                scale: scale) else { return false }
         return switch v.result {
@@ -2112,11 +2112,11 @@ final class SheetView: View, @unchecked Sendable {
                              frameRate: Rational(frameRate))
     }
     func currentTimeProgress() -> Double? {
-        model.animation.localDurBeat != 0 && model.enabledAnimation ?
+        model.animation.localDurBeat != 0 && model.isEnabledAnimation ?
             .init(model.animation.localBeat / model.animation.localDurBeat) : nil
     }
     func timeProgress(fromBeat beat: Rational) -> Double? {
-        model.animation.localDurBeat != 0 && model.enabledAnimation ?
+        model.animation.localDurBeat != 0 && model.isEnabledAnimation ?
             .init(beat / model.animation.localDurBeat) : nil
     }
     func currentTimeNodes() -> [Node] {
@@ -2144,10 +2144,10 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func containsTempo(_ p: Point, scale: Double) -> Bool {
-        if animationView.model.enabled, animationView.containsTempo(p, scale: scale) {
+        if animationView.model.isEnabled, animationView.containsTempo(p, scale: scale) {
             return true
         }
-        if scoreView.model.enabled, scoreView.containsTempo(p, scale: scale) {
+        if scoreView.model.isEnabled, scoreView.containsTempo(p, scale: scale) {
             return true
         }
         for textView in textsView.elementViews {
@@ -2163,10 +2163,10 @@ final class SheetView: View, @unchecked Sendable {
         return false
     }
     func tempo(at p: Point, scale: Double) -> Rational? {
-        if animationView.model.enabled, animationView.containsTempo(p, scale: scale) {
+        if animationView.model.isEnabled, animationView.containsTempo(p, scale: scale) {
             return animationView.tempo
         }
-        if scoreView.model.enabled, scoreView.containsTempo(p, scale: scale) {
+        if scoreView.model.isEnabled, scoreView.containsTempo(p, scale: scale) {
             return scoreView.tempo
         }
         for textView in textsView.elementViews {
@@ -2265,7 +2265,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     private func setNoUpdateTopAndBottom(mainSec: Rational) {
-        guard model.animation.enabled,
+        guard model.animation.isEnabled,
               model.animation.allSecRange.contains(mainSec)
                 else { return }
         
@@ -2324,7 +2324,7 @@ final class SheetView: View, @unchecked Sendable {
     func updateScoreViewFromAround() {
         let nBeatRange = self.scoreView.model.beatRange
         var nNotes = [Note]()
-        if let scoreView = left?.scoreView, scoreView.model.enabled {
+        if let scoreView = left?.scoreView, scoreView.model.isEnabled {
             let beatRange = scoreView.model.beatRange
             nNotes += scoreView.model.notes.filter { $0.beatRange.end > beatRange.end }.map {
                 var n = $0
@@ -2332,7 +2332,7 @@ final class SheetView: View, @unchecked Sendable {
                 return n
             }
         }
-        if let scoreView = right?.scoreView, scoreView.model.enabled {
+        if let scoreView = right?.scoreView, scoreView.model.isEnabled {
             let startBeat = scoreView.model.beatRange.start
             nNotes += scoreView.model.notes.filter { $0.beatRange.start < startBeat }.map {
                 var n = $0
@@ -2375,12 +2375,12 @@ final class SheetView: View, @unchecked Sendable {
         bottomSheetViews.forEach { $0.element?.updateTopAndBottom() }
     }
     func updateTopAndBottom() {
-        guard model.enabledAnimation else { return }
+        guard model.isEnabledAnimation else { return }
         let allSec = animationView.model.mainSec, bounds = bounds
         var otherBottomChildren = [Node](), otherTopChildren = [Node]()
         
         func update(_ oSheetView: SheetView, isBottom: Bool) {
-            if oSheetView.model.enabledAnimation, oSheetView.model.animation.allSecRange.contains(allSec) {
+            if oSheetView.model.isEnabledAnimation, oSheetView.model.animation.allSecRange.contains(allSec) {
                 
                 let weakElement = WeakElement(element: oSheetView)
                 let ki = oSheetView.animationView.model.index(atSec: allSec)
@@ -2682,7 +2682,7 @@ final class SheetView: View, @unchecked Sendable {
             if !sheetView.bottomSheetViews.isEmpty {
                 for (si, bottomSheetViewE) in sheetView.bottomSheetViews.enumerated() {
                     guard let bottomSheetView = bottomSheetViewE.element,
-                          bottomSheetView.model.enabledAnimation else { continue }
+                          bottomSheetView.model.isEnabledAnimation else { continue }
                     let i = bottomSheetView.model.animation.indexInBeatRange(atSec: playingSec)
                     if let i {
                         if bottomSheetView.playingOldKeyframeIndex != i {
@@ -2724,7 +2724,7 @@ final class SheetView: View, @unchecked Sendable {
             if !sheetView.topSheetViews.isEmpty {
                 for (si, topSheetViewE) in sheetView.topSheetViews.enumerated() {
                     guard let topSheetView = topSheetViewE.element,
-                          topSheetView.model.enabledAnimation else { continue }
+                          topSheetView.model.isEnabledAnimation else { continue }
                     let i = topSheetView.model.animation.indexInBeatRange(atSec: playingSec)
                     if let i {
                         if topSheetView.playingOldKeyframeIndex != i {
@@ -2800,7 +2800,7 @@ final class SheetView: View, @unchecked Sendable {
             func update(from sheetView: SheetView) {
                 let d = volumeColor == .warning ? 2.0 : 1.0
                 let knobW = (isPlaying ? 3.0 : 1.0) * d, volmW = (isPlaying ? 2.0 : 0) * d
-                if !(!isPlaying && sheetView == self), sheetView.model.enabledAnimation && sheetView.animationView.model.allSecRange.contains(playingSec) {
+                if !(!isPlaying && sheetView == self), sheetView.model.isEnabledAnimation && sheetView.animationView.model.allSecRange.contains(playingSec) {
                     
                     let btx = sheetView.animationView.x(atSec: playingSec)
                     let knobH = sheetView.animationView.timelineBounds?.height ?? 0
@@ -2818,7 +2818,7 @@ final class SheetView: View, @unchecked Sendable {
                 
                 var oTimeRects1 = [Rect]()
                 let scoreView = sheetView.scoreView
-                if scoreView.option.enabled {
+                if scoreView.option.isEnabled {
                     if scoreView.model.allSecRange.contains(playingSec) {
                         let btx = scoreView.x(atSec: playingSec) + scoreView.origin.x
                         let h = scoreView.mainFrame.maxY - scoreView.timelineFrame.minY
@@ -3130,7 +3130,7 @@ final class SheetView: View, @unchecked Sendable {
     func nearestTempo(at p: Point) -> Rational? {
         var minTempo: Rational?, minDS = Double.infinity
         
-        if scoreView.model.enabled {
+        if scoreView.model.isEnabled {
             let ds = scoreView.transformedTimelineFrame?.distanceSquared(p) ?? 0
             if ds < minDS {
                 minTempo = scoreView.model.tempo
@@ -3154,7 +3154,7 @@ final class SheetView: View, @unchecked Sendable {
                 minDS = ds
             }
         }
-        if animationView.model.enabled {
+        if animationView.model.isEnabled {
             let ds = animationView.transformedPaddingTimelineBounds?.distanceSquared(p) ?? 0
             if ds < minDS {
                 minTempo = animationView.model.tempo
@@ -3296,18 +3296,18 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     func sheetColorOwner(at p: Point,
-                         enabledLine: Bool = true, enabledLinePlane: Bool = true,
-                         enabledAlwaysAnimation: Bool = false,
+                         isEnabledLine: Bool = true, isEnabledLinePlane: Bool = true,
+                         isEnabledAlwaysAnimation: Bool = false,
                          removingUUColor: UUColor? = Line.defaultUUColor,
                          scale: Double) -> (isLine: Bool, value: SheetColorOwner) {
-        if enabledLine,
+        if isEnabledLine,
            let (lineView, li) = lineTuple(at: p,
-                                          enabledPlane: enabledLinePlane,
+                                          isEnabledPlane: isEnabledLinePlane,
                                           removingUUColor: removingUUColor,
                                           scale: scale) {
             let uuColor = lineView.model.uuColor
             
-            if model.enabledAnimation {
+            if model.isEnabledAnimation {
                 if containsSelectedKeyframe(p, scale: scale) {
                     return (true, sheetColorOwnerFromAnimation(with: uuColor, isLine: true))
                 } else {
@@ -3321,7 +3321,7 @@ final class SheetView: View, @unchecked Sendable {
                 return (true, SheetColorOwner(sheetView: self, colorValue: cv))
             }
         } else {
-            return (false, sheetColorOwnerFromPlane(at: p, enabledAlwaysAnimation: enabledAlwaysAnimation, scale: scale))
+            return (false, sheetColorOwnerFromPlane(at: p, isEnabledAlwaysAnimation: isEnabledAlwaysAnimation, scale: scale))
         }
     }
     func sheetColorOwnerFromAnimation(with uuColor: UUColor,
@@ -3351,11 +3351,11 @@ final class SheetView: View, @unchecked Sendable {
         return SheetColorOwner(sheetView: self, colorValue: cv)
     }
     func sheetColorOwnerFromPlane(at p: Point,
-                                  enabledAlwaysAnimation: Bool = false,
+                                  isEnabledAlwaysAnimation: Bool = false,
                                   scale: Double) -> SheetColorOwner {
         if let pi = planesView.firstIndex(at: animationView.convert(p, from: node)) {
-            if model.enabledAnimation {
-                if containsSelectedKeyframe(p, scale: scale) || enabledAlwaysAnimation {
+            if model.isEnabledAnimation {
+                if containsSelectedKeyframe(p, scale: scale) || isEnabledAlwaysAnimation {
                     let uuColor = model.picture.planes[pi].uuColor
                     return sheetColorOwnerFromAnimation(with: uuColor)
                 } else {
@@ -3385,7 +3385,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
             return liDic.map {
-                if model.enabledAnimation {
+                if model.isEnabledAnimation {
                     let cv = ColorValue(uuColor: $0.key,
                                         lineAnimationIndexes: [IndexValue(value: $0.value,
                                                            index: model.animation.index)])
@@ -3405,7 +3405,7 @@ final class SheetView: View, @unchecked Sendable {
                 }
             }
             return piDic.map {
-                if model.enabledAnimation {
+                if model.isEnabledAnimation {
                     let cv = ColorValue(uuColor: $0.key,
                                         planeAnimationIndexes: [IndexValue(value: $0.value,
                                                            index: model.animation.index)])
@@ -3418,7 +3418,7 @@ final class SheetView: View, @unchecked Sendable {
         }
     }
     func sheetColorOwner(with uuColor: UUColor) -> SheetColorOwner? {
-        if model.enabledAnimation {
+        if model.isEnabledAnimation {
             let iivs: [IndexValue<[Int]>] = model.animation.keyframes.enumerated().compactMap { (i, kf) in
                 let planeIndexes = kf.picture.planes.enumerated().compactMap {
                     $0.element.uuColor == uuColor ? $0.offset : nil
@@ -3471,7 +3471,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
-        if model.animation.enabled {
+        if model.animation.isEnabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
         history.append(undo: undoItem, redo: redoItem)
@@ -3482,7 +3482,7 @@ final class SheetView: View, @unchecked Sendable {
         history.append(undo: undoItem, redo: redoItem)
     }
     private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
-        if model.animation.enabled {
+        if model.animation.isEnabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
         history.append(undo: undoItem, redo: redoItem)
@@ -5389,11 +5389,11 @@ final class SheetView: View, @unchecked Sendable {
         return uuColor == Sheet.defalutBackgroundUUColor
         || (uuColor.id == .two && uuColor.value.opacity == 0)
     }
-    func lineTuple(at p: Point, enabledPlane: Bool = false,
+    func lineTuple(at p: Point, isEnabledPlane: Bool = false,
                    isSelectedOnly: Bool = false,
                    removingUUColor: UUColor? = nil,
                    scale: Double) -> (lineView: SheetLineView, lineIndex: Int)? {
-        let isNoneDefaultColorPlane = enabledPlane
+        let isNoneDefaultColorPlane = isEnabledPlane
         && !model.picture.planes.isEmpty
         && !isDefaultPlaneColor(at: p, scale: scale)
         let ds = if isNoneDefaultColorPlane {
@@ -5765,7 +5765,7 @@ final class SheetView: View, @unchecked Sendable {
     
     @MainActor
     func fillAll(withClipping cb: Rect?, selectedKeyframeIs: [Int], isOutClip: Bool) -> Bool {
-        if selectedKeyframeIs.isEmpty || !model.enabledAnimation {
+        if selectedKeyframeIs.isEmpty || !model.isEnabledAnimation {
             return fillAllFromKeyframeIndex(withClipping: cb, isOutClip: isOutClip)
         }
         
@@ -5877,7 +5877,7 @@ final class SheetView: View, @unchecked Sendable {
     }
     func fillAllFromKeyframeIndex(withClipping cb: Rect?, topolygons: [Topolygon],
                                   isOutClip: Bool, isNewUndoGroup: Bool = true) -> Bool {
-        let result = if model.enabledAnimation {
+        let result = if model.isEnabledAnimation {
             Picture.autoFill(fromOther: fillAllOtherPlanes(at: model.animation.index),
                              from: topolygons,
                              from: model.picture.planes,

@@ -305,7 +305,7 @@ final class PCMNoder: ObjectHashable {
         }
     }
     
-    var enabledWaveclip = false
+    var isEnabledWaveclip = false
     
     convenience init?(content: Content, startSec: Double = 0) {
         guard let pcmTrackItem = PCMTrackItem(content: content, startSec: startSec) else { return nil }
@@ -398,7 +398,7 @@ final class PCMNoder: ObjectHashable {
                 return noErr
             }
             
-            let enabledWaveclip = self.enabledWaveclip
+            let isEnabledWaveclip = self.isEnabledWaveclip
             let rSampleRate = 1 / sampleRate
             let oFrameCount = pcmBuffer.sampleCount, cCount = pcmBuffer.channelCount
             for ci in 0 ..< min(outputBLP.count, cCount) {
@@ -413,7 +413,7 @@ final class PCMNoder: ObjectHashable {
                             continue
                         }
                         let sec = Double(i) * rSampleRate
-                        let amp = enabledWaveclip ?
+                        let amp = isEnabledWaveclip ?
                         Waveclip.default.scale(atSec: sec,
                                              attackStartSec: loopedContentStartSec,
                                              releaseStartSec: loopedContentEndSec - Waveclip.default.releaseSec) : 1
@@ -1326,9 +1326,9 @@ extension Sequencer {
                 limitLufs: Double? = Audio.limitLufs,
                 isClip: Bool = true,
                 progressHandler: (Double) throws -> ()) throws -> AVAudioPCMBuffer {
-        (limiterNode.auAudioUnit as! ClippingAudioUnit).enabledHeadroomAndAttack = false
+        (limiterNode.auAudioUnit as! ClippingAudioUnit).isEnabledHeadroomAndAttack = false
         defer {
-            (limiterNode.auAudioUnit as! ClippingAudioUnit).enabledHeadroomAndAttack = true
+            (limiterNode.auAudioUnit as! ClippingAudioUnit).isEnabledHeadroomAndAttack = true
         }
         
         guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -1612,16 +1612,16 @@ extension AVAudioPCMBuffer {
         let frameCount = sampleCount
         guard frameCount > 0 else { return }
         for ci in 0 ..< channelCount {
-            let enabledAttack = abs(self[ci, 0]) > 0.00001
-            let enabledRelease = abs(self[ci, frameCount - 1]) > 0.00001
-            if enabledAttack || enabledRelease {
+            let isEnabledAttack = abs(self[ci, 0]) > 0.00001
+            let isEnabledRelease = abs(self[ci, frameCount - 1]) > 0.00001
+            if isEnabledAttack || isEnabledRelease {
                 enumerated(atChannel: ci) { i, v in
                     let aSec = Double(i) * rSampleRate
-                    if enabledAttack && aSec < waveclip.attackSec {
+                    if isEnabledAttack && aSec < waveclip.attackSec {
                         self[ci, i] *= Float(aSec * waveclip.rAttackSec)
                     }
                     let rSec = Double(frameCount - 1 - i) * rSampleRate
-                    if enabledRelease && rSec < waveclip.releaseSec {
+                    if isEnabledRelease && rSec < waveclip.releaseSec {
                         self[ci, i] *= Float(rSec * waveclip.rReleaseSec)
                     }
                 }
@@ -1633,16 +1633,16 @@ extension AVAudioPCMBuffer {
         let frameCount = sampless[0].count, channelCount = sampless.count
         guard frameCount > 0 else { return }
         for ci in 0 ..< channelCount {
-            let enabledAttack = abs(sampless[ci][0]) > 0.00001
-            let enabledRelease = abs(sampless[ci][frameCount - 1]) > 0.00001
-            if enabledAttack || enabledRelease {
+            let isEnabledAttack = abs(sampless[ci][0]) > 0.00001
+            let isEnabledRelease = abs(sampless[ci][frameCount - 1]) > 0.00001
+            if isEnabledAttack || isEnabledRelease {
                 for i in 0 ..< frameCount {
                     let aSec = Double(i) * rSampleRate
-                    if enabledAttack && aSec < waveclip.attackSec {
+                    if isEnabledAttack && aSec < waveclip.attackSec {
                         sampless[ci][i] *= aSec * waveclip.rAttackSec
                     }
                     let rSec = Double(frameCount - 1 - i) * rSampleRate
-                    if enabledRelease && rSec < waveclip.releaseSec {
+                    if isEnabledRelease && rSec < waveclip.releaseSec {
                         sampless[ci][i] *= rSec * waveclip.rReleaseSec
                     }
                 }
@@ -2147,16 +2147,16 @@ final class ClippingAudioUnit: AUAudioUnit {
     private var pcmBuffer: AVAudioPCMBuffer?
     
     private var headroomAmp: Float? = Audio.floatHeadroomAmp
-    private var enabledAttack = true
-    var enabledHeadroomAndAttack = true {
+    private var isEnabledAttack = true
+    var isEnabledHeadroomAndAttack = true {
         didSet {
-            guard enabledHeadroomAndAttack != oldValue else { return }
-            if enabledHeadroomAndAttack {
+            guard isEnabledHeadroomAndAttack != oldValue else { return }
+            if isEnabledHeadroomAndAttack {
                 headroomAmp = Audio.floatHeadroomAmp
-                enabledAttack = true
+                isEnabledAttack = true
             } else {
                 headroomAmp = nil
-                enabledAttack = false
+                isEnabledAttack = false
             }
         }
     }
@@ -2236,7 +2236,7 @@ final class ClippingAudioUnit: AUAudioUnit {
                 }
             }
             
-            if self.enabledAttack,
+            if self.isEnabledAttack,
                (timestamp.pointee.mFlags.contains(.sampleTimeValid)
                 || timestamp.pointee.mFlags.contains(.sampleHostTimeValid))
                 && timestamp.pointee.mSampleTime == 0 {

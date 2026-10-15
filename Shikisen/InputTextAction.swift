@@ -58,7 +58,7 @@ final class FindAction: InputKeyEventAction {
                     rootView.finding = Finding(worldPosition: p, string: str)
                     isFind = true
                 }
-            } else if let (lineView, _) = sheetView.lineTuple(at: sheetP, enabledPlane: true, scale: rootView.screenToWorldScale),
+            } else if let (lineView, _) = sheetView.lineTuple(at: sheetP, isEnabledPlane: true, scale: rootView.screenToWorldScale),
                       sheetView.animationView.interporatedKeyLineIs(from: [lineView.model.interID]).count > 1 {
                 let string = lineView.model.interID.uuidString
                 rootView.finding = Finding(worldPosition: p, string: string, isLine: true)
@@ -239,7 +239,7 @@ final class LookUpAction: InputKeyEventAction {
             rootView.show("Border".localized, at: p)
         } else if let sheetView = rootView.sheetView(at: p),
                   let (lineView, li) = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
-                                                     enabledPlane: true,
+                                                     isEnabledPlane: true,
                                                      scale: 1 / rootView.worldToScreenScale) {
             let line = lineView.model
             let interStr = if line.interType != .none {
@@ -428,8 +428,8 @@ final class LookUpAction: InputKeyEventAction {
     
     static func sizeString(from size: Size) -> String {
         let width = size.width, height = size.height
-        let widthStr = width.string(digitsCount: 1, enabledZeroInteger: false)
-        let heightStr = height.string(digitsCount: 1, enabledZeroInteger: false)
+        let widthStr = width.string(digitsCount: 1, isEnabledZeroInteger: false)
+        let heightStr = height.string(digitsCount: 1, isEnabledZeroInteger: false)
         let iWidth = max(Int(width.rounded()), 1), iHeight = max(Int(height.rounded()), 1)
         let wScale = height == 0 ? "" : String(format: "%.3f:1", width / height)
         return if Rational(iWidth, iHeight) == Rational(37, 20) {
@@ -508,7 +508,7 @@ final class ChangeTextOrientationAction: Action {
             
             let p = rootView.convertScreenToWorld(event.screenPoint)
             guard let sheetView = rootView.madeSheetView(at: p) else { return }
-            if sheetView.model.score.enabled {
+            if sheetView.model.score.isEnabled {
                 rootAction.keepOut(with: event)
                 return
             }
@@ -816,7 +816,7 @@ final class InputTextAction: InputTextEventAction {
         
         let p = rootView.convertScreenToWorld(event.screenPoint)
         if !event.isRepeat, let sheetView = rootView.sheetView(at: p),
-           sheetView.model.score.enabled,
+           sheetView.model.score.isEnabled,
            sheetView.scoreView.containsMainFrame(sheetView.scoreView.convertFromWorld(p),
                                                  scale: rootView.screenToWorldScale) {
             let scoreView = sheetView.scoreView

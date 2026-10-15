@@ -2010,7 +2010,7 @@ struct ScoreOption: Hashable, Codable {
     var scales: [Rational] = [0, 2, 4, 5, 7, 9, 11]
     var tempo = Music.defaultTempo
     var timelineY = Sheet.timelineY
-    var enabled = false
+    var isEnabled = false
     var isShownSpectrogram = false
 }
 extension ScoreOption: Protobuf {
@@ -2022,7 +2022,7 @@ extension ScoreOption: Protobuf {
         tempo = (try? Rational(pb.tempo))?.clipped(Music.tempoRange) ?? Music.defaultTempo
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
-        enabled = pb.enabled
+        isEnabled = pb.isEnabled
         isShownSpectrogram = pb.isShownSpectrogram
     }
     var pb: PBScoreOption {
@@ -2035,7 +2035,7 @@ extension ScoreOption: Protobuf {
                 $0.tempo = tempo.pb
             }
             $0.timelineY = timelineY
-            $0.enabled = enabled
+            $0.isEnabled = isEnabled
             $0.isShownSpectrogram = isShownSpectrogram
         }
     }
@@ -2062,7 +2062,7 @@ struct Score: BeatRangeType, Hashable, Codable {
     var timelineY = Sheet.timelineY
     var keyBeats = [Rational]()
     var scales: [Rational] = [0, 2, 4, 5, 7, 9, 11]
-    var enabled = false
+    var isEnabled = false
     var isShownSpectrogram = false
     var id = UUID()
 }
@@ -2077,7 +2077,7 @@ extension Score: Protobuf {
         tempo = (try? Rational(pb.tempo))?.clipped(Music.tempoRange) ?? Music.defaultTempo
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
-        enabled = pb.enabled
+        isEnabled = pb.isEnabled
         isShownSpectrogram = pb.isShownSpectrogram
         id = (try? .init(pb.id)) ?? .init()
     }
@@ -2091,7 +2091,7 @@ extension Score: Protobuf {
             $0.scales = scales.map { $0.pb }
             $0.tempo = tempo.pb
             $0.timelineY = timelineY
-            $0.enabled = enabled
+            $0.isEnabled = isEnabled
             $0.isShownSpectrogram = isShownSpectrogram
             $0.id = id.pb
         }
@@ -2238,7 +2238,7 @@ extension Score {
             .init(beatRange: beatRange, loopDurBeat: loopDurBeat,
                   keyBeats: keyBeats, scales: scales,
                   tempo: tempo, timelineY: timelineY,
-                  enabled: enabled,
+                  isEnabled: isEnabled,
                   isShownSpectrogram: isShownSpectrogram)
         }
         set {
@@ -2248,7 +2248,7 @@ extension Score {
             scales = newValue.scales
             tempo = newValue.tempo
             timelineY = newValue.timelineY
-            enabled = newValue.enabled
+            isEnabled = newValue.isEnabled
             isShownSpectrogram = newValue.isShownSpectrogram
         }
     }

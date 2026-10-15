@@ -1440,7 +1440,7 @@ final class ChangeColorAction: Action {
         let p = rootView.convertScreenToWorld(sp)
         if event.phase == .began {
             if let sheetView = rootView.sheetView(at: p) {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     isChangeVolm = true
                     changeVolm(with: event)
                     return
@@ -1627,7 +1627,7 @@ final class ChangeColorAction: Action {
         if event.phase == .began {
             if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     isChangePan = true
                     changePan(with: event)
                     return
@@ -1713,7 +1713,7 @@ final class ChangeColorAction: Action {
         let p = rootView.convertScreenToWorld(sp)
         if event.phase == .began {
             if let sheetView = rootView.sheetView(at: p) {
-                if sheetView.model.score.enabled {
+                if sheetView.model.score.isEnabled {
                     isChangeVolm = true
                     changeEvenVolm(with: event)
                     return

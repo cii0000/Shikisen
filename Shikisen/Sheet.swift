@@ -242,7 +242,7 @@ struct AnimationOption: Hashable, Codable {
     var previousNext = PreviousNext.none
     var keyBeats = [Rational]()
     var timelineY = Sheet.timelineY
-    var enabled = false
+    var isEnabled = false
 }
 extension AnimationOption: Protobuf {
     init(_ pb: PBAnimationOption) throws {
@@ -252,7 +252,7 @@ extension AnimationOption: Protobuf {
         previousNext = (try? .init(pb.previousNext)) ?? .none
         keyBeats = pb.keyBeats.compactMap { try? Rational($0) }
         timelineY = pb.timelineY
-        enabled = pb.enabled
+        isEnabled = pb.isEnabled
     }
     var pb: PBAnimationOption {
         .with {
@@ -262,7 +262,7 @@ extension AnimationOption: Protobuf {
             $0.previousNext = previousNext.pb
             $0.keyBeats = keyBeats.map { $0.pb }
             $0.timelineY = timelineY
-            $0.enabled = enabled
+            $0.isEnabled = isEnabled
         }
     }
 }
@@ -338,7 +338,7 @@ struct Animation: Hashable, Codable {
     var previousNext = PreviousNext.none
     var keyBeats = [Rational]()
     var timelineY = Sheet.timelineY
-    var enabled = false
+    var isEnabled = false
     
     init(keyframes: [Keyframe] = [],
          rootBeat: Rational = 0,
@@ -348,7 +348,7 @@ struct Animation: Hashable, Codable {
          previousNext: PreviousNext = .none,
          keyBeats: [Rational] = [],
          timelineY: Double = Sheet.timelineY,
-         enabled: Bool = false) {
+         isEnabled: Bool = false) {
         
         self.keyframes = keyframes
         self.rootBeat = rootBeat
@@ -358,7 +358,7 @@ struct Animation: Hashable, Codable {
         self.previousNext = previousNext
         self.keyBeats = keyBeats
         self.timelineY = timelineY
-        self.enabled = enabled
+        self.isEnabled = isEnabled
         index = keyframes.isEmpty ?
             0 : index(atRootBeat: rootBeat)
     }
@@ -403,7 +403,7 @@ extension Animation: Protobuf {
         keyBeats = pb.keyBeats.compactMap { try? Rational($0) }
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
-        enabled = pb.enabled
+        isEnabled = pb.isEnabled
         index = keyframes.isEmpty ?
             0 : index(atRootBeat: rootBeat)
     }
@@ -480,7 +480,7 @@ extension Animation: Protobuf {
             $0.previousNext = previousNext.pb
             $0.keyBeats = keyBeats.map { $0.pb }
             $0.timelineY = timelineY
-            $0.enabled = enabled
+            $0.isEnabled = isEnabled
         }
     }
 }
@@ -906,7 +906,7 @@ extension Animation {
         get {
             .init(beatRange: beatRange, loopDurBeat: loopDurBeat, tempo: tempo,
                   previousNext: previousNext, keyBeats: keyBeats,
-                  timelineY: timelineY, enabled: enabled)
+                  timelineY: timelineY, isEnabled: isEnabled)
         }
         set {
             beatRange = newValue.beatRange
@@ -915,7 +915,7 @@ extension Animation {
             previousNext = newValue.previousNext
             keyBeats = newValue.keyBeats
             timelineY = newValue.timelineY
-            enabled = newValue.enabled
+            isEnabled = newValue.isEnabled
         }
     }
 }
@@ -1303,12 +1303,12 @@ extension Sheet {
         return true
     }
     
-    var enabledAnimation: Bool {
-        animation.enabled
+    var isEnabledAnimation: Bool {
+        animation.isEnabled
     }
-    var enabledTimeline: Bool {
-        animation.enabled
-        || score.enabled
+    var isEnabledTimeline: Bool {
+        animation.isEnabled
+        || score.isEnabled
         || contents.contains { $0.timeOption != nil }
         || texts.contains { $0.timeOption != nil }
     }
@@ -1316,7 +1316,7 @@ extension Sheet {
     static func frameRate(from sheets: [Sheet]) -> Int {
         let qs = sheets
             .flatMap { sheet in
-                if sheet.enabledAnimation {
+                if sheet.isEnabledAnimation {
                     sheet.animation.keyframes.count.range
                         .map { sheet.animation.rendableKeyframeDurSec(at: $0).q }
                         .filter { $0 != 0 }
@@ -1499,10 +1499,10 @@ extension Sheet {
         func timelineStr(sec range: Range<Rational>, tempo: Rational) -> String {
             "\(range.start)..<\(range.end) sec, \(tempo) bpm\n"
         }
-        if animation.enabled {
+        if animation.isEnabled {
             str += timelineStr(sec: animation.allSecRange, tempo: animation.tempo)
         }
-        if score.enabled {
+        if score.isEnabled {
             str += timelineStr(sec: score.allSecRange, tempo: score.tempo)
         }
         texts.forEach {
@@ -1516,7 +1516,7 @@ extension Sheet {
             }
         }
         str += "\n\n\n"
-        if score.enabled {
+        if score.isEnabled {
             score.scales.forEach { str += "\($0) " }
         }
         str += "\n\n\n"
@@ -1560,13 +1560,13 @@ extension Sheet {
                     in: bounds)
     }
     func node(isBorder: Bool, atSec sec: Rational,
-              enabledCaption: Bool, renderingCaptionFrame: Rect? = nil,
+              isEnabledCaption: Bool, renderingCaptionFrame: Rect? = nil,
               isBackground: Bool = true,
               attitude: Attitude = .init(),
               in bounds: Rect) -> CPUNode {
         let rootBeat = animation.beat(fromSec: sec)
         
-        let captionNodes: [CPUNode] = if enabledCaption {
+        let captionNodes: [CPUNode] = if isEnabledCaption {
             Caption.cpuNodes(in: renderingCaptionFrame ?? bounds,
                              from: captions(atSec: sec))
         } else {
@@ -1624,15 +1624,15 @@ extension Sheet {
     }
     
     var animationEndBeat: Rational {
-        animation.enabled ? animation.beatRange.end + animation.loopDurBeat : 0
+        animation.isEnabled ? animation.beatRange.end + animation.loopDurBeat : 0
     }
     var animationEndSec: Rational {
-        animation.enabled ? animation.secRange.end + animation.loopDurSec : 0
+        animation.isEnabled ? animation.secRange.end + animation.loopDurSec : 0
     }
     
     var musicEndBeat: Rational {
         var v = Rational(0)
-        if score.enabled {
+        if score.isEnabled {
             v = max(v, score.allBeatRange.end)
         }
         v = contents.reduce(into: v) {
@@ -1649,7 +1649,7 @@ extension Sheet {
     }
     var musicEndSec: Rational {
         var v = Rational(0)
-        if score.enabled {
+        if score.isEnabled {
             v = max(v, score.allSecRange.end)
         }
         v = contents.reduce(into: v) {
@@ -1666,10 +1666,10 @@ extension Sheet {
     }
     
     var isEnabledAudio: Bool {
-        score.enabled || contents.contains { $0.type.isAudio }
+        score.isEnabled || contents.contains { $0.type.isAudio }
     }
     var audiotrack: Audiotrack {
-        .init(values: (score.enabled ? [.score(score)] : [])
+        .init(values: (score.isEnabled ? [.score(score)] : [])
               + contents.compactMap { $0.type.isAudio ? .sound($0) : nil })
     }
     var pcmBuffer: PCMBuffer? {

@@ -40,7 +40,7 @@ extension Interpolation {
     var isEmpty: Bool {
         keys.isEmpty
     }
-    var enabled: Bool {
+    var isEnabled: Bool {
         keys.count >= 2
     }
     mutating func insert(_ key: Key) {

@@ -381,7 +381,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
         updateDraftNotes()
         updateScore()
         
-        if model.enabled {
+        if model.isEnabled {
             scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate,
                                    isUpdateNotewaveDic: false)
         }
@@ -397,7 +397,7 @@ extension ScoreView {
         updateScore()
     }
     func updateClippingNode() {
-        guard model.enabled else {
+        guard model.isEnabled else {
             clippingNode.isHidden = true
             return
         }
@@ -423,7 +423,7 @@ extension ScoreView {
         }
     }
     func updateTimeline() {
-        if model.enabled {
+        if model.isEnabled {
             let (contentPathlines, subBorderPathlines,
                  borderPathlines, secondEditBorderPathlines, fullEditBorderPathlines) = self.timelinePathlinesTuple()
             timelineContentNode.path = .init(contentPathlines)
@@ -442,14 +442,14 @@ extension ScoreView {
         }
     }
     func updateChord() {
-        if model.enabled {
+        if model.isEnabled {
             chordNode.children = chordNodes()
         } else {
             chordNode.children = []
         }
     }
     func updateNotes() {
-        if model.enabled {
+        if model.isEnabled {
             let vs = model.notes.map { noteNode(from: $0) }
             let nodes = vs.map { $0.node }
             notesNode.children = nodes
@@ -466,7 +466,7 @@ extension ScoreView {
         }
     }
     func updateDraftNotes() {
-        if model.enabled {
+        if model.isEnabled {
             draftNotesNode.children = model.draftNotes.map { draftNoteNode(from: $0) }
         } else {
             draftNotesNode.children = []
@@ -563,8 +563,8 @@ extension ScoreView {
                 updateSpectrogram()
             }
             
-            if oldValue.enabled != newValue.enabled {
-                scoreTrackItem = newValue.enabled ? .init(score: model, sampleRate: Audio.defaultSampleRate,
+            if oldValue.isEnabled != newValue.isEnabled {
+                scoreTrackItem = newValue.isEnabled ? .init(score: model, sampleRate: Audio.defaultSampleRate,
                                                           isUpdateNotewaveDic: false) : nil
             }
             if oldValue.tempo != newValue.tempo {
@@ -727,7 +727,7 @@ extension ScoreView {
                           sy: pitchMinY,
                           ey: pitchMaxY,
                           subBorderBeats: Set(score.keyBeats),
-                          enabledBeatExtension: false,
+                          isEnabledBeatExtension: false,
                           subBorderPathlines: &subBorderPathlines,
                           fullEditBorderPathlines: &fullEditBorderPathlines,
                           secondEditBorderPathlines: &secondEditBorderPathlines,
@@ -987,14 +987,14 @@ extension ScoreView {
         }
         return Node(children: nodes)
     }
-    func octaveNode(fromPitch pitch: Rational, _ noteNode: Node, enabledPitchLine: Bool = true,
+    func octaveNode(fromPitch pitch: Rational, _ noteNode: Node, isEnabledPitchLine: Bool = true,
                      _ color: Color = .octave) -> Node {
         var vs = Set<Rational>()
         return Node(children: octaveNodes(fromPitch: pitch, noteNode,
-                                          enabledPitchLine: enabledPitchLine, color,
+                                          isEnabledPitchLine: isEnabledPitchLine, color,
                                           addedPitches: &vs))
     }
-    func octaveNodes(fromPitch pitch: Rational, _ noteNode: Node, enabledPitchLine: Bool = true,
+    func octaveNodes(fromPitch pitch: Rational, _ noteNode: Node, isEnabledPitchLine: Bool = true,
     _ color: Color = .octave, addedPitches: inout Set<Rational>) -> [Node] {
         let pitchRange = Score.pitchRange
         guard pitchRange.contains(pitch) else { return .init() }
@@ -1007,7 +1007,7 @@ extension ScoreView {
         let pd = 12 * pitchHeight
         var nodes = [Node](), nPitch = pitch, npd = 0.0
         let plw = 0.5
-        if enabledPitchLine && !addedPitches.contains(nPitch) {
+        if isEnabledPitchLine && !addedPitches.contains(nPitch) {
             nodes.append(Node(path: .init(Rect(x: sx, y: y(fromPitch: nPitch) - plw / 2,
                                                width: ex - sx, height: plw)),
                               fillType: .color(pitchLineColor)))
@@ -1021,7 +1021,7 @@ extension ScoreView {
             node.fillType = .color(color)
             node.attitude.position.y = npd
             nodes.append(node)
-            if enabledPitchLine && !addedPitches.contains(nPitch) {
+            if isEnabledPitchLine && !addedPitches.contains(nPitch) {
                 nodes.append(Node(path: .init(Rect(x: sx, y: y(fromPitch: nPitch) - plw / 2,
                                                    width: ex - sx, height: plw)),
                                   fillType: .color(pitchLineColor)))
@@ -1038,7 +1038,7 @@ extension ScoreView {
             node.fillType = .color(color)
             node.attitude.position.y = npd
             nodes.append(node)
-            if enabledPitchLine && !addedPitches.contains(nPitch) {
+            if isEnabledPitchLine && !addedPitches.contains(nPitch) {
                 nodes.append(Node(path: .init(Rect(x: sx, y: y(fromPitch: nPitch) - plw / 2,
                                                    width: ex - sx, height: plw)),
                                   fillType: .color(pitchLineColor)))
@@ -2013,21 +2013,21 @@ extension ScoreView {
     }
     
     func contains(_ p : Point, scale: Double) -> Bool {
-        model.enabled
+        model.isEnabled
         && (containsTimeline(p, scale: scale)
             || containsIsShownSpectrogram(p, scale: scale)
             || containsMainFrame(p, scale: scale)
             || containsScaleFrame(p, scale: scale)
-            || containsNote(p, scale: scale, enabledTone: true))
+            || containsNote(p, scale: scale, isEnabledTone: true))
     }
     func containsMainFrame(_ p: Point, scale: Double) -> Bool {
-        model.enabled && mainFrame.outset(by: 10 * scale).contains(p)
+        model.isEnabled && mainFrame.outset(by: 10 * scale).contains(p)
     }
     func containsScaleFrame(_ p: Point, scale: Double) -> Bool {
-        model.enabled && scaleFrame.outset(by: 10 * scale).contains(p)
+        model.isEnabled && scaleFrame.outset(by: 10 * scale).contains(p)
     }
     func containsTimeline(_ p : Point, scale: Double) -> Bool {
-        model.enabled && timelineFrame.outsetBy(dx: 5 * scale, dy: 3 * scale).contains(p)
+        model.isEnabled && timelineFrame.outsetBy(dx: 5 * scale, dy: 3 * scale).contains(p)
     }
     var timelineFrame: Rect {
         let sx = self.x(atBeat: model.beatRange.start)
@@ -2082,14 +2082,14 @@ extension ScoreView {
         return false
     }
     
-    func noteIs(at p: Point, scale: Double, enabledTone: Bool = false) -> [Int] {
-        guard let i = noteIndex(at: p, scale: scale, enabledTone: enabledTone) else { return [] }
+    func noteIs(at p: Point, scale: Double, isEnabledTone: Bool = false) -> [Int] {
+        guard let i = noteIndex(at: p, scale: scale, isEnabledTone: isEnabledTone) else { return [] }
         return selectedNotePitSprolIs[i] != nil ? selectedNotePitSprolIs.map { $0.key }.sorted() : [i]
     }
-    func containsNote(_ p: Point, scale: Double, enabledTone: Bool = false) -> Bool {
-        noteIndex(at: p, scale: scale, enabledTone: enabledTone) != nil
+    func containsNote(_ p: Point, scale: Double, isEnabledTone: Bool = false) -> Bool {
+        noteIndex(at: p, scale: scale, isEnabledTone: isEnabledTone) != nil
     }
-    func noteIndex(at p: Point, scale: Double, enabledTone: Bool = false) -> Int? {
+    func noteIndex(at p: Point, scale: Double, isEnabledTone: Bool = false) -> Int? {
         let hnh = pitchHeight / 2
         var minDSq = Double.infinity, minI: Int?
         for (noteI, note) in model.notes.enumerated().reversed() {
@@ -2108,7 +2108,7 @@ extension ScoreView {
                 }
             }
             
-            if enabledTone {
+            if isEnabledTone {
                 for (_, toneFrame) in toneFrames(from: note) {
                     let maxD = Sheet.knobEditDistance * scale
                     let maxDSq = maxD * maxD

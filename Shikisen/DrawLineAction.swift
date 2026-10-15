@@ -91,7 +91,7 @@ final class LineAction: Action {
     var tempLineWidth = Line.defaultLineWidth
     var lassoDistance = 5.0
     
-    var enabledPressure = true
+    var isEnabledPressure = true
     
     var straightTime = 0.0
     var isSnapStraight = false {
@@ -205,7 +205,7 @@ final class LineAction: Action {
         case .began:
             rootAction.closeLookingUpAndStop(at: p)
             
-            if let sheetView = noteSheetView, sheetView.model.score.enabled {
+            if let sheetView = noteSheetView, sheetView.model.score.isEnabled {
                 rootView.unselectAndNewUndoGroupIfNeeded()
                 for sheetValue in rootView.sheetViewValues {
                     guard let sheetView = sheetValue.value.sheetView else { continue }
@@ -586,25 +586,25 @@ final class LineAction: Action {
     
     nonisolated
     static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true, enabledPressure: Bool,
+                     isClip: Bool = true, isEnabledPressure: Bool,
                      isSnap: Bool = true,
                      firstSnapLines: [Line], lastSnapLines: [Line],
                      clipBounds: Rect, isStraight: Bool) -> (line: Line, isSnapStraight: Bool) {
         isStraight ?
         straightLine(from: events, isClip: isClip, isSnap: isSnap,
-                     enabledPressure: enabledPressure,
+                     isEnabledPressure: isEnabledPressure,
                      firstSnapLines: firstSnapLines,
                      lastSnapLines: lastSnapLines,
                      clipBounds: clipBounds) :
         (line(from: events, isClip: isClip, isSnap: isSnap,
-              enabledPressure: enabledPressure,
+              isEnabledPressure: isEnabledPressure,
              firstSnapLines: firstSnapLines,
              lastSnapLines: lastSnapLines,
              clipBounds: clipBounds), false)
     }
     nonisolated
     static func line(from events: [DrawLineEvent],
-                     isClip: Bool = true, isSnap: Bool = true, enabledPressure: Bool,
+                     isClip: Bool = true, isSnap: Bool = true, isEnabledPressure: Bool,
                      lineWidth: Double = Line.defaultLineWidth,
                      firstSnapLines: [Line], lastSnapLines: [Line],
                      clipBounds: Rect) -> Line {
@@ -622,7 +622,7 @@ final class LineAction: Action {
                     p = clipBounds.clipped(p)
                 }
                 
-                let pressure = enabledPressure && event.isTablet ?
+                let pressure = isEnabledPressure && event.isTablet ?
                 revision(pressure: event.pressure, tiltAngle: event.tiltAngle) : 1
                 if isSnap, let nc = snap(.init(point: p, weight: 0.5, pressure: pressure), nil,
                                          size: lineWidth,
@@ -642,7 +642,7 @@ final class LineAction: Action {
                 preJointP = fc.point
             case .changed:
                 var p = RootView.roundedPoint(from: event.p, scale: event.worldToScreenScale)
-                let pressure = enabledPressure && event.isTablet ?
+                let pressure = isEnabledPressure && event.isTablet ?
                 revision(pressure: event.pressure, tiltAngle: event.tiltAngle) : 1
                 
                 if isClip {
@@ -670,7 +670,7 @@ final class LineAction: Action {
                     tempJointPs.removeFirst()
                 }
                 
-                if enabledPressure {
+                if isEnabledPressure {
                     func revisionFirstPressure() {
                         if !isStopRevisionFirstPressure {
                             if nLine.controls[.first].pressure < pressure {
@@ -698,7 +698,7 @@ final class LineAction: Action {
                 }
                 
                 let lastC = Line.Control(point: p, weight: 0.5,
-                                         pressure: enabledPressure ? (tempPresures.first?.pressure ?? pressure) : 1)
+                                         pressure: isEnabledPressure ? (tempPresures.first?.pressure ?? pressure) : 1)
                 
                 func revisionFirstBezier() {
                     if nLine.controls.count == 4, tempPs.count >= 2 {
@@ -840,7 +840,7 @@ final class LineAction: Action {
     static func straightLine(from events: [DrawLineEvent],
                              isClip: Bool = true, isSnap: Bool = true,
                              lineWidth: Double = Line.defaultLineWidth,
-                             enabledPressure: Bool,
+                             isEnabledPressure: Bool,
                              snappableDistance: Double = 2.5,
                              firstSnapLines: [Line], lastSnapLines: [Line],
                              clipBounds: Rect) -> (line: Line, snapStraight: Bool) {
@@ -856,7 +856,7 @@ final class LineAction: Action {
                       screenToWorldScale: Double,
                       _ phase: Phase) {
             var p = RootView.roundedPoint(from: p, scale: worldToScreenScale)
-            let pressure = enabledPressure && isTablet ? revision(pressure: pressure,
+            let pressure = isEnabledPressure && isTablet ? revision(pressure: pressure,
                                                                   tiltAngle: tiltAngle) : 1
             
             switch phase {
@@ -881,7 +881,7 @@ final class LineAction: Action {
                 }
                 guard p != oldPoint else { return }
                 
-                if enabledPressure {
+                if isEnabledPressure {
                     prs.append((time, pressure))
                     
                     let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
@@ -932,7 +932,7 @@ final class LineAction: Action {
                 
                 oldPoint = p
             case .ended:
-                if enabledPressure {
+                if isEnabledPressure {
                     let nPressure = isTablet ? prs.maxValue { $0.pressure }! : prs.last!.pressure
                     nLine.controls[.first].pressure = nPressure
                     nLine.controls[.last].pressure = nPressure
@@ -1011,7 +1011,7 @@ final class LineAction: Action {
             
             beganTime = event.time
             
-            if let sheetView, sheetView.model.enabledAnimation {
+            if let sheetView, sheetView.model.isEnabledAnimation {
                 beganSheetID = sheetView.id
                 beganAnimationRootIndex = sheetView.model.animation.rootIndex
                 beganLineColor = Line.defaultUUColor.value
@@ -1033,7 +1033,7 @@ final class LineAction: Action {
                 rootView.node.insert(child: isStraightNode,
                                          at: rootView.accessoryNodeIndex + 1)
                 let (tempLine, _) = Self.line(from: drawLineEvents,
-                                              enabledPressure: enabledPressure,
+                                              isEnabledPressure: isEnabledPressure,
                                               firstSnapLines: snapLines,
                                               lastSnapLines: snapLines,
                                               clipBounds: clipBounds,
@@ -1049,11 +1049,11 @@ final class LineAction: Action {
                     let events = self.drawLineEvents
                     self.oldDrawLineEventsCount = events.count
                     let snapLines = self.snapLines, clipBounds = self.clipBounds,
-                        enabledPressure = self.enabledPressure, lineWidth = self.lineWidth
+                        isEnabledPressure = self.isEnabledPressure, lineWidth = self.lineWidth
                     
                     DispatchQueue.global().async { [weak self] in
                         let (tempLine, isSnapStraight) = Self.line(from: events,
-                                                                   enabledPressure: enabledPressure,
+                                                                   isEnabledPressure: isEnabledPressure,
                                                                    firstSnapLines: snapLines,
                                                                    lastSnapLines: snapLines,
                                                                    clipBounds: clipBounds,
@@ -1101,7 +1101,7 @@ final class LineAction: Action {
                                         screenToWorldScale: rootView.screenToWorldScale,
                                         phase: .ended))
             let tempLine = Self.line(from: drawLineEvents,
-                                     enabledPressure: enabledPressure,
+                                     isEnabledPressure: isEnabledPressure,
                                      firstSnapLines: snapLines,
                                      lastSnapLines: snapLines,
                                      clipBounds: clipBounds,
@@ -1138,7 +1138,7 @@ final class LineAction: Action {
                     sheetView.newUndoGroup()
                     sheetView.unselect()
                 }
-                if sheetView.model.enabledAnimation, sheetView.id == beganSheetID,
+                if sheetView.model.isEnabledAnimation, sheetView.id == beganSheetID,
                    beganAnimationRootIndex != sheetView.model.animation.rootIndex {
                     
                     sheetView.append(tempLine, atRoot: beganAnimationRootIndex)
@@ -1193,7 +1193,7 @@ final class LineAction: Action {
             rootView.cursor = rootView.defaultCursor
             
             let sheetView = rootView.sheetView(at: p)
-            let isScore = sheetView?.model.score.enabled ?? false
+            let isScore = sheetView?.model.score.isEnabled ?? false
             
             if rootAction.isPlaying(with: event) {
                 rootAction.stopPlaying(with: event)
@@ -1271,11 +1271,11 @@ final class LineAction: Action {
                     let events = self.drawLineEvents
                     self.oldDrawLineEventsCount = events.count
                     let snapLines = self.snapLines, clipBounds = self.clipBounds,
-                        enabledPressure = self.enabledPressure
+                        isEnabledPressure = self.isEnabledPressure
                     DispatchQueue.global().async { [weak self] in
                         let (tempLine, _) = Self.line(from: events,
                                                       isClip: false,
-                                                      enabledPressure: enabledPressure,
+                                                      isEnabledPressure: isEnabledPressure,
                                                       isSnap: false,
                                                       firstSnapLines: snapLines,
                                                       lastSnapLines: snapLines,
@@ -1341,7 +1341,7 @@ final class LineAction: Action {
             
             tempLine = Self.line(from: drawLineEvents,
                                  isClip: false,
-                                 enabledPressure: enabledPressure,
+                                 isEnabledPressure: isEnabledPressure,
                                  isSnap: false,
                                  firstSnapLines: snapLines,
                                  lastSnapLines: snapLines,

@@ -238,7 +238,7 @@ message PBScoreOption {
     double timelineY = 7;
     repeated PBRational keyBeats = 4;
     repeated PBRational scales = 8;
-    bool enabled = 3;
+    bool isEnabled = 3;
     bool isShownSpectrogram = 5;
 }
 message PBScore {
@@ -250,7 +250,7 @@ message PBScore {
     double timelineY = 10;
     repeated PBRational keyBeats = 7;
     repeated PBRational scales = 11;
-    bool enabled = 4;
+    bool isEnabled = 4;
     bool isShownSpectrogram = 8;
     PBUUID id = 5;
 }
@@ -326,7 +326,7 @@ message PBAnimationOption {
     PBPreviousNext previousNext = 6;
     repeated PBRational keyBeats = 7;
     double timelineY = 3;
-    bool enabled = 4;
+    bool isEnabled = 4;
 }
 message PBAnimation {
     repeated PBKeyframe keyframes = 1;
@@ -339,7 +339,7 @@ message PBAnimation {
     bool isPlaying = 5;
     repeated PBRational keyBeats = 11;
     double timelineY = 6;
-    bool enabled = 7;
+    bool isEnabled = 7;
 }
 
 message PBSheetOption {

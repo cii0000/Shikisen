@@ -238,13 +238,13 @@ extension Double {
     var isInteger: Bool {
         Int(exactly: self) != nil
     }
-    func string(digitsCount: Int, enabledZeroInteger: Bool = true) -> String {
-        !enabledZeroInteger && self.isInteger ?
+    func string(digitsCount: Int, isEnabledZeroInteger: Bool = true) -> String {
+        !isEnabledZeroInteger && self.isInteger ?
         "\(Int(self))" :
         String(format: "%.\(digitsCount)f", self)
     }
     var shortString: String {
-        string(digitsCount: 2, enabledZeroInteger: false)
+        string(digitsCount: 2, isEnabledZeroInteger: false)
     }
     
     func interval(scale: Double) -> Double {

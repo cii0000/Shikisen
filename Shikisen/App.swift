@@ -455,7 +455,6 @@ private extension NSMenu {
 
 final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenuRequestor,
                         @preconcurrency NSTextInputClient, NSMenuItemValidation, NSMenuDelegate {
-    static let enabledAnimationKey = "enabledAnimation"
     static let isHiddenActionListKey = "isHiddenActionList"
     static let isShownTrackpadAlternativeKey = "isShownTrackpadAlternative"
     
@@ -542,14 +541,14 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
     override func viewDidChangeEffectiveAppearance() {
         updateWithAppearance()
     }
-    var enabledAppearance = false {
+    var isEnabledAppearance = false {
         didSet {
-            guard enabledAppearance != oldValue else { return }
+            guard isEnabledAppearance != oldValue else { return }
             updateWithAppearance()
         }
     }
     func updateWithAppearance() {
-        if enabledAppearance {
+        if isEnabledAppearance {
             Appearance.current
                 = NSApp.effectiveAppearance.name == .darkAqua ? .dark : .light
             
@@ -1852,8 +1851,8 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         
         if isTouchedSubDrag || isSubDrag {
             isTouchedSubDrag = true
-            endPinch(with: event, enabledMomentum: false)
-            endScroll(with: event, enabledMomentum: false)
+            endPinch(with: event, isEnabledMomentum: false)
+            endScroll(with: event, isEnabledMomentum: false)
             endRotate(with: event)
         } else if ps.count >= 2 {
             if touchedIDs.count >= 2,
@@ -2150,8 +2149,8 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         oldTouchEvent = event
         
         if isTouchedSubDrag || isSubDrag {
-            endPinch(with: event, enabledMomentum: false)
-            endScroll(with: event, enabledMomentum: false)
+            endPinch(with: event, isEnabledMomentum: false)
+            endScroll(with: event, isEnabledMomentum: false)
             endRotate(with: event)
             
             oldTouchPoints = [:]
@@ -2214,12 +2213,12 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         beganSwipePosition = nil
     }
     
-    func endPinch(with event: TouchEvent, enabledMomentum: Bool = true,
+    func endPinch(with event: TouchEvent, isEnabledMomentum: Bool = true,
                   timeInterval: Double = 1 / 60.0) {
         guard isBeganPinch else { return }
         self.oldPinchDistance = nil
         isBeganPinch = false
-        guard pinchVs.count >= 2 && enabledMomentum else {
+        guard pinchVs.count >= 2 && isEnabledMomentum else {
             rootAction.pinch(with: .init(screenPoint: event.screenPoint,
                                          time: event.time,
                                          magnification: 0,
@@ -2290,12 +2289,12 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
                                       phase: .ended))
     }
     
-    func endScroll(with event: TouchEvent, enabledMomentum: Bool = true,
+    func endScroll(with event: TouchEvent, isEnabledMomentum: Bool = true,
                    timeInterval: Double = 1 / 60.0) {
         guard isBeganScroll else { return }
         self.oldScrollPosition = nil
         isBeganScroll = false
-        guard scrollVs.count >= 2 && enabledMomentum else {
+        guard scrollVs.count >= 2 && isEnabledMomentum else {
             rootAction.scroll(with: .init(screenPoint: event.screenPoint,
                                           time: event.time,
                                           scrollDeltaPoint: .init(),

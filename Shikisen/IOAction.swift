@@ -276,7 +276,7 @@ final class IOAction: Action {
     func orientation(_ vs: [SelectingValue], at shp: IntPoint) -> Orientation {
         let vsSHPs = Set(vs.map { $0.shp })
         let svvs = rootView.sheetViewValues.filter { vsSHPs.contains($0.key) }
-        let isEnabledTimeline = svvs.contains { $0.value.sheetView?.model.enabledTimeline ?? false }
+        let isEnabledTimeline = svvs.contains { $0.value.sheetView?.model.isEnabledTimeline ?? false }
         if isEnabledTimeline {
             return .horizontal
         }
@@ -1182,7 +1182,7 @@ final class IOAction: Action {
                     var sec = Rational(0)
                     for (ki, _) in sheet.animation.keyframes.enumerated() {
                         let node = sheet.node(isBorder: false, atSec: sec,
-                                              enabledCaption: false,
+                                              isEnabledCaption: false,
                                               attitude: .init(position: rendering.mainItem.frame.origin),
                                               in: rendering.bounds)
                         let durBeat = sheet.animation.rendableKeyframeDurBeat(at: ki)
@@ -1284,11 +1284,11 @@ final class IOAction: Action {
                     var sheets = [(sheet: Sheet, sheetBounds: Rect)]()
                     for item in rendering.bottomItems {
                         filledIDs.insert(item.id)
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         
                         audiotrack += sheet.audiotrack
                         captions += sheet.captions
-                        if sheet.enabledAnimation {
+                        if sheet.isEnabledAnimation {
                             sheets.append((sheet, item.frame.bounds))
                             maxEndSec = max(sheet.allEndSec, maxEndSec)
                         }
@@ -1301,11 +1301,11 @@ final class IOAction: Action {
                     
                     for item in rendering.topItems {
                         filledIDs.insert(item.id)
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         
                         audiotrack += sheet.audiotrack
                         captions += sheet.captions
-                        if sheet.enabledAnimation {
+                        if sheet.isEnabledAnimation {
                             sheets.append((sheet, item.frame.bounds))
                             maxEndSec = max(sheet.allEndSec, maxEndSec)
                         }
@@ -1488,12 +1488,12 @@ final class IOAction: Action {
                     
                     for item in rendering.bottomItems {
                         filledIDs.insert(item.id)
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         audiotrack += sheet.audiotrack
                     }
                     for item in rendering.topItems {
                         filledIDs.insert(item.id)
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         audiotrack += sheet.audiotrack
                     }
                     if let audiotrack {
@@ -1561,13 +1561,13 @@ final class IOAction: Action {
                 if let sheet = rendering.mainItem.decodedSheet() {
                     var maxEndSec: Rational = 0
                     for item in rendering.bottomItems {
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         maxEndSec = max(sheet.allEndSec, maxEndSec)
                         captions += sheet.captions.map { $0.move(sec: currentSec) }
                         sheets.append(sheet)
                     }
                     for item in rendering.topItems {
-                        guard let sheet = item.decodedSheet(), sheet.enabledTimeline else { break }
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
                         maxEndSec = max(sheet.allEndSec, maxEndSec)
                         captions += sheet.captions.map { $0.move(sec: currentSec) }
                         sheets.append(sheet)
@@ -1808,7 +1808,7 @@ final class IOAction: Action {
                         allGroups.append((currentVersion, history[currentVersion]))
                     }
                     
-                    let isEnabledAnimation = sheetView.model.enabledAnimation
+                    let isEnabledAnimation = sheetView.model.isEnabledAnimation
                     
                     guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
                                                      height: .init(size.height),

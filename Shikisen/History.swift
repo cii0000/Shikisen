@@ -757,7 +757,7 @@ extension History {
         var undoDataValue: UndoDataValue<T>, type: UndoType
         var version: Version, valueIndex: Int
         
-        static func enabledFirst(version: Version) -> Self {
+        static func isEnabledFirst(version: Version) -> Self {
             Self.init(isEnabledFirst: true, undoDataValue: .init(),
                       type: .undo, version: version, valueIndex: 0)
         }
@@ -790,7 +790,7 @@ extension History {
             enumerated(minI: fromTopIndex + 1, maxI: toTopIndex) { (version) in
                 let group = rootBranch[version]
                 if group.isEnabledFirst {
-                    results.append(UndoResult.enabledFirst(version: version))
+                    results.append(UndoResult.isEnabledFirst(version: version))
                 }
                 group.values.enumerated().forEach {
                     results.append(UndoResult(undoDataValue: $0.element,
@@ -813,7 +813,7 @@ extension History {
                     nVersion.indexPath.append(branch.selectedChildIndex!)
                     let group = branch.children[branch.selectedChildIndex!].groups[0]
                     if group.isEnabledFirst {
-                        results.append(UndoResult.enabledFirst(version: nVersion))
+                        results.append(UndoResult.isEnabledFirst(version: nVersion))
                     }
                     group.reverse {
                         results.append(UndoResult(undoDataValue: $0.element,
@@ -826,7 +826,7 @@ extension History {
                     nVersion.groupIndex = version.groupIndex + 1
                     let group = rootBranch[nVersion]
                     if group.isEnabledFirst {
-                        results.append(UndoResult.enabledFirst(version: nVersion))
+                        results.append(UndoResult.isEnabledFirst(version: nVersion))
                     }
                     group.reverse {
                         results.append(UndoResult(undoDataValue: $0.element,

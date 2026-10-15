@@ -579,7 +579,7 @@ final class APasteAction: Action {
                 let rect = sheetView.convertToWorld(selectedFrame)
                 let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
                 selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
-                                                                  isKnob: !sheetView.model.score.enabled,
+                                                                  isKnob: !sheetView.model.score.isEnabled,
                                                                   scale: scale * 1.5)
             } else {
                 selectedFrameNodes = []
@@ -653,7 +653,7 @@ final class APasteAction: Action {
                 let rect = sheetView.convertToWorld(selectedFrame)
                 let lastP: Point? = if let p = sheetView.selection.lastPosition { sheetView.convertToWorld(p) } else { nil }
                 selectedFrameNodes = SheetView.selectedFrameNodes(fom: rect, lastP: lastP,
-                                                                  isKnob: !sheetView.model.score.enabled,
+                                                                  isKnob: !sheetView.model.score.isEnabled,
                                                                   scale: scale * 1.5)
             } else {
                 selectedFrameNodes = []
@@ -683,10 +683,10 @@ final class APasteAction: Action {
             }
             
             var frames = [Rect]()
-            if sheetView.animationView.model.enabled, sheetView.animationView.tempo == tempo {
+            if sheetView.animationView.model.isEnabled, sheetView.animationView.tempo == tempo {
                 frames += sheetView.animationView.tempoFrames()
             }
-            if sheetView.scoreView.model.enabled, sheetView.scoreView.tempo == tempo {
+            if sheetView.scoreView.model.isEnabled, sheetView.scoreView.tempo == tempo {
                 frames += sheetView.scoreView.tempoFrames()
             }
             for textView in sheetView.textsView.elementViews {
@@ -709,7 +709,7 @@ final class APasteAction: Action {
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   let lineView = sheetView.lineTuple(at: sheetView.convertFromWorld(p),
-                                                     enabledPlane: true,
+                                                     isEnabledPlane: true,
                                                      scale: 1 / rootView.worldToScreenScale)?.lineView {
             let t = Transform(translation: -sheetView.convertFromWorld(p))
             let ssv = SheetValue(lines: [sheetView.animationView.convert(lineView.model, to: sheetView.node)],
@@ -728,7 +728,7 @@ final class APasteAction: Action {
             let selectedNode = Node(path: sheetView.animationView.convertToWorld(lineView.node.path),
                                     lineWidth: sheetView.animationView.convertToWorldScale(max(lw * 1.5, lw * 2.5 * scale, 1 * scale)),
                                     lineType: .color(.selected))
-            if sheetView.model.enabledAnimation {
+            if sheetView.model.isEnabledAnimation {
                 selectingLineNode.children = [selectedNode]
                 + sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale)
                 + sheetView.interporatedTimelineNodes(from: [lineView.model.interID])
@@ -847,7 +847,7 @@ final class APasteAction: Action {
             }
             
             return true
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled,
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled,
                   let (noteI, result) = sheetView.scoreView
             .hitTestPoint(sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale / 2) {
             
@@ -997,7 +997,7 @@ final class APasteAction: Action {
                 }
             }
             return true
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled,
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled,
                   sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
                                                scale: rootView.screenToWorldScale) {
             let scoreView = sheetView.scoreView
@@ -1102,7 +1102,7 @@ final class APasteAction: Action {
                     Node(path: mainPlanePath!,
                          lineWidth: mainLineWidth!, lineType: .color(.selected))
                 ] :  [])
-                + (fco.sheetView.model.enabledAnimation ?
+                + (fco.sheetView.model.isEnabledAnimation ?
                    fco.sheetView.interporatedTimelineNodes(fromColor: ids) : [])
                 
                 return true
@@ -1153,7 +1153,7 @@ final class APasteAction: Action {
                     sheetView.insert([IndexValue(value: keyframe, index: 0)])
                     sheetView.removeKeyframes(at: indexes)
                     
-                    let option = AnimationOption(enabled: false)
+                    let option = AnimationOption(isEnabled: false)
                     sheetView.set(option)
                     
                     sheetView.rootKeyframeIndex = 0
@@ -1353,7 +1353,7 @@ final class APasteAction: Action {
         } else if let sheetView = rootView.sheetView(at: p),
                   let (lineView, li) = sheetView
             .lineTuple(at: sheetView.convertFromWorld(p),
-                       enabledPlane: true,
+                       isEnabledPlane: true,
                        scale: 1 / rootView.worldToScreenScale) {
             
             let sheetP = sheetView.convertFromWorld(p)
@@ -1367,7 +1367,7 @@ final class APasteAction: Action {
                                  isSelected: false) * t
             Pasteboard.shared.copiedObjects = [.sheetValue(ssv)]
             
-            if sheetView.model.enabledAnimation {
+            if sheetView.model.isEnabledAnimation {
                 let scale = 1 / rootView.worldToScreenScale
                 let nodes = sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale,
                                                                        removeLineIndex: li)
@@ -1491,7 +1491,7 @@ final class APasteAction: Action {
                 sheetView.updatePlaying()
                 return true
             }
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled,
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled,
                   let (noteI, result) = sheetView.scoreView
             .hitTestPoint(sheetView.scoreView.convertFromWorld(p), scale: rootView.screenToWorldScale) {
             
@@ -1657,7 +1657,7 @@ final class APasteAction: Action {
                 sheetView.updatePlaying()
                 return true
             }
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled,
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled,
                   sheetView.scoreView.contains(sheetView.scoreView.convertFromWorld(p),
                                                scale: rootView.screenToWorldScale) {
             if let result = sheetView.scoreView
@@ -1686,7 +1686,7 @@ final class APasteAction: Action {
                     return true
                 }
             } else if sheetView.scoreView.model.notes.isEmpty {
-                let option = ScoreOption(enabled: false)
+                let option = ScoreOption(isEnabled: false)
                 sheetView.newUndoGroup()
                 sheetView.unselect()
                 sheetView.set(option)
@@ -1715,7 +1715,7 @@ final class APasteAction: Action {
             sheetView.removeBorder(at: i)
             return true
         } else if !rootView.isDefaultUUColor(at: p) {
-            let colorOwners = rootView.colorOwners(at: p, enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)))
+            let colorOwners = rootView.colorOwners(at: p, isEnabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)))
             if !colorOwners.isEmpty {
                 Pasteboard.shared.copiedObjects = [.uuColor(rootView.uuColor(at: p))]
                 var nug = Set<SheetView>()
@@ -2241,9 +2241,9 @@ final class APasteAction: Action {
                 
                 sheetView.newUndoGroup()
                 sheetView.unselect()
-                if !sheetView.scoreView.model.enabled {
+                if !sheetView.scoreView.model.isEnabled {
                     var option = sheetView.scoreView.option
-                    option.enabled = true
+                    option.isEnabled = true
                     sheetView.set(option)
                 }
                 
@@ -2347,7 +2347,7 @@ final class APasteAction: Action {
                sheetView.containsSelectedLineOrPlane(sheetView.convertFromWorld(p),
                                                      scale: rootView.screenToWorldScale),
                let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
-                                                                       enabledLinePlane: false,
+                                                                       isEnabledLinePlane: false,
                                                                        removingUUColor: uuColor) {
                 let ownerDic = owners.reduce(into: [SheetView: [SheetColorOwner]]()) {
                     if $0[$1.sheetView] == nil {
@@ -2369,8 +2369,8 @@ final class APasteAction: Action {
                 }
             } else if let _ = rootView.madeSheetView(at: shp) {
                 let colorOwners = rootView.madeColorOwnerWithFindingLine(at: p)
-                ?? rootView.madeColorOwner(at: p, enabledLine: false,
-                                           enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
+                ?? rootView.madeColorOwner(at: p, isEnabledLine: false,
+                                           isEnabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
                                            removingUUColor: uuColor)
                 colorOwners.forEach {
                     if $0.uuColor != uuColor {
@@ -3066,7 +3066,7 @@ final class APasteAction: Action {
                                               scale: rootView.screenToWorldScale)
                 || sheetView.containsSelectedPlane(sheetView.convertFromWorld(p)),
                let (_, owners) = rootView.madeColorOwnersWithSelection(at: p,
-                                                                       enabledLinePlane: false,
+                                                                       isEnabledLinePlane: false,
                                                                        removingUUColor: uuColor) {
                 let ownerDic = owners.reduce(into: [SheetView: [SheetColorOwner]]()) {
                     if $0[$1.sheetView] == nil {
@@ -3091,8 +3091,8 @@ final class APasteAction: Action {
                 rootView.updateSelectedFrame()
             } else if let _ = rootView.madeSheetView(at: shp) {
                 let colorOwners = rootView.madeColorOwnerWithFindingLine(at: p)
-                ?? rootView.madeColorOwner(at: p, enabledLine: false,
-                                           enabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
+                ?? rootView.madeColorOwner(at: p, isEnabledLine: false,
+                                           isEnabledAlwaysAnimation: rootView.containsFromFinding(rootView.uuColor(at: p)),
                                            removingUUColor: uuColor)
                 colorOwners.forEach {
                     if $0.uuColor != uuColor {
@@ -3225,7 +3225,7 @@ final class APasteAction: Action {
             break
         case .normalizationRationalValue(let v):
             guard let sheetView = rootView.sheetView(at: shp) else { return }
-            if sheetView.model.score.enabled {
+            if sheetView.model.score.isEnabled {
                 let scoreView = sheetView.scoreView
                 if let (noteI, result) = scoreView
                     .hitTestPoint(scoreView.convertFromWorld(p),
@@ -3275,7 +3275,7 @@ final class APasteAction: Action {
             }
         case .stereo(let stereo):
             guard let sheetView = rootView.sheetView(at: shp) else { return }
-            if sheetView.model.score.enabled {
+            if sheetView.model.score.isEnabled {
                 let scoreView = sheetView.scoreView
                 if let (noteI, pitI) = scoreView.noteAndPitIEnabledNote(at: scoreView.convertFromWorld(p),
                                                                         scale: rootView.screenToWorldScale) {
@@ -3359,7 +3359,7 @@ final class APasteAction: Action {
             }
         case .tone(let tone):
             guard let sheetView = rootView.sheetView(at: shp) else { return }
-            if sheetView.model.score.enabled {
+            if sheetView.model.score.isEnabled {
                 let scoreView = sheetView.scoreView
                 if sheetView.containsSelectedNote(sheetView.convertFromWorld(p),
                                                   scale: rootView.screenToWorldScale) {
@@ -4053,7 +4053,7 @@ final class CopyLineColorAction: InputKeyEventAction {
             let selectedNode = Node(path: lineView.node.path * sheetView.node.localTransform,
                                     lineWidth: max(lw * 1.5, lw * 2.5 * scale, 1 * scale),
                                     lineType: .color(.selected))
-            if sheetView.model.enabledAnimation {
+            if sheetView.model.isEnabledAnimation {
                 selectingLineNode.children = [selectedNode]
                 + sheetView.animationView.interpolationNodes(from: [lineView.model.interID], scale: scale)
                 + sheetView.interporatedTimelineNodes(from: [lineView.model.interID])
@@ -4062,7 +4062,7 @@ final class CopyLineColorAction: InputKeyEventAction {
             }
             
             return true
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.enabled {
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.model.score.isEnabled {
             let scoreView = sheetView.scoreView
             let scoreP = scoreView.convertFromWorld(p)
             

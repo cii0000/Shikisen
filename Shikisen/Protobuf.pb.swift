@@ -1206,7 +1206,7 @@ nonisolated struct PBScoreOption: Sendable {
 
   var scales: [PBRational] = []
 
-  var enabled: Bool = false
+  var isEnabled: Bool = false
 
   var isShownSpectrogram: Bool = false
 
@@ -1276,9 +1276,9 @@ nonisolated struct PBScore: @unchecked Sendable {
     set {_uniqueStorage()._scales = newValue}
   }
 
-  var enabled: Bool {
-    get {_storage._enabled}
-    set {_uniqueStorage()._enabled = newValue}
+  var isEnabled: Bool {
+    get {_storage._isEnabled}
+    set {_uniqueStorage()._isEnabled = newValue}
   }
 
   var isShownSpectrogram: Bool {
@@ -1620,7 +1620,7 @@ nonisolated struct PBAnimationOption: Sendable {
 
   var timelineY: Double = 0
 
-  var enabled: Bool = false
+  var isEnabled: Bool = false
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1706,9 +1706,9 @@ nonisolated struct PBAnimation: @unchecked Sendable {
     set {_uniqueStorage()._timelineY = newValue}
   }
 
-  var enabled: Bool {
-    get {_storage._enabled}
-    set {_uniqueStorage()._enabled = newValue}
+  var isEnabled: Bool {
+    get {_storage._isEnabled}
+    set {_uniqueStorage()._isEnabled = newValue}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -5386,7 +5386,7 @@ nonisolated extension PBNote: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
 
 nonisolated extension PBScoreOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBScoreOption"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}tempo\0\u{1}enabled\0\u{1}keyBeats\0\u{1}isShownSpectrogram\0\u{1}beatRange\0\u{1}timelineY\0\u{1}scales\0\u{1}loopDurBeat\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}tempo\0\u{1}isEnabled\0\u{1}keyBeats\0\u{1}isShownSpectrogram\0\u{1}beatRange\0\u{1}timelineY\0\u{1}scales\0\u{1}loopDurBeat\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5395,7 +5395,7 @@ nonisolated extension PBScoreOption: SwiftProtobuf.Message, SwiftProtobuf._Messa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 2: try { try decoder.decodeSingularMessageField(value: &self._tempo) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.keyBeats) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.isShownSpectrogram) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._beatRange) }()
@@ -5415,8 +5415,8 @@ nonisolated extension PBScoreOption: SwiftProtobuf.Message, SwiftProtobuf._Messa
     try { if let v = self._tempo {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.enabled != false {
-      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 3)
+    if self.isEnabled != false {
+      try visitor.visitSingularBoolField(value: self.isEnabled, fieldNumber: 3)
     }
     if !self.keyBeats.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.keyBeats, fieldNumber: 4)
@@ -5446,7 +5446,7 @@ nonisolated extension PBScoreOption: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.timelineY != rhs.timelineY {return false}
     if lhs.keyBeats != rhs.keyBeats {return false}
     if lhs.scales != rhs.scales {return false}
-    if lhs.enabled != rhs.enabled {return false}
+    if lhs.isEnabled != rhs.isEnabled {return false}
     if lhs.isShownSpectrogram != rhs.isShownSpectrogram {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -5455,7 +5455,7 @@ nonisolated extension PBScoreOption: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
 nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBScore"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}notes\0\u{2}\u{2}tempo\0\u{1}enabled\0\u{1}id\0\u{1}draftNotes\0\u{1}keyBeats\0\u{1}isShownSpectrogram\0\u{1}beatRange\0\u{1}timelineY\0\u{1}scales\0\u{1}loopDurBeat\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}notes\0\u{2}\u{2}tempo\0\u{1}isEnabled\0\u{1}id\0\u{1}draftNotes\0\u{1}keyBeats\0\u{1}isShownSpectrogram\0\u{1}beatRange\0\u{1}timelineY\0\u{1}scales\0\u{1}loopDurBeat\0")
 
   fileprivate class _StorageClass {
     var _notes: [PBNote] = []
@@ -5466,7 +5466,7 @@ nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     var _timelineY: Double = 0
     var _keyBeats: [PBRational] = []
     var _scales: [PBRational] = []
-    var _enabled: Bool = false
+    var _isEnabled: Bool = false
     var _isShownSpectrogram: Bool = false
     var _id: PBUUID? = nil
 
@@ -5487,7 +5487,7 @@ nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       _timelineY = source._timelineY
       _keyBeats = source._keyBeats
       _scales = source._scales
-      _enabled = source._enabled
+      _isEnabled = source._isEnabled
       _isShownSpectrogram = source._isShownSpectrogram
       _id = source._id
     }
@@ -5510,7 +5510,7 @@ nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         switch fieldNumber {
         case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._notes) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._tempo) }()
-        case 4: try { try decoder.decodeSingularBoolField(value: &_storage._enabled) }()
+        case 4: try { try decoder.decodeSingularBoolField(value: &_storage._isEnabled) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._id) }()
         case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._draftNotes) }()
         case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._keyBeats) }()
@@ -5537,8 +5537,8 @@ nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       try { if let v = _storage._tempo {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
       } }()
-      if _storage._enabled != false {
-        try visitor.visitSingularBoolField(value: _storage._enabled, fieldNumber: 4)
+      if _storage._isEnabled != false {
+        try visitor.visitSingularBoolField(value: _storage._isEnabled, fieldNumber: 4)
       }
       try { if let v = _storage._id {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
@@ -5581,7 +5581,7 @@ nonisolated extension PBScore: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         if _storage._timelineY != rhs_storage._timelineY {return false}
         if _storage._keyBeats != rhs_storage._keyBeats {return false}
         if _storage._scales != rhs_storage._scales {return false}
-        if _storage._enabled != rhs_storage._enabled {return false}
+        if _storage._isEnabled != rhs_storage._isEnabled {return false}
         if _storage._isShownSpectrogram != rhs_storage._isShownSpectrogram {return false}
         if _storage._id != rhs_storage._id {return false}
         return true
@@ -6062,7 +6062,7 @@ nonisolated extension PBAnimationCompressor: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBAnimationOption"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beatRange\0\u{1}tempo\0\u{1}timelineY\0\u{1}enabled\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beatRange\0\u{1}tempo\0\u{1}timelineY\0\u{1}isEnabled\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6073,7 +6073,7 @@ nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._M
       case 1: try { try decoder.decodeSingularMessageField(value: &self._beatRange) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._tempo) }()
       case 3: try { try decoder.decodeSingularDoubleField(value: &self.timelineY) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._loopDurBeat) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.previousNext) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.keyBeats) }()
@@ -6096,8 +6096,8 @@ nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._M
     if self.timelineY.bitPattern != 0 {
       try visitor.visitSingularDoubleField(value: self.timelineY, fieldNumber: 3)
     }
-    if self.enabled != false {
-      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 4)
+    if self.isEnabled != false {
+      try visitor.visitSingularBoolField(value: self.isEnabled, fieldNumber: 4)
     }
     try { if let v = self._loopDurBeat {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
@@ -6118,7 +6118,7 @@ nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.previousNext != rhs.previousNext {return false}
     if lhs.keyBeats != rhs.keyBeats {return false}
     if lhs.timelineY != rhs.timelineY {return false}
-    if lhs.enabled != rhs.enabled {return false}
+    if lhs.isEnabled != rhs.isEnabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6126,7 +6126,7 @@ nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBAnimation"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframes\0\u{1}rootBeat\0\u{1}beatRange\0\u{1}tempo\0\u{1}isPlaying\0\u{1}timelineY\0\u{1}enabled\0\u{1}compressor\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframes\0\u{1}rootBeat\0\u{1}beatRange\0\u{1}tempo\0\u{1}isPlaying\0\u{1}timelineY\0\u{1}isEnabled\0\u{1}compressor\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
 
   fileprivate class _StorageClass {
     var _keyframes: [PBKeyframe] = []
@@ -6139,7 +6139,7 @@ nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._Message
     var _isPlaying: Bool = false
     var _keyBeats: [PBRational] = []
     var _timelineY: Double = 0
-    var _enabled: Bool = false
+    var _isEnabled: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6160,7 +6160,7 @@ nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._Message
       _isPlaying = source._isPlaying
       _keyBeats = source._keyBeats
       _timelineY = source._timelineY
-      _enabled = source._enabled
+      _isEnabled = source._isEnabled
     }
   }
 
@@ -6185,7 +6185,7 @@ nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._Message
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._tempo) }()
         case 5: try { try decoder.decodeSingularBoolField(value: &_storage._isPlaying) }()
         case 6: try { try decoder.decodeSingularDoubleField(value: &_storage._timelineY) }()
-        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._enabled) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._isEnabled) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._compressor) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._loopDurBeat) }()
         case 10: try { try decoder.decodeSingularEnumField(value: &_storage._previousNext) }()
@@ -6220,8 +6220,8 @@ nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._Message
       if _storage._timelineY.bitPattern != 0 {
         try visitor.visitSingularDoubleField(value: _storage._timelineY, fieldNumber: 6)
       }
-      if _storage._enabled != false {
-        try visitor.visitSingularBoolField(value: _storage._enabled, fieldNumber: 7)
+      if _storage._isEnabled != false {
+        try visitor.visitSingularBoolField(value: _storage._isEnabled, fieldNumber: 7)
       }
       try { if let v = _storage._compressor {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
@@ -6254,7 +6254,7 @@ nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._Message
         if _storage._isPlaying != rhs_storage._isPlaying {return false}
         if _storage._keyBeats != rhs_storage._keyBeats {return false}
         if _storage._timelineY != rhs_storage._timelineY {return false}
-        if _storage._enabled != rhs_storage._enabled {return false}
+        if _storage._isEnabled != rhs_storage._isEnabled {return false}
         return true
       }
       if !storagesAreEqual {return false}

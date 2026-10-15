@@ -65,13 +65,13 @@ final class MoveAction: DragEventAction {
             if !rootView.isEditingSheet {
                 type = .sheets(MoveSheetsAction(rootAction))
             } else if let sheetView = rootView.sheetViewsFromSelectedFrame(at: p).first {
-                type = sheetView.model.score.enabled ?
+                type = sheetView.model.score.isEnabled ?
                     .score(MoveScoreAction(rootAction)) :
                     .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetViewWithSelectedSheetValue(at: p),
                       !sheetView.scoreView.containsNote(sheetView.scoreView.convertFromWorld(p),
                                                            scale: rootView.screenToWorldScale,
-                                                           enabledTone: true) {
+                                                           isEnabledTone: true) {
                 type = .sheet(MoveSheetAction(rootAction))
             } else if let sheetView = rootView.sheetView(at: p) {
                 let sheetP = sheetView.convertFromWorld(p)
@@ -360,7 +360,7 @@ final class MoveAnimationAction: DragEventAction {
             rootView.cursor = .arrow
             rootAction.closeLookingUpAndStop(at: p)
             
-            if let sheetView = rootView.sheetView(at: p), sheetView.model.enabledAnimation {
+            if let sheetView = rootView.sheetView(at: p), sheetView.model.isEnabledAnimation {
                 beganSP = event.screenPoint
                 self.sheetView = sheetView
                 sheetView.hideSelected()
@@ -700,7 +700,7 @@ final class MoveScoreAction: DragEventAction {
             
             let shp = rootView.sheetPositionFromSelectedFrame(at: p)
             ?? rootView.sheetPosition(at: p)
-            if let sheetView = rootView.sheetView(at: shp), sheetView.model.score.enabled {
+            if let sheetView = rootView.sheetView(at: shp), sheetView.model.score.isEnabled {
                 let sheetP = sheetView.convertFromWorld(p)
                 containsSelectedLastLine = sheetView.containsSelectedLastLine(sheetP, scale: rootView.screenToWorldScale)
                 let containsSelectedFrame
@@ -2853,7 +2853,7 @@ final class MoveLineAction: DragEventAction {
                                 }
                             }
                             
-                            rootView.cursor = .arrowWith(string: "(\(line.controls[0].point.x.string(digitsCount: 2, enabledZeroInteger: false)) \(line.controls[0].point.y.string(digitsCount: 2, enabledZeroInteger: false)))\n(\(line.controls[1].point.x.string(digitsCount: 2, enabledZeroInteger: false)) \(line.controls[1].point.y.string(digitsCount: 2, enabledZeroInteger: false)))")
+                            rootView.cursor = .arrowWith(string: "(\(line.controls[0].point.x.string(digitsCount: 2, isEnabledZeroInteger: false)) \(line.controls[0].point.y.string(digitsCount: 2, isEnabledZeroInteger: false)))\n(\(line.controls[1].point.x.string(digitsCount: 2, isEnabledZeroInteger: false)) \(line.controls[1].point.y.string(digitsCount: 2, isEnabledZeroInteger: false)))")
                         }
                         
                         lineView.model = line
@@ -2947,7 +2947,7 @@ final class MoveLineAction: DragEventAction {
                         lineView.model = nLine
                         lineView.node.lineType = isSnapStraight ? .color(.selected) : .color(.content)
                         
-                        rootView.cursor = .arrowWith(string: "(\(nLine.controls[fol1].point.x.string(digitsCount: 2, enabledZeroInteger: false)) \(nLine.controls[fol1].point.y.string(digitsCount: 2, enabledZeroInteger: false)))")
+                        rootView.cursor = .arrowWith(string: "(\(nLine.controls[fol1].point.x.string(digitsCount: 2, isEnabledZeroInteger: false)) \(nLine.controls[fol1].point.y.string(digitsCount: 2, isEnabledZeroInteger: false)))")
                     }
                 }
             }
@@ -3090,8 +3090,8 @@ final class MoveBorderAction: DragEventAction {
                 }
                 borderView.model = nBorder
                 
-                let nString0 = nBorder.location.string(digitsCount: 1, enabledZeroInteger: false)
-                let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, enabledZeroInteger: false)
+                let nString0 = nBorder.location.string(digitsCount: 1, isEnabledZeroInteger: false)
+                let nString1 = ((nBorder.orientation == .horizontal ? sheetFrame.width : sheetFrame.height) - nBorder.location).string(digitsCount: 1, isEnabledZeroInteger: false)
                 rootView.cursor = switch nBorder.orientation {
                 case .horizontal: rootView.cursor(from: "\(nString0):\(nString1)")
                 case .vertical: rootView.cursor(from: "\(nString0):\(nString1)")
@@ -3293,7 +3293,7 @@ final class MoveZAction: DragEventAction {
                     sheetView.linesView.node.children.insert(lineNode, at: li)
                     
                     isChange = true
-                } else if sheetView.scoreView.model.enabled,
+                } else if sheetView.scoreView.model.isEnabled,
                           let li = sheetView.scoreView.noteIndex(at: sheetView.scoreView.convertFromWorld(p),
                                                                  scale: rootView.screenToWorldScale) {
                     self.sheetView = sheetView
@@ -3361,7 +3361,7 @@ final class MoveZAction: DragEventAction {
                     .clipped(min: 0, max: sheetView.linesView.elementViews.count)
                 lineNode.removeFromParent()
                 sheetView.linesView.node.children.insert(lineNode, at: li)
-            } else if let sheetView = sheetView, sheetView.scoreView.model.enabled,
+            } else if let sheetView = sheetView, sheetView.scoreView.model.isEnabled,
                       lineIndex < sheetView.scoreView.model.notes.count {
                 
                 guard !crossIndexes.isEmpty else { return }
@@ -3395,7 +3395,7 @@ final class MoveZAction: DragEventAction {
                         sheetView.removeLines(at: [lineIndex])
                         sheetView.insert([.init(value: line, index: li > lineIndex ? li - 1 : li)])
                     }
-                } else if sheetView.scoreView.model.enabled,
+                } else if sheetView.scoreView.model.isEnabled,
                           lineIndex < sheetView.scoreView.model.notes.count {
                     
                     guard !crossIndexes.isEmpty else { return }
