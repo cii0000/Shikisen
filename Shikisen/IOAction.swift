@@ -1897,6 +1897,7 @@ final class IOAction: Action {
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
                             let sb = rendering.mainItem.frame.bounds
+                            let borderWidth = 1.0
                             
                             let kCount = sheetView.model.animation.keyframes.count
                             if isEnabledAnimation && kCount > 1 {
@@ -1913,7 +1914,7 @@ final class IOAction: Action {
                                 }
                                 func draw(_ image: Image, at ki: Int,
                                           borderColor: Color? = nil) {
-                                    let rect = rect(at: ki).inset(by: 2)
+                                    let rect = rect(at: ki).inset(by: borderWidth)
                                     bitmap.draw(image, in: rect, isHighQuality: true)
                                 }
                             
@@ -1945,7 +1946,7 @@ final class IOAction: Action {
                                 guard let nBitmap = bitmap.copy()
                                 else { throw MovieEncoder.ExportingError() }
                                 nBitmap.set(lineColor: .content)
-                                nBitmap.set(lineWidth: 4)
+                                nBitmap.set(lineWidth: borderWidth * 2)
                                 for ki in kis {
                                     nBitmap.stroke(rect(at: ki))
                                 }

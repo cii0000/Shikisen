@@ -563,6 +563,10 @@ extension RunAction {
             sheetView.insert(diffTexts.inserts)
         }
         
+        if oSheet.animation.option != nSheet.animation.option {
+            updateNewUndoGroup()
+            sheetView.set(nSheet.animation.option)
+        }
         if oSheet.score.option != nSheet.score.option {
             updateNewUndoGroup()
             sheetView.set(nSheet.score.option)

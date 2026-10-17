@@ -198,8 +198,12 @@ final class LookUpAction: InputKeyEventAction {
                 let animation = animationView.model
                 let startBeatStr = sheetView.timeString(fromBeat: animation.keyframes[indexes.first!].beat)
                 let endBeatStr = sheetView.timeString(fromBeat: animation.keyframes[indexes.last!].beat)
+                let frameRate = Rational(Sheet.standardFrameRate(from: [sheetView.model]))
+                let startSecStr = sheetView.timeString(fromSec: animation.sec(fromBeat: animation.keyframes[indexes.first!].beat), frameRate: frameRate)
+                let endSecStr = sheetView.timeString(fromSec: animation.sec(fromBeat: animation.keyframes[indexes.last!].beat), frameRate: frameRate)
                 rootView.show("Keyframes".localized
                               + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
+                              + "\n\t\("Seconds Range".localized): \(startSecStr) - \(endSecStr) (\(frameRate) fps)"
                               + "\n\t\("Count".localized): \(indexes.count)",
                               at: p)
             } else {
@@ -224,7 +228,7 @@ final class LookUpAction: InputKeyEventAction {
                                                  frameRate: frameRate)
             rootView.show("Timeline".localized
                           + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
-                          + "\n\t\("Seconds Range".localized): \(startSecStr) - \(endSecStr)"
+                          + "\n\t\("Seconds Range".localized): \(startSecStr) - \(endSecStr) (\(frameRate) fps)"
                           + "\n\t\("Tempo".localized): \(tempoStr)",
                           at: p)
         } else if let sheetView = rootView.sheetView(at: p),
@@ -306,7 +310,7 @@ final class LookUpAction: InputKeyEventAction {
                               + "\n\t\("True Peak".localized): \(truePeakDb?.string(digitsCount: 2) ?? "N/A") dBTP"
                               + "\n\t\("Beat Range".localized): \(startBeatStr) - \(endBeatStr)"
                               
-                              + "\n\t\("Seconds Range".localized): \(startSecStr) - \(endSecStr)"
+                              + "\n\t\("Seconds Range".localized): \(startSecStr) - \(endSecStr) (\(frameRate) fps"
                               + "\n\t\("Tempo".localized): \(tempoStr)",
                               at: p)
             } else {
