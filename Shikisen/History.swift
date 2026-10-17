@@ -1021,9 +1021,7 @@ protocol HisotryOwner {
     associatedtype OwnerUndoItem: UndoItem
     func canLoad(redo item: OwnerUndoItem) -> Bool
     func canLoad(undo item: OwnerUndoItem) -> Bool
-    func setReverse(undo item: OwnerUndoItem,
-                    with result: History<OwnerUndoItem>.UndoResult,
-                    in history: inout History<OwnerUndoItem>)
+    func reversed(undo item: OwnerUndoItem) -> OwnerUndoItem?
 }
 extension History {
     mutating func undoItem<S: HisotryOwner>(with result: History<T>.UndoResult,
@@ -1044,8 +1042,10 @@ extension History {
                 let redoItem = uiv.item(at: result.type.reversed)
                 guard owner.canLoad(redo: redoItem) else { throw UndoError(redo: redoItem) }
                 let undoItem = uiv.item(at: result.type)
-                guard owner.canLoad(undo: undoItem) else { throw UndoError(undo: redoItem) }
-                owner.setReverse(undo: undoItem, with: result, in: &self)
+                guard owner.canLoad(undo: undoItem) else { throw UndoError(undo: undoItem) }
+                if let reversedUndoItem = owner.reversed(undo: undoItem) {
+                    setReverse(reversedUndoItem, with: result)
+                }
                 return result.undoItem(with: self[result].undoItemValue!)
             } catch {
                 self[result].setError()

@@ -4985,33 +4985,20 @@ final class SheetView: View, @unchecked Sendable {
         set(undo: .insertKeyPlanes(okvs), redo: .removeKeyPlanes(kvs))
     }
     
-    func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
-        var isArray = Array(repeating: false, count: picture.planes.count)
-        for v in planeValue.moveIndexValues {
-            isArray[v.value] = true
-        }
-        let oldPlanes = picture.planes.enumerated().compactMap {
-            isArray[$0.offset] ? nil : $0.element
-        }
-        let oldVs = planeValue.moveIndexValues
-            .map { IndexValue(value: $0.index, index: $0.value) }
-            .sorted { $0.index < $1.index }
-        return PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
-    }
     func set(_ planeValue: PlaneValue) {
-        set(undo: .setPlaneValue(oldPlaneValue(from: planeValue, in: model.picture)),
+        set(undo: .setPlaneValue(model.currentPlaneValue(from: planeValue,
+                                                         in: model.picture)),
             redo: .setPlaneValue(planeValue))
     }
     func set(_ pvkvs: [IndexValue<PlaneValue>]) {
         let oldPVKVs = pvkvs.map {
             let picture = model.animation.keyframes[$0.index].picture
-            let oldPlaneValue = oldPlaneValue(from: $0.value, in: picture)
+            let oldPlaneValue = model.currentPlaneValue(from: $0.value, in: picture)
             return IndexValue(value: oldPlaneValue, index: $0.index)
         }
         set(undo: .setKeyPlaneValues(oldPVKVs),
             redo: .setKeyPlaneValues(pvkvs))
     }
-    
     
     func appendDraftKeyLines(_ kvs: [IndexValue<[Line]>]) {
         let nkvs = kvs.map { kv in
@@ -5211,21 +5198,9 @@ final class SheetView: View, @unchecked Sendable {
     func capture(_ ituv: IndexValue<TextValue>, old oituv: IndexValue<TextValue>) {
         cap(undo: .replaceString(oituv), redo: .replaceString(ituv))
     }
-    func replace(_ ituv: IndexValue<TextValue>) {
-        let oldText = textsView.elementViews[ituv.index].model
-        let string = oldText.string
-        let intRange = ituv.value.replacedRange
-        let oldRange = intRange.lowerBound ..< (intRange.lowerBound + ituv.value.string.count)
-        let oldOrigin = ituv.value.origin != nil ? oldText.origin : nil
-        let oldSize = ituv.value.size != nil ? oldText.size : nil
-        let oldWidthCount = ituv.value.widthCount != nil ? oldText.widthCount : nil
-        let sRange = string.range(fromInt: intRange)
-        let oituv = TextValue(string: String(string[sRange]),
-                              replacedRange: oldRange,
-                              origin: oldOrigin, size: oldSize,
-                              widthCount: oldWidthCount)
-        set(undo: .replaceString(IndexValue(value: oituv, index: ituv.index)),
-            redo: .replaceString(ituv))
+    func replace(_ tviv: IndexValue<TextValue>) {
+        set(undo: .replaceString(model.currentTextValueIndexValue(tviv)),
+            redo: .replaceString(tviv))
     }
     
     func append(_ note: Note) {

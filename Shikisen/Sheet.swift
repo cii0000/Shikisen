@@ -1757,29 +1757,67 @@ extension Sheet {
         }
     }
     
+    func currentPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
+        var isArray = Array(repeating: false, count: picture.planes.count)
+        for v in planeValue.moveIndexValues {
+            isArray[v.value] = true
+        }
+        let oldPlanes = picture.planes.enumerated().compactMap {
+            isArray[$0.offset] ? nil : $0.element
+        }
+        let oldVs = planeValue.moveIndexValues
+            .map { IndexValue(value: $0.index, index: $0.value) }
+            .sorted { $0.index < $1.index }
+        return PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
+    }
+    func currentTextValueIndexValue(_ tviv: IndexValue<TextValue>) -> IndexValue<TextValue> {
+        let text = texts[tviv.index]
+        let string = text.string
+        let rRange = string.range(fromInt: tviv.value.replacedRange)
+        let nRange = tviv.value.newRange
+        let nOrigin = tviv.value.origin != nil ? text.origin : nil
+        let nSize = tviv.value.size != nil ? text.size : nil
+        let nWidthCount = tviv.value.widthCount != nil ? text.widthCount : nil
+        return IndexValue(value: TextValue(string: String(string[rRange]),
+                                           replacedRange: nRange,
+                                           origin: nOrigin, size: nSize,
+                                           widthCount: nWidthCount),
+                          index: tviv.index)
+    }
     func currentColorValue(from cv: ColorValue) -> ColorValue {
         var ncv = cv
-        if !cv.planeIndexes.isEmpty {
-            ncv.uuColor = picture.planes[cv.planeIndexes.first!].uuColor
-        } else if !cv.planeAnimationIndexes.isEmpty {
-            ncv.uuColor = animation
-                .keyframes[cv.planeAnimationIndexes.first!.index].picture
-                .planes[cv.planeIndexes.first!]
-                .uuColor
+        if let pi = ncv.planeIndexes.first {
+            ncv.uuColor = picture.planes[pi].uuColor
+        } else if let piv = ncv.planeAnimationIndexes.first,
+                  let pi = piv.value.first {
+            if ncv.planeAnimationIndexes.count == ncv.animationColors.count {
+                ncv.animationColors = ncv.planeAnimationIndexes.map {
+                    animation.keyframes[$0.index].picture
+                        .planes[$0.value.first!].uuColor.value
+                }
+            }
+            ncv.uuColor = animation.keyframes[piv.index].picture
+                .planes[pi].uuColor
         }
         
-        if !cv.lineIndexes.isEmpty {
-            ncv.uuColor = picture.lines[cv.lineIndexes.first!].uuColor
-        } else if !cv.lineAnimationIndexes.isEmpty {
-            ncv.uuColor = animation
-                .keyframes[cv.lineAnimationIndexes.first!.index].picture
-                .lines[cv.lineIndexes.first!]
-                .uuColor
+        if let li = ncv.lineIndexes.first {
+            ncv.uuColor = picture.lines[li].uuColor
+        } else if let liv = ncv.lineAnimationIndexes.first,
+                  let li = liv.value.first {
+            if ncv.lineAnimationIndexes.count == ncv.animationColors.count {
+                ncv.animationColors = ncv.lineAnimationIndexes.map {
+                    animation.keyframes[$0.index].picture
+                        .lines[$0.value.first!].uuColor.value
+                }
+            }
+            ncv.uuColor = animation.keyframes[liv.index].picture
+                .lines[li].uuColor
         }
         
         if cv.isBackground {
             ncv.uuColor = backgroundUUColor
         }
+        
         return ncv
     }
 }
@@ -3225,7 +3263,8 @@ extension Sheet: HisotryOwner {
                 for k in cv.planeAnimationIndexes {
                     guard k.index < animation.keyframes.count else { return false }
                     let planes = animation.keyframes[k.index].picture.planes
-                    guard k.value.allSatisfy({ $0 < planes.count }) else { return false }
+                    guard !k.value.isEmpty,
+                          k.value.allSatisfy({ $0 < planes.count }) else { return false }
                 }
             }
             
@@ -3236,7 +3275,8 @@ extension Sheet: HisotryOwner {
                 for k in cv.lineAnimationIndexes {
                     guard k.index < animation.keyframes.count else { return false }
                     let lines = animation.keyframes[k.index].picture.lines
-                    guard k.value.allSatisfy({ $0 < lines.count }) else { return false }
+                    guard !k.value.isEmpty,
+                          k.value.allSatisfy({ $0 < lines.count }) else { return false }
                 }
             }
             
@@ -3399,186 +3439,111 @@ extension Sheet: HisotryOwner {
         }
     }
     
-    func setReverse(undo item: SheetUndoItem,
-                    with result: SheetHistory.UndoResult,
-                    in history: inout SheetHistory) {
-        func oldPlaneValue(from planeValue: PlaneValue, in picture: Picture) -> PlaneValue {
-            var isArray = Array(repeating: false, count: picture.planes.count)
-            for v in planeValue.moveIndexValues {
-                isArray[v.value] = true
-            }
-            let oldPlanes = picture.planes.enumerated().compactMap {
-                isArray[$0.offset] ? nil : $0.element
-            }
-            let oldVs = planeValue.moveIndexValues
-                .map { IndexValue(value: $0.index, index: $0.value) }
-                .sorted { $0.index < $1.index }
-            return PlaneValue(planes: oldPlanes, moveIndexValues: oldVs)
-        }
-        
+    func reversed(undo item: SheetUndoItem) -> SheetUndoItem? {
         switch item {
-        case .appendLine: break
-        case .appendKeyLine: break
-        case .appendLines: break
-        case .insertLines: break
-        case .removeLastLines: break
-        case .removeLastKeyLines: break
-        case .removeLines: break
-            
-        case .appendPlanes: break
-        case .removeLastPlanes: break
-        case .insertPlanes: break
+        case .appendLine: nil
+        case .appendKeyLine: nil
+        case .appendLines: nil
+        case .insertLines: nil
+        case .removeLastLines: nil
+        case .removeLastKeyLines: nil
+        case .removeLines: nil
+        case .appendPlanes: nil
+        case .removeLastPlanes: nil
+        case .insertPlanes: nil
         case .replaceLines(let livs):
-            let oldLIVs = livs.map { IndexValue(value: picture.lines[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replaceLines(oldLIVs), with: result)
+            .replaceLines(livs.map { .init(value: picture.lines[$0.index],
+                                           index: $0.index) })
         case .replacePlanes(let pivs):
-            let oldPIVs = pivs.map { IndexValue(value: picture.planes[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replacePlanes(oldPIVs), with: result)
-        case .removePlanes: break
+            .replacePlanes(pivs.map { IndexValue(value: picture.planes[$0.index],
+                                                 index: $0.index) })
+        case .removePlanes: nil
         case .setPlaneValue(let planeValue):
-            let oldPlaneValue = oldPlaneValue(from: planeValue, in: picture)
-            history.setReverse(.setPlaneValue(oldPlaneValue), with: result)
+            .setPlaneValue(currentPlaneValue(from: planeValue, in: picture))
         case .setKeyPlaneValues(let pvkvs):
-            let oldPVKVs = pvkvs.map {
+            .setKeyPlaneValues(pvkvs.map {
                 let picture = animation.keyframes[$0.index].picture
-                let oldPlaneValue = oldPlaneValue(from: $0.value, in: picture)
+                let oldPlaneValue = currentPlaneValue(from: $0.value, in: picture)
                 return IndexValue(value: oldPlaneValue, index: $0.index)
-            }
-            history.setReverse(.setKeyPlaneValues(oldPVKVs), with: result)
-        case .changeToDraft: break
+            })
+        case .changeToDraft: nil
         case .setPicture:
-            history.setReverse(.setPicture(self.picture), with: result)
-        case .insertDraftLines: break
-        case .insertDraftPlanes: break
-        case .removeDraftLines: break
-        case .removeDraftPlanes: break
+            .setPicture(picture)
+        case .insertDraftLines: nil
+        case .insertDraftPlanes: nil
+        case .removeDraftLines: nil
+        case .removeDraftPlanes: nil
         case .setDraftPicture:
-            history.setReverse(.setDraftPicture(self.draftPicture), with: result)
-        case .insertTexts: break
+            .setDraftPicture(draftPicture)
+        case .insertTexts: nil
         case .replaceTexts(let tivs):
-            let oldTIVs = tivs.map { IndexValue(value: texts[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replaceTexts(oldTIVs), with: result)
-        case .removeTexts: break
+            .replaceTexts(tivs.map { IndexValue(value: texts[$0.index],
+                                                index: $0.index) })
+        case .removeTexts: nil
         case .replaceString(let tviv):
-            let oldString = texts[tviv.index].string
-            let oldRange = tviv.value.newRange
-            let oldOrigin = tviv.value.origin != nil ? texts[tviv.index].origin : nil
-            let oldSize = tviv.value.size != nil ? texts[tviv.index].size : nil
-            let oldWidthCount = tviv.value.widthCount != nil ? texts[tviv.index].widthCount : nil
-            let nRange = oldString.range(fromInt: tviv.value.replacedRange)
-            let tiv = IndexValue(value: TextValue(string: String(oldString[nRange]),
-                                                  replacedRange: oldRange,
-                                                  origin: oldOrigin, size: oldSize,
-                                                  widthCount: oldWidthCount),
-                                 index: tviv.index)
-            history.setReverse(.replaceString(tiv), with: result)
-        case .changedColors(let cuv):
-            var oldCUV = cuv
-            var isBackground = true
-            if let pi = oldCUV.planeIndexes.first {
-                oldCUV.uuColor = picture.planes[pi].uuColor
-                isBackground = false
-            } else if let piv = oldCUV.planeAnimationIndexes.first,
-                      let pi = piv.value.first {
-                if oldCUV.planeAnimationIndexes.count == oldCUV.animationColors.count {
-                    oldCUV.animationColors = oldCUV.planeAnimationIndexes.map {
-                        animation.keyframes[$0.index].picture.planes[$0.value.first!].uuColor.value
-                    }
-                } else {
-                    oldCUV.uuColor = animation.keyframes[piv.index].picture.planes[pi].uuColor
-                }
-                isBackground = false
-            }
-            
-            if let li = oldCUV.lineIndexes.first {
-                oldCUV.uuColor = picture.lines[li].uuColor
-                isBackground = false
-            } else if let liv = oldCUV.lineAnimationIndexes.first,
-                      let li = liv.value.first {
-                if oldCUV.lineAnimationIndexes.count == oldCUV.animationColors.count {
-                    oldCUV.animationColors = oldCUV.lineAnimationIndexes.map {
-                        animation.keyframes[$0.index].picture.lines[$0.value.first!].uuColor.value
-                    }
-                } else {
-                    oldCUV.uuColor = animation.keyframes[liv.index].picture.lines[li].uuColor
-                }
-                isBackground = false
-            }
-            
-            if isBackground {
-                oldCUV.uuColor = backgroundUUColor
-            }
-            
-            history.setReverse(.changedColors(oldCUV), with: result)
-        
-        case .insertBorders: break
-        case .removeBorders: break
-            
-        case .insertKeyframes: break
-        case .removeKeyframes: break
+            .replaceString(currentTextValueIndexValue(tviv))
+        case .changedColors(let cv):
+            .changedColors(currentColorValue(from: cv))
+        case .insertBorders: nil
+        case .removeBorders: nil
+        case .insertKeyframes: nil
+        case .removeKeyframes: nil
         case .setKeyframeOptions(let kvs):
-            let oldKVs = kvs.map { IndexValue(value: animation.keyframes[$0.index].option,
-                                              index: $0.index) }
-            history.setReverse(.setKeyframeOptions(oldKVs), with: result)
+            .setKeyframeOptions(kvs.map {
+                IndexValue(value: animation.keyframes[$0.index].option,
+                           index: $0.index)
+            })
         case .setRootKeyframeI:
-            history.setReverse(.setRootKeyframeI(animation.rootIndex), with: result)
-        case .insertKeyLines: break
+            .setRootKeyframeI(animation.rootIndex)
+        case .insertKeyLines: nil
         case .replaceKeyLines(let kvs):
-            let oldKVs = kvs.map {
+            .replaceKeyLines(kvs.map {
                 let lines = animation.keyframes[$0.index].picture.lines
                 let oldLIVs = $0.value.map { IndexValue(value: lines[$0.index],
                                                         index: $0.index) }
                 return IndexValue(value: oldLIVs, index: $0.index)
-            }
-            history.setReverse(.replaceKeyLines(oldKVs), with: result)
-        case .removeKeyLines: break
-        case .insertKeyPlanes: break
+            })
+        case .removeKeyLines: nil
+        case .insertKeyPlanes: nil
         case .replaceKeyPlanes(let kvs):
-            let oldKVs = kvs.map {
+            .replaceKeyPlanes(kvs.map {
                 let planes = animation.keyframes[$0.index].picture.planes
                 let oldPIVs = $0.value.map { IndexValue(value: planes[$0.index],
                                                         index: $0.index) }
                 return IndexValue(value: oldPIVs, index: $0.index)
-            }
-            history.setReverse(.replaceKeyPlanes(oldKVs), with: result)
-        case .removeKeyPlanes: break
-        case .insertDraftKeyLines: break
-        case .removeDraftKeyLines: break
-        case .insertDraftKeyPlanes: break
-        case .removeDraftKeyPlanes: break
+            })
+        case .removeKeyPlanes: nil
+        case .insertDraftKeyLines: nil
+        case .removeDraftKeyLines: nil
+        case .insertDraftKeyPlanes: nil
+        case .removeDraftKeyPlanes: nil
         case .setLineIDs(let kvs):
-            let oldKVs = kvs.map {
+            .setLineIDs(kvs.map {
                 let lines = animation.keyframes[$0.index].picture.lines
                 let oldKIVs = $0.value.map { IndexValue(value: lines[$0.index].interOption,
                                                         index: $0.index) }
                 return IndexValue(value: oldKIVs, index: $0.index)
-            }
-            history.setReverse(.setLineIDs(oldKVs), with: result)
+            })
         case .setAnimationOption:
-            history.setReverse(.setAnimationOption(animation.option), with: result)
-        case .insertNotes: break
+            .setAnimationOption(animation.option)
+        case .insertNotes: nil
         case .replaceNotes(let nivs):
-            let oldNIVs = nivs.map { IndexValue(value: score.notes[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replaceNotes(oldNIVs), with: result)
-        case .removeNotes: break
-        case .insertDraftNotes: break
-        case .removeDraftNotes: break
-        case .insertContents: break
+            .replaceNotes(nivs.map { IndexValue(value: score.notes[$0.index],
+                                                index: $0.index) })
+        case .removeNotes: nil
+        case .insertDraftNotes: nil
+        case .removeDraftNotes: nil
+        case .insertContents: nil
         case .replaceContents(let civs):
-            let oldCIVs = civs.map { IndexValue(value: contents[$0.index],
-                                                index: $0.index) }
-            history.setReverse(.replaceContents(oldCIVs), with: result)
-        case .removeContents: break
+            .replaceContents(civs.map { IndexValue(value: contents[$0.index],
+                                                   index: $0.index) })
+        case .removeContents: nil
         case .setScoreOption:
-            history.setReverse(.setScoreOption(score.option), with: result)
+            .setScoreOption(score.option)
         case .setSheetOption:
-            history.setReverse(.setSheetOption(self.option), with: result)
+            .setSheetOption(option)
         case .setSelection:
-            history.setReverse(.setSelection(self.selection), with: result)
+            .setSelection(selection)
         }
     }
 }

@@ -538,14 +538,12 @@ extension World: HisotryOwner {
         case .setSelection: true
         }
     }
-    func setReverse(undo item: WorldUndoItem,
-                    with result: WorldHistory.UndoResult,
-                    in history: inout WorldHistory) {
+    func reversed(undo item: WorldUndoItem) -> WorldUndoItem? {
         switch item {
-        case .insertSheets: break
-        case .removeSheets: break
+        case .insertSheets: nil
+        case .removeSheets: nil
         case .setSelection:
-            history.setReverse(.setSelection(self.selection), with: result)
+            .setSelection(selection)
         }
     }
 }
