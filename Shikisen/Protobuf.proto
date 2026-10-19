@@ -532,6 +532,10 @@ message PBIntArrayIndexValueArray {
 message PBLineArray {
     repeated PBLine value = 1;
 }
+message PBLineArrayIndexValue {
+    repeated PBLine value = 1;
+    int64 index = 2;
+}
 message PBPlaneArray {
     repeated PBPlane value = 1;
 }
@@ -595,11 +599,14 @@ message PBKeyframeIndexValueArray {
 message PBKeyframeOptionIndexValueArray {
     repeated PBKeyframeOptionIndexValue value = 1;
 }
+message Empty {}
 
 message PBSheetUndoItem {
     oneof value {
         PBLine appendLine = 1;
+        Empty removeLastLine = 58;
         PBLineIndexValue appendKeyLine = 32;
+        int64 removeKeyLastLine = 59;
         PBLineArray appendLines = 2;
         PBPlaneArray appendPlanes = 3;
         PBLineIndexValueArray insertLines = 6;
@@ -608,7 +615,8 @@ message PBSheetUndoItem {
         PBLineIndexValueArrayIndexValueArray replaceKeyLines = 29;
         PBInterOptionIndexValueArrayIndexValueArray setLineIDs = 31;
         int64 removeLastLines = 4;
-        PBIntIndexValue removeLastKeyLines = 33;
+        PBLineArrayIndexValue appendKeyLines = 57;
+        PBIntIndexValue removeKeyLastLines = 33;
         PBInt64Array removeLines = 8;
         PBIntArrayIndexValueArray removeKeyLines = 30;
         

@@ -2155,6 +2155,18 @@ extension IndexValue where Value == Line {
         }
     }
 }
+extension IndexValue where Value == [Line] {
+    init(_ pb: PBLineArrayIndexValue) throws {
+        value = try pb.value.map { try .init($0) }
+        index = max(Int(pb.index), 0)
+    }
+    var pb: PBLineArrayIndexValue {
+        .with {
+            $0.value = value.map { $0.pb }
+            $0.index = Int64(index)
+        }
+    }
+}
 extension IndexValue where Value == [IndexValue<Line>] {
     init(_ pb: PBLineIndexValueArrayIndexValue) throws {
         value = try pb.value.map { try IndexValue<Line>($0) }
@@ -2418,17 +2430,20 @@ extension Array where Element == IndexValue<[IndexValue<InterOption>]> {
 
 enum SheetUndoItem {
     case appendLine(_ line: Line)
+    case removeLastLine
     case appendKeyLine(_ kv: IndexValue<Line>)
+    case removeKeyLastLine(_ ki: Int)
     case appendLines(_ lines: [Line])
+    case removeLastLines(count: Int)
+    case appendKeyLines(_ kv: IndexValue<[Line]>)
+    case removeKeyLastLines(_ countKV: IndexValue<Int>)
     case insertLines(_ lineIndexValues: [IndexValue<Line>])
+    case removeLines(lineIndexes: [Int])
     case insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
+    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
     case replaceLines(_ lineIndexValue: [IndexValue<Line>])
     case replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
     case setLineIDs(_ idvs: [IndexValue<[IndexValue<InterOption>]>])
-    case removeLastLines(count: Int)
-    case removeLastKeyLines(_ countKV: IndexValue<Int>)
-    case removeLines(lineIndexes: [Int])
-    case removeKeyLines(_ indexes: [IndexValue<[Int]>])
 
     case insertDraftLines(_ lineIndexValues: [IndexValue<Line>])
     case insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>])
@@ -2436,13 +2451,13 @@ enum SheetUndoItem {
     case removeDraftKeyLines(_ indexes: [IndexValue<[Int]>])
     
     case appendPlanes(_ planes: [Plane])
+    case removeLastPlanes(count: Int)
     case insertPlanes(_ planeIndexValues: [IndexValue<Plane>])
+    case removePlanes(planeIndexes: [Int])
     case insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
+    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
     case replacePlanes(_ planeIndexValue: [IndexValue<Plane>])
     case replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
-    case removeLastPlanes(count: Int)
-    case removePlanes(planeIndexes: [Int])
-    case removeKeyPlanes(_ indexes: [IndexValue<[Int]>])
     
     case insertDraftPlanes(_ planeIndexValues: [IndexValue<Plane>])
     case insertDraftKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>])
@@ -2458,26 +2473,26 @@ enum SheetUndoItem {
     case setDraftPicture(_ picture: Picture)
     
     case insertKeyframes(_ kivs: [IndexValue<Keyframe>])
-    case setKeyframeOptions(_ koivs: [IndexValue<KeyframeOption>])
     case removeKeyframes(_ kis: [Int])
+    case setKeyframeOptions(_ koivs: [IndexValue<KeyframeOption>])
     
     case setRootKeyframeI(_ rootKI: Int)
     
     case insertTexts(_ tivs: [IndexValue<Text>])
-    case replaceTexts(_ tivs: [IndexValue<Text>])
     case removeTexts(_ tis: [Int])
+    case replaceTexts(_ tivs: [IndexValue<Text>])
     case replaceString(_ tviv: IndexValue<TextValue>)
     
     case insertNotes(_ nivs: [IndexValue<Note>])
-    case replaceNotes(_ niv: [IndexValue<Note>])
     case removeNotes(noteIndexes: [Int])
+    case replaceNotes(_ niv: [IndexValue<Note>])
     
     case insertDraftNotes(_ nivs: [IndexValue<Note>])
     case removeDraftNotes(noteIndexes: [Int])
     
     case insertContents(_ civs: [IndexValue<Content>])
-    case replaceContents(_ civs: [IndexValue<Content>])
     case removeContents(contentIndexes: [Int])
+    case replaceContents(_ civs: [IndexValue<Content>])
     
     case insertBorders(_ borderIndexValues: [IndexValue<Border>])
     case removeBorders(borderIndexes: [Int])
@@ -2494,28 +2509,34 @@ extension SheetUndoItem: Protobuf {
         switch value {
         case .appendLine(let line):
             self = .appendLine(try Line(line))
+        case .removeLastLine:
+            self = .removeLastLine
         case .appendKeyLine(let liv):
             self = .appendKeyLine(try .init(liv))
+        case .removeKeyLastLine(let ki):
+            self = .removeKeyLastLine(Int(ki))
         case .appendLines(let lines):
             self = .appendLines(try [Line](lines))
-        case .insertLines(let lineIndexValues):
-            self = .insertLines(try [IndexValue<Line>](lineIndexValues))
         case .removeLastLines(let lineCount):
             self = .removeLastLines(count: Int(lineCount))
-        case .removeLastKeyLines(let countIV):
-            self = .removeLastKeyLines(try .init(countIV))
+        case .insertLines(let lineIndexValues):
+            self = .insertLines(try [IndexValue<Line>](lineIndexValues))
+        case .removeLines(let lineIndexes):
+            self = .removeLines(lineIndexes: try [Int](lineIndexes))
+        case .replaceLines(let lines):
+            self = .replaceLines(try [IndexValue<Line>](lines))
+        case .appendKeyLines(let kv):
+            self = .appendKeyLines(try .init(kv))
+        case .removeKeyLastLines(let countIV):
+            self = .removeKeyLastLines(try .init(countIV))
         case .appendPlanes(let planes):
             self = .appendPlanes(try [Plane](planes))
         case .removeLastPlanes(let planesCount):
             self = .removeLastPlanes(count: Int(planesCount))
         case .insertPlanes(let planeIndexValues):
             self = .insertPlanes(try [IndexValue<Plane>](planeIndexValues))
-        case .replaceLines(let lines):
-            self = .replaceLines(try [IndexValue<Line>](lines))
         case .replacePlanes(let planes):
             self = .replacePlanes(try [IndexValue<Plane>](planes))
-        case .removeLines(let lineIndexes):
-            self = .removeLines(lineIndexes: try [Int](lineIndexes))
         case .removePlanes(let planeIndexes):
             self = .removePlanes(planeIndexes: try [Int](planeIndexes))
         case .setPlaneValue(let planeValue):
@@ -2611,16 +2632,22 @@ extension SheetUndoItem: Protobuf {
             switch self {
             case .appendLine(let line):
                 $0.value = .appendLine(line.pb)
+            case .removeLastLine:
+                $0.value = .removeLastLine(.init())
             case .appendKeyLine(let kv):
                 $0.value = .appendKeyLine(kv.pb)
+            case .removeKeyLastLine(let ki):
+                $0.value = .removeKeyLastLine(Int64(ki))
             case .appendLines(let lines):
                 $0.value = .appendLines(lines.pb)
             case .insertLines(let lineIndexValues):
                 $0.value = .insertLines(lineIndexValues.pb)
             case .removeLastLines(let lineCount):
                 $0.value = .removeLastLines(Int64(lineCount))
-            case .removeLastKeyLines(let liv):
-                $0.value = .removeLastKeyLines(liv.pb)
+            case .appendKeyLines(let kv):
+                $0.value = .appendKeyLines(kv.pb)
+            case .removeKeyLastLines(let liv):
+                $0.value = .removeKeyLastLines(liv.pb)
             case .appendPlanes(let planes):
                 $0.value = .appendPlanes(planes.pb)
             case .removeLastPlanes(let planesCount):
@@ -2729,17 +2756,20 @@ extension SheetUndoItem: UndoItem {
     var caseName: String {
         switch self {
         case .appendLine: "appendLine"
+        case .removeLastLine: "removeLastLine"
         case .appendKeyLine: "appendKeyLine"
+        case .removeKeyLastLine: "removeKeyLastLine"
         case .appendLines: "appendLines"
-        case .insertLines: "insertLines"
         case .removeLastLines: "removeLastLines"
-        case .removeLastKeyLines: "removeLastKeyLines"
+        case .insertLines: "insertLines"
+        case .removeLines: "removeLines"
+        case .appendKeyLines: "appendKeyLines"
+        case .removeKeyLastLines: "removeKeyLastLines"
+        case .replaceLines: "replaceLines"
         case .appendPlanes: "appendPlanes"
         case .removeLastPlanes: "removeLastPlanes"
         case .insertPlanes: "insertPlane"
-        case .replaceLines: "replaceLines"
         case .replacePlanes: "replacePlanes"
-        case .removeLines: "removeLines"
         case .removePlanes: "removePlanes"
         case .setPlaneValue: "setPlaneValue"
         case .setKeyPlaneValues: "setKeyPlaneValues"
@@ -2787,191 +2817,67 @@ extension SheetUndoItem: UndoItem {
         }
     }
     
-    var type: UndoItemType {
+    var isRequiredEncodable: Bool {
         switch self {
-        case .appendLine: .reversible
-        case .appendKeyLine: .reversible
-        case .appendLines: .reversible
-        case .insertLines: .reversible
-        case .insertKeyLines: .reversible
-        case .removeLastLines: .unreversible
-        case .removeLastKeyLines: .unreversible
-        case .appendPlanes: .reversible
-        case .removeLastPlanes: .unreversible
-        case .insertPlanes: .reversible
-        case .replaceLines: .lazyReversible
-        case .replacePlanes: .lazyReversible
-        case .removeLines: .unreversible
-        case .removePlanes: .unreversible
-        case .setPlaneValue: .lazyReversible
-        case .setKeyPlaneValues: .lazyReversible
-        case .changeToDraft: .reversible
-        case .setPicture: .lazyReversible
-        case .insertDraftLines: .reversible
-        case .insertDraftPlanes: .reversible
-        case .removeDraftLines: .unreversible
-        case .removeDraftPlanes: .unreversible
-        case .setDraftPicture: .lazyReversible
-        case .insertTexts: .reversible
-        case .replaceTexts: .lazyReversible
-        case .removeTexts: .unreversible
-        case .replaceString: .lazyReversible
-        case .changedColors: .lazyReversible
-        case .insertBorders: .reversible
-        case .removeBorders: .unreversible
-        case .insertKeyframes: .reversible
-        case .removeKeyframes: .unreversible
-        case .setKeyframeOptions: .lazyReversible
-        case .setRootKeyframeI: .lazyReversible
-        case .replaceKeyLines: .lazyReversible
-        case .removeKeyLines: .unreversible
-        case .insertKeyPlanes: .reversible
-        case .replaceKeyPlanes: .lazyReversible
-        case .removeKeyPlanes: .unreversible
-        case .insertDraftKeyLines: .reversible
-        case .removeDraftKeyLines: .unreversible
-        case .insertDraftKeyPlanes: .reversible
-        case .removeDraftKeyPlanes: .unreversible
-        case .setLineIDs: .lazyReversible
-        case .setAnimationOption: .lazyReversible
-        case .insertNotes: .reversible
-        case .replaceNotes: .lazyReversible
-        case .removeNotes: .unreversible
-        case .insertDraftNotes: .reversible
-        case .removeDraftNotes: .unreversible
-        case .insertContents: .reversible
-        case .replaceContents: .lazyReversible
-        case .removeContents: .unreversible
-        case .setScoreOption: .lazyReversible
-        case .setSheetOption: .lazyReversible
-        case .setSelection: .lazyReversible
-        }
-    }
-    
-    func reversed() -> SheetUndoItem? {
-        switch self {
-        case .appendLine:
-             .removeLastLines(count: 1)
-        case .appendKeyLine(let kv):
-            .removeLastKeyLines(.init(value: 1, index: kv.index))
-        case .appendLines(let lines):
-             .removeLastLines(count: lines.count)
-        case .removeLastLines:
-             nil
-        case .removeLastKeyLines:
-             nil
-        case .appendPlanes(let planes):
-             .removeLastPlanes(count: planes.count)
-        case .removeLastPlanes:
-             nil
-        case .insertLines(let livs):
-             .removeLines(lineIndexes: livs.map { $0.index })
-        case .insertPlanes(let pivs):
-             .removePlanes(planeIndexes: pivs.map { $0.index })
-        case .replaceLines:
-             self
-        case .replacePlanes:
-             self
-        case .removeLines:
-             nil
-        case .removePlanes:
-             nil
-        case .setPlaneValue:
-             self
-        case .setKeyPlaneValues:
-             self
-        case .changeToDraft(let isReverse):
-             .changeToDraft(isReverse: !isReverse)
-        case .setPicture(_):
-             self
-        case .insertDraftLines(let livs):
-             .removeDraftLines(lineIndexes: livs.map { $0.index })
-        case .insertDraftPlanes(let pivs):
-             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
-        case .removeDraftLines:
-             nil
-        case .removeDraftPlanes:
-             nil
-        case .setDraftPicture(_):
-             self
-        case .insertTexts(let tivs):
-             .removeTexts(tivs.map { $0.index })
-        case .replaceTexts:
-             self
-        case .removeTexts:
-             nil
-        case .replaceString(_):
-             self
-        case .changedColors(_):
-             self
-        case .insertBorders(let bivs):
-             .removeBorders(borderIndexes: bivs.map { $0.index })
-        case .removeBorders:
-             nil
-        case .insertKeyframes(let kivs):
-             .removeKeyframes(kivs.map { $0.index })
-        case .removeKeyframes:
-             nil
-        case .setKeyframeOptions:
-             self
-        case .setRootKeyframeI:
-             self
-        case .insertKeyLines(let kivs):
-             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                   index: $0.index) })
-        case .replaceKeyLines:
-             self
-        case .removeKeyLines:
-             nil
-        case .insertKeyPlanes(let kivs):
-             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                    index: $0.index) })
-        case .replaceKeyPlanes:
-             self
-        case .removeKeyPlanes:
-             nil
-        case .insertDraftKeyLines(let kivs):
-             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                        index: $0.index) })
-        case .removeDraftKeyLines:
-             nil
-        case .insertDraftKeyPlanes(let kivs):
-             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
-                                                         index: $0.index) })
-        case .removeDraftKeyPlanes:
-             nil
-        case .setLineIDs:
-             self
-        case .setAnimationOption:
-             self
-        
-        case .insertNotes(let nivs):
-             .removeNotes(noteIndexes: nivs.map { $0.index })
-        case .replaceNotes:
-             self
-        case .removeNotes:
-             nil
-            
-        case .insertDraftNotes(let nivs):
-             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
-        case .removeDraftNotes:
-             nil
-            
-        case .insertContents(let civs):
-             .removeContents(contentIndexes: civs.map { $0.index })
-        case .replaceContents:
-             self
-        case .removeContents:
-             nil
-            
-        case .setScoreOption:
-             self
-            
-        case .setSheetOption:
-             self
-            
-        case .setSelection:
-             self
+        case .appendLine: true
+        case .removeLastLine: false
+        case .appendKeyLine: true
+        case .removeKeyLastLine: false
+        case .appendLines: true
+        case .insertLines: true
+        case .insertKeyLines: true
+        case .removeLastLines: false
+        case .appendKeyLines: true
+        case .removeKeyLastLines: false
+        case .appendPlanes: true
+        case .removeLastPlanes: false
+        case .insertPlanes: true
+        case .replaceLines: true
+        case .replacePlanes: true
+        case .removeLines: false
+        case .removePlanes: false
+        case .setPlaneValue: true
+        case .setKeyPlaneValues: true
+        case .changeToDraft: true
+        case .setPicture: true
+        case .insertDraftLines: true
+        case .insertDraftPlanes: true
+        case .removeDraftLines: false
+        case .removeDraftPlanes: false
+        case .setDraftPicture: true
+        case .insertTexts: true
+        case .replaceTexts: true
+        case .removeTexts: false
+        case .replaceString: true
+        case .changedColors: true
+        case .insertBorders: true
+        case .removeBorders: false
+        case .insertKeyframes: true
+        case .removeKeyframes: false
+        case .setKeyframeOptions: true
+        case .setRootKeyframeI: true
+        case .replaceKeyLines: true
+        case .removeKeyLines: false
+        case .insertKeyPlanes: true
+        case .replaceKeyPlanes: true
+        case .removeKeyPlanes: false
+        case .insertDraftKeyLines: true
+        case .removeDraftKeyLines: false
+        case .insertDraftKeyPlanes: true
+        case .removeDraftKeyPlanes: false
+        case .setLineIDs: true
+        case .setAnimationOption: true
+        case .insertNotes: true
+        case .replaceNotes: true
+        case .removeNotes: false
+        case .insertDraftNotes: true
+        case .removeDraftNotes: false
+        case .insertContents: true
+        case .replaceContents: true
+        case .removeContents: false
+        case .setScoreOption: true
+        case .setSheetOption: true
+        case .setSelection: true
         }
     }
 }
@@ -2979,7 +2885,7 @@ extension SheetUndoItem: UndoItem {
 typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
 extension Sheet: HisotryOwner {
-    func canLoad(redo item: SheetUndoItem) -> Bool {
+    func canLoad(from item: SheetUndoItem) -> Bool {
         func canAppend<T: Equatable>(_ ns: [T], in array: [T]) -> Bool {
             let di = array.count - ns.count
             return di >= 0 && Array(array[di...]) == ns
@@ -3066,15 +2972,21 @@ extension Sheet: HisotryOwner {
         return switch item {
         case .appendLine(let line):
             picture.lines.last == line
+        case .removeLastLine:
+            true
         case .appendKeyLine(let kv):
             kv.index < animation.keyframes.count && picture.lines.last == kv.value
+        case .removeKeyLastLine(let ki):
+            ki < animation.keyframes.count
         case .appendLines(let lines):
             canAppend(lines, in: picture.lines)
         case .insertLines(let livs):
             canInsert(livs, in: picture.lines)
         case .removeLastLines:
             true
-        case .removeLastKeyLines(let kv):
+        case .appendKeyLines(let kv):
+            kv.index < animation.keyframes.count && canAppend(kv.value, in: picture.lines)
+        case .removeKeyLastLines(let kv):
             kv.index < animation.keyframes.count
         case .appendPlanes(let planes):
             canAppend(planes, in: picture.planes)
@@ -3222,7 +3134,7 @@ extension Sheet: HisotryOwner {
         }
     }
     
-    func canLoad(undo item: SheetUndoItem) -> Bool {
+    func canLoad(to item: SheetUndoItem) -> Bool {
         func canInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             var count = array.count
             return ivs.allSatisfy {
@@ -3286,15 +3198,22 @@ extension Sheet: HisotryOwner {
         return switch item {
         case .appendLine:
             true
+        case .removeLastLine:
+            picture.lines.count >= 1
         case .appendKeyLine(let kv):
             kv.index < animation.keyframes.count
+        case .removeKeyLastLine(let ki):
+            ki < animation.keyframes.count
+            && animation.keyframes[ki].picture.lines.count >= 1
         case .appendLines:
             true
         case .insertLines(let livs):
             canInsert(livs, in: picture.lines)
         case .removeLastLines(let count):
             count <= picture.lines.count
-        case .removeLastKeyLines(let kv):
+        case .appendKeyLines(let kv):
+            kv.index < animation.keyframes.count
+        case .removeKeyLastLines(let kv):
             kv.index < animation.keyframes.count
             && kv.value <= animation.keyframes[kv.index].picture.lines.count
         case .removeLines(let lis):
@@ -3439,25 +3358,44 @@ extension Sheet: HisotryOwner {
         }
     }
     
-    func reversed(undo item: SheetUndoItem) -> SheetUndoItem? {
+    func reversed(_ item: SheetUndoItem) -> SheetUndoItem {
         switch item {
-        case .appendLine: nil
-        case .appendKeyLine: nil
-        case .appendLines: nil
-        case .insertLines: nil
-        case .removeLastLines: nil
-        case .removeLastKeyLines: nil
-        case .removeLines: nil
-        case .appendPlanes: nil
-        case .removeLastPlanes: nil
-        case .insertPlanes: nil
+        case .appendLine:
+            .removeLastLine
+        case .removeLastLine:
+            .appendLine(picture.lines.last!)
+        case .appendKeyLine(let kv):
+            .removeKeyLastLine(kv.index)
+        case .removeKeyLastLine(let ki):
+            .appendKeyLine(.init(value: animation.keyframes[ki].picture.lines.last!,
+                                 index: ki))
+        case .appendLines(let lines):
+            .removeLastLines(count: lines.count)
+        case .removeLastLines(let count):
+            .appendLines(Array(picture.lines.suffix(count)))
+        case .appendKeyLines(let kv):
+            .removeKeyLastLines(.init(value: kv.value.count, index: kv.index))
+        case .removeKeyLastLines(let kv):
+            .appendKeyLines(.init(Array(animation.keyframes[kv.index].picture.lines.suffix(kv.value)), at: kv.index))
+        case .insertLines(let livs):
+            .removeLines(lineIndexes: livs.map { $0.index })
+        case .removeLines(let lis):
+            .insertLines(lis.map { IndexValue(value: picture.lines[$0], index: $0) })
         case .replaceLines(let livs):
             .replaceLines(livs.map { .init(value: picture.lines[$0.index],
                                            index: $0.index) })
+            
+        case .appendPlanes(let planes):
+            .removeLastPlanes(count: planes.count)
+        case .removeLastPlanes(let count):
+            .appendPlanes(Array(picture.planes.suffix(count)))
+        case .insertPlanes(let pivs):
+            .removePlanes(planeIndexes: pivs.map { $0.index })
+        case .removePlanes(let pis):
+            .insertPlanes(pis.map { IndexValue(value: picture.planes[$0], index: $0) })
         case .replacePlanes(let pivs):
             .replacePlanes(pivs.map { IndexValue(value: picture.planes[$0.index],
                                                  index: $0.index) })
-        case .removePlanes: nil
         case .setPlaneValue(let planeValue):
             .setPlaneValue(currentPlaneValue(from: planeValue, in: picture))
         case .setKeyPlaneValues(let pvkvs):
@@ -3466,28 +3404,41 @@ extension Sheet: HisotryOwner {
                 let oldPlaneValue = currentPlaneValue(from: $0.value, in: picture)
                 return IndexValue(value: oldPlaneValue, index: $0.index)
             })
-        case .changeToDraft: nil
+        case .changeToDraft(let isReverse):
+            .changeToDraft(isReverse: !isReverse)
         case .setPicture:
             .setPicture(picture)
-        case .insertDraftLines: nil
-        case .insertDraftPlanes: nil
-        case .removeDraftLines: nil
-        case .removeDraftPlanes: nil
+        case .insertDraftLines(let livs):
+            .removeDraftLines(lineIndexes: livs.map { $0.index })
+        case .insertDraftPlanes(let pivs):
+            .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
+        case .removeDraftLines(let lis):
+            .insertDraftLines(lis.map { IndexValue(value: draftPicture.lines[$0],
+                                                   index: $0) })
+        case .removeDraftPlanes(let pis):
+            .insertDraftPlanes(pis.map { IndexValue(value: draftPicture.planes[$0],
+                                                    index: $0) })
         case .setDraftPicture:
             .setDraftPicture(draftPicture)
-        case .insertTexts: nil
+        case .insertTexts(let tivs):
+            .removeTexts(tivs.map { $0.index })
         case .replaceTexts(let tivs):
             .replaceTexts(tivs.map { IndexValue(value: texts[$0.index],
                                                 index: $0.index) })
-        case .removeTexts: nil
+        case .removeTexts(let tis):
+            .insertTexts(tis.map { IndexValue(value: texts[$0], index: $0) })
         case .replaceString(let tviv):
             .replaceString(currentTextValueIndexValue(tviv))
         case .changedColors(let cv):
             .changedColors(currentColorValue(from: cv))
-        case .insertBorders: nil
-        case .removeBorders: nil
-        case .insertKeyframes: nil
-        case .removeKeyframes: nil
+        case .insertBorders(let bivs):
+            .removeBorders(borderIndexes: bivs.map { $0.index })
+        case .removeBorders(let bis):
+            .insertBorders(bis.map { IndexValue(value: borders[$0], index: $0) })
+        case .insertKeyframes(let kivs):
+            .removeKeyframes(kivs.map { $0.index })
+        case .removeKeyframes(let kis):
+            .insertKeyframes(kis.map { IndexValue(value: animation.keyframes[$0], index: $0) })
         case .setKeyframeOptions(let kvs):
             .setKeyframeOptions(kvs.map {
                 IndexValue(value: animation.keyframes[$0.index].option,
@@ -3495,7 +3446,15 @@ extension Sheet: HisotryOwner {
             })
         case .setRootKeyframeI:
             .setRootKeyframeI(animation.rootIndex)
-        case .insertKeyLines: nil
+        case .insertKeyLines(let kivs):
+            .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                  index: $0.index) })
+        case .removeKeyLines(let kvs):
+            .insertKeyLines(kvs.map { kv in
+                let lines = animation.keyframes[kv.index].picture.lines
+                let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
+                return IndexValue(value: livs, index: kv.index)
+            })
         case .replaceKeyLines(let kvs):
             .replaceKeyLines(kvs.map {
                 let lines = animation.keyframes[$0.index].picture.lines
@@ -3503,8 +3462,15 @@ extension Sheet: HisotryOwner {
                                                         index: $0.index) }
                 return IndexValue(value: oldLIVs, index: $0.index)
             })
-        case .removeKeyLines: nil
-        case .insertKeyPlanes: nil
+        case .insertKeyPlanes(let kivs):
+            .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                   index: $0.index) })
+        case .removeKeyPlanes(let kvs):
+            .insertKeyPlanes(kvs.map { kv in
+                let planes = animation.keyframes[kv.index].picture.planes
+                let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
+                return IndexValue(value: pivs, index: kv.index)
+            })
         case .replaceKeyPlanes(let kvs):
             .replaceKeyPlanes(kvs.map {
                 let planes = animation.keyframes[$0.index].picture.planes
@@ -3512,11 +3478,24 @@ extension Sheet: HisotryOwner {
                                                         index: $0.index) }
                 return IndexValue(value: oldPIVs, index: $0.index)
             })
-        case .removeKeyPlanes: nil
-        case .insertDraftKeyLines: nil
-        case .removeDraftKeyLines: nil
-        case .insertDraftKeyPlanes: nil
-        case .removeDraftKeyPlanes: nil
+        case .insertDraftKeyLines(let kivs):
+            .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                       index: $0.index) })
+        case .removeDraftKeyLines(let kvs):
+            .insertDraftKeyLines(kvs.map { kv in
+                let lines = animation.keyframes[kv.index].draftPicture.lines
+                let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
+                return IndexValue(value: livs, index: kv.index)
+            })
+        case .insertDraftKeyPlanes(let kivs):
+            .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                        index: $0.index) })
+        case .removeDraftKeyPlanes(let kvs):
+            .insertDraftKeyPlanes(kvs.map { kv in
+                let planes = animation.keyframes[kv.index].draftPicture.planes
+                let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
+                return IndexValue(value: pivs, index: kv.index)
+            })
         case .setLineIDs(let kvs):
             .setLineIDs(kvs.map {
                 let lines = animation.keyframes[$0.index].picture.lines
@@ -3526,18 +3505,24 @@ extension Sheet: HisotryOwner {
             })
         case .setAnimationOption:
             .setAnimationOption(animation.option)
-        case .insertNotes: nil
+        case .insertNotes(let nivs):
+            .removeNotes(noteIndexes: nivs.map { $0.index })
+        case .removeNotes(let nis):
+            .insertNotes(nis.map { IndexValue(value: score.notes[$0], index: $0) })
         case .replaceNotes(let nivs):
             .replaceNotes(nivs.map { IndexValue(value: score.notes[$0.index],
                                                 index: $0.index) })
-        case .removeNotes: nil
-        case .insertDraftNotes: nil
-        case .removeDraftNotes: nil
-        case .insertContents: nil
+        case .insertDraftNotes(let nivs):
+            .removeDraftNotes(noteIndexes: nivs.map { $0.index })
+        case .removeDraftNotes(let nis):
+            .insertDraftNotes(nis.map { IndexValue(value: score.draftNotes[$0], index: $0) })
+        case .insertContents(let civs):
+            .removeContents(contentIndexes: civs.map { $0.index })
+        case .removeContents(let cis):
+            .insertContents(cis.map { IndexValue(value: contents[$0], index: $0) })
         case .replaceContents(let civs):
             .replaceContents(civs.map { IndexValue(value: contents[$0.index],
                                                    index: $0.index) })
-        case .removeContents: nil
         case .setScoreOption:
             .setScoreOption(score.option)
         case .setSheetOption:

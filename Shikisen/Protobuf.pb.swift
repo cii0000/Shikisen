@@ -2602,6 +2602,20 @@ nonisolated struct PBLineArray: Sendable {
   init() {}
 }
 
+nonisolated struct PBLineArrayIndexValue: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var value: [PBLine] = []
+
+  var index: Int64 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 nonisolated struct PBPlaneArray: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2848,6 +2862,16 @@ nonisolated struct PBKeyframeOptionIndexValueArray: Sendable {
   init() {}
 }
 
+nonisolated struct Empty: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
 nonisolated struct PBSheetUndoItem: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2863,12 +2887,28 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .appendLine(newValue)}
   }
 
+  var removeLastLine: Empty {
+    get {
+      if case .removeLastLine(let v)? = value {return v}
+      return Empty()
+    }
+    set {value = .removeLastLine(newValue)}
+  }
+
   var appendKeyLine: PBLineIndexValue {
     get {
       if case .appendKeyLine(let v)? = value {return v}
       return PBLineIndexValue()
     }
     set {value = .appendKeyLine(newValue)}
+  }
+
+  var removeKeyLastLine: Int64 {
+    get {
+      if case .removeKeyLastLine(let v)? = value {return v}
+      return 0
+    }
+    set {value = .removeKeyLastLine(newValue)}
   }
 
   var appendLines: PBLineArray {
@@ -2935,12 +2975,20 @@ nonisolated struct PBSheetUndoItem: Sendable {
     set {value = .removeLastLines(newValue)}
   }
 
-  var removeLastKeyLines: PBIntIndexValue {
+  var appendKeyLines: PBLineArrayIndexValue {
     get {
-      if case .removeLastKeyLines(let v)? = value {return v}
+      if case .appendKeyLines(let v)? = value {return v}
+      return PBLineArrayIndexValue()
+    }
+    set {value = .appendKeyLines(newValue)}
+  }
+
+  var removeKeyLastLines: PBIntIndexValue {
+    get {
+      if case .removeKeyLastLines(let v)? = value {return v}
       return PBIntIndexValue()
     }
-    set {value = .removeLastKeyLines(newValue)}
+    set {value = .removeKeyLastLines(newValue)}
   }
 
   var removeLines: PBInt64Array {
@@ -3307,7 +3355,9 @@ nonisolated struct PBSheetUndoItem: Sendable {
 
   nonisolated enum OneOf_Value: Equatable, Sendable {
     case appendLine(PBLine)
+    case removeLastLine(Empty)
     case appendKeyLine(PBLineIndexValue)
+    case removeKeyLastLine(Int64)
     case appendLines(PBLineArray)
     case appendPlanes(PBPlaneArray)
     case insertLines(PBLineIndexValueArray)
@@ -3316,7 +3366,8 @@ nonisolated struct PBSheetUndoItem: Sendable {
     case replaceKeyLines(PBLineIndexValueArrayIndexValueArray)
     case setLineIds(PBInterOptionIndexValueArrayIndexValueArray)
     case removeLastLines(Int64)
-    case removeLastKeyLines(PBIntIndexValue)
+    case appendKeyLines(PBLineArrayIndexValue)
+    case removeKeyLastLines(PBIntIndexValue)
     case removeLines(PBInt64Array)
     case removeKeyLines(PBIntArrayIndexValueArray)
     case insertPlanes(PBPlaneIndexValueArray)
@@ -7843,6 +7894,41 @@ nonisolated extension PBLineArray: SwiftProtobuf.Message, SwiftProtobuf._Message
   }
 }
 
+nonisolated extension PBLineArrayIndexValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBLineArrayIndexValue"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}index\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.index) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.value.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.value, fieldNumber: 1)
+    }
+    if self.index != 0 {
+      try visitor.visitSingularInt64Field(value: self.index, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: PBLineArrayIndexValue, rhs: PBLineArrayIndexValue) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.index != rhs.index {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension PBPlaneArray: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBPlaneArray"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0")
@@ -8458,9 +8544,28 @@ nonisolated extension PBKeyframeOptionIndexValueArray: SwiftProtobuf.Message, Sw
   }
 }
 
+nonisolated extension Empty: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "Empty"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Empty, rhs: Empty) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheetUndoItem"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}appendLine\0\u{1}appendLines\0\u{1}appendPlanes\0\u{1}removeLastLines\0\u{1}removeLastPlanes\0\u{1}insertLines\0\u{1}insertPlanes\0\u{1}removeLines\0\u{1}removePlanes\0\u{1}setPlaneValue\0\u{1}changeToDraft\0\u{1}setPicture\0\u{1}insertDraftLines\0\u{1}insertDraftPlanes\0\u{1}removeDraftLines\0\u{1}removeDraftPlanes\0\u{1}setDraftPicture\0\u{1}insertTexts\0\u{1}removeTexts\0\u{1}replaceString\0\u{1}changedColors\0\u{1}insertBorders\0\u{1}removeBorders\0\u{1}setRootKeyframeI\0\u{1}insertKeyframes\0\u{1}removeKeyframes\0\u{1}setKeyframeOptions\0\u{1}insertKeyLines\0\u{1}replaceKeyLines\0\u{1}removeKeyLines\0\u{1}setLineIDs\0\u{1}appendKeyLine\0\u{1}removeLastKeyLines\0\u{1}insertKeyPlanes\0\u{1}removeKeyPlanes\0\u{1}insertDraftKeyLines\0\u{1}removeDraftKeyLines\0\u{1}insertDraftKeyPlanes\0\u{1}removeDraftKeyPlanes\0\u{1}setAnimationOption\0\u{1}replaceKeyPlanes\0\u{1}insertNotes\0\u{1}replaceNotes\0\u{1}removeNotes\0\u{1}setKeyPlaneValues\0\u{1}insertContents\0\u{1}replaceContents\0\u{1}removeContents\0\u{1}setScoreOption\0\u{1}insertDraftNotes\0\u{1}removeDraftNotes\0\u{1}setSheetOption\0\u{1}setSelection\0\u{1}replaceLines\0\u{1}replacePlanes\0\u{1}replaceTexts\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}appendLine\0\u{1}appendLines\0\u{1}appendPlanes\0\u{1}removeLastLines\0\u{1}removeLastPlanes\0\u{1}insertLines\0\u{1}insertPlanes\0\u{1}removeLines\0\u{1}removePlanes\0\u{1}setPlaneValue\0\u{1}changeToDraft\0\u{1}setPicture\0\u{1}insertDraftLines\0\u{1}insertDraftPlanes\0\u{1}removeDraftLines\0\u{1}removeDraftPlanes\0\u{1}setDraftPicture\0\u{1}insertTexts\0\u{1}removeTexts\0\u{1}replaceString\0\u{1}changedColors\0\u{1}insertBorders\0\u{1}removeBorders\0\u{1}setRootKeyframeI\0\u{1}insertKeyframes\0\u{1}removeKeyframes\0\u{1}setKeyframeOptions\0\u{1}insertKeyLines\0\u{1}replaceKeyLines\0\u{1}removeKeyLines\0\u{1}setLineIDs\0\u{1}appendKeyLine\0\u{1}removeKeyLastLines\0\u{1}insertKeyPlanes\0\u{1}removeKeyPlanes\0\u{1}insertDraftKeyLines\0\u{1}removeDraftKeyLines\0\u{1}insertDraftKeyPlanes\0\u{1}removeDraftKeyPlanes\0\u{1}setAnimationOption\0\u{1}replaceKeyPlanes\0\u{1}insertNotes\0\u{1}replaceNotes\0\u{1}removeNotes\0\u{1}setKeyPlaneValues\0\u{1}insertContents\0\u{1}replaceContents\0\u{1}removeContents\0\u{1}setScoreOption\0\u{1}insertDraftNotes\0\u{1}removeDraftNotes\0\u{1}setSheetOption\0\u{1}setSelection\0\u{1}replaceLines\0\u{1}replacePlanes\0\u{1}replaceTexts\0\u{1}appendKeyLines\0\u{1}removeLastLine\0\u{1}removeKeyLastLine\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8869,12 +8974,12 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
         var hadOneofValue = false
         if let current = self.value {
           hadOneofValue = true
-          if case .removeLastKeyLines(let m) = current {v = m}
+          if case .removeKeyLastLines(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.value = .removeLastKeyLines(v)
+          self.value = .removeKeyLastLines(v)
         }
       }()
       case 34: try {
@@ -9176,6 +9281,40 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
           self.value = .replaceTexts(v)
         }
       }()
+      case 57: try {
+        var v: PBLineArrayIndexValue?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .appendKeyLines(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .appendKeyLines(v)
+        }
+      }()
+      case 58: try {
+        var v: Empty?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .removeLastLine(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .removeLastLine(v)
+        }
+      }()
+      case 59: try {
+        var v: Int64?
+        try decoder.decodeSingularInt64Field(value: &v)
+        if let v = v {
+          if self.value != nil {try decoder.handleConflictingOneOf()}
+          self.value = .removeKeyLastLine(v)
+        }
+      }()
       default: break
       }
     }
@@ -9315,8 +9454,8 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
       guard case .appendKeyLine(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 32)
     }()
-    case .removeLastKeyLines?: try {
-      guard case .removeLastKeyLines(let v)? = self.value else { preconditionFailure() }
+    case .removeKeyLastLines?: try {
+      guard case .removeKeyLastLines(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 33)
     }()
     case .insertKeyPlanes?: try {
@@ -9410,6 +9549,18 @@ nonisolated extension PBSheetUndoItem: SwiftProtobuf.Message, SwiftProtobuf._Mes
     case .replaceTexts?: try {
       guard case .replaceTexts(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 56)
+    }()
+    case .appendKeyLines?: try {
+      guard case .appendKeyLines(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 57)
+    }()
+    case .removeLastLine?: try {
+      guard case .removeLastLine(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 58)
+    }()
+    case .removeKeyLastLine?: try {
+      guard case .removeKeyLastLine(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularInt64Field(value: v, fieldNumber: 59)
     }()
     case nil: break
     }

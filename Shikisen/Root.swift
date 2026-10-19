@@ -501,27 +501,17 @@ extension WorldUndoItem: UndoItem {
         case .setSelection: "setSelection"
         }
     }
-    var type: UndoItemType {
+    var isRequiredEncodable: Bool {
         switch self {
-        case .insertSheets: .reversible
-        case .removeSheets: .unreversible
-        case .setSelection: .lazyReversible
-        }
-    }
-    func reversed() -> Self? {
-        switch self {
-        case .insertSheets(let shps):
-            .removeSheets(shps.map { $0.key })
-        case .removeSheets:
-            nil
-        case .setSelection:
-            self
+        case .insertSheets: true
+        case .removeSheets: false
+        case .setSelection: true
         }
     }
 }
 typealias WorldHistory = History<WorldUndoItem>
 extension World: HisotryOwner {
-    func canLoad(redo item: WorldUndoItem) -> Bool {
+    func canLoad(from item: WorldUndoItem) -> Bool {
         switch item {
         case .insertSheets(let sids):
             sids.allSatisfy { sheetIDs[$0.key] == $0.value }
@@ -531,17 +521,19 @@ extension World: HisotryOwner {
             self.selection == selection
         }
     }
-    func canLoad(undo item: WorldUndoItem) -> Bool {
+    func canLoad(to item: WorldUndoItem) -> Bool {
         switch item {
         case .insertSheets: true
         case .removeSheets: true
         case .setSelection: true
         }
     }
-    func reversed(undo item: WorldUndoItem) -> WorldUndoItem? {
+    func reversed(_ item: WorldUndoItem) -> WorldUndoItem {
         switch item {
-        case .insertSheets: nil
-        case .removeSheets: nil
+        case .insertSheets(let shps):
+            .removeSheets(shps.map { $0.key })
+        case .removeSheets(let shps):
+            .insertSheets(shps.reduce(into: .init()) { $0[$1] = sheetIDs[$1] })
         case .setSelection:
             .setSelection(selection)
         }

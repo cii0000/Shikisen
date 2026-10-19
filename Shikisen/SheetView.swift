@@ -3470,29 +3470,23 @@ final class SheetView: View, @unchecked Sendable {
         history.newUndoGroup()
     }
     
-    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
+    private func cap(undo undoItem: SheetUndoItem) {
         if model.animation.isEnabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
-        history.append(undo: undoItem, redo: redoItem)
+        history.append(undo: undoItem, redo: model.reversed(undoItem))
     }
-    private func cap(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
-                     rootKI: Int) {
-        history.set(first: .setRootKeyframeI(rootKI))
-        history.append(undo: undoItem, redo: redoItem)
-    }
-    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem) {
+    private func set(_ redoItem: SheetUndoItem) {
         if model.animation.isEnabled {
             history.set(first: .setRootKeyframeI(model.animation.rootIndex))
         }
-        history.append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        history.append(undo: model.reversed(redoItem), redo: redoItem)
+        update(redoItem)
     }
-    private func set(undo undoItem: SheetUndoItem, redo redoItem: SheetUndoItem,
-                     rootKI: Int) {
+    private func set(_ redoItem: SheetUndoItem, rootKI: Int) {
         history.set(first: .setRootKeyframeI(rootKI))
-        history.append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+        history.append(undo: model.reversed(redoItem), redo: redoItem)
+        update(redoItem)
     }
     @discardableResult
     func undo(to toTopIndex: Int,
@@ -3501,7 +3495,7 @@ final class SheetView: View, @unchecked Sendable {
         var rect = Rect?.none, nodes = [Node]()
         let results = history.undoResults(to: toTopIndex)
         for result in results {
-            let (aRect, aNodes) = set(try history.undoItem(with: result, model),
+            let (aRect, aNodes) = update(try history.undoItem(with: result, model),
                                       isMakeRect: isMakeRect, isSleep: isSleep)
             rect += aRect
             nodes += aNodes
@@ -3509,9 +3503,9 @@ final class SheetView: View, @unchecked Sendable {
         return (rect, nodes)
     }
     @discardableResult
-    func set(_ item: SheetUndoItem,
-             isMakeRect: Bool = false,
-             isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
+    func update(_ item: SheetUndoItem,
+                isMakeRect: Bool = false,
+                isSleep: Bool = false) -> (rect: Rect?, nodes: [Node]) {
         selectedTextView = nil
         stop()
         
@@ -3524,10 +3518,27 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 return (rect(local: lineView.node.bounds), [])
             }
+        case .removeLastLine:
+            if isMakeRect {
+                let rect = rect(local: linesView.elementViews.last!.node.bounds)
+                removeLastLinesNode(count: 1)
+                return (rect, [])
+            } else {
+                removeLastLinesNode(count: 1)
+            }
         case .appendKeyLine(let kv):
             let lineView = appendNode(kv.value, atKeyframe: kv.index)
             if isMakeRect {
                 return (rect(local: lineView.node.bounds), [])
+            }
+        case .removeKeyLastLine(let ki):
+            if isMakeRect {
+                let rect = rect(local: animationView.elementViews[ki]
+                    .linesView.elementViews.last!.node.bounds)
+                removeLastLinesNode(count: 1, atKeyframe: ki)
+                return (rect, [])
+            } else {
+                removeLastLinesNode(count: 1, atKeyframe: ki)
             }
         case .appendLines(let lines):
             appendNode(lines)
@@ -3559,19 +3570,34 @@ final class SheetView: View, @unchecked Sendable {
             if isMakeRect {
                 let rect = linesView.elementViews[(linesView.elementViews.count - count)...]
                     .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
-                removeLastsLineNode(count: count)
+                removeLastLinesNode(count: count)
                 return (rect, [])
             } else {
-                removeLastsLineNode(count: count)
+                removeLastLinesNode(count: count)
             }
-        case .removeLastKeyLines(let countKV):
+        case .appendKeyLines(let kv):
+            appendNode(kv.value, atKeyframe: kv.index)
+            for lineView in animationView.elementViews[kv.index]
+                .linesView.elementViews.suffix(kv.value.count) {
+                lineView.isHiddenPoints = animationView.editGrid != .full
+            }
+            animationView.updateTimelineAtCurrentKeyframe()
+            
             if isMakeRect {
-                let rect = linesView.elementViews[(linesView.elementViews.count - countKV.value)...]
+                let rect = animationView.elementViews[kv.index]
+                    .linesView.elementViews.suffix(kv.value.count)
                     .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
-                removeLastsLineNode(count: countKV.value)
+                return (rect, [])
+            }
+        case .removeKeyLastLines(let countKV):
+            if isMakeRect {
+                let rect = animationView.elementViews[countKV.index]
+                    .linesView.elementViews.suffix(countKV.value)
+                    .reduce(into: Rect?.none) { $0 += rect(local: $1.node.bounds) }
+                removeLastLinesNode(count: countKV.value, atKeyframe: countKV.index)
                 return (rect, [])
             } else {
-                removeLastsLineNode(count: countKV.value)
+                removeLastLinesNode(count: countKV.value, atKeyframe: countKV.index)
             }
         case .removeLines(let lis):
             if isMakeRect {
@@ -4469,8 +4495,15 @@ final class SheetView: View, @unchecked Sendable {
     private func appendNode(_ lines: [Line]) {
         linesView.append(lines)
     }
-    private func removeLastsLineNode(count: Int) {
+    private func appendNode(_ lines: [Line], atKeyframe ki: Int) {
+        animationView.elementViews[ki].linesView.append(lines)
+    }
+    private func removeLastLinesNode(count: Int) {
         linesView.removeLasts(count: count)
+        animationView.updateTimelineAtCurrentKeyframe()
+    }
+    private func removeLastLinesNode(count: Int, atKeyframe ki: Int) {
+        animationView.elementViews[ki].linesView.removeLasts(count: count)
         animationView.updateTimelineAtCurrentKeyframe()
     }
     private func removeLinesNode(at lineIndexes: [Int]) {
@@ -4801,19 +4834,18 @@ final class SheetView: View, @unchecked Sendable {
     }
     
     func append(_ line: Line) {
-        set(undo: .removeLastLines(count: 1), redo: .appendLine(line))
+        set(.appendLine(line))
     }
     func append(_ line: Line, atRoot rootKI: Int) {
-        let ki = model.animation.index(atRoot: rootKI)
-        set(undo: .removeLastKeyLines(.init(value: 1, index: ki)),
-            redo: .appendKeyLine(.init(value: line, index: ki)),
+        set(.appendKeyLine(.init(value: line,
+                                       index: model.animation.index(atRoot: rootKI))),
             rootKI: rootKI)
     }
     func append(_ lines: [Line]) {
         if lines.count == 1 {
             append(lines[0])
         } else {
-            set(undo: .removeLastLines(count: lines.count), redo: .appendLines(lines))
+            set(.appendLines(lines))
         }
     }
     func append(_ kvs: [IndexValue<[Line]>]) {
@@ -4827,79 +4859,53 @@ final class SheetView: View, @unchecked Sendable {
         insertKeyLines(vs)
     }
     func insert(_ livs: [IndexValue<Line>]) {
-        set(undo: .removeLines(lineIndexes: livs.map { $0.index }),
-            redo: .insertLines(livs))
+        set(.insertLines(livs))
     }
     func insertKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             insert(kvs[0].value)
-            return
+        } else {
+            set(.insertKeyLines(kvs))
         }
-        
-        let ovs = kvs.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        set(undo: .removeKeyLines(ovs), redo: .insertKeyLines(kvs))
     }
     func replace(_ line: Line, at i: Int) {
         replace(IndexValue(value: line, index: i))
     }
     func replace(_ liv: IndexValue<Line>) {
-        set(undo: .replaceLines([IndexValue(value: model.picture.lines[liv.index],
-                                            index: liv.index)]),
-            redo: .replaceLines([liv]))
+        set(.replaceLines([liv]))
     }
     func replace(_ livs: [IndexValue<Line>]) {
-        set(undo: .replaceLines(livs.map { .init(value: model.picture.lines[$0.index],
-                                                 index: $0.index) }),
-            redo: .replaceLines(livs))
+        set(.replaceLines(livs))
     }
     func replaceKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             replace(kvs[0].value)
-            return
+        } else {
+            set(.replaceKeyLines(kvs))
         }
-        
-        let ovs = kvs.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let livs = kv.value.map { IndexValue(value: lines[$0.index], index: $0.index) }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        set(undo: .replaceKeyLines(ovs), redo: .replaceKeyLines(kvs))
     }
     func capture(old oldLine: Line, at i: Int) {
         capture(old: IndexValue(value: oldLine, index: i))
     }
     func capture(old oldLIV: IndexValue<Line>) {
-        cap(undo: .replaceLines([oldLIV]),
-            redo: .replaceLines([IndexValue(value: model.picture.lines[oldLIV.index],
-                                            index: oldLIV.index)]))
+        cap(undo: .replaceLines([oldLIV]))
     }
     func capture(old oldLIVs: [IndexValue<Line>]) {
-        cap(undo: .replaceLines(oldLIVs),
-            redo: .replaceLines(oldLIVs.map { .init(value: model.picture.lines[$0.index],
-                                                    index: $0.index) }))
+        cap(undo: .replaceLines(oldLIVs))
     }
     func removeLines(at lis: [Int]) {
-        let livs = lis.map { IndexValue(value: model.picture.lines[$0], index: $0) }
-        set(undo: .insertLines(livs), redo: .removeLines(lineIndexes: lis))
+        set(.removeLines(lineIndexes: lis))
     }
     func removeKeyLines(_ kvs: [IndexValue<[Int]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             removeLines(at: kvs[0].value)
-            return
+        } else {
+            set(.removeKeyLines(kvs))
         }
-        
-        let ovs = kvs.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        set(undo: .insertKeyLines(ovs), redo: .removeKeyLines(kvs))
     }
     
     func append(_ planes: [Plane]) {
-        set(undo: .removeLastPlanes(count: planes.count), redo: .appendPlanes(planes))
+        set(.appendPlanes(planes))
     }
     func append(_ kvs: [IndexValue<[Plane]>]) {
         let vs = kvs.map { kv in
@@ -4912,92 +4918,56 @@ final class SheetView: View, @unchecked Sendable {
         insertKeyPlanes(vs)
     }
     func insert(_ pivs: [IndexValue<Plane>]) {
-        set(undo: .removePlanes(planeIndexes: pivs.map { $0.index }),
-            redo: .insertPlanes(pivs))
+        set(.insertPlanes(pivs))
     }
     func insertKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             insert(kvs[0].value)
-            return
+        } else {
+            set(.insertKeyPlanes(kvs))
         }
-        
-        let okvs = kvs.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        set(undo: .removeKeyPlanes(okvs), redo: .insertKeyPlanes(kvs))
     }
     func replace(_ plane: Plane, at i: Int) {
         replace(IndexValue(value: plane, index: i))
     }
     func replace(_ piv: IndexValue<Plane>) {
-        set(undo: .replacePlanes([IndexValue(value: model.picture.planes[piv.index],
-                                             index: piv.index)]),
-            redo: .replacePlanes([piv]))
+        set(.replacePlanes([piv]))
     }
     func replace(_ pivs: [IndexValue<Plane>]) {
-        set(undo: .replacePlanes(pivs.map { .init(value: model.picture.planes[$0.index],
-                                                  index: $0.index) }),
-            redo: .replacePlanes(pivs))
+        set(.replacePlanes(pivs))
     }
     func replaceKeyPlanes(_ kvs: [IndexValue<[IndexValue<Plane>]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             replace(kvs[0].value)
-            return
+        } else {
+            set(.replaceKeyPlanes(kvs))
         }
-        
-        let okvs = kvs.map { kv in
-            let planes = model.animation.keyframes[kv.index].picture.planes
-            let pivs = kv.value.map {
-                IndexValue(value: planes[$0.index], index: $0.index)
-            }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        set(undo: .replaceKeyPlanes(okvs), redo: .replaceKeyPlanes(kvs))
     }
     func capture(old oldPlane: Plane, at i: Int) {
         capture(old: IndexValue(value: oldPlane, index: i))
     }
     func capture(old oldPIV: IndexValue<Plane>) {
-        cap(undo: .replacePlanes([oldPIV]),
-            redo: .replacePlanes([IndexValue(value: model.picture.planes[oldPIV.index],
-                                             index: oldPIV.index)]))
+        cap(undo: .replacePlanes([oldPIV]))
     }
     func capture(old oldPIVs: [IndexValue<Plane>]) {
-        cap(undo: .replacePlanes(oldPIVs),
-            redo: .replacePlanes(oldPIVs.map { .init(value: model.picture.planes[$0.index],
-                                                     index: $0.index) }))
+        cap(undo: .replacePlanes(oldPIVs))
     }
     func removePlanes(at pis: [Int]) {
-        let pivs = pis.map { IndexValue(value: model.picture.planes[$0], index: $0) }
-        set(undo: .insertPlanes(pivs), redo: .removePlanes(planeIndexes: pis))
+        set(.removePlanes(planeIndexes: pis))
     }
     func removeKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
         if kvs.count == 1 && kvs[0].index == model.animation.index {
             removePlanes(at: kvs[0].value)
-            return
+        } else {
+            set(.removeKeyPlanes(kvs))
         }
-        
-        let okvs = kvs.map { kv in
-            let planes = model.animation.keyframes[kv.index].picture.planes
-            let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        set(undo: .insertKeyPlanes(okvs), redo: .removeKeyPlanes(kvs))
     }
     
     func set(_ planeValue: PlaneValue) {
-        set(undo: .setPlaneValue(model.currentPlaneValue(from: planeValue,
-                                                         in: model.picture)),
-            redo: .setPlaneValue(planeValue))
+        set(.setPlaneValue(planeValue))
     }
     func set(_ pvkvs: [IndexValue<PlaneValue>]) {
-        let oldPVKVs = pvkvs.map {
-            let picture = model.animation.keyframes[$0.index].picture
-            let oldPlaneValue = model.currentPlaneValue(from: $0.value, in: picture)
-            return IndexValue(value: oldPlaneValue, index: $0.index)
-        }
-        set(undo: .setKeyPlaneValues(oldPVKVs),
-            redo: .setKeyPlaneValues(pvkvs))
+        set(.setKeyPlaneValues(pvkvs))
     }
     
     func appendDraftKeyLines(_ kvs: [IndexValue<[Line]>]) {
@@ -5011,38 +4981,19 @@ final class SheetView: View, @unchecked Sendable {
         insertDraftKeyLines(nkvs)
     }
     func insertDraft(_ livs: [IndexValue<Line>]) {
-        set(undo: .removeDraftLines(lineIndexes: livs.map { $0.index }),
-            redo: .insertDraftLines(livs))
+        set(.insertDraftLines(livs))
     }
     func insertDraftKeyLines(_ kvs: [IndexValue<[IndexValue<Line>]>]) {
-        let okvs = kvs.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        set(undo: .removeDraftKeyLines(okvs), redo: .insertDraftKeyLines(kvs))
+        set(.insertDraftKeyLines(kvs))
     }
     func set(_ kvs: [IndexValue<[IndexValue<InterOption>]>]) {
-        let okvs = kvs.map { kv in
-            let lines = model.animation.keyframes[kv.index].picture.lines
-            let iovs = kv.value.map {
-                IndexValue(value: lines[$0.index].interOption, index: $0.index)
-            }
-            return IndexValue(value: iovs, index: kv.index)
-        }
-        set(undo: .setLineIDs(okvs), redo: .setLineIDs(kvs))
+        set(.setLineIDs(kvs))
     }
     func removeDraftLines(at lis: [Int]) {
-        let livs = lis.map {
-            IndexValue(value: model.draftPicture.lines[$0], index: $0)
-        }
-        set(undo: .insertDraftLines(livs), redo: .removeDraftLines(lineIndexes: lis))
+        set(.removeDraftLines(lineIndexes: lis))
     }
     func removeDraftKeyLines(_ kvs: [IndexValue<[Int]>]) {
-        let okvs = kvs.map { kv in
-            let lines = model.animation.keyframes[kv.index].draftPicture.lines
-            let livs = kv.value.map { IndexValue(value: lines[$0], index: $0) }
-            return IndexValue(value: livs, index: kv.index)
-        }
-        set(undo: .insertDraftKeyLines(okvs), redo: .removeDraftKeyLines(kvs))
+        set(.removeDraftKeyLines(kvs))
     }
     
     func appendDraftKeyPlanes(_ kvs: [IndexValue<[Plane]>]) {
@@ -5056,159 +5007,118 @@ final class SheetView: View, @unchecked Sendable {
         insertKeyPlanes(nkvs)
     }
     func insertDraft(_ pivs: [IndexValue<Plane>]) {
-        set(undo: .removeDraftPlanes(planeIndexes: pivs.map { $0.index }),
-            redo: .insertDraftPlanes(pivs))
+        set(.insertDraftPlanes(pivs))
     }
     func insertDraftKeyPlanes(_ values: [IndexValue<[IndexValue<Plane>]>]) {
-        let ovs = values.map { kv in
-            IndexValue(value: kv.value.map { $0.index }, index: kv.index)
-        }
-        set(undo: .removeDraftKeyPlanes(ovs), redo: .insertDraftKeyPlanes(values))
+        set(.insertDraftKeyPlanes(values))
     }
     func removeDraftPlanes(at pis: [Int]) {
-        let pivs = pis.map {
-            IndexValue(value: model.draftPicture.planes[$0], index: $0)
-        }
-        set(undo: .insertDraftPlanes(pivs), redo: .removeDraftPlanes(planeIndexes: pis))
+        set(.removeDraftPlanes(planeIndexes: pis))
     }
     func removeDraftKeyPlanes(_ kvs: [IndexValue<[Int]>]) {
-        let ovs = kvs.map { kv in
-            let planes = model.animation.keyframes[kv.index].draftPicture.planes
-            let pivs = kv.value.map { IndexValue(value: planes[$0], index: $0) }
-            return IndexValue(value: pivs, index: kv.index)
-        }
-        set(undo: .insertDraftKeyPlanes(ovs), redo: .removeDraftKeyPlanes(kvs))
+        set(.removeDraftKeyPlanes(kvs))
     }
     
     func set(_ picture: Picture) {
-        set(undo: .setPicture(model.picture), redo: .setPicture(picture))
+        set(.setPicture(picture))
     }
     func removeDraft() {
         setDraft(Picture())
     }
     func setDraft(_ draftPicture: Picture) {
-        set(undo: .setDraftPicture(model.draftPicture), redo: .setDraftPicture(draftPicture))
+        set(.setDraftPicture(draftPicture))
     }
     func changeToDraft() {
         if !model.draftPicture.isEmpty {
             removeDraft()
         }
-        set(undo: .changeToDraft(isReverse: true), redo: .changeToDraft(isReverse: false))
+        set(.changeToDraft(isReverse: false))
     }
     
     func set(_ cv: ColorValue, oldColorValue: ColorValue) {//
-        set(undo: .changedColors(oldColorValue),
-            redo: .changedColors(cv))
+        set(.changedColors(cv))
     }
     func set(_ cv: ColorValue) {
-        set(undo: .changedColors(model.currentColorValue(from: cv)),
-            redo: .changedColors(cv))
+        set(.changedColors(cv))
     }
     func capture(_ cv: ColorValue, old oldCV: ColorValue) {
-        cap(undo: .changedColors(oldCV),
-            redo: .changedColors(cv))
+        cap(undo: .changedColors(oldCV))
     }
     
     func insert(_ kivs: [IndexValue<Keyframe>]) {
-        set(undo: .removeKeyframes(kivs.map { $0.index }),
-            redo: .insertKeyframes(kivs))
+        set(.insertKeyframes(kivs))
     }
     func set(_ koivs: [IndexValue<KeyframeOption>]) {
-        let keyframes = model.animation.keyframes
-        let okoivs = koivs.map { IndexValue(value: keyframes[$0.index].option,
-                                            index: $0.index) }
-        set(undo: .setKeyframeOptions(okoivs), redo: .setKeyframeOptions(koivs))
+        set(.setKeyframeOptions(koivs))
     }
     func set(keyframeBeat beat: Rational, at ki: Int) {
         let ko = model.animation.keyframes[ki].option
-        set(undo: .setKeyframeOptions([IndexValue(value: ko, index: ki)]),
-            redo: .setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
+        set(.setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
     }
     func capture(keyframeBeat beat: Rational, oldBeat: Rational, at ki: Int) {
         let ko = model.animation.keyframes[ki].option
-        cap(undo: .setKeyframeOptions([IndexValue(value: ko.with(beat: oldBeat), index: ki)]),
-            redo: .setKeyframeOptions([IndexValue(value: ko.with(beat: beat), index: ki)]))
+        cap(undo: .setKeyframeOptions([IndexValue(value: ko.with(beat: oldBeat), index: ki)]))
     }
     func capture(old okoivs: [IndexValue<KeyframeOption>]) {
-        let koivs = okoivs.map {
-            IndexValue(value: animationView.model.keyframes[$0.index].option, index: $0.index)
-        }
-        cap(undo: .setKeyframeOptions(okoivs), redo: .setKeyframeOptions(koivs))
+        cap(undo: .setKeyframeOptions(okoivs))
     }
     func removeKeyframes(at kis: [Int]) {
-        let kivs = kis.map { IndexValue(value: model.animation.keyframes[$0], index: $0) }
-        set(undo: .insertKeyframes(kivs), redo: .removeKeyframes(kis))
+        set(.removeKeyframes(kis))
     }
     
     func set(_ option: AnimationOption) {
-        set(undo: .setAnimationOption(model.animation.option),
-            redo: .setAnimationOption(option))
+        set(.setAnimationOption(option))
     }
     func capture(old oldOption: AnimationOption) {
-        cap(undo: .setAnimationOption(oldOption),
-            redo: .setAnimationOption(model.animation.option))
+        cap(undo: .setAnimationOption(oldOption))
     }
     
     func append(_ text: Text) {
-        set(undo: .removeTexts([model.texts.count]),
-            redo: .insertTexts([.init(value: text, index: model.texts.count)]))
+        set(.insertTexts([.init(value: text, index: model.texts.count)]))
     }
     func append(_ texts: [Text]) {
-        set(undo: .removeTexts(Array(model.texts.count ..< (model.texts.count + texts.count))),
-            redo: .insertTexts(texts.enumerated().map { IndexValue(value: $0.element, index: model.texts.count + $0.offset) }))
+        set(.insertTexts(texts.enumerated().map { IndexValue(value: $0.element, index: model.texts.count + $0.offset) }))
     }
     func insert(_ tivs: [IndexValue<Text>]) {
-        set(undo: .removeTexts(tivs.map { $0.index }), redo: .insertTexts(tivs))
+        set(.insertTexts(tivs))
     }
     func replace(_ text: Text, at i: Int) {
         replace(IndexValue(value: text, index: i))
     }
     func replace(_ tiv: IndexValue<Text>) {
-        set(undo: .replaceTexts([.init(value: model.texts[tiv.index],
-                                       index: tiv.index)]),
-            redo: .replaceTexts([tiv]))
+        set(.replaceTexts([tiv]))
     }
     func replace(_ tivs: [IndexValue<Text>]) {
-        set(undo: .replaceTexts(tivs.map { .init(value: model.texts[$0.index],
-                                                 index: $0.index) }),
-            redo: .replaceTexts(tivs))
+        set(.replaceTexts(tivs))
     }
     func capture(old oldText: Text, at i: Int) {
         capture(old: IndexValue(value: oldText, index: i))
     }
     func capture(old oldTIV: IndexValue<Text>) {
-        cap(undo: .replaceTexts([oldTIV]),
-            redo: .replaceTexts([IndexValue(value: model.texts[oldTIV.index],
-                                            index: oldTIV.index)]))
+        cap(undo: .replaceTexts([oldTIV]))
     }
     func capture(old oldTIVs: [IndexValue<Text>]) {
-        cap(undo: .replaceTexts(oldTIVs),
-            redo: .replaceTexts(oldTIVs.map { .init(value: model.texts[$0.index],
-                                                    index: $0.index) }))
+        cap(undo: .replaceTexts(oldTIVs))
     }
     func removeText(at ti: Int) {
-        set(undo: .insertTexts([IndexValue(value: model.texts[ti], index: ti)]),
-            redo: .removeTexts([ti]))
+        set(.removeTexts([ti]))
     }
     func removeTexts(at tis: [Int]) {
-        let tivs = tis.map { IndexValue(value: model.texts[$0], index: $0) }
-        set(undo: .insertTexts(tivs), redo: .removeTexts(tis))
+        set(.removeTexts(tis))
     }
     
     func capture(_ ituv: IndexValue<TextValue>, old oituv: IndexValue<TextValue>) {
-        cap(undo: .replaceString(oituv), redo: .replaceString(ituv))
+        cap(undo: .replaceString(oituv))
     }
     func replace(_ tviv: IndexValue<TextValue>) {
-        set(undo: .replaceString(model.currentTextValueIndexValue(tviv)),
-            redo: .replaceString(tviv))
+        set(.replaceString(tviv))
     }
     
     func append(_ note: Note) {
         append([note])
     }
     func append(_ notes: [Note]) {
-        set(undo: .removeNotes(noteIndexes: Array(model.score.notes.count ..< (model.score.notes.count + notes.count))),
-            redo: .insertNotes(notes.enumerated().map {
+        set(.insertNotes(notes.enumerated().map {
             IndexValue(value: $0.element, index: model.score.notes.count + $0.offset)
         }))
     }
@@ -5216,117 +5126,89 @@ final class SheetView: View, @unchecked Sendable {
         captureAppend([note])
     }
     func captureAppend(_ notes: [Note]) {
-        cap(undo: .removeNotes(noteIndexes: Array((model.score.notes.count - notes.count) ..< (model.score.notes.count))),
-            redo: .insertNotes(notes.enumerated().map {
-            IndexValue(value: $0.element, index: model.score.notes.count - notes.count + $0.offset)
-        }))
+        cap(undo: .removeNotes(noteIndexes: Array((model.score.notes.count - notes.count) ..< (model.score.notes.count))))
     }
     func insert(_ nivs: [IndexValue<Note>]) {
-        set(undo: .removeNotes(noteIndexes: nivs.map { $0.index }),
-            redo: .insertNotes(nivs))
+        set(.insertNotes(nivs))
     }
     func capture(_ note: Note, old oldNote: Note, at ni: Int) {
         capture([.init(value: note, index: ni)], old: [.init(value: oldNote, index: ni)])
     }
     func capture(_ values: [IndexValue<Note>], old oldValues: [IndexValue<Note>]) {
-        cap(undo: .replaceNotes(oldValues), redo: .replaceNotes(values))
+        cap(undo: .replaceNotes(oldValues))
     }
     func replace(_ note: Note, at ni: Int) {
         replace([.init(value: note, index: ni)])
     }
     func replace(_ values: [IndexValue<Note>]) {
-        set(undo: .replaceNotes(values.map { IndexValue(value: model.score.notes[$0.index],
-                                                        index: $0.index) }),
-            redo: .replaceNotes(values))
+        set(.replaceNotes(values))
     }
     func removeNote(at i: Int) {
-        set(undo: .insertNotes([IndexValue(value: model.score.notes[i], index: i)]),
-            redo: .removeNotes(noteIndexes: [i]))
+        set(.removeNotes(noteIndexes: [i]))
     }
     func removeNotes(at noteIndexes: [Int]) {
-        let nivs = noteIndexes.map { IndexValue(value: model.score.notes[$0], index: $0) }
-        set(undo: .insertNotes(nivs), redo: .removeNotes(noteIndexes: noteIndexes))
+        set(.removeNotes(noteIndexes: noteIndexes))
     }
     
     func insertDraft(_ nivs: [IndexValue<Note>]) {
-        set(undo: .removeDraftNotes(noteIndexes: nivs.map { $0.index }),
-            redo: .insertDraftNotes(nivs))
+        set(.insertDraftNotes(nivs))
     }
     func removeDraftNotes(at nis: [Int]) {
-        let nivs = nis.map { IndexValue(value: model.score.draftNotes[$0], index: $0) }
-        set(undo: .insertDraftNotes(nivs), redo: .removeDraftNotes(noteIndexes: nis))
+        set(.removeDraftNotes(noteIndexes: nis))
     }
     
     func set(_ option: ScoreOption) {
-        set(undo: .setScoreOption(model.score.option), redo: .setScoreOption(option))
+        set(.setScoreOption(option))
     }
     func capture(old oldOption: ScoreOption) {
-        cap(undo: .setScoreOption(oldOption), redo: .setScoreOption(model.score.option))
+        cap(undo: .setScoreOption(oldOption))
     }
     
     func append(_ content: Content) {
-        set(undo: .removeContents(contentIndexes: [model.contents.count]),
-            redo: .insertContents([IndexValue(value: content, index: model.contents.count)]))
+        set(.insertContents([IndexValue(value: content, index: model.contents.count)]))
     }
     func replace(_ content: Content, at i: Int) {
         replace(IndexValue(value: content, index: i))
     }
     func replace(_ civ: IndexValue<Content>) {
-        set(undo: .replaceContents([IndexValue(value: model.contents[civ.index],
-                                               index: civ.index)]),
-            redo: .replaceContents([civ]))
+        set(.replaceContents([civ]))
     }
     func replace(_ civs: [IndexValue<Content>]) {
-        set(undo: .replaceContents(civs.map { .init(value: model.contents[$0.index],
-                                                    index: $0.index) }),
-            redo: .replaceContents(civs))
+        set(.replaceContents(civs))
     }
     func capture(old oldContent: Content, at i: Int) {
-        cap(undo: .replaceContents([IndexValue(value: oldContent, index: i)]),
-            redo: .replaceContents([IndexValue(value: model.contents[i], index: i)]))
+        cap(undo: .replaceContents([IndexValue(value: oldContent, index: i)]))
     }
     func capture(old oldCIVs: [IndexValue<Content>]) {
-        cap(undo: .replaceContents(oldCIVs),
-            redo: .replaceContents(oldCIVs.map { .init(value: model.contents[$0.index],
-                                                       index: $0.index) }))
+        cap(undo: .replaceContents(oldCIVs))
     }
     func removeContent(at i: Int) {
-        set(undo: .insertContents([IndexValue(value: model.contents[i], index: i)]),
-            redo: .removeContents(contentIndexes: [i]))
+        set(.removeContents(contentIndexes: [i]))
     }
     func removeContents(at cis: [Int]) {
-        let civs = cis.map { IndexValue(value: model.contents[$0], index: $0) }
-        set(undo: .insertContents(civs), redo: .removeContents(contentIndexes: cis))
+        set(.removeContents(contentIndexes: cis))
     }
     
     func removeBorder(at i: Int) {
-        let undoItem = SheetUndoItem.insertBorders([IndexValue(value: model.borders[i],
-                                                               index: i)])
-        let redoItem = SheetUndoItem.removeBorders(borderIndexes: [i])
-        set(undo: undoItem, redo: redoItem)
+        set(.removeBorders(borderIndexes: [i]))
     }
     func capture(_ border: Border, old oldBorder: Border, at i: Int) {
-        let undoItem1 = SheetUndoItem.insertBorders([IndexValue(value: oldBorder, index: i)])
-        let redoItem1 = SheetUndoItem.removeBorders(borderIndexes: [i])
-        cap(undo: undoItem1, redo: redoItem1)
-        
-        let undoItem0 = SheetUndoItem.removeBorders(borderIndexes: [i])
-        let redoItem0 = SheetUndoItem.insertBorders([IndexValue(value: border, index: i)])
-        cap(undo: undoItem0, redo: redoItem0)
+        cap(undo: .insertBorders([IndexValue(value: oldBorder, index: i)]))
+        cap(undo: .removeBorders(borderIndexes: [i]))
     }
     
     func set(_ option: SheetOption) {
-        set(undo: .setSheetOption(model.option), redo: .setSheetOption(option))
+        set(.setSheetOption(option))
     }
     func capture(old oldOption: SheetOption) {
-        cap(undo: .setSheetOption(oldOption), redo: .setSheetOption(model.option))
+        cap(undo: .setSheetOption(oldOption))
     }
     
     func set(_ selection: SheetSelection) {
-        set(undo: .setSelection(model.selection), redo: .setSelection(selection))
+        set(.setSelection(selection))
     }
     func capture(old oldSelection: SheetSelection) {
-        cap(undo: .setSelection(oldSelection), redo: .setSelection(model.selection))
+        cap(undo: .setSelection(oldSelection))
     }
     
     func textTuple(at p: Point, scale: Double) -> (textView: SheetTextView,

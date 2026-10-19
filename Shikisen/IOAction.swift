@@ -1838,7 +1838,7 @@ final class IOAction: Action {
                                 let undoItem = try sheetView.history.undoItem(with: result, sheetView.model)
                                 let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
                                 
-                                sheetView.set(undoItem, isMakeRect: false, isSleep: false)
+                                sheetView.update(undoItem, isMakeRect: false, isSleep: false)
                                 
                                 if !isFirst && isEnabledAnimation {
                                     switch undoItem {

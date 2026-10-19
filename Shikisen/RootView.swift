@@ -609,19 +609,19 @@ final class RootView: View, @unchecked Sendable {
         history.newUndoGroup()
     }
     
-    private func cap(undo undoItem: WorldUndoItem, redo redoItem: WorldUndoItem) {
-        history.append(undo: undoItem, redo: redoItem)
+    private func cap(undo undoItem: WorldUndoItem) {
+        history.append(undo: undoItem, redo: world.reversed(undoItem))
     }
-    private func set(undo undoItem: WorldUndoItem, redo redoItem: WorldUndoItem) {
-        history.append(undo: undoItem, redo: redoItem)
-        set(redoItem)
+    private func set(_ redoItem: WorldUndoItem, enableNode: Bool = true) {
+        history.append(undo: world.reversed(redoItem), redo: redoItem)
+        update(redoItem, enableNode: enableNode)
     }
     @discardableResult
     func undo(to toTopIndex: Int) throws -> Rect? {
         var rect = Rect?.none
         let results = history.undoResults(to: toTopIndex)
         for result in results {
-            if let aRect = set(try history.undoItem(with: result, world),
+            if let aRect = update(try history.undoItem(with: result, world),
                                isMakeRect: true) {
                 rect += aRect
             }
@@ -629,8 +629,8 @@ final class RootView: View, @unchecked Sendable {
         return rect
     }
     @discardableResult
-    private func set(_ item: WorldUndoItem, enableNode: Bool = true,
-                     isMakeRect: Bool = false) -> Rect? {
+    private func update(_ item: WorldUndoItem, enableNode: Bool = true,
+                        isMakeRect: Bool = false) -> Rect? {
         if enableNode {
             switch item {
             case .insertSheets(let sids):
@@ -744,24 +744,17 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     func append(_ sids: [IntPoint: UUID], enableNode: Bool = true) {
-        let undoItem = WorldUndoItem.removeSheets(sids.map { $0.key })
-        let redoItem = WorldUndoItem.insertSheets(sids)
-        cap(undo: undoItem, redo: redoItem)
-        set(redoItem, enableNode: enableNode)
+        set(.insertSheets(sids), enableNode: enableNode)
     }
     func removeSheets(at shps: [IntPoint]) {
-        var sids = [IntPoint: UUID]()
-        shps.forEach {
-            sids[$0] = world.sheetIDs[$0]
-        }
-        set(undo: .insertSheets(sids), redo: .removeSheets(shps))
+        set(.removeSheets(shps))
     }
     
     func set(_ selection: WorldSelection) {
-        set(undo: .setSelection(world.selection), redo: .setSelection(selection))
+        set(.setSelection(selection))
     }
     func capture(old oldSelection: WorldSelection) {
-        cap(undo: .setSelection(oldSelection), redo: .setSelection(world.selection))
+        cap(undo: .setSelection(oldSelection))
     }
     
     struct RestoreError: LocalizedError {
@@ -777,17 +770,18 @@ final class RootView: View, @unchecked Sendable {
         history.allGroups { (_, groups) in
             for group in groups {
                 for udv in group.values {
-                    if let item = udv.loadedRedoItem() {
-                        if case .insertSheets(let sids) = item.undoItem {
+                    func append(_ item: WorldUndoItem) {
+                        if case .insertSheets(let sids) = item {
                             for sid in sids.values {
                                 resetSIDs.remove(sid)
                             }
                         }
-                        if case .insertSheets(let sids) = item.redoItem {
-                            for sid in sids.values {
-                                resetSIDs.remove(sid)
-                            }
-                        }
+                    }
+                    if let undoItem = try? WorldUndoItem(serializedData: udv.undoItemData) {
+                        append(undoItem)
+                    }
+                    if let redoItem = try? WorldUndoItem(serializedData: udv.redoItemData) {
+                        append(redoItem)
                     }
                 }
             }
