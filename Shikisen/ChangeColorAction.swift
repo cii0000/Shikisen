@@ -120,7 +120,7 @@ final class ChangeColorAction: Action {
             let t = Double.linear(isReversed ? maxLightness : Color.minLightness,
                                   isReversed ? Color.minLightness : maxLightness,
                                   t: Double($0) * rCount)
-            return Color(lightness: t, unsafetyChroma: chroma, hue: hue)
+            return Color(lightness: t, unclipChroma: chroma, hue: hue)
         }
     }
     private func opacityPointsWith(splitCount count: Int = 100) -> [Point] {
@@ -1562,13 +1562,13 @@ final class ChangeColorAction: Action {
             }
         }
     }
-    func updateTintNode(unsafetyChroma: Double = 128, splitCount: Int = 360) {
+    func updateTintNode(unclipChroma: Double = 128, splitCount: Int = 360) {
         let rsc = 1 / Double(splitCount)
         var points = [Point](), colors = [Color]()
         for i in 0 ..< splitCount {
             let hue = Double(i) * rsc * .pi2
             let color = Color(lightness: tintLightness,
-                              unsafetyChroma: unsafetyChroma,
+                              unclipChroma: unclipChroma,
                               hue: hue)
             var tint = color.tint
             tint.r *= tintR / maxTint

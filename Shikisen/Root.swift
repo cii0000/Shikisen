@@ -494,13 +494,6 @@ extension WorldUndoItem: Protobuf {
     }
 }
 extension WorldUndoItem: UndoItem {
-    var caseName: String {
-        switch self {
-        case .insertSheets: "insertSheets"
-        case .removeSheets: "removeSheets"
-        case .setSelection: "setSelection"
-        }
-    }
     var isRequiredEncodable: Bool {
         switch self {
         case .insertSheets: true
@@ -508,10 +501,21 @@ extension WorldUndoItem: UndoItem {
         case .setSelection: true
         }
     }
+    
+    func reversed() -> Self? {
+        switch self {
+        case .insertSheets(let shps):
+            .removeSheets(shps.map { $0.key })
+        case .removeSheets:
+            nil
+        case .setSelection:
+            nil
+        }
+    }
 }
 typealias WorldHistory = History<WorldUndoItem>
 extension World: HisotryOwner {
-    func canLoad(from item: WorldUndoItem) -> Bool {
+    func canSet(from item: WorldUndoItem) -> Bool {
         switch item {
         case .insertSheets(let sids):
             sids.allSatisfy { sheetIDs[$0.key] == $0.value }
@@ -521,7 +525,7 @@ extension World: HisotryOwner {
             self.selection == selection
         }
     }
-    func canLoad(to item: WorldUndoItem) -> Bool {
+    func canSet(_ item: WorldUndoItem) -> Bool {
         switch item {
         case .insertSheets: true
         case .removeSheets: true

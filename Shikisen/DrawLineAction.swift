@@ -723,7 +723,7 @@ final class LineAction: Action {
                 revisionFirstBezier()
                 
                 let maxDSq = (event.time - firstChangedTime < 0.15 && nLine.controls.count == 4 ?
-                              5.0 : 0.75).squared
+                              5.0 : 0.5).squared
                 
                 func jointControl(angle: Double = 0.75 * (.pi / 2)) -> Line.Control? {
                     guard tempJointPs.count >= 6 else { return nil }

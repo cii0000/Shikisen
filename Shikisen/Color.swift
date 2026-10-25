@@ -70,11 +70,11 @@ struct Color: Codable {
         self.rgba = lcha.safetyRGBAAndChroma(with: colorSpace).rgba
         self.colorSpace = colorSpace
     }
-    init(lightness: Double, unsafetyChroma: Double, hue: Double,
+    init(lightness: Double, unclipChroma: Double, hue: Double,
          opacity: Double = 1,
          _ colorSpace: ColorSpace = .default) {
         
-        var lcha = LCHA(lightness, unsafetyChroma, hue, opacity)
+        var lcha = LCHA(lightness, unclipChroma, hue, opacity)
         let (rgba, chroma) = lcha.safetyRGBAAndChroma(with: colorSpace)
         lcha.c = chroma
         self.lcha = lcha
@@ -84,7 +84,7 @@ struct Color: Codable {
     init(lightness: Double, opacity: Double = 1,
          _ colorSpace: ColorSpace = .default) {
         
-        self.init(lightness: lightness, unsafetyChroma: 0, hue: 0,
+        self.init(lightness: lightness, unclipChroma: 0, hue: 0,
                   opacity: opacity, colorSpace)
     }
     init(white: Double, opacity: Double = 1,
@@ -93,7 +93,7 @@ struct Color: Codable {
         let lightness = Double.linear(Color.minLightness, Color.whiteLightness,
                                       t: white)
         self.init(lightness: lightness,
-                  unsafetyChroma: 0, hue: 0,
+                  unclipChroma: 0, hue: 0,
                   opacity: opacity, colorSpace)
     }
     init(red r: Double, green g: Double, blue b: Double, opacity: Double = 1,
@@ -237,11 +237,11 @@ extension Color {
         let l = interval == 0 ?
             Double.random(in: range) :
             Double(Int.random(in: 0 ... Int(1 / interval))) * interval
-        return Color(lightness: l, unsafetyChroma: 0, hue: 0,
+        return Color(lightness: l, unclipChroma: 0, hue: 0,
                      opacity: opacity, colorSpace)
     }
     static func randomLightnessAndHue(_ range: ClosedRange<Double>,
-                                      unsafetyChroma: Double = Color.maxChroma,
+                                      unclipChroma: Double = Color.maxChroma,
                                       interval: Double = 0.0,
                                       opacity: Double = 1.0,
                                       _ colorSpace: ColorSpace = .default) -> Color {
@@ -249,14 +249,14 @@ extension Color {
             Double.random(in: range) :
             Double(Int.random(in: 0 ... Int(1 / interval))) * interval
         let hue = Double.random(in: -.pi ..< .pi)
-        return Color(lightness: l, unsafetyChroma: unsafetyChroma, hue: hue,
+        return Color(lightness: l, unclipChroma: unclipChroma, hue: hue,
                      opacity: opacity, colorSpace)
     }
     func randomLightness(length: Double = 5) -> Color {
         let minL = max(Color.minLightness, lightness - length)
         let maxL = min(Color.whiteLightness, lightness + length)
         let l = Double.random(in: minL ... maxL)
-        return Color(lightness: l, unsafetyChroma: chroma, hue: hue,
+        return Color(lightness: l, unclipChroma: chroma, hue: hue,
                      opacity: opacity, colorSpace)
     }
     
@@ -323,7 +323,7 @@ extension Color {
         let tint = Point(na, nb).polar
         let nChroma = tint.r, nHue = tint.theta
         let opacity = (lhs.opacity + rhs.opacity) / 2
-        return Color(lightness: nLightness, unsafetyChroma: nChroma, hue: nHue,
+        return Color(lightness: nLightness, unclipChroma: nChroma, hue: nHue,
                      opacity: opacity, lhs.colorSpace)
     }
 }

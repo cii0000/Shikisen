@@ -36,12 +36,11 @@ struct Version: Hashable, Codable {
 
 protocol UndoItem: Sendable, Protobuf, Hashable, Codable {
     var isRequiredEncodable: Bool { get }
-    func isEqualCase(_ other: Self) -> Bool
-    var caseName: String { get }
+    func reversed() -> Self?
 }
 extension UndoItem {
-    func isEqualCase(_ other: Self) -> Bool {
-        caseName == other.caseName
+    var caseName: String {
+        Mirror(reflecting: self).children.first?.label ?? .init(describing: self)
     }
 }
 
@@ -69,11 +68,6 @@ struct UndoItemValue<T: UndoItem>: Codable {
         }
     }
 }
-extension UndoItemValue: CustomStringConvertible {
-    var description: String {
-        "\nundo: \(undoItem),\nredo: \(redoItem)\n"
-    }
-}
 
 struct UndoError: LocalizedError, Equatable {
     var errorDescription: String?
@@ -83,9 +77,10 @@ struct UndoError: LocalizedError, Equatable {
     }
     static let load = Self.init(errorDescription: "\("History Error".localized): \("Failed to load".localized)")
     static let errored = Self.init(errorDescription: "errored")
-    init<T: UndoItem>(to undoItem: T) {
-        errorDescription = "\("History Error".localized): to \(undoItem.caseName)"
+    init<T: UndoItem>(_ undoItem: T) {
+        errorDescription = "\("History Error".localized): \(undoItem.caseName)"
     }
+    
     init<T: UndoItem>(from undoItem: T) {
         errorDescription = "\("History Error".localized): from \(undoItem.caseName)"
     }
@@ -605,7 +600,7 @@ extension History {
         if let currentVersion,
            let lastUndoItem = rootBranch[currentVersion.indexPath].groups.last?
             .values.last?.undoItemValue?.undoItem,
-           undoItem.isEqualCase(lastUndoItem) {
+           undoItem.caseName == lastUndoItem.caseName {
             
             rootBranch[currentVersion.indexPath].replaceInLastGroup(redo: lastUndoItem)
         } else {
@@ -617,14 +612,14 @@ extension History {
     mutating func replace(redo redoItem: T) {
         guard let lastUndoItem = rootBranch[currentVersion!.indexPath].groups.last?
             .values.last?.undoItemValue?.undoItem,
-              redoItem.isEqualCase(lastUndoItem) else { return }
+              redoItem.caseName == lastUndoItem.caseName else { return }
         
         copyIfShared()
         rootBranch[currentVersion!.indexPath].replaceInLastGroup(redo: redoItem)
     }
     mutating func removeLastIfEqual(redo redoItem: T) {
         guard let uiv = rootBranch[currentVersion!.indexPath].groups.last?
-            .values.last?.undoItemValue, redoItem.isEqualCase(uiv.undoItem) else { return }
+            .values.last?.undoItemValue, redoItem.caseName == uiv.undoItem.caseName else { return }
         if uiv.undoItem == uiv.redoItem {
             copyIfShared()
             rootBranch[currentVersion!.indexPath].groups[.last].values.removeLast()
@@ -753,6 +748,10 @@ extension History {
             un = un.children[vi]
         }
         currentVersion = rootBranch.version(atAll: currentVersionIndex)
+    }
+    mutating func set(toTopIndex: Int) {
+        currentVersion = rootBranch.version(atAll: toTopIndex)
+        currentVersionIndex = toTopIndex
     }
     
     mutating func reset() {
@@ -894,12 +893,30 @@ extension History {
             }
         }
     }
+    
+    mutating func _update() {
+        allGroups { ip, groups in
+            for (gi, group) in groups.enumerated() {
+                for (vi, value) in group.values.enumerated() {
+                    let undoItem = try? T(serializedData: value.undoItemData)
+                    let redoItem = try? T(serializedData: value.redoItemData)
+                    if undoItem == nil, let redoItem {
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
+                        = try! redoItem.reversed()!.serializedData()
+                    } else if let undoItem, redoItem == nil {
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
+                        = try! undoItem.reversed()!.serializedData()
+                    }
+                }
+            }
+        }
+    }
 }
 
 protocol HisotryOwner {
     associatedtype OwnerUndoItem: UndoItem
-    func canLoad(from item: OwnerUndoItem) -> Bool
-    func canLoad(to item: OwnerUndoItem) -> Bool
+    func canSet(from item: OwnerUndoItem) -> Bool
+    func canSet(_ item: OwnerUndoItem) -> Bool
     func reversed(_ item: OwnerUndoItem) -> OwnerUndoItem
 }
 extension History {
@@ -924,9 +941,9 @@ extension History {
                 func uiv(from item: T,
                          isTo: Bool, isReversed: Bool) throws -> UndoItemValue<T> {
                     if isTo {
-                        guard owner.canLoad(to: item) else { throw UndoError(to: item) }
+                        guard owner.canSet(item) else { throw UndoError(item) }
                     } else {
-                        guard owner.canLoad(from: item) else { throw UndoError(from: item) }
+                        guard owner.canSet(from: item) else { throw UndoError(from: item) }
                     }
                     return .init(undo: item, redo: owner.reversed(item),
                                  isReversed: isReversed)

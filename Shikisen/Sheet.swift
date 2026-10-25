@@ -696,13 +696,12 @@ extension Animation: BeatRangeType {
     mutating func goPrevious() {
         self.rootBeat = rootBeat(dx: -1, fromRoot: rootBeat, keyD: 1, otherD: 1)
     }
-    func rootBeat(dx: Double, fromRoot beganRootBeat: Rational,
+    func rootBeat(dx: Double, fromRoot beganRootBeat: Rational, deltaBeat: Rational = .init(1, 4),
                   keyD: Double = 17.5, otherD: Double = 8.75) -> Rational {
         var bws = keyframes.count.range.reduce(into: [Rational: Double]()) {
             $0[keyframes[$1].beat] = keyframes[$1].isKey ? keyD : otherD
         }
         let roundedSBeat = beatRange.start.rounded(.down)
-        let deltaBeat: Rational = 1
         var cBeat = roundedSBeat
         while cBeat < beatRange.end {
             if cBeat >= beatRange.start {
@@ -2753,70 +2752,6 @@ extension SheetUndoItem: Protobuf {
     }
 }
 extension SheetUndoItem: UndoItem {
-    var caseName: String {
-        switch self {
-        case .appendLine: "appendLine"
-        case .removeLastLine: "removeLastLine"
-        case .appendKeyLine: "appendKeyLine"
-        case .removeKeyLastLine: "removeKeyLastLine"
-        case .appendLines: "appendLines"
-        case .removeLastLines: "removeLastLines"
-        case .insertLines: "insertLines"
-        case .removeLines: "removeLines"
-        case .appendKeyLines: "appendKeyLines"
-        case .removeKeyLastLines: "removeKeyLastLines"
-        case .replaceLines: "replaceLines"
-        case .appendPlanes: "appendPlanes"
-        case .removeLastPlanes: "removeLastPlanes"
-        case .insertPlanes: "insertPlane"
-        case .replacePlanes: "replacePlanes"
-        case .removePlanes: "removePlanes"
-        case .setPlaneValue: "setPlaneValue"
-        case .setKeyPlaneValues: "setKeyPlaneValues"
-        case .changeToDraft: "changeToDraft"
-        case .setPicture: "setPicture"
-        case .insertDraftLines: "insertDraftLines"
-        case .insertDraftPlanes: "insertDraftPlanes"
-        case .removeDraftLines: "removeDraftLines"
-        case .removeDraftPlanes: "removeDraftPlanes"
-        case .setDraftPicture: "setDraftPicture"
-        case .insertTexts: "insertTexts"
-        case .replaceTexts: "replaceTexts"
-        case .removeTexts: "removeTexts"
-        case .replaceString: "replaceString"
-        case .changedColors: "changedColors"
-        case .insertBorders: "insertBorders"
-        case .removeBorders: "removeBorders"
-        case .insertKeyframes: "insertKeyframes"
-        case .removeKeyframes: "removeKeyframes"
-        case .setKeyframeOptions: "setKeyframeOptions"
-        case .setRootKeyframeI: "setRootKeyframeI"
-        case .insertKeyLines: "insertKeyLines"
-        case .replaceKeyLines: "replaceKeyLines"
-        case .removeKeyLines: "removeKeyLines"
-        case .insertKeyPlanes: "insertKeyPlanes"
-        case .replaceKeyPlanes: "replaceKeyPlanes"
-        case .removeKeyPlanes: "removeKeyPlanes"
-        case .insertDraftKeyLines: "insertDraftKeyLines"
-        case .removeDraftKeyLines: "removeDraftKeyLines"
-        case .insertDraftKeyPlanes: "insertDraftKeyPlanes"
-        case .removeDraftKeyPlanes: "removeDraftKeyPlanes"
-        case .setLineIDs: "setLineIDs"
-        case .setAnimationOption: "setAnimationOption"
-        case .insertNotes: "insertNotes"
-        case .replaceNotes: "replaceNotes"
-        case .removeNotes: "removeNotes"
-        case .insertDraftNotes: "insertDraftNotes"
-        case .removeDraftNotes: "removeDraftNotes"
-        case .insertContents: "insertContents"
-        case .replaceContents: "replaceContents"
-        case .removeContents: "removeContents"
-        case .setScoreOption: "setScoreOption"
-        case .setSheetOption: "setSheetOption"
-        case .setSelection: "setSelection"
-        }
-    }
-    
     var isRequiredEncodable: Bool {
         switch self {
         case .appendLine: true
@@ -2880,12 +2815,145 @@ extension SheetUndoItem: UndoItem {
         case .setSelection: true
         }
     }
+    
+    func reversed() -> SheetUndoItem? {
+        switch self {
+        case .appendLine:
+             .removeLastLines(count: 1)
+        case .removeLastLine:
+            nil
+        case .appendKeyLine(let kv):
+            .removeKeyLastLine(kv.index)
+        case .removeKeyLastLine:
+            nil
+        case .appendKeyLines(let kv):
+            .removeKeyLastLines(.init(value: kv.value.count, index: kv.index))
+        case .appendLines(let lines):
+             .removeLastLines(count: lines.count)
+        case .removeLastLines:
+             nil
+        case .removeKeyLastLines:
+             nil
+        case .appendPlanes(let planes):
+             .removeLastPlanes(count: planes.count)
+        case .removeLastPlanes:
+             nil
+        case .insertLines(let livs):
+             .removeLines(lineIndexes: livs.map { $0.index })
+        case .insertPlanes(let pivs):
+             .removePlanes(planeIndexes: pivs.map { $0.index })
+        case .replaceLines:
+            nil
+        case .replacePlanes:
+            nil
+        case .removeLines:
+             nil
+        case .removePlanes:
+            nil
+        case .setPlaneValue:
+            nil
+        case .setKeyPlaneValues:
+            nil
+        case .changeToDraft(let isReverse):
+             .changeToDraft(isReverse: !isReverse)
+        case .setPicture(_):
+            nil
+        case .insertDraftLines(let livs):
+             .removeDraftLines(lineIndexes: livs.map { $0.index })
+        case .insertDraftPlanes(let pivs):
+             .removeDraftPlanes(planeIndexes: pivs.map { $0.index })
+        case .removeDraftLines:
+             nil
+        case .removeDraftPlanes:
+             nil
+        case .setDraftPicture(_):
+            nil
+        case .insertTexts(let tivs):
+             .removeTexts(tivs.map { $0.index })
+        case .replaceTexts:
+            nil
+        case .removeTexts:
+             nil
+        case .replaceString(_):
+            nil
+        case .changedColors(_):
+            nil
+        case .insertBorders(let bivs):
+             .removeBorders(borderIndexes: bivs.map { $0.index })
+        case .removeBorders:
+             nil
+        case .insertKeyframes(let kivs):
+             .removeKeyframes(kivs.map { $0.index })
+        case .removeKeyframes:
+             nil
+        case .setKeyframeOptions:
+            nil
+        case .setRootKeyframeI:
+            nil
+        case .insertKeyLines(let kivs):
+             .removeKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                   index: $0.index) })
+        case .replaceKeyLines:
+            nil
+        case .removeKeyLines:
+             nil
+        case .insertKeyPlanes(let kivs):
+             .removeKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                    index: $0.index) })
+        case .replaceKeyPlanes:
+            nil
+        case .removeKeyPlanes:
+             nil
+        case .insertDraftKeyLines(let kivs):
+             .removeDraftKeyLines(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                        index: $0.index) })
+        case .removeDraftKeyLines:
+             nil
+        case .insertDraftKeyPlanes(let kivs):
+             .removeDraftKeyPlanes(kivs.map { IndexValue(value: $0.value.map { $0.index },
+                                                         index: $0.index) })
+        case .removeDraftKeyPlanes:
+             nil
+        case .setLineIDs:
+            nil
+        case .setAnimationOption:
+            nil
+        
+        case .insertNotes(let nivs):
+             .removeNotes(noteIndexes: nivs.map { $0.index })
+        case .replaceNotes:
+            nil
+        case .removeNotes:
+             nil
+            
+        case .insertDraftNotes(let nivs):
+             .removeDraftNotes(noteIndexes: nivs.map { $0.index })
+        case .removeDraftNotes:
+             nil
+            
+        case .insertContents(let civs):
+             .removeContents(contentIndexes: civs.map { $0.index })
+        case .replaceContents:
+            nil
+        case .removeContents:
+             nil
+            
+        case .setScoreOption:
+            nil
+            
+        case .setSheetOption:
+            nil
+            
+        case .setSelection:
+            nil
+        }
+    }
 }
 
 typealias SheetUndoItemValue = UndoItemValue<SheetUndoItem>
 typealias SheetHistory = History<SheetUndoItem>
 extension Sheet: HisotryOwner {
-    func canLoad(from item: SheetUndoItem) -> Bool {
+    func canSet(from item: SheetUndoItem) -> Bool {
         func canAppend<T: Equatable>(_ ns: [T], in array: [T]) -> Bool {
             let di = array.count - ns.count
             return di >= 0 && Array(array[di...]) == ns
@@ -3134,7 +3202,7 @@ extension Sheet: HisotryOwner {
         }
     }
     
-    func canLoad(to item: SheetUndoItem) -> Bool {
+    func canSet(_ item: SheetUndoItem) -> Bool {
         func canInsert<T: Equatable>(_ ivs: [IndexValue<T>], in array: [T]) -> Bool {
             var count = array.count
             return ivs.allSatisfy {

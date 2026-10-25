@@ -100,7 +100,7 @@ struct HUDItem {
 struct Exporting {
     enum ExportType {
         case image, image4K, images, images4K, pdf, gif, movie, movie4K,
-             sound, linearPCM, document, documentWithHistory, caption, timelapse, timelapse8
+             sound, linearPCM, document, documentWithHistory, caption, timelapse
         var isDocument: Bool {
             self == .document || self == .documentWithHistory
         }
@@ -122,7 +122,6 @@ struct Exporting {
             case .linearPCM: "Linear PCM".localized
             case .caption: "Caption".localized
             case .timelapse: "Timelapse".localized
-            case .timelapse8: "Timelapse 1/8".localized
             case .document: "Document".localized
             case .documentWithHistory: "Document with History".localized
             }
@@ -900,6 +899,32 @@ final class RootView: View, @unchecked Sendable {
                 syncSave()
             }
         }
+    }
+    
+    func update1_3(_ handler: (String) -> (Bool)) {
+        for (i, v) in model.sheetRecorders.enumerated() {
+            let (_, sheetRecorder) = v
+            guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
+            autoreleasepool {
+                let record = sheetRecorder.sheetRecord
+                let historyRecord = sheetRecorder.sheetHistoryRecord
+                guard let sheet = record.decodedValue,
+                      var history = historyRecord.decodedValue else { return }
+                record.value = sheet
+                record.isWillwrite = true
+                
+                history._update()
+                historyRecord.value = history
+                historyRecord.isWillwrite = true
+                syncSave()
+            }
+        }
+        
+        history._update()
+        model.worldHistoryRecord.value = history
+        model.worldHistoryRecord.isWillwrite = true
+        
+        syncSave()
     }
     
     func clearHistory(progressHandler: (Double, inout Bool) -> ()) {

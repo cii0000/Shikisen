@@ -189,20 +189,6 @@ final class ExportAsTimelapseAction: InputKeyEventAction {
         action.updateNode()
     }
 }
-final class ExportAsTimelapse8Action: InputKeyEventAction {
-    let action: IOAction
-    
-    init(_ rootAction: RootAction) {
-        action = IOAction(rootAction)
-    }
-    
-    func flow(with event: InputKeyEvent) {
-        action.exportFile(with: event, .timelapse8)
-    }
-    func updateNode() {
-        action.updateNode()
-    }
-}
 final class ExportAsDocumentAction: InputKeyEventAction {
     let action: IOAction
     
@@ -872,7 +858,7 @@ final class IOAction: Action {
                 }
             }
             documentRecorders = []
-        case .timelapse, .timelapse8:
+        case .timelapse:
             renderings = nvs.map {
                 if let sid = rootView.sheetID(at: $0.shp),
                    let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord,
@@ -911,7 +897,7 @@ final class IOAction: Action {
         case .image4K, .images4K: nvs.count > 1 ? Image.FileType.pngs : Image.FileType.png
         case .pdf: PDF.FileType.pdf
         case .gif: Image.FileType.gif
-        case .movie, .movie4K, .timelapse, .timelapse8: isAlphaChannel ? MovieEncoder.FileType.mov : MovieEncoder.FileType.mp4
+        case .movie, .movie4K, .timelapse: isAlphaChannel ? MovieEncoder.FileType.mov : MovieEncoder.FileType.mp4
         case .sound: Content.FileType.m4a
         case .linearPCM: Content.FileType.wav
         case .caption: Caption.FileType.itt
@@ -953,7 +939,7 @@ final class IOAction: Action {
                 } else {
                     return nil
                 }
-            case .gif, .movie, .movie4K, .timelapse, .timelapse8: return nil
+            case .gif, .movie, .movie4K, .timelapse: return nil
             case .sound, .linearPCM: return nil
             case .caption: return nil
             case .document:
@@ -1013,13 +999,13 @@ final class IOAction: Action {
                     exportSound(from: renderings, isLinearPCM: true, at: ioResult)
                 case .caption:
                     exportCaption(from: renderings, at: ioResult)
-                case .timelapse, .timelapse8:
+                case .timelapse:
                     let nSize = size.width > size.height ?
                     size.snapped(height: 1080).rounded(.down) :
                     size.snapped(max: Size(width: 1200, height: 1920).rounded(.down))
                     exportTimelapse(from: renderings,
                                     isAlphaChannel: isAlphaChannel,
-                                    colorSpace, speed: type == .timelapse8 ? 8 : 1,
+                                    colorSpace,
                                     size: nSize, at: ioResult)
                 case .document:
                     exportDocument(from: nvs, isHistory: false, at: ioResult)
@@ -1771,7 +1757,7 @@ final class IOAction: Action {
     }
     
     func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
-                         _ colorSpace: ColorSpace, speed: Int,
+                         _ colorSpace: ColorSpace, isNormalSpeed: Bool = false,
                          size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
                               progressHandler: (Double) -> ()) async throws {
@@ -1794,21 +1780,18 @@ final class IOAction: Action {
                     let sheetView = SheetView(binder: sheetBinder,
                                               keyPath: \SheetBinder.value,
                                               history: history)
-                    var allGroups = [(version: Version,
-                                      group: UndoGroup<SheetUndoItem>)]()
+                    
+                    var allGroups = [(version: Version, group: UndoGroup<SheetUndoItem>)]()
                     history.allGroups { indexPath, groups in
                         allGroups += groups.enumerated()
                             .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
                                     $0.element) }
                     }
-                    
                     allGroups.sort { $0.group.date < $1.group.date }
                     if let currentVersion = history.currentVersion,
                        allGroups.last?.group.date != history.currentDate {
                         allGroups.append((currentVersion, history[currentVersion]))
                     }
-                    
-                    let isEnabledAnimation = sheetView.model.isEnabledAnimation
                     
                     guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
                                                      height: .init(size.height),
@@ -1823,10 +1806,26 @@ final class IOAction: Action {
                                              color: backgroundColor) else { throw MovieEncoder.ExportingError() }
                     var kImages = [fkImage]
                     
-                    let currentTopI = sheetView.history.currentVersionIndex
-                    var currentI = 0, lastBitmap: Bitmap<UInt8>?
                     let vs = [nil] + allGroups.map { $0.version }
-                    var isRedraw = false, kiSet = Set<Int>()
+                    var nHistory = history, allCount = 0, exportableCount = 0
+                    for (vi, version) in vs.enumerated() {
+                        await nHistory.move(to: version) { yIndexPath in
+                            nHistory.set(indexPath: yIndexPath)
+                        } topIHandler: { toTopIndex in
+                            if !(vi == 0 && toTopIndex != 0) {
+                                exportableCount += 1
+                            }
+                            allCount += 1
+                            nHistory.set(toTopIndex: toTopIndex)
+                        }
+                    }
+                    let speed = isNormalSpeed ?
+                    1 :
+                    max(Int((Double(exportableCount / 60) / Double(120)).rounded(.up)), 1)
+                    
+                    let isEnabledAnimation = sheetView.model.isEnabledAnimation
+                    var currentI = 0, lastBitmap: Bitmap<UInt8>?
+                    var isRedraw = false, kiSet = Set<Int>(), oldKiss = [[Int]]()
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
@@ -1836,12 +1835,27 @@ final class IOAction: Action {
                             let results = sheetView.history.undoResults(to: toTopIndex)
                             for result in results {
                                 let undoItem = try sheetView.history.undoItem(with: result, sheetView.model)
-                                let oldSelectionKIS = Set(sheetView.selection.keyframeSelections.map { $0.key })
                                 
                                 sheetView.update(undoItem, isMakeRect: false, isSleep: false)
+                                switch undoItem {
+                                case .setSelection(let selection):
+                                    if !selection.isEmpty {
+                                        sheetView.updateNode(from: .empty,
+                                                             old: sheetView.model.selection)
+                                    }
+                                default: break
+                                }
                                 
                                 if !isFirst && isEnabledAnimation {
                                     switch undoItem {
+                                    case .appendKeyLine(let kv):
+                                        kiSet.insert(kv.index)
+                                    case .removeKeyLastLine(let ki):
+                                        kiSet.insert(ki)
+                                    case .appendKeyLines(let kv):
+                                        kiSet.insert(kv.index)
+                                    case .removeKeyLastLines(let kv):
+                                        kiSet.insert(kv.index)
                                     case .insertDraftKeyLines(let kvs):
                                         kiSet.formUnion(kvs.map { $0.index })
                                     case .insertDraftKeyPlanes(let kvs):
@@ -1862,6 +1876,18 @@ final class IOAction: Action {
                                         kiSet.formUnion(kvs.map { $0.index })
                                     case .replaceKeyPlanes(let kvs):
                                         kiSet.formUnion(kvs.map { $0.index })
+                                    case .setKeyPlaneValues(let kvs):
+                                        kiSet.formUnion(kvs.map { $0.index })
+                                    case .changedColors(let cv):
+                                        if !cv.lineAnimationIndexes.isEmpty
+                                            || !cv.planeAnimationIndexes.isEmpty {
+                                            
+                                            kiSet.formUnion(cv.lineAnimationIndexes.map { $0.index })
+                                            kiSet.formUnion(cv.planeAnimationIndexes.map { $0.index })
+                                        }
+                                        if cv.isBackground {
+                                            kiSet.formUnion(0 ..< sheetView.model.animation.keyframes.count)
+                                        }
                                     case .setRootKeyframeI(let rootKI):
                                         kiSet.insert(sheetView.model.animation.index(atRoot: rootKI))
                                     case .insertKeyframes(let kvs):
@@ -1876,23 +1902,22 @@ final class IOAction: Action {
                                             kImages.remove(at: kis)
                                         }
                                         isRedraw = true
-                                    case .setSelection(let selection):
-                                        kiSet.formUnion(oldSelectionKIS.symmetricDifference(selection.keyframeSelections.map { $0.key }))
                                     default: kiSet.insert(sheetView.model.animation.index)
                                     }
                                 }
                             }
-                            let kis = kiSet.sorted()
                             
                             if isFirst {
-                                progressHandler((.init(ri) + .init(vi + 1) / .init(vs.count)) / .init(renderings.count))
+                                progressHandler((.init(ri) + .init(currentI) / .init(allCount)) / .init(renderings.count))
                                 try Task.checkCancellation()
                                 return
                             }
                             
-                            if !(currentI == 0
-                                 || (vi == vs.count - 1 && toTopIndex == currentTopI)
-                                 || (currentI - 1) % speed == 0) { return }
+                            guard currentI == 0
+                                 || currentI == allCount - 1
+                                 || currentI % speed == 0 else { return }
+                            
+                            let kis = kiSet.sorted()
                             
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
@@ -1945,8 +1970,20 @@ final class IOAction: Action {
                                 
                                 guard let nBitmap = bitmap.copy()
                                 else { throw MovieEncoder.ExportingError() }
-                                nBitmap.set(lineColor: .content)
                                 nBitmap.set(lineWidth: borderWidth * 2)
+                                for (i, okis) in oldKiss.enumerated() {
+                                    let t = Double(20 - oldKiss.count + i)
+                                        .clipped(min: 0, max: 10, newMin: 0, newMax: 1)
+                                    nBitmap.set(lineColor: .content.with(multiplyOpacity: t))
+                                    for ki in okis {
+                                        nBitmap.stroke(rect(at: ki))
+                                    }
+                                }
+                                if oldKiss.count >= 20 {
+                                    oldKiss.removeFirst()
+                                }
+                                oldKiss.append(kis)
+                                nBitmap.set(lineColor: .content)
                                 for ki in kis {
                                     nBitmap.stroke(rect(at: ki))
                                 }
@@ -1971,7 +2008,7 @@ final class IOAction: Action {
                                 try await movieEncoder.write(image, duration: 1, timeScale: 60)
                             }
                             
-                            progressHandler((.init(ri) + .init(vi + 1) / .init(vs.count)) / .init(renderings.count))
+                            progressHandler((.init(ri) + .init(currentI) / .init(allCount)) / .init(renderings.count))
                             try Task.checkCancellation()
                         }
                     }
