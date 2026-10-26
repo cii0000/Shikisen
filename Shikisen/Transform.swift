@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Double3x3: Hashable, Codable {
+struct Double3x3: Hashable {
     var column0: Double3, column1: Double3, column2: Double3
 }
 extension Double3x3 {
@@ -350,7 +350,7 @@ extension Array: AppliableTransform where Element: AppliableTransform {
     }
 }
 
-struct Attitude: Hashable, Codable {
+struct Attitude: Hashable {
     static let identity = Self()
     
     var position = Point(), scale = Size(square: 1), rotation = 0.0

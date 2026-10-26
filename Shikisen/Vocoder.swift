@@ -24,7 +24,7 @@ import Accelerate.vecLib.vDSP
 //#endif
 
 /// xoshiro256**
-struct Random: Hashable, Codable {
+struct Random: Hashable {
     private var s0, s1, s2, s3: UInt64
     
     static func next(seed: UInt64, count: Int) -> UInt64 {
@@ -161,7 +161,7 @@ extension Waveclip {
     }
 }
 
-struct Pitbend: Hashable, Codable {
+struct Pitbend: Hashable {
     let pitchInterpolation: Interpolation<Double>
     let firstPitch: Double, firstFqScale: Double, isEqualAllPitch: Bool
     

@@ -24,7 +24,7 @@ import CoreImage
 //#elseif os(linux) && os(windows)
 //#endif
 
-struct Caption: Hashable, Codable {
+struct Caption: Hashable {
     var string = ""
     var origin = Point()
     var orientation = Orientation.horizontal

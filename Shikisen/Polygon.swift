@@ -40,7 +40,7 @@
 
 import protocol Foundation.LocalizedError
 
-struct Triangle: Hashable, Codable {
+struct Triangle: Hashable {
     var p0, p1, p2: Point
     init() {
         p0 = Point()
@@ -96,7 +96,7 @@ extension Triangle {
     }
 }
 
-struct Polygon: Hashable, Codable {
+struct Polygon: Hashable {
     var points = [Point]()
 }
 extension Polygon: Protobuf {
@@ -1092,7 +1092,7 @@ extension Polygon {
     }
 }
 
-struct Topolygon: Hashable, Codable {
+struct Topolygon: Hashable {
     var polygon = Polygon()
     var holePolygons = [Polygon]()
 }

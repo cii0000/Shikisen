@@ -79,7 +79,7 @@ extension UUID {
     }
 }
 
-struct UU<Value: Codable>: Codable {
+struct UU<Value> {
     var value: Value {
         didSet {
             id = UUID()

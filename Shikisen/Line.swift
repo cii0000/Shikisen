@@ -18,7 +18,7 @@
 import struct Foundation.UUID
 import struct Foundation.Data
 
-struct LineIndexValue: Hashable, Codable {
+struct LineIndexValue: Hashable {
     var index = 0, t = 0.0
 }
 extension LineIndexValue: Comparable {
@@ -31,7 +31,7 @@ extension LineIndexValue: Comparable {
     }
 }
 
-struct LineRange: Hashable, Codable {
+struct LineRange: Hashable {
     var startIndexValue: LineIndexValue, endIndexValue: LineIndexValue
 }
 extension LineRange {
@@ -89,7 +89,7 @@ extension Array where Element == LineRange {
     }
 }
 
-enum InterType: Int8, Hashable, Codable {
+enum InterType: Int8, Hashable {
     case none, key, interpolated
 }
 extension InterType: Protobuf {
@@ -110,8 +110,8 @@ extension InterType: Protobuf {
     }
 }
 
-struct Line: Hashable, Codable {
-    struct Control: Hashable, Codable {
+struct Line: Hashable {
+    struct Control: Hashable {
         var point = Point(), weight = 0.5, pressure = 1.0
         
         init(point: Point, weight: Double = 0.5, pressure: Double = 1.0) {

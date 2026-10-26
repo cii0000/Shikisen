@@ -1926,25 +1926,6 @@ extension Image {
     }
 }
 extension Image: Hashable {}
-extension Image: Codable {
-    struct CodableError: LocalizedError {}
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let data = try container.decode(Data.self)
-        guard let aSelf = Image(data: data) else {
-            throw CodableError()
-        }
-        self = aSelf
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.singleValueContainer()
-        if let data = data(fileType) {
-            try container.encode(data)
-        } else {
-            throw CodableError()
-        }
-    }
-}
 extension Image: Serializable {
     struct SerializableError: LocalizedError {}
     init(serializedData data: Data) throws {

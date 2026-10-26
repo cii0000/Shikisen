@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-enum CircularOrientation: String, Codable {
+enum CircularOrientation: String {
     case clockwise, counterClockwise
 }
 
-enum Orientation: String, Hashable, Codable {
+enum Orientation: String, Hashable {
     case horizontal, vertical
 }
 extension Orientation {
@@ -50,7 +50,7 @@ enum LRTB {
     case left, right, top, bottom
 }
 
-enum LRTBOrientation: String, Hashable, Codable {
+enum LRTBOrientation: String, Hashable {
     case leftToRight, rightToLeft
     case bottomToTop, topToBottom
 }

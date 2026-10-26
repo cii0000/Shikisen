@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct TriangleStrip: Hashable, Codable {
+struct TriangleStrip: Hashable {
     var points = [Point]()
 }
 extension TriangleStrip {

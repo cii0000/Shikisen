@@ -218,7 +218,7 @@ extension Directory {
     }
     func resetWrite() {}
     
-    func makeRecord<T: Codable & Serializable>(forKey key: String, isLoadOnly: Bool = false) -> Record<T> {
+    func makeRecord<T: Serializable>(forKey key: String, isLoadOnly: Bool = false) -> Record<T> {
         if let child = children[key] {
             switch child {
             case .file(let file):
@@ -292,7 +292,7 @@ extension Directory {
     }
 }
 
-final class Record<Value: Codable & Serializable>: File, @unchecked Sendable {
+final class Record<Value: Serializable>: File, @unchecked Sendable {
     weak var parent: Directory?
     
     var url: URL

@@ -18,7 +18,7 @@
 import struct Foundation.URL
 import struct Foundation.UUID
 
-struct ContentTimeOption: BeatRangeType, Hashable, Codable {
+struct ContentTimeOption: BeatRangeType, Hashable {
     var beatRange = 0 ..< Rational(0)
     var localStartBeat = Rational(0)
     var tempo = Music.defaultTempo
@@ -42,7 +42,7 @@ extension ContentTimeOption: Protobuf {
     }
 }
 
-struct Content: Hashable, Codable {
+struct Content: Hashable {
     enum FileType: FileTypeProtocol, CaseIterable {
         case mp4
         case mov
@@ -79,7 +79,7 @@ struct Content: Hashable, Codable {
         }
     }
     
-    enum ContentType: Int, CaseIterable, Hashable, Codable {
+    enum ContentType: Int, CaseIterable, Hashable {
         case movie, sound, image, none
         
         var isAudio: Bool {

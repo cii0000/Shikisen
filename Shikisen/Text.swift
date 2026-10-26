@@ -315,7 +315,7 @@ extension Locale: Protobuf {
     }
 }
 
-struct TextTimeOption: BeatRangeType, Hashable, Codable {
+struct TextTimeOption: BeatRangeType, Hashable {
     var beatRange = 0 ..< Rational(0)
     var tempo = Music.defaultTempo
 }
@@ -334,7 +334,7 @@ extension TextTimeOption: Protobuf {
     }
 }
 
-struct Text: Hashable, Codable {
+struct Text: Hashable {
     var string = ""
     var orientation = Orientation.horizontal
     var size = Font.defaultSize

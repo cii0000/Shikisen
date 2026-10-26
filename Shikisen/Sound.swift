@@ -23,11 +23,11 @@ import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif
 
-struct LyricsUnison: Hashable, Codable {
-    enum Step: Int, CaseIterable, Hashable, Codable {
+struct LyricsUnison: Hashable {
+    enum Step: Int, CaseIterable, Hashable {
         case c = 0, d = 2, e = 4, f = 5, g = 7, a = 9, b = 11
     }
-    enum Accidental: Int, CaseIterable, Hashable, Codable {
+    enum Accidental: Int, CaseIterable, Hashable {
         case none = 0, flat = -1, sharp = 1
     }
     
@@ -111,7 +111,7 @@ extension LyricsUnison {
     }
 }
 
-struct Pitch: Hashable, Codable {
+struct Pitch: Hashable {
     var value = Rational(0)
 }
 extension Pitch {
@@ -183,7 +183,7 @@ extension Pitch {
     }
 }
 
-enum MusicScaleType: Int32, CaseIterable, Hashable, Codable {
+enum MusicScaleType: Int32, CaseIterable, Hashable {
     case popular, hexaPopular, pentaPopular, wholeTone, chromatic
 }
 extension MusicScaleType {
@@ -269,7 +269,7 @@ struct Mel {
     }
 }
 
-struct Stereo: Hashable, Codable {
+struct Stereo: Hashable {
     var volm = 0.0, pan = 0.0, id = UUID()
 }
 extension Stereo {
@@ -371,7 +371,7 @@ extension Stereo: MonoInterpolatable {
     }
 }
 
-struct Overtone: Hashable, Codable {
+struct Overtone: Hashable {
     var evenAmp = 1.0, oddVolm = 1.0
 }
 extension Overtone {
@@ -397,7 +397,7 @@ extension Overtone: Protobuf {
         }
     }
 }
-enum OvertoneType: Int, CaseIterable, Hashable, Codable {
+enum OvertoneType: Int, CaseIterable, Hashable {
     case evenAmp, oddVolm
 }
 extension Overtone {
@@ -453,7 +453,7 @@ extension Overtone: MonoInterpolatable {
     }
 }
 
-struct Sprol: Hashable, Codable {
+struct Sprol: Hashable {
     var pitch = 0.0, volm = 0.0, noise = 0.0
 }
 extension Sprol: Protobuf {
@@ -502,7 +502,7 @@ extension Sprol {
     }
 }
 
-struct Spectlope: Hashable, Codable {
+struct Spectlope: Hashable {
     static func defaultSprols(isRandom: Bool = false) -> [Sprol] {
         [Sprol(pitch: 12 * 0.75, volm: 0, noise: 0),
          Sprol(pitch: 12 * 2, volm: 0.75, noise: 0),
@@ -905,7 +905,7 @@ extension Spectlope: MonoInterpolatable {
     }
 }
 
-struct Tone: Hashable, Codable {
+struct Tone: Hashable {
     var overtone = Overtone()
     var spectlope = Spectlope()
     var id = UUID()
@@ -993,7 +993,7 @@ extension Tone: MonoInterpolatable {
     }
 }
 
-struct Pit: Hashable, Codable {
+struct Pit: Hashable {
     var beat = Rational(0), pitch = Rational(0), stereo = Stereo(volm: 0.453125), tone = Tone(), lyric = ""
 }
 extension Pit: Protobuf {
@@ -1043,7 +1043,7 @@ extension Pit {
     }
 }
 
-struct Reverb: Hashable, Codable, Sendable {
+struct Reverb: Hashable, Sendable {
     var earlySec = 0.02
     var earlyVolm = 0.75
     var lateSec = 0.08
@@ -1169,7 +1169,7 @@ extension Reverb {
     }
 }
 
-struct Note: Hashable, Codable {
+struct Note: Hashable {
     static let defaultF0Pitch = Rational(51), doubleDefaultF0Pitch = Double(defaultF0Pitch)
     var beatRange = 0 ..< Rational(1, 4)
     var pitch = Rational(0), f0Pitch = defaultF0Pitch
@@ -1688,8 +1688,8 @@ extension Note {
     }
 }
 
-struct Chord: Hashable, Codable {
-    enum ChordType: Int, CaseIterable, Hashable, Codable, CustomStringConvertible {
+struct Chord: Hashable {
+    enum ChordType: Int, CaseIterable, Hashable, CustomStringConvertible {
         case octave, power, major3, major, suspended, minor, minor3, augmented, flatfive,
              wholeTone, semitone,
              diminish, tritone
@@ -1777,7 +1777,7 @@ struct Chord: Hashable, Codable {
         }
     }
     
-    struct ChordTyper: Hashable, Codable, CustomStringConvertible {
+    struct ChordTyper: Hashable, CustomStringConvertible {
         var type = ChordType.major
         var mainUnison = 0
         var unisons = Set<Int>()
@@ -2003,7 +2003,7 @@ extension Chord: CustomStringConvertible {
     }
 }
 
-struct ScoreOption: Hashable, Codable {
+struct ScoreOption: Hashable {
     var beatRange = Music.defaultBeatRange
     var loopDurBeat: Rational = 0
     var keyBeats: [Rational] = [4, 8, 12]
@@ -2046,7 +2046,7 @@ extension ScoreOption {
     }
 }
 
-struct Score: BeatRangeType, Hashable, Codable {
+struct Score: BeatRangeType, Hashable {
     static let minPitch = Rational(0, 12), maxPitch = Rational(10 * 12)
     static let pitchRange = minPitch ..< maxPitch
     static let doubleMinPitch = 0.0, doubleMaxPitch = 120.0
@@ -2389,7 +2389,7 @@ extension Audiotrack {
     }
 }
 
-struct Volm: Hashable, Codable {
+struct Volm: Hashable {
     static let minVolm = 0.0, safeVolm = 0.75, maxVolm = 1.0
     static let safeVolmRange = minVolm ... safeVolm, volmRange = minVolm ... maxVolm
 }
@@ -2463,7 +2463,7 @@ extension Volm {
     }
 }
 
-struct Audio: Hashable, Codable {
+struct Audio: Hashable {
     static let defaultSampleRate = 48000.0
     static let headroomDb = -1.0
     static let headroomVolm = Volm.volm(fromDb: headroomDb)

@@ -312,7 +312,6 @@ extension IndexValue: CustomStringConvertible {
         "(\(value) at: \(index))"
     }
 }
-extension IndexValue: Codable where Value: Codable {}
 
 extension Range: Serializable where Bound == Int {}
 extension Range: Protobuf where Bound == Int {
@@ -331,7 +330,7 @@ extension Range: Protobuf where Bound == Int {
     }
 }
 
-struct IntClosedRange: Hashable, Codable {
+struct IntClosedRange: Hashable {
     var value: ClosedRange<Int>
 }
 extension IntClosedRange: Protobuf {
@@ -350,7 +349,7 @@ extension IntClosedRange: Protobuf {
         }
     }
 }
-struct IntRange: Hashable, Codable {
+struct IntRange: Hashable {
     var value: Range<Int>
 }
 extension IntRange: Protobuf {

@@ -56,10 +56,10 @@ extension BezierInterpolation {
     }
 }
 
-struct BezierIntersection: Hashable, Codable {
+struct BezierIntersection: Hashable {
     var t: Double, otherT: Double, otherDirection: CrossDirection, point: Point
 }
-struct Bezier: Hashable, Codable {
+struct Bezier: Hashable {
     var p0 = Point(), cp = Point(), p1 = Point()
 }
 extension Bezier: AppliableTransform {
@@ -772,7 +772,7 @@ extension Bezier {
     }
 }
 
-struct Bezier3: Hashable, Codable {
+struct Bezier3: Hashable {
     var p0 = Point(), cp0 = Point(), cp1 = Point(), p1 = Point()
 }
 extension Bezier3 {

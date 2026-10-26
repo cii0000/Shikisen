@@ -19,7 +19,7 @@ import struct Foundation.UUID
 import struct Foundation.Data
 import struct Foundation.URL
 
-struct Finding: Codable {
+struct Finding {
     var worldPosition = Point()
     var string = ""
     var isLine = false
@@ -123,7 +123,7 @@ extension Dictionary where Key == IntPoint, Value == UUID {
     }
 }
 
-struct WorldSelection: Hashable, Codable {
+struct WorldSelection: Hashable {
     static let empty = Self()
     
     var sheetIDs = [UUID]()
@@ -155,7 +155,7 @@ extension WorldSelection {
     }
 }
 
-struct World: Codable {
+struct World {
     var sheetIDs = [IntPoint: UUID]()
     var sheetPositions = [UUID: IntPoint]()
     var selection = WorldSelection.empty

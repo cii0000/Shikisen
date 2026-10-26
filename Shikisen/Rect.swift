@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-enum RectCorner: String, Codable {
+enum RectCorner: String {
     case minXMinY, maxXMinY, minXMaxY, maxXMaxY
 }
 extension RectCorner: Protobuf {
@@ -38,7 +38,7 @@ extension RectCorner: Protobuf {
     }
 }
 
-struct Rect: Hashable, Codable {
+struct Rect: Hashable {
     var origin = Point(), size = Size()
     
     init(origin: Point = Point(), size: Size = Size()) {
@@ -804,7 +804,7 @@ struct RectSearchTree<Value: Rectable> {
     }
 }
 
-struct AABB: Hashable, Codable {
+struct AABB: Hashable {
     var xRange = DoubleRange(), yRange = DoubleRange()
     init() {
         xRange = DoubleRange()

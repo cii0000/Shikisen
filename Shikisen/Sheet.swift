@@ -17,7 +17,7 @@
 
 import struct Foundation.UUID
 
-struct Border: Hashable, Codable {
+struct Border: Hashable {
     var location = 0.0, orientation = Orientation.horizontal
 }
 extension Border {
@@ -132,7 +132,7 @@ protocol Picable {
     var draftPicture: Picture { get set }
 }
 
-struct KeyframeOption: Hashable, Codable {
+struct KeyframeOption: Hashable {
     var beat = Rational(0)
 }
 extension KeyframeOption: Protobuf {
@@ -153,7 +153,7 @@ extension KeyframeOption {
     }
 }
 
-struct Keyframe: Picable, Hashable, Codable {
+struct Keyframe: Picable, Hashable {
     var picture = Picture() {
         didSet {
             isKey = (picture.lines.contains { $0.interType != .interpolated }) || picture.isEmpty
@@ -235,7 +235,7 @@ extension Keyframe: Protobuf {
     }
 }
 
-struct AnimationOption: Hashable, Codable {
+struct AnimationOption: Hashable {
     var beatRange = Music.defaultBeatRange
     var loopDurBeat: Rational = 0
     var tempo = Music.defaultTempo
@@ -272,7 +272,7 @@ extension AnimationOption {
     }
 }
 
-struct Animation: Hashable, Codable {
+struct Animation: Hashable {
     var keyframes = [Keyframe]()
 
     var rootBeat = Rational(0) {
@@ -623,7 +623,7 @@ extension Animation: BeatRangeType {
         localDurBeat * Rational(loopI)
     }
     
-    struct RootBeatIndex: Hashable, Codable {
+    struct RootBeatIndex: Hashable {
         var internalBeat = Rational(0), index = 0, loopIndex = 0
     }
     var rootBeatIndex: RootBeatIndex {
@@ -645,7 +645,7 @@ extension Animation: BeatRangeType {
         + rootLoopIndexBeat(atRootLoop: rootBeatIndex.loopIndex)
     }
     
-    struct RootBeatPosition: Hashable, Codable {
+    struct RootBeatPosition: Hashable {
         var beat = Rational(0), loopIndex = 0
     }
     var rootBeatPosition: RootBeatPosition {
@@ -777,7 +777,7 @@ extension Animation {
     }
 }
 
-enum PreviousNext: Int32, Hashable, Codable {
+enum PreviousNext: Int32, Hashable {
     case none, previous, next, previousAndNext
 }
 extension PreviousNext {
@@ -810,7 +810,7 @@ extension PreviousNext: Protobuf {
     }
 }
 
-struct SheetOption: Hashable, Codable {
+struct SheetOption: Hashable {
     var mainFrame = Sheet.defaultBounds
 }
 extension SheetOption: Protobuf {
@@ -827,7 +827,7 @@ extension SheetOption: Protobuf {
     }
 }
 
-struct TextSelection: Hashable, Codable {
+struct TextSelection: Hashable {
     var ranges = [Range<Int>]()
 }
 extension TextSelection {
@@ -846,7 +846,7 @@ extension TextSelection: Protobuf {
     }
 }
 
-struct PitSelection: Hashable, Codable {
+struct PitSelection: Hashable {
     var sprolIs = Set<Int>()
 }
 extension PitSelection {
@@ -864,7 +864,7 @@ extension PitSelection: Protobuf {
         }
     }
 }
-struct NoteSelection: Hashable, Codable {
+struct NoteSelection: Hashable {
     var pitSelections = [Int: PitSelection]()
 }
 extension NoteSelection {
@@ -887,7 +887,7 @@ extension NoteSelection: Protobuf {
     }
 }
 
-struct KeyframeSelection: Hashable, Codable {
+struct KeyframeSelection: Hashable {
     var lineIs = Set<Int>()
     var planeIs = Set<Int>()
 }
@@ -909,7 +909,7 @@ extension KeyframeSelection: Protobuf {
     }
 }
 
-struct SheetSelection: Hashable, Codable {
+struct SheetSelection: Hashable {
     static let empty = Self()
     
     var keyframeSelections = [Int: KeyframeSelection]()
@@ -990,7 +990,7 @@ extension SheetSelection: Protobuf {
     }
 }
 
-struct Sheet: Hashable, Codable {
+struct Sheet: Hashable {
     var animation = Animation(keyframes: [Keyframe(beat: 0)])
     var score = Score()
     var texts = [Text]()
@@ -1676,7 +1676,7 @@ extension Sheet {
     }
 }
 
-struct InterOption: Hashable, Codable {
+struct InterOption: Hashable {
     var id = UUID()
     var interType = InterType.none
 }
@@ -1712,7 +1712,7 @@ extension Line {
     }
 }
 
-struct PlaneValue: Hashable, Codable {
+struct PlaneValue: Hashable {
     var planes: [Plane]
     var moveIndexValues: [IndexValue<Int>]
 }
@@ -1729,7 +1729,7 @@ extension PlaneValue: Protobuf {
     }
 }
 
-struct ColorValue: Hashable, Codable {
+struct ColorValue: Hashable {
     var uuColor: UUColor
     var planeIndexes = [Int](), lineIndexes = [Int](), isBackground = false
     var planeAnimationIndexes = [IndexValue<[Int]>]()
@@ -1759,7 +1759,7 @@ extension ColorValue: Protobuf {
     }
 }
 
-struct TextValue: Hashable, Codable {
+struct TextValue: Hashable {
     var string: String, replacedRange: Range<Int>,
         origin: Point?, size: Double?, widthCount: Double?
 }
@@ -1811,7 +1811,7 @@ extension TextValue: Protobuf {
     }
 }
 
-struct SheetValue: Hashable, Codable {
+struct SheetValue: Hashable {
     var lines = [Line](), planes = [Plane](),
         texts = [Text](), contents = [Content](), origin = Point()
     var scale = 1.0

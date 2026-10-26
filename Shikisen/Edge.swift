@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Edge: Hashable, Codable {
+struct Edge: Hashable {
     var p0, p1: Point
     
     init() {
@@ -363,8 +363,8 @@ extension LinearLine {
     }
 }
 
-struct Pointline: Hashable, Codable {
-    struct Control: Hashable, Codable {
+struct Pointline: Hashable {
+    struct Control: Hashable {
         var point = Point(), pressure = 1.0
     }
     var controls = [Control]()

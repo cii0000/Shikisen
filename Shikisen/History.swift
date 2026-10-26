@@ -30,18 +30,18 @@ extension Date: Protobuf {
     }
 }
 
-struct Version: Hashable, Codable {
+struct Version: Hashable {
     var indexPath = [Int](), groupIndex = 0
 }
 
-protocol UndoItem: Sendable, Protobuf, Hashable, Codable {}
+protocol UndoItem: Sendable, Protobuf, Hashable {}
 extension UndoItem {
     var caseName: String {
         Mirror(reflecting: self).children.first?.label ?? .init(describing: self)
     }
 }
 
-struct UndoItemValue<T: UndoItem>: Codable {
+struct UndoItemValue<T: UndoItem> {
     var undoItem: T
     var redoItem: T
     
@@ -78,8 +78,8 @@ struct UndoError: LocalizedError, Equatable {
         errorDescription = "\("History Error".localized): \(undoItem.caseName)"
     }
 }
-struct UndoDataValue<T: UndoItem>: Codable {
-    enum LoadType: Codable {
+struct UndoDataValue<T: UndoItem> {
+    enum LoadType {
         case unload, loaded, error
     }
     
@@ -117,7 +117,7 @@ extension UndoDataValue: Protobuf {
     }
 }
 
-struct UndoGroup<T: UndoItem>: Codable {
+struct UndoGroup<T: UndoItem> {
     var values = [UndoDataValue<T>]()
     private(set) var firstUndoItem: T?, firstUndoItemData = Data()
     var date = Date()
@@ -229,21 +229,6 @@ extension _Branch: Protobuf {
         }
     }
 }
-extension _Branch: Codable {
-    public convenience init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        self.init()
-        groups = try container.decode([UndoGroup<T>].self)
-        childrenCount = try container.decode(Int.self)
-        selectedChildIndex = try container.decodeIfPresent(Int.self)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(groups)
-        try container.encode(children.count)
-        try container.encode(selectedChildIndex)
-    }
-}
 extension _Branch {
     func appendInLastGroup(undo undoItem: T, redo redoItem: T) {
         groups[.last].values.append(.init(save: .init(undo: undoItem, redo: redoItem)))
@@ -336,17 +321,6 @@ extension BranchCoder: Protobuf {
         .with {
             $0.allBranches = allBranches.map { $0.pb }
         }
-    }
-}
-extension BranchCoder: Codable {
-    public init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let allBranches = try container.decode([_Branch<T>].self)
-        rootBranch = BranchCoder.rootBranch(from: allBranches)
-    }
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(allBranches)
     }
 }
 private enum BranchLoop<T: UndoItem> {
@@ -466,22 +440,6 @@ extension History: Protobuf {
         }
         currentVersionIndex = j + branch.groups.count - 1
         currentVersion = .init(indexPath: indexPath, groupIndex: branch.groups.count - 1)
-    }
-}
-extension History: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case rootBranch, currentVersionIndex
-    }
-    init(from decoder: any Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        rootBranch = try values.decode(BranchCoder.self, forKey: .rootBranch).rootBranch
-        currentVersionIndex = try values.decode(Int.self, forKey: .currentVersionIndex)
-        check()
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(BranchCoder(rootBranch: rootBranch), forKey: .rootBranch)
-        try container.encode(currentVersionIndex, forKey: .currentVersionIndex)
     }
 }
 extension History {

@@ -20,7 +20,7 @@ import Accelerate.vecLib.vDSP
 //#elseif os(linux) && os(windows)
 //#endif
 
-struct Picture: Hashable, Codable {
+struct Picture: Hashable {
     var lines = [Line](), planes = [Plane]()
 }
 extension Picture: Protobuf {

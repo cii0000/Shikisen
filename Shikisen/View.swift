@@ -55,7 +55,7 @@ protocol BinderProtocol: AnyObject {
     associatedtype Value
     var value: Value { get set }
 }
-final class RecordBinder<Value: Codable & Serializable>: BinderProtocol {
+final class RecordBinder<Value: Serializable>: BinderProtocol {
     var record: Record<Value> {
         didSet {
             record.willwriteClosure = { [weak self] (record) in

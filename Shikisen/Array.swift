@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-enum FirstOrLast: String, Codable {
+enum FirstOrLast: String {
     case first, last
 }
 extension FirstOrLast {

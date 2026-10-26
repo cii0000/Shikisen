@@ -268,7 +268,7 @@ extension Note {
     }
 }
 
-struct Formant: Hashable, Codable {
+struct Formant: Hashable {
     var sprol0 = Sprol(), sprol1 = Sprol(), sprol2 = Sprol(), sprol3 = Sprol()
 }
 extension Formant {
@@ -577,7 +577,7 @@ extension Formant: MonoInterpolatable {
     }
 }
 
-struct FormantFilter: Hashable, Codable {
+struct FormantFilter: Hashable {
     /// f0: 4.03
     var formants: [Formant] = [.init(sdVolm: 0.5 * 0.8 * 0.85, sdNoise: 0,
                                      sdPitch: 9.1, sPitch: 67.8, ePitch: 74.5, edPitch: 6.3,
@@ -1411,7 +1411,7 @@ extension FormantFilter: MonoInterpolatable {
     }
 }
 
-struct KeyFormantFilter: Hashable, Codable {
+struct KeyFormantFilter: Hashable {
     var formantFilter: FormantFilter
     var durSec = 0.0
     var sec = 0.0
@@ -1428,7 +1428,7 @@ struct KeyFormantFilter: Hashable, Codable {
     }
 }
 
-struct Mora: Hashable, Codable {
+struct Mora: Hashable {
     var keyFormantFilters: [KeyFormantFilter]
     
     init?(hiragana: String, baseFormantFilterA: FormantFilter,
@@ -1962,7 +1962,7 @@ struct Mora: Hashable, Codable {
     }
 }
 
-enum Phoneme: String, CaseIterable, Hashable, Codable {
+enum Phoneme: String, CaseIterable, Hashable {
     case a, i, ɯ, e, o, j, ja, β, ɴ,
          n, nj, m, mj, ɾ, ɾj,
          ha, ç, ɸ, he, ho,

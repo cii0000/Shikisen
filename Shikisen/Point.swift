@@ -47,18 +47,6 @@ extension Array where Element == IntPoint {
         .with { $0.value = map { $0.pb } }
     }
 }
-extension IntPoint: Codable {
-    init(from decoder: any Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        x = try container.decode(Int.self)
-        y = try container.decode(Int.self)
-    }
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(x)
-        try container.encode(y)
-    }
-}
 extension IntPoint {
     func cross(_ other: IntPoint) -> Int {
         x * other.y - y * other.x
@@ -445,7 +433,7 @@ extension Sequence where Element == Point {
 //    }
 }
 
-enum CrossDirection: Int8, Hashable, Codable {
+enum CrossDirection: Int8, Hashable {
     case left, straight, right
     init(_ v: Double) {
         if v > 0 {

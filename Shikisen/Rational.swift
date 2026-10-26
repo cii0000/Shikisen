@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Rational: SignedNumeric, Hashable, Codable {
+struct Rational: SignedNumeric, Hashable {
     static let ulpOfOne = Rational(.ulpOfOne)
     var p, q: Int
     
@@ -477,7 +477,7 @@ extension Range where Bound == Int {
     }
 }
 
-struct RationalClosedRange: Hashable, Codable {
+struct RationalClosedRange: Hashable {
     var value: ClosedRange<Rational>
 }
 extension RationalClosedRange: Protobuf {
@@ -496,7 +496,7 @@ extension RationalClosedRange: Protobuf {
         }
     }
 }
-struct RationalRange: Hashable, Codable {
+struct RationalRange: Hashable {
     var value: Range<Rational>
 }
 extension RationalRange: Protobuf {

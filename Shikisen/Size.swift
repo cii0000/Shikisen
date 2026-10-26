@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct Size: Hashable, Codable {
+struct Size: Hashable {
     var width = 0.0, height = 0.0
 }
 extension Size: Protobuf {

@@ -23,7 +23,7 @@ struct ColorPathValue {
     var paths: [Path], lineType: Node.LineType?, fillType: Node.FillType?
 }
 
-struct CopiedSheetsValue: Hashable, Codable {
+struct CopiedSheetsValue: Hashable {
     var deltaPoint = Point()
     var sheetIDs = [IntPoint: UUID]()
     var isSelected = false
@@ -43,7 +43,7 @@ extension CopiedSheetsValue: Protobuf {
     }
 }
 
-struct PlanesValue: Codable {
+struct PlanesValue {
     var planes: [Plane]
 }
 extension PlanesValue: Protobuf {
@@ -57,7 +57,7 @@ extension PlanesValue: Protobuf {
     }
 }
 
-struct NotesValue: Codable {
+struct NotesValue {
     var notes: [Note]
     var deltaPitch: Rational
     var isSelected: Bool
@@ -77,7 +77,7 @@ extension NotesValue: Protobuf {
     }
 }
 
-struct CopiedAnimation: Codable {
+struct CopiedAnimation {
     var animation: Animation
     var sheetID: UUID
     var keyframeID: UUID
@@ -97,7 +97,7 @@ extension CopiedAnimation: Protobuf {
     }
 }
 
-struct InteroptionsValue: Codable {
+struct InteroptionsValue {
     var ids: [InterOption]
     var sheetID: UUID
     var rootKeyframeIndex: Int
@@ -117,7 +117,7 @@ extension InteroptionsValue: Protobuf {
     }
 }
 
-enum PastableObject: Sendable, Codable {
+enum PastableObject: Sendable {
     case copiedSheetsValue(_ copiedSheetsValue: CopiedSheetsValue)
     case sheetValue(_ sheetValue: SheetValue)
     case border(_ border: Border)

@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-enum Phase: Int8, Codable {
+enum Phase: Int8 {
     case began, changed, ended
 }
 extension Phase: CustomDebugStringConvertible {

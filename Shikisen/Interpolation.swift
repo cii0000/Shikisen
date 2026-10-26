@@ -16,7 +16,7 @@
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
 struct Interpolation<Value: MonoInterpolatable & Equatable> {
-    enum KeyType: Int8, Hashable, Codable {
+    enum KeyType: Int8, Hashable {
         case step, linear, spline
     }
     struct Key {
@@ -31,11 +31,9 @@ struct Interpolation<Value: MonoInterpolatable & Equatable> {
 extension Interpolation.Key: Sendable where Value: Sendable {}
 extension Interpolation.Key: Equatable where Value: Equatable {}
 extension Interpolation.Key: Hashable where Value: Hashable {}
-extension Interpolation.Key: Codable where Value: Codable {}
 extension Interpolation: Sendable where Value: Sendable {}
 extension Interpolation: Equatable where Value: Equatable {}
 extension Interpolation: Hashable where Value: Hashable {}
-extension Interpolation: Codable where Value: Codable {}
 extension Interpolation {
     var isEmpty: Bool {
         keys.isEmpty
