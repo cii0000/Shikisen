@@ -140,7 +140,12 @@ extension Line.Control {
 }
 extension Line: Protobuf {
     init(_ pb: PBLine) throws {
-        controls = try pb.controls.map { try Control($0) }
+        controls = try zip(zip(pb.xs, pb.ys), zip(pb.weights, pb.pressures)).map {
+            .init(point: .init(try $0.0.notInfiniteAndNAN(),
+                               try $0.1.notInfiniteAndNAN()),
+                  weight: try $1.0.notNaN().clipped(min: 0, max: 1),
+                  pressure: try $1.1.notNaN().clipped(min: 0, max: 1))
+        }
         
         if controls.isEmpty {
             let aControls = [Control](data: pb.controlsData)
@@ -169,7 +174,10 @@ extension Line: Protobuf {
     }
     var pb: PBLine {
         .with {
-            $0.controls = controls.map { $0.pb }
+            $0.xs = controls.map { $0.point.x }
+            $0.ys = controls.map { $0.point.y }
+            $0.weights = controls.map { $0.weight }
+            $0.pressures = controls.map { $0.pressure }
             if size != Line.defaultLineWidth { $0.size = size }
             $0.interID = interID.pb
             if interType != .none { $0.interType = interType.pb }

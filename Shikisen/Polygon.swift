@@ -101,23 +101,21 @@ struct Polygon: Hashable, Codable {
 }
 extension Polygon: Protobuf {
     init(_ pb: PBPolygon) throws {
-        let aPoints = [Point](data: pb.pointsData)
-        switch ByteOrder.current() ?? .littleEndian {
-        case .littleEndian: points = aPoints
-        case .bigEndian: points = aPoints.map { $0.littleEndianToBigEndian() }
-        }
-        points = try points.map { try $0.notInfiniteAndNAN() }
-        
-        if points.isEmpty {// ver 1.0
-            points = try pb.points.map { try Point($0).notInfiniteAndNAN() }
+        points = try zip(pb.xs, pb.ys).map { Point(try $0.notInfiniteAndNAN(),
+                                                   try $1.notInfiniteAndNAN()) }
+        if points.isEmpty {
+            let aPoints = [Point](data: pb.pointsData)
+            switch ByteOrder.current() ?? .littleEndian {
+            case .littleEndian: points = aPoints
+            case .bigEndian: points = aPoints.map { $0.littleEndianToBigEndian() }
+            }
+            points = try points.map { try $0.notInfiniteAndNAN() }
         }
     }
     var pb: PBPolygon {
         .with {
-            switch ByteOrder.current() ?? .littleEndian {
-            case .littleEndian: $0.pointsData = points.data
-            case .bigEndian: $0.pointsData = points.map { $0.bigEndianToLittleEndian() }.data
-            }
+            $0.xs = points.map { $0.x }
+            $0.ys = points.map { $0.y }
         }
     }
 }

@@ -111,6 +111,11 @@ message PBLine {
         double weight = 2;
         double pressure = 3;
     }
+    repeated double xs = 9;
+    repeated double ys = 10;
+    repeated double weights = 11;
+    repeated double pressures = 12;
+    
     repeated PBControl controls = 1;
     optional double size = 2;
     PBUUID interID = 4;
@@ -122,6 +127,9 @@ message PBLine {
 }
 
 message PBPolygon {
+    repeated double xs = 3;
+    repeated double ys = 4;
+    
     repeated PBPoint points = 1;
     bytes pointsData = 2;
 }
