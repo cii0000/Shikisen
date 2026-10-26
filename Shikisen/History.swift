@@ -890,12 +890,21 @@ extension History {
                 for (vi, value) in group.values.enumerated() {
                     let undoItem = try? T(serializedData: value.undoItemData)
                     let redoItem = try? T(serializedData: value.redoItemData)
-                    if undoItem == nil, let redoItem {
+                    if let undoItem, let redoItem {
                         self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
-                        = try! redoItem.reversed()!.serializedData()
-                    } else if let undoItem, redoItem == nil {
+                        = (try? undoItem.serializedData()) ?? .init()
                         self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
-                        = try! undoItem.reversed()!.serializedData()
+                        = (try? redoItem.serializedData()) ?? .init()
+                    } else if undoItem == nil, let redoItem {
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
+                        = (try? redoItem.reversed()?.serializedData()) ?? .init()
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
+                        = (try? redoItem.serializedData()) ?? .init()
+                    } else if let undoItem, redoItem == nil {
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
+                        = (try? undoItem.serializedData()) ?? .init()
+                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
+                        = (try? undoItem.reversed()?.serializedData()) ?? .init()
                     }
                 }
             }
