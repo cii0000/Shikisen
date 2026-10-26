@@ -110,11 +110,11 @@ extension Plane {
 }
 extension Text {
     var node: Node {
-        .init(attitude: .init(position: origin),
+        .init(pose: .init(position: origin),
               path: typesetter.path(), fillType: .color(.content))
     }
     var cpuNode: CPUNode {
-        .init(attitude: .init(position: origin),
+        .init(pose: .init(position: origin),
               path: typesetter.path(), fillType: .color(.content))
     }
 }
@@ -999,7 +999,7 @@ struct Sheet: Hashable {
     var mainFrame = Sheet.defaultBounds
     var backgroundUUColor = Sheet.defalutBackgroundUUColor
     var selection = SheetSelection.empty
-    var keyframeAttitude = Attitude.identity
+    var keyframePose = Pose.identity
 }
 extension Sheet: Protobuf {
     init(_ pb: PBSheet) throws {
@@ -1020,8 +1020,8 @@ extension Sheet: Protobuf {
         if !canSet(selection) {
             selection = .empty
         }
-        keyframeAttitude = pb.hasKeyframeAttitude ?
-        ((try? .init(pb.keyframeAttitude)) ?? .identity) : .identity
+        keyframePose = pb.hasKeyframePose ?
+        ((try? .init(pb.keyframePose)) ?? .identity) : .identity
     }
     var pb: PBSheet {
         .with {
@@ -1033,7 +1033,7 @@ extension Sheet: Protobuf {
             if mainFrame != Sheet.defaultBounds { $0.mainFrame = mainFrame.pb }
             $0.backgroundUucolor = backgroundUUColor.pb
             $0.selection = selection.pb
-            if !keyframeAttitude.isIdentity { $0.keyframeAttitude = keyframeAttitude.pb }
+            if !keyframePose.isIdentity { $0.keyframePose = keyframePose.pb }
         }
     }
 }
@@ -1384,29 +1384,29 @@ extension Sheet {
     }
     
     func node(isBorder: Bool, isBackground: Bool = true,
-              attitude: Attitude = .init(),
+              pose: Pose = .init(),
               in bounds: Rect) -> CPUNode {
         node(isBorder: isBorder, picture: picture, draftPicture: draftPicture,
              isBackground: isBackground,
-             attitude: attitude,
+             pose: pose,
              in: bounds)
     }
     
     func node(isBorder: Bool, atKeyframe ki: Int?,
               isBackground: Bool = true,
-              attitude: Attitude = .init(),
+              pose: Pose = .init(),
               in bounds: Rect) -> CPUNode {
         let k = ki != nil ? animation.keyframes[ki!] : nil
         return node(isBorder: isBorder, captionNodes: [],
                     picture: k?.picture ?? .init(), draftPicture: k?.draftPicture ?? .init(),
                     isBackground: isBackground,
-                    attitude: attitude,
+                    pose: pose,
                     in: bounds)
     }
     func node(isBorder: Bool, atSec sec: Rational,
               isEnabledCaption: Bool, renderingCaptionFrame: Rect? = nil,
               isBackground: Bool = true,
-              attitude: Attitude = .init(),
+              pose: Pose = .init(),
               in bounds: Rect) -> CPUNode {
         let rootBeat = animation.beat(fromSec: sec)
         
@@ -1421,13 +1421,13 @@ extension Sheet {
         return node(isBorder: isBorder, captionNodes: captionNodes,
                     picture: k?.picture ?? .init(), draftPicture: k?.draftPicture ?? .init(),
                     isBackground: isBackground,
-                    attitude: attitude,
+                    pose: pose,
                     in: bounds)
     }
     func node(isBorder: Bool, captionNodes: [CPUNode] = [],
               picture: Picture, draftPicture: Picture,
               isBackground: Bool,
-              attitude: Attitude = .init(),
+              pose: Pose = .init(),
               in bounds: Rect) -> CPUNode {
         let lineNodes = picture.lines.map { $0.cpuNode }
         let planeNodes = picture.planes.map { $0.cpuNode }
@@ -1457,12 +1457,12 @@ extension Sheet {
         let children2 = textNodes + borderNodes + captionNodes
         if isBackground {
             return .init(children: children0 + children1 + children2,
-                         attitude: attitude,
+                         pose: pose,
                          path: Path(bounds),
                          fillType: .color(backgroundUUColor.value))
         } else{
             return .init(children: children0 + children1 + children2,
-                         attitude: attitude,
+                         pose: pose,
                          path: Path(bounds))
         }
     }

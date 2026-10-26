@@ -369,7 +369,7 @@ extension Picture {
         
         let position = Point(x: -bounds.centerPoint.x * renderingScale + size.width / 2,
                              y: -bounds.centerPoint.y * renderingScale + size.height / 2)
-        let invertedTransform = Attitude(position: position,
+        let invertedTransform = Pose(position: position,
                                          scale: Size(square: renderingScale)).transform.inverted()
         return mPolys.map { $0 * invertedTransform }
     }

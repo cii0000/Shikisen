@@ -493,7 +493,7 @@ final class APasteAction: Action {
                 Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
             }
             selectingLineNode.children =
-            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
+            [Node(pose: rootView.lookingUpNode.pose, path: path,
                   lineWidth: Line.defaultLineWidth * 1.5,
                   lineType: .color(.selected),
                   fillType: .color(.subSelected))]
@@ -555,7 +555,7 @@ final class APasteAction: Action {
             }
             let planeNodes = sheetView.keyframeView.selectedPlaneIs.map {
                 let node = sheetView.keyframeView.planesView.elementViews[$0].node.clone
-                node.attitude *= sheetView.animationView.node.worldTransform
+                node.pose *= sheetView.animationView.node.worldTransform
                 node.fillType = .color(sheetView.model.picture.planes[$0].uuColor.value + .subSelected)
                 return node
             }
@@ -593,10 +593,10 @@ final class APasteAction: Action {
             let scoreView = sheetView.scoreView
             
             func show(_ ps: [Point], r: Double) {
-                let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let node = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                 path: Path(ps.map { Pathline(circleRadius: r, position: $0) }),
                                 fillType: .color(.selected))
-                let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let inNode = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: r * 0.5,
                                                                position: $0) }),
                                   fillType: .color(.background))
@@ -666,10 +666,10 @@ final class APasteAction: Action {
                     Node(path: $0,
                          lineWidth: 1.5 * 2,
                          lineType: .color(.selected))
-                } + [Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                } + [Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                           path: Path(ps.map { Pathline(circleRadius: 0.25 * 8, position: $0) }),
                           fillType: .color(.selected)),
-                     Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                     Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                           path: Path(ps.map { Pathline(circleRadius: 0.25 * 8 * 0.5,
                                                        position: $0) }),
                           fillType: .color(.background))] + selectedFrameNodes
@@ -855,10 +855,10 @@ final class APasteAction: Action {
             let score = scoreView.model
             
             func show(_ ps: [Point], r: Double) {
-                let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let node = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                 path: Path(ps.map { Pathline(circleRadius: r, position: $0) }),
                                 fillType: .color(.selected))
-                let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let inNode = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: r * 0.5,
                                                                position: $0) }),
                                   fillType: .color(.background))
@@ -953,7 +953,7 @@ final class APasteAction: Action {
                 }
                 let pathlines = [Pathline(nps.map { scoreView.node.convertToWorld($0) })]
                 + ps.map { Pathline(circleRadius: 0.125 * 2, position: scoreView.convertToWorld($0)) }
-                let inNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let inNode = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                   path: Path(ps.map { Pathline(circleRadius: 0.125 * 2 * 0.5,
                                                                position: $0) }),
                                   fillType: .color(.background))
@@ -963,7 +963,7 @@ final class APasteAction: Action {
                 let note = score.notes[noteI]
                 let toneFrames = scoreView.toneFrames(at: noteI)
                 
-                let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                let node = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                 path: .init(toneFrames.map { Edge($0.frame.minXMaxYPoint,
                                                                   $0.frame.maxXMaxYPoint) }),
                                 lineWidth: rootView.worldLineWidth,
@@ -1118,8 +1118,8 @@ final class APasteAction: Action {
         if rootAction.textAction.editingTextView != nil {
             rootAction.textAction.cut(at: p)
             return true
-        } else if let sheetView = rootView.sheetView(at: p), sheetView.containsKeyframeAttitude(sheetView.convertFromWorld(p)) {
-            sheetView.keyframeAttitude = .init()
+        } else if let sheetView = rootView.sheetView(at: p), sheetView.containsKeyframePose(sheetView.convertFromWorld(p)) {
+            sheetView.keyframePose = .init()
             return true
         } else if let sheetView = rootView.sheetView(at: p),
                   sheetView.animationView.containsTimeline(sheetView.animationView.timelineNode.convertFromWorld(p), scale: rootView.screenToWorldScale) {
@@ -1861,7 +1861,7 @@ final class APasteAction: Action {
             oldFillSnapP = np
             
             if selectingLineNode.children.count == 4 {
-                selectingLineNode.children[0].attitude = Attitude(position: np,
+                selectingLineNode.children[0].pose = Pose(position: np,
                                                                   scale: Size(square: 1.0 * scale),
                                                                   rotation: rootView.pov.rotation - firstRotation)
                 
@@ -1872,18 +1872,18 @@ final class APasteAction: Action {
                         .rotated(by: rootView.pov.rotation - firstRotation)
                     let nt = t.translated(by: np - sheetFrame.minXMinYPoint)
                     for (i, text) in value.texts.enumerated() {
-                        textChildren[i].attitude = Attitude(position: (text.origin) * nt + sheetFrame.minXMinYPoint,
+                        textChildren[i].pose = Pose(position: (text.origin) * nt + sheetFrame.minXMinYPoint,
                                                             scale: Size(square: 1.0 * scale))
                     }
                 }
                 
-                selectingLineNode.children[2].attitude = Attitude(position: np,
+                selectingLineNode.children[2].pose = Pose(position: np,
                                                                   scale: Size(square: 1.0 * scale))
                 
                 if nSnapP != oldSnapP {
                     if let nSnapP {
                         selectingLineNode.children[3].path = Path(circleRadius: isSnapped ? 5 : 4)
-                        selectingLineNode.children[3].attitude = Attitude(position: nSnapP, scale: Size(square: rootView.screenToWorldScale))
+                        selectingLineNode.children[3].pose = Pose(position: nSnapP, scale: Size(square: rootView.screenToWorldScale))
                     } else {
                         selectingLineNode.children[3].path = Path()
                     }
@@ -1915,7 +1915,7 @@ final class APasteAction: Action {
                 selectingLineNode.fillType = .color(.subSelected)
                 selectingLineNode.lineType = .color(.selected)
                 selectingLineNode.path = path
-                selectingLineNode.attitude = Attitude(position: Point())
+                selectingLineNode.pose = Pose(position: Point())
                 selectingLineNode.children = []
                 isAppend = true
             }
@@ -1951,7 +1951,7 @@ final class APasteAction: Action {
                 let np: Point
                 if let stb = textFrame {
                     let textFrame = stb
-                    * Attitude(position: p,
+                    * Pose(position: p,
                                scale: Size(square: 1.0 * scale)).transform
                     let sb = sheetFrame.inset(by: Sheet.textPadding)
                     if !sb.intersects(textFrame) {
@@ -2004,13 +2004,13 @@ final class APasteAction: Action {
                 if let path = path {
                     selectingLineNode.fillType = .color(.subSelected)
                     selectingLineNode.lineType = .color(.selected)
-                    selectingLineNode.path = path * Attitude(position: np + snapDP,
+                    selectingLineNode.path = path * Pose(position: np + snapDP,
                                                              scale: Size(square: 1.0 * scale)).transform.inverted()
                 } else {
                     selectingLineNode.path = Path()
                 }
-                selectingLineNode.attitude
-                = Attitude(position: np + snapDP,
+                selectingLineNode.pose
+                = Pose(position: np + snapDP,
                            scale: Size(square: 1.0 * scale))
                 
                 oldScale = s
@@ -2211,7 +2211,7 @@ final class APasteAction: Action {
                     
                     let scale = firstScale / rootView.worldToScreenScale
                     let imageNode = Node(name: "content",
-                                         attitude: .init(position: p, scale: .init(square: scale)),
+                                         pose: .init(position: p, scale: .init(square: scale)),
                                          path: Path(rect),
                                          fillType: .texture(texture))
                     self.imageNode = imageNode
@@ -2219,7 +2219,7 @@ final class APasteAction: Action {
                 }
             } else if !selectingLineNode.children.isEmpty {
                 let scale = firstScale / rootView.worldToScreenScale
-                selectingLineNode.children[0].attitude = Attitude(position: p, scale: .init(square: scale))
+                selectingLineNode.children[0].pose = Pose(position: p, scale: .init(square: scale))
             }
         }
         func updateNotes(_ notes: [Note], deltaPitch: Rational, isSelected: Bool) {
@@ -2260,7 +2260,7 @@ final class APasteAction: Action {
                 sheetView.append(notes)
                 
                 let octaveNode = scoreView.octaveNode(noteIs: Array(count ..< count + notes.count))
-                octaveNode.attitude.position = sheetView.convertToWorld(scoreView.node.attitude.position)
+                octaveNode.pose.position = sheetView.convertToWorld(scoreView.node.pose.position)
                 self.octaveNode = octaveNode
                 rootView.node.append(child: octaveNode)
                 
@@ -2311,7 +2311,7 @@ final class APasteAction: Action {
             
             //            selectingLineNode.children = notes.map {
             //                let node = scoreView.noteNode(from: $0).node
-            //                node.attitude = Attitude(position: sheetView.convertToWorld(Point()))
+            //                node.pose = Pose(position: sheetView.convertToWorld(Point()))
             //                return node
             //            }
             
@@ -3578,7 +3578,7 @@ final class APasteAction: Action {
                 Pasteboard.shared.copiedObjects = [.string(rootView.lookingUpString)]
             }
             selectingLineNode.children =
-            [Node(attitude: rootView.lookingUpNode.attitude, path: path,
+            [Node(pose: rootView.lookingUpNode.pose, path: path,
                   lineWidth: Line.defaultLineWidth * 1.5,
                   lineType: .color(.selected),
                   fillType: .color(.subSelected))]
@@ -3741,7 +3741,7 @@ final class APasteAction: Action {
                         ?? .color(.disabled)
                     
                     let sf = rootView.sheetFrame(with: $0.key)
-                    return Node(attitude: Attitude(position: sf.origin),
+                    return Node(pose: Pose(position: sf.origin),
                                 path: Path(Rect(size: sf.size)),
                                 lineWidth: lw,
                                 lineType: .color(.selected), fillType: fillType)
@@ -3756,7 +3756,7 @@ final class APasteAction: Action {
                 let nsf = Rect(origin: rootView.sheetFrame(with: nshp).origin,
                               size: sf.size)
                 let lw = Line.defaultLineWidth / rootView.worldToScreenScale
-                children.append(Node(attitude: Attitude(position: nsf.origin),
+                children.append(Node(pose: Pose(position: nsf.origin),
                                      path: Path(Rect(size: nsf.size)),
                                      lineWidth: lw,
                                      lineType: selectingLineNode.lineType,
@@ -3764,7 +3764,7 @@ final class APasteAction: Action {
             }
             selectingLineNode.children = children
             
-            pasteSheetNode.attitude.position = p - csv.deltaPoint
+            pasteSheetNode.pose.position = p - csv.deltaPoint
         }
     }
     func pasteSheet(at sp: Point) {
@@ -3870,7 +3870,7 @@ final class APasteAction: Action {
             
             selectingLineNode.children = values.map {
                 let sf = $0.frame
-                return Node(attitude: Attitude(position: sf.origin),
+                return Node(pose: Pose(position: sf.origin),
                             path: Path(Rect(size: sf.size)),
                             lineWidth: selectingLineNode.lineWidth,
                             lineType: selectingLineNode.lineType,
@@ -4074,10 +4074,10 @@ final class CopyLineColorAction: InputKeyEventAction {
                     let lw = Line.defaultLineWidth
                     let nlw = max(lw * 1.5, lw * 2.5 * scale, 1 * scale)
                     
-                    let colorNode = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                    let colorNode = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                          path: Path(ps.map { Pathline(circleRadius: nlw / 2, position: $0) }),
                                          fillType: .color(color))
-                    let node = Node(attitude: .init(position: scoreView.node.convertToWorld(Point())),
+                    let node = Node(pose: .init(position: scoreView.node.convertToWorld(Point())),
                                     path: Path(ps.map { Pathline(circleRadius: nlw, position: $0) }),
                                     fillType: .color(.selected))
                     selectingLineNode.children = [node, colorNode]

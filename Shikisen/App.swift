@@ -3806,11 +3806,11 @@ struct Cursor {
             let nodes: [Node]
             if let tPath {
                 nodes = [outlineNode, inlineNode,
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                                lineWidth: lineWidth + subLineWidth,
                                lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                               fillType: .color(color))] + progressNodes
             } else {
@@ -3891,11 +3891,11 @@ struct Cursor {
             let nodes: [Node]
             if let tPath {
                 nodes = [arrowOutlineNode, outlineNode, arrowInlineNode, inlineNode,
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                                lineWidth: lineWidth + subLineWidth,
                                lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                                fillType: .color(color))] + progressNodes
             } else {
@@ -3945,11 +3945,11 @@ struct Cursor {
         let hotSpot = Point(d, -d)
         
         func node(color: Color, outlineColor: Color) -> Node {
-            let outlineNode = Node(attitude: Attitude(position: Point(0, tSize.height)),
+            let outlineNode = Node(pose: Pose(position: Point(0, tSize.height)),
                                    path: path,
                                    lineWidth: subLineWidth * 2,
                                    lineType: .color(outlineColor))
-            let inlineNode = Node(attitude: Attitude(position: Point(0, tSize.height)),
+            let inlineNode = Node(pose: Pose(position: Point(0, tSize.height)),
                                   path: path,
                                   fillType: .color(color))
             
@@ -3957,11 +3957,11 @@ struct Cursor {
             if let tPath {
                 let lineWidth = circleDefaultLineWidth, subLineWidth = 1.25
                 nodes = [outlineNode, inlineNode,
-                         Node(attitude: Attitude(position: Point(d, tSize.height - h / 2)),
+                         Node(pose: Pose(position: Point(d, tSize.height - h / 2)),
                               path: tPath,
                               lineWidth: lineWidth + subLineWidth,
                               lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, tSize.height - h / 2)),
+                         Node(pose: Pose(position: Point(d, tSize.height - h / 2)),
                               path: tPath,
                               fillType: .color(color))]
             } else {
@@ -4025,11 +4025,11 @@ struct Cursor {
             let nodes: [Node]
             if let tPath {
                 nodes = [outlineNode, inlineNode,
-                         Node(attitude: Attitude(position: Point(d, b.centerPoint.y)),
+                         Node(pose: Pose(position: Point(d, b.centerPoint.y)),
                                path: tPath,
                                lineWidth: lineWidth + subLineWidth,
                                lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, b.centerPoint.y)),
+                         Node(pose: Pose(position: Point(d, b.centerPoint.y)),
                                path: tPath,
                                fillType: .color(color))]
             } else {
@@ -4095,11 +4095,11 @@ struct Cursor {
             let nodes: [Node]
             if let tPath {
                 nodes = [outlineNode, lOutlineNode, inlineNode, lInlineNode,
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                                lineWidth: lineWidth + subLineWidth,
                                lineType: .color(outlineColor)),
-                         Node(attitude: Attitude(position: Point(d, d + r + ph)),
+                         Node(pose: Pose(position: Point(d, d + r + ph)),
                                path: tPath,
                               fillType: .color(color))]
             } else {

@@ -730,7 +730,7 @@ final class IOAction: Action {
                 return .init(path: .init(bounds), fillType: .color(.background))
             }
             guard let sheet = mainItem.decodedSheet() else { return nil }
-            return sheet.node(isBorder: false, attitude: .init(position: mainItem.frame.origin), in: bounds)
+            return sheet.node(isBorder: false, pose: .init(position: mainItem.frame.origin), in: bounds)
         }
         
         mutating func makeTemps() throws {
@@ -1169,7 +1169,7 @@ final class IOAction: Action {
                     for (ki, _) in sheet.animation.keyframes.enumerated() {
                         let node = sheet.node(isBorder: false, atSec: sec,
                                               isEnabledCaption: false,
-                                              attitude: .init(position: rendering.mainItem.frame.origin),
+                                              pose: .init(position: rendering.mainItem.frame.origin),
                                               in: rendering.bounds)
                         let durBeat = sheet.animation.rendableKeyframeDurBeat(at: ki)
                         let durSec = sheet.animation.sec(fromBeat: durBeat)
@@ -1389,7 +1389,7 @@ final class IOAction: Action {
                     
                     let image: Image?
                     if isChanged || oldImage == nil {
-                        let node = CPUNode(children: children + [.init(children: captionNodes)], attitude: .init(position: track.sheetOrigin),
+                        let node = CPUNode(children: children + [.init(children: captionNodes)], pose: .init(position: track.sheetOrigin),
                                            path: Path(track.sheetBounds),
                                            fillType: .color(track.backgroundColor))
                         image = node.image(in: track.renderBounds, to: size, colorSpace)
@@ -1947,7 +1947,7 @@ final class IOAction: Action {
                                     if ki >= kImages.count { break }
                                     let node = sheetView.animationView.elementViews[ki].node
                                     guard let image = Node(children: [node],
-                                                           attitude: .init(position: origin),
+                                                           pose: .init(position: origin),
                                                            path: Path(sb),
                                                            fillType: .color(backgroundColor))
                                         .renderedTexture(in: b, to: size,
@@ -1999,7 +1999,7 @@ final class IOAction: Action {
                                 kiSet = []
                             } else {
                                 guard let image = Node(children: [sheetView.node],
-                                                       attitude: .init(position: origin),
+                                                       pose: .init(position: origin),
                                                        path: Path(sb),
                                                        fillType: .color(backgroundColor))
                                     .renderedTexture(in: b, to: size,

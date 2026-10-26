@@ -350,12 +350,12 @@ extension Array: AppliableTransform where Element: AppliableTransform {
     }
 }
 
-struct Attitude: Hashable {
+struct Pose: Hashable {
     static let identity = Self()
     
     var position = Point(), scale = Size(square: 1), rotation = 0.0
 }
-extension Attitude {
+extension Pose {
     func with(position: Point) -> Self {
         var n = self
         n.position = position
@@ -372,13 +372,13 @@ extension Attitude {
         return n
     }
 }
-extension Attitude: Protobuf {
-    init(_ pb: PBAttitude) throws {
+extension Pose: Protobuf {
+    init(_ pb: PBPose) throws {
         position = try Point(pb.position).notInfiniteAndNAN()
         scale = try Size(pb.scale).notInfiniteAndNAN()
         rotation = try pb.rotation.notInfiniteAndNAN()
     }
-    var pb: PBAttitude {
+    var pb: PBPose {
         .with {
             $0.position = position.pb
             $0.scale = scale.pb
@@ -386,7 +386,7 @@ extension Attitude: Protobuf {
         }
     }
 }
-extension Attitude {
+extension Pose {
     init(position: Point = Point(), log2Scale: Double, rotation: Double = 0) {
         self.position = position
         scale = Size(square: 2 ** log2Scale)
@@ -421,44 +421,44 @@ extension Attitude {
         }
     }
 }
-extension Attitude: AppliableTransform {
-    static func * (lhs: Attitude, rhs: Transform) -> Attitude {
-        Attitude(lhs.transform * rhs)
+extension Pose: AppliableTransform {
+    static func * (lhs: Pose, rhs: Transform) -> Pose {
+        Pose(lhs.transform * rhs)
     }
 }
-extension Attitude: Interpolatable {
-    static func linear(_ f0: Attitude, _ f1: Attitude,
-                       t: Double) -> Attitude {
+extension Pose: Interpolatable {
+    static func linear(_ f0: Pose, _ f1: Pose,
+                       t: Double) -> Pose {
         let position = Point.linear(f0.position, f1.position, t: t)
         let scale = Size.linear(f0.scale, f1.scale, t: t)
         let rotation = Double.linear(f0.rotation, f1.rotation, t: t)
-        return Attitude(position: position, scale: scale, rotation: rotation)
+        return Pose(position: position, scale: scale, rotation: rotation)
     }
-    static func firstSpline(_ f1: Attitude,
-                            _ f2: Attitude, _ f3: Attitude,
-                            t: Double) -> Attitude {
+    static func firstSpline(_ f1: Pose,
+                            _ f2: Pose, _ f3: Pose,
+                            t: Double) -> Pose {
         let position = Point.firstSpline(f1.position, f2.position, f3.position, t: t)
         let scale = Size.firstSpline(f1.scale, f2.scale, f3.scale, t: t)
         let rotation = Double.firstSpline(f1.rotation, f2.rotation, f3.rotation, t: t)
-        return Attitude(position: position, scale: scale, rotation: rotation)
+        return Pose(position: position, scale: scale, rotation: rotation)
     }
-    static func spline(_ f0: Attitude, _ f1: Attitude,
-                       _ f2: Attitude, _ f3: Attitude,
-                       t: Double) -> Attitude {
+    static func spline(_ f0: Pose, _ f1: Pose,
+                       _ f2: Pose, _ f3: Pose,
+                       t: Double) -> Pose {
         let position = Point.spline(f0.position, f1.position, f2.position, f3.position, t: t)
         let scale = Size.spline(f0.scale, f1.scale, f2.scale, f3.scale, t: t)
         let rotation = Double.spline(f0.rotation, f1.rotation, f2.rotation, f3.rotation, t: t)
-        return Attitude(position: position, scale: scale, rotation: rotation)
+        return Pose(position: position, scale: scale, rotation: rotation)
     }
-    static func lastSpline(_ f0: Attitude, _ f1: Attitude, _ f2: Attitude,
-                           t: Double) -> Attitude {
+    static func lastSpline(_ f0: Pose, _ f1: Pose, _ f2: Pose,
+                           t: Double) -> Pose {
         let position = Point.lastSpline(f0.position, f1.position, f2.position, t: t)
         let scale = Size.lastSpline(f0.scale, f1.scale, f2.scale, t: t)
         let rotation = Double.lastSpline(f0.rotation, f1.rotation, f2.rotation, t: t)
-        return Attitude(position: position, scale: scale, rotation: rotation)
+        return Pose(position: position, scale: scale, rotation: rotation)
     }
 }
-extension Attitude: MonoInterpolatable {
+extension Pose: MonoInterpolatable {
     static func firstMonospline(_ f1: Self,
                                 _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
         .init(position: .firstMonospline(f1.position, f2.position, f3.position, with: ms),
@@ -478,7 +478,7 @@ extension Attitude: MonoInterpolatable {
               rotation: .lastMonospline(f0.rotation, f1.rotation, f2.rotation, with: ms))
     }
 }
-extension Attitude {
+extension Pose {
     var log2Scale: Double {
         get { .log2(scale.width) }
         set {

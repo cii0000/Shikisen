@@ -131,7 +131,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
         
         node = Node(children: [markedRangeNode, replacedRangeNode,
                                cursorNode, borderNode, timelineNode, clippingNode, selectedNode],
-                    attitude: Attitude(position: binder[keyPath: keyPath].origin),
+                    pose: Pose(position: binder[keyPath: keyPath].origin),
                     fillType: .color(.content))
         updateLineWidth()
         updatePath()
@@ -144,7 +144,7 @@ final class TextView<T: BinderProtocol>: TimelineView, @unchecked Sendable {
 }
 extension TextView {
     func updateWithModel() {
-        node.attitude.position = model.origin
+        node.pose.position = model.origin
         updateLineWidth()
         updateTypesetter()
         
@@ -205,7 +205,7 @@ extension TextView {
     func set(_ timeOption: TextTimeOption?, origin: Point) {
         unupdateModel.timeOption = timeOption
         unupdateModel.origin = origin
-        node.attitude.position = origin
+        node.pose.position = origin
         updateTimeline()
         updateClippingNode()
     }
@@ -221,7 +221,7 @@ extension TextView {
         get { model.origin }
         set {
             unupdateModel.origin = newValue
-            node.attitude.position = newValue
+            node.pose.position = newValue
             updateClippingNode()
         }
     }
@@ -600,7 +600,7 @@ extension TextView {
         
         if let origin = textValue.origin {
             unupdateModel.origin = origin
-            node.attitude.position = origin
+            node.pose.position = origin
         }
         if let size = textValue.size {
             unupdateModel.size = size

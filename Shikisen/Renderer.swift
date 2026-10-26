@@ -1290,9 +1290,9 @@ extension CGContext {
 struct CPUNode {
     var children = [Self]()
     var isHidden = false
-    var attitude = Attitude() {
+    var pose = Pose() {
         didSet {
-            localTransform = attitude.transform
+            localTransform = pose.transform
             isIdentityFromLocal = localTransform.isIdentity
         }
     }
@@ -1307,7 +1307,7 @@ struct CPUNode {
     var isDrawLineAntialias = false
     var isClippingChildrenLines = false
     
-    init(children: [Self] = [Self](), isHidden: Bool = false, attitude: Attitude = Attitude(),
+    init(children: [Self] = [Self](), isHidden: Bool = false, pose: Pose = Pose(),
          path: Path = Path(),
          lineWidth: Double = 0.0, lineType: Node.LineType? = nil, fillType: Node.FillType? = nil,
          isCPUFillAntialias: Bool = true, isDrawLineAntialias: Bool = false,
@@ -1315,8 +1315,8 @@ struct CPUNode {
         
         self.children = children
         self.isHidden = isHidden
-        self.attitude = attitude
-        let localTransform = attitude.transform
+        self.pose = pose
+        let localTransform = pose.transform
         self.localTransform = localTransform
         self.isIdentityFromLocal = localTransform.isIdentity
         self.path = path
@@ -1327,7 +1327,7 @@ struct CPUNode {
         self.isDrawLineAntialias = isDrawLineAntialias
         self.isClippingChildrenLines = isClippingChildrenLines
     }
-    init(children: [Self] = [Self](), isHidden: Bool = false, attitude: Attitude = Attitude(),
+    init(children: [Self] = [Self](), isHidden: Bool = false, pose: Pose = Pose(),
          localTransform: Transform = .identity, isIdentityFromLocal: Bool = true,
          path: Path = Path(),
          lineWidth: Double = 0.0, lineType: Node.LineType? = nil, fillType: Node.FillType? = nil,
@@ -1336,7 +1336,7 @@ struct CPUNode {
         
         self.children = children
         self.isHidden = isHidden
-        self.attitude = attitude
+        self.pose = pose
         self.localTransform = localTransform
         self.isIdentityFromLocal = isIdentityFromLocal
         self.path = path
@@ -1350,7 +1350,7 @@ struct CPUNode {
 }
 extension Node {
     var cpu: CPUNode {
-        .init(children: children.map { $0.cpu }, isHidden: isHidden, attitude: attitude,
+        .init(children: children.map { $0.cpu }, isHidden: isHidden, pose: pose,
               localTransform: localTransform, isIdentityFromLocal: isIdentityFromLocal,
               path: path, lineWidth: lineWidth, lineType: lineType, fillType: fillType,
               isCPUFillAntialias: isCPUFillAntialias)

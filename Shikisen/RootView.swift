@@ -77,7 +77,7 @@ struct HUDItem {
         var w = 0.0, h = margin
         let color = Color.content
         if let (nts, nNode) = textNode(with: string, color: color) {
-            nNode.attitude.position = Point((margin + imagePadding).rounded(), h + nts.height - fontSize / 2 - imagePadding)
+            nNode.pose.position = Point((margin + imagePadding).rounded(), h + nts.height - fontSize / 2 - imagePadding)
             w = max(w, nts.width + margin * 2)
             children.append(nNode)
             h += nts.height + padding
@@ -285,7 +285,7 @@ final class HUDView: View, @unchecked Sendable {
             } else {
                 0.0
             }
-            dateView.node.attitude.position = Point(sb.maxX - size.width + dx - padding, sb.maxY - size.height - padding)
+            dateView.node.pose.position = Point(sb.maxX - size.width + dx - padding, sb.maxY - size.height - padding)
         }
     }
     func updateActionListWithScreenBounds() {
@@ -296,13 +296,13 @@ final class HUDView: View, @unchecked Sendable {
                     let scale = sb.height / b.maxY
                     let x = sb.maxX - b.maxX * scale
                     let y = 0.0
-                    actionNode.attitude.scale = .init(square: scale)
-                    actionNode.attitude.position = Point(x, y)
+                    actionNode.pose.scale = .init(square: scale)
+                    actionNode.pose.position = Point(x, y)
                 } else {
                     let x = sb.maxX - b.maxX
                     let y = sb.midY - b.midY
-                    actionNode.attitude.scale = .init(square: 1)
-                    actionNode.attitude.position = Point(x, y)
+                    actionNode.pose.scale = .init(square: 1)
+                    actionNode.pose.position = Point(x, y)
                 }
             }
         }
@@ -321,13 +321,13 @@ final class HUDView: View, @unchecked Sendable {
         }
         p.y -= padding
         for exportingView in exportingViews {
-            exportingView.node.attitude.position
+            exportingView.node.pose.position
             = .init(p.x - exportingView.hudItem.size.width,
                     p.y - exportingView.hudItem.size.height)
             p.y -= exportingView.hudItem.size.height + padding
         }
         for errorView in errorViews {
-            errorView.node.attitude.position
+            errorView.node.pose.position
             = .init(p.x - errorView.hudItem.size.width,
                     p.y - errorView.hudItem.size.height)
             p.y -= errorView.hudItem.size.height + padding
@@ -596,8 +596,8 @@ final class RootView: View, @unchecked Sendable {
     func updateWithWorld() {
         for (shp, _) in world.sheetIDs {
             let sf = sheetFrame(with: shp)
-            thumbnailNode(at: shp)?.attitude.position = sf.origin
-            sheetView(at: shp)?.node.attitude.position = sf.origin
+            thumbnailNode(at: shp)?.pose.position = sf.origin
+            sheetView(at: shp)?.node.pose.position = sf.origin
         }
         updateMap()
         updateSelected()
@@ -1041,7 +1041,7 @@ final class RootView: View, @unchecked Sendable {
         }
         return p
     }
-    static func clippedPOV(from pov: Attitude) -> Attitude {
+    static func clippedPOV(from pov: Pose) -> Pose {
         var pov = pov
         pov.position = clippedPOVPosition(from: pov.position)
         let s = pov.scale.width
@@ -1060,7 +1060,7 @@ final class RootView: View, @unchecked Sendable {
         return pov
     }
     
-    var povNotifications = [((RootView, Attitude) -> ())]()
+    var povNotifications = [((RootView, Pose) -> ())]()
     var pov = Root.defaultPOV {
         didSet {
             model.povRecord.isWillwrite = true
@@ -1187,13 +1187,13 @@ final class RootView: View, @unchecked Sendable {
                                    y: np.y - cvb.height / 2,
                                    width: cvb.width, height: cvb.height)
                     let nf = screenBounds.inset(by: 5).clipped(cvf)
-                    runningNode.attitude.position = convertScreenToWorld(nf.origin - cvb.origin)
+                    runningNode.pose.position = convertScreenToWorld(nf.origin - cvb.origin)
                 } else {
-                    runningNode.attitude.position = p
+                    runningNode.pose.position = p
                 }
-                runningNode.attitude.scale = Size(square: 1 / worldToScreenScale)
+                runningNode.pose.scale = Size(square: 1 / worldToScreenScale)
                 if pov.rotation != 0 {
-                    runningNode.attitude.rotation = pov.rotation
+                    runningNode.pose.rotation = pov.rotation
                 }
             } else {
                 runningNode.isHidden = true
@@ -1885,7 +1885,7 @@ final class RootView: View, @unchecked Sendable {
         let origin = rects.count == 1 && rects[0].size.isEmpty ? rects[0].origin : nil
         let textOrigin: Point
         if let origin {
-            lookingUpNode.attitude = .init(position: origin,
+            lookingUpNode.pose = .init(position: origin,
                                            scale: .init(square: screenToWorldScale))
             textOrigin = Point(0, -pd)
             backNodes = [Node(path: Path(circleRadius: 4),
@@ -1895,7 +1895,7 @@ final class RootView: View, @unchecked Sendable {
             lineNodes = [Node(path: Path(circleRadius: 1.5),
                               fillType: .color(.content))]
         } else {
-            lookingUpNode.attitude = .init()
+            lookingUpNode.pose = .init()
             switch orientation {
             case .horizontal:
                 textOrigin = rects[0].minXMinYPoint + Point(0, -pd)
@@ -1932,7 +1932,7 @@ final class RootView: View, @unchecked Sendable {
         let typesetter = Typesetter(string: text.string, typobute: typobute)
         guard let b = typesetter.typoBounds?
             .outset(by: padding) else { return }
-        let textNode = Node(attitude: Attitude(position: text.origin),
+        let textNode = Node(pose: Pose(position: text.origin),
                             path: typesetter.path(), fillType: .color(.content))
         let boundsNode = Node(path: Path(b + text.origin,
                                          cornerRadius: cornerRadius),
@@ -2153,7 +2153,7 @@ final class RootView: View, @unchecked Sendable {
         guard let shp = sheetPosition(at: sid) else { return nil }
         if let tv = thumbnailNodeValues[shp]?.node { return tv }
         let ssFrame = sheetFrame(with: shp)
-        return Node(attitude: Attitude(position: ssFrame.origin),
+        return Node(pose: Pose(position: ssFrame.origin),
                     path: Path(Rect(size: ssFrame.size)),
                     fillType: readFillType(at: sid) ?? .color(.disabled))
     }
@@ -2757,7 +2757,7 @@ final class RootView: View, @unchecked Sendable {
                     try Task.checkCancellation()
                     sheetView.id = sid
                     sheetView.bounds = Rect(size: frame.size)
-                    sheetView.node.attitude.position = frame.origin
+                    sheetView.node.pose.position = frame.origin
                     try Task.checkCancellation()
                     try sheetView.node.allChildrenAndSelf {
                         $0.updateDatas()
@@ -2853,7 +2853,7 @@ final class RootView: View, @unchecked Sendable {
         guard let shp = sheetPosition(at: sid) else { return nil }
         guard let sheet = model.sheet(at: sid) else { return nil }
         let frame = sheetFrame(with: shp)
-        return sheet.node(isBorder: false, attitude: .init(position: frame.origin), in: frame.bounds)
+        return sheet.node(isBorder: false, pose: .init(position: frame.origin), in: frame.bounds)
     }
     
     func readSheetView(at sid: UUID) -> SheetView? {
@@ -2886,7 +2886,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.id = sid
         let frame = sheetFrame(with: shp)
         sheetView.bounds = Rect(size: frame.size)
-        sheetView.node.attitude.position = frame.origin
+        sheetView.node.pose.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
         sheetView.node.enableCache = true
         updateWithEditGrid(in: sheetView)
@@ -3032,7 +3032,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.id = sid
         let frame = sheetFrame(with: shp)
         sheetView.bounds = Rect(size: frame.size)
-        sheetView.node.attitude.position = frame.origin
+        sheetView.node.pose.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
         sheetView.node.enableCache = true
         updateWithEditGrid(in: sheetView)
@@ -3851,7 +3851,7 @@ final class RootView: View, @unchecked Sendable {
     }
     func updateMapWith(worldToScreenTransform: Transform,
                        screenToWorldTransform: Transform,
-                       pov: Attitude,
+                       pov: Pose,
                        in screenBounds: Rect) {
         let worldBounds = screenBounds * screenToWorldTransform
         for road in roads {

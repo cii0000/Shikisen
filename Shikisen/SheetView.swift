@@ -67,7 +67,7 @@ final class LineView<T: BinderProtocol>: BindableView, @unchecked Sendable {
             let pointColor: Color = color.lightness < 30 ? .lightPoint : .darkPoint
             return line.mainControlSequence.map {
                 let pointNode = Node.point.clone
-                pointNode.attitude.position = $0.point
+                pointNode.pose.position = $0.point
                 pointNode.fillType = .color(pointColor)
                 return pointNode
             }
@@ -407,7 +407,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
         get { model.timelineY }
         set {
             unupdateModel.timelineY = newValue
-            timelineNode.attitude.position.y = newValue
+            timelineNode.pose.position.y = newValue
         }
     }
     
@@ -450,7 +450,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                                       keyPath: keyPath)
         updateTimeline()
         updateWithKeyframeIndex()
-        timelineNode.attitude.position.y = binder[keyPath: keyPath].timelineY
+        timelineNode.pose.position.y = binder[keyPath: keyPath].timelineY
     }
     
     func updateWithModel() {
@@ -786,7 +786,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
                                        Point(af.maxX, af.minY), Point(af.maxX, af.maxY),
                                        Point(bf.maxX, af.maxY), Point(bf.maxX, bf.maxY)])
             timelineNode.fillType = .color(.subRemoving)
-            timelineNode.attitude.position.y = model.timelineY
+            timelineNode.pose.position.y = model.timelineY
             
             updateClippingNode()
         } else {
@@ -794,7 +794,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             timelineNode.path = .init()
             timelineNode.fillType = nil
             timelineBounds = nil
-            timelineNode.attitude.position = .init()
+            timelineNode.pose.position = .init()
             updateClippingNode()
         }
     }
@@ -1122,7 +1122,7 @@ final class AnimationView: TimelineView, @unchecked Sendable {
             if !edges.isEmpty {
                 clippingNode.isHidden = false
                 clippingNode.path = .init(edges)
-                clippingNode.attitude.position = -timelineNode.attitude.position
+                clippingNode.pose.position = -timelineNode.pose.position
             } else {
                 clippingNode.isHidden = true
             }
@@ -1514,7 +1514,7 @@ final class SheetView: View, @unchecked Sendable {
     let bordersView: ArrayView<SheetBorderView>
     
     let mainFrameNode = Node()
-    let keyframeAttitudeNode = Node()
+    let keyframePoseNode = Node()
     
     var notePlayer: NotePlayer?
     let tempoNode = Node()
@@ -1570,7 +1570,7 @@ final class SheetView: View, @unchecked Sendable {
                          rect.midXMinYPoint, rect.midXMaxYPoint,
                          rect.maxXMinYPoint, rect.maxXMidYPoint, rect.maxXMaxYPoint].map {
             Node(name: "knob",
-                 attitude: .init(position: $0, scale: .init(square: scale)),
+                 pose: .init(position: $0, scale: .init(square: scale)),
                  path: Path(circleRadius: 3),
                  fillType: .color(.selected))
         } + [rect.minXMinYPoint.mid(rect.midXMinYPoint),
@@ -1582,7 +1582,7 @@ final class SheetView: View, @unchecked Sendable {
              rect.minXMaxYPoint.mid(rect.minXMidYPoint),
              rect.minXMidYPoint.mid(rect.minXMinYPoint)].map {
             Node(name: "knob",
-                 attitude: .init(position: $0, scale: .init(square: scale), rotation: cp.angle($0)),
+                 pose: .init(position: $0, scale: .init(square: scale), rotation: cp.angle($0)),
                  path: Path(Rect(x: -2.5, y: -0.75, width: 5, height: 1.5)),
                  fillType: .color(.selected))
         }
@@ -1617,7 +1617,7 @@ final class SheetView: View, @unchecked Sendable {
                                bordersView.node,
                                animationView.timelineNode,
                                animationView.captionNode,
-                               keyframeAttitudeNode])
+                               keyframePoseNode])
         
         updateBackground()
         updateWithKeyframeIndex()
@@ -1632,38 +1632,38 @@ final class SheetView: View, @unchecked Sendable {
             }
         }
         
-        if !model.keyframeAttitude.isIdentity {
-            update(keyframeAttitude: model.keyframeAttitude)
+        if !model.keyframePose.isIdentity {
+            update(keyframePose: model.keyframePose)
         }
     }
     
-    var keyframeAttitude: Attitude {
-        get { model.keyframeAttitude }
+    var keyframePose: Pose {
+        get { model.keyframePose }
         set {
-            guard keyframeAttitude != newValue else { return }
-            unupdateModel.keyframeAttitude = newValue
-            update(keyframeAttitude: newValue)
+            guard keyframePose != newValue else { return }
+            unupdateModel.keyframePose = newValue
+            update(keyframePose: newValue)
         }
     }
-    func update(keyframeAttitude: Attitude) {
-        otherBottomNode.attitude = keyframeAttitude
-        animationView.node.attitude = keyframeAttitude
-        otherTopNode.attitude = keyframeAttitude
-        animationView.previousNextNode.attitude = keyframeAttitude
-        mainFrameNode.attitude = keyframeAttitude
-        if keyframeAttitude.isIdentity {
-            keyframeAttitudeNode.path = .init()
+    func update(keyframePose: Pose) {
+        otherBottomNode.pose = keyframePose
+        animationView.node.pose = keyframePose
+        otherTopNode.pose = keyframePose
+        animationView.previousNextNode.pose = keyframePose
+        mainFrameNode.pose = keyframePose
+        if keyframePose.isIdentity {
+            keyframePoseNode.path = .init()
         } else {
-            let typesetter = Text(string: "x: \(keyframeAttitude.position.x.string(digitsCount: 2)), y: \(keyframeAttitude.position.y.string(digitsCount: 2)), scale: \(keyframeAttitude.log2Scale.string(digitsCount: 2))").typesetter
-            keyframeAttitudeNode.path = .init(typesetter, isPolygon: false)
-            keyframeAttitudeNode.attitude = .init(position: .init(bounds.width - typesetter.width - 5, bounds.height - typesetter.height / 2 - 5))
-            keyframeAttitudeNode.fillType = .color(.content)
+            let typesetter = Text(string: "x: \(keyframePose.position.x.string(digitsCount: 2)), y: \(keyframePose.position.y.string(digitsCount: 2)), scale: \(keyframePose.log2Scale.string(digitsCount: 2))").typesetter
+            keyframePoseNode.path = .init(typesetter, isPolygon: false)
+            keyframePoseNode.pose = .init(position: .init(bounds.width - typesetter.width - 5, bounds.height - typesetter.height / 2 - 5))
+            keyframePoseNode.fillType = .color(.content)
         }
         updateSelectedFrame()
     }
-    func containsKeyframeAttitude(_ p: Point) -> Bool {
-        keyframeAttitudeNode.bounds?.outset(by: 5)
-            .contains(keyframeAttitudeNode.convert(p, from: node)) ?? false
+    func containsKeyframePose(_ p: Point) -> Bool {
+        keyframePoseNode.bounds?.outset(by: 5)
+            .contains(keyframePoseNode.convert(p, from: node)) ?? false
     }
     
     func updateSelection(from ranges: [Range<String.Index>], _ textView: SheetTextView) {
@@ -1849,7 +1849,7 @@ final class SheetView: View, @unchecked Sendable {
         keyframeView.selectedPlaneIs.forEach {
             rect += keyframeView.planesView.elementViews[$0].node.bounds
         }
-        if keyframeAttitude != .init(), let nRect = rect {
+        if keyframePose != .init(), let nRect = rect {
             rect = animationView.convert(nRect, to: node)
         }
         
@@ -2135,10 +2135,10 @@ final class SheetView: View, @unchecked Sendable {
         let b = text.frame ?? Rect()
         let tp = Point(-b.width / 2, -b.height / 2 - 9)
         let path = Text(string: u, size: size).typesetter.path()
-        return [Node(attitude: Attitude(position: tp),
+        return [Node(pose: Pose(position: tp),
                      path: path,
                      lineWidth: 4, lineType: .color(.background)),
-                Node(attitude: Attitude(position: tp),
+                Node(pose: Pose(position: tp),
                      path: path,
                      fillType: .color(.content))]
     }

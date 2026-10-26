@@ -122,7 +122,7 @@ final class RunAction: InputKeyEventAction {
                         
                         let wy = view.spectrgramY + 0.5
                         let sNode = Node(name: "spectrogram",
-                                         attitude: .init(position: .init(wx, wy)),
+                                         pose: .init(position: .init(wx, wy)),
                                          path: path,
                                          lineWidth: 0.5,
                                          lineType: .color(.content))
@@ -313,7 +313,7 @@ extension RunAction {
         nText.origin += rootView.sheetFrame(with: shp).origin
         let xo = O(nText, &oDic)
         
-        calculatingNode.attitude.position = nodePoint(from: nText)
+        calculatingNode.pose.position = nodePoint(from: nText)
         rootView.node.append(child: calculatingNode)
         
         calculatingTimer = Task.timer(interval: .seconds(1)) { dur in

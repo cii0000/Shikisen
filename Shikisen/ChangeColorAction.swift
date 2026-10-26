@@ -80,18 +80,18 @@ final class ChangeColorAction: Action {
     var isEditableOpacity = false
     
     func updateNode() {
-        let attitude = Attitude(rootView.screenToWorldTransform)
+        let pose = Pose(rootView.screenToWorldTransform)
         
-        var lightnessAttitude = attitude
-        lightnessAttitude.position = lightnessWorldPosition
-        lightnessNode.attitude = lightnessAttitude
+        var lightnessPose = pose
+        lightnessPose.position = lightnessWorldPosition
+        lightnessNode.pose = lightnessPose
         
-        var tintAttitude = attitude
-        tintAttitude.position = tintWorldPosition
-        tintBorderNode.attitude = tintAttitude
-        tintNode.attitude = tintAttitude
+        var tintPose = pose
+        tintPose.position = tintWorldPosition
+        tintBorderNode.pose = tintPose
+        tintNode.pose = tintPose
         
-        panNode.attitude = attitude.with(position: panWorldPosition)
+        panNode.pose = pose.with(position: panWorldPosition)
     }
     
     let colorPointNode = Node(path: Path(circleRadius: 4.5), lineWidth: 1,
@@ -184,7 +184,7 @@ final class ChangeColorAction: Action {
     }
     var beganLightnessPosition = Point() {
         didSet {
-            lightnessNode.attitude.position = lightnessWorldPosition
+            lightnessNode.pose.position = lightnessWorldPosition
         }
     }
     var lightnessWorldPosition: Point {
@@ -216,13 +216,13 @@ final class ChangeColorAction: Action {
             if isEditableOpacity {
                 let t = editingLightness
                 let p = Point(0, maxLightnessHeight * t)
-                colorPointNode.attitude.position = p
+                colorPointNode.pose.position = p
             } else {
                 let t = editingLightness.clipped(min: Color.minLightness,
                                                  max: maxLightness,
                                                  newMin: 0, newMax: 1)
                 let p = Point(0, maxLightnessHeight * t)
-                colorPointNode.attitude.position = p
+                colorPointNode.pose.position = p
             }
         }
     }
@@ -278,7 +278,7 @@ final class ChangeColorAction: Action {
                                        y: vy + y - vKbobH / 2,
                                        width: vKnobW,
                                        height: vKbobH))])
-        return [Node(attitude: .init(position: p - Point(0, fy)), path: path,
+        return [Node(pose: .init(position: p - Point(0, fy)), path: path,
                      fillType: .color(.content))]
     }
     
@@ -915,12 +915,12 @@ final class ChangeColorAction: Action {
                         let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(noiseWidth),
                                                                                    width: noiseWidth))]),
                                                 lineWidth: 3, lineType: .gradient(gradient))
-                        colorPointNode.attitude.position = .init(noiseWidth * beganNoise, 0)
+                        colorPointNode.pose.position = .init(noiseWidth * beganNoise, 0)
                         panNode.append(child: outlineGradientNode)
                         panNode.append(child: gradientNode)
                         panNode.append(child: colorPointNode)
-                        let attitude = Attitude(rootView.screenToWorldTransform)
-                        panNode.attitude = attitude.with(position: noiseWorldPosition)
+                        let pose = Pose(rootView.screenToWorldTransform)
+                        panNode.pose = pose.with(position: noiseWorldPosition)
                         
                         rootView.node.append(child: panNode)
                     case .sprol(let pitI, let sprolI):
@@ -937,12 +937,12 @@ final class ChangeColorAction: Action {
                         let gradientNode = Node(path: .init([.init(noisePointsWith(splitCount: .init(noiseWidth),
                                                                                    width: noiseWidth))]),
                                                 lineWidth: 3, lineType: .gradient(gradient))
-                        colorPointNode.attitude.position = .init(noiseWidth * beganNoise, 0)
+                        colorPointNode.pose.position = .init(noiseWidth * beganNoise, 0)
                         panNode.append(child: outlineGradientNode)
                         panNode.append(child: gradientNode)
                         panNode.append(child: colorPointNode)
-                        let attitude = Attitude(rootView.screenToWorldTransform)
-                        panNode.attitude = attitude.with(position: noiseWorldPosition)
+                        let pose = Pose(rootView.screenToWorldTransform)
+                        panNode.pose = pose.with(position: noiseWorldPosition)
                         
                         rootView.node.append(child: panNode)
                     }
@@ -974,13 +974,13 @@ final class ChangeColorAction: Action {
                                             lineWidth: 3, lineType: .gradient(gradient))
                     let whiteLineNode = Node(path: .init(Edge(.init(0, -1), .init(0, 1))),
                                              lineWidth: 1, lineType: .color(outlineColor))
-                    colorPointNode.attitude.position = .init(panWidth * beganPan / 2, 0)
+                    colorPointNode.pose.position = .init(panWidth * beganPan / 2, 0)
                     panNode.append(child: outlineGradientNode)
                     panNode.append(child: gradientNode)
                     panNode.append(child: whiteLineNode)
                     panNode.append(child: colorPointNode)
-                    let attitude = Attitude(rootView.screenToWorldTransform)
-                    panNode.attitude = attitude.with(position: panWorldPosition)
+                    let pose = Pose(rootView.screenToWorldTransform)
+                    panNode.pose = pose.with(position: panWorldPosition)
                     
                     rootView.node.append(child: panNode)
                 }
@@ -1020,7 +1020,7 @@ final class ChangeColorAction: Action {
                 let nivs = nvs.map { IndexValue(value: $0.value, index: $0.key) }
                 scoreView.replace(nivs)
                 
-                colorPointNode.attitude.position = .init(noiseWidth * noise, 0)
+                colorPointNode.pose.position = .init(noiseWidth * noise, 0)
                 
                 notePlayer?.notes = playerBeatNoteIndexes.map {
                     scoreView.rendableNormarizedPitResult(atBeat: beganBeat, at: $0)
@@ -1082,7 +1082,7 @@ final class ChangeColorAction: Action {
                     }
                 }
                 
-                colorPointNode.attitude.position = .init(panWidth * pan / 2, 0)
+                colorPointNode.pose.position = .init(panWidth * pan / 2, 0)
             }
         case .ended:
             notePlayer?.stop()
@@ -1586,8 +1586,8 @@ final class ChangeColorAction: Action {
     }
     var beganTintPosition = Point() {
         didSet {
-            tintBorderNode.attitude.position = tintWorldPosition
-            tintNode.attitude.position = tintWorldPosition
+            tintBorderNode.pose.position = tintWorldPosition
+            tintNode.pose.position = tintWorldPosition
         }
     }
     var tintWorldPosition: Point {
@@ -1597,7 +1597,7 @@ final class ChangeColorAction: Action {
     var oldEditingTintPosition = Point()
     var editingTintPosition = Point() {
         didSet {
-            colorPointNode.attitude.position = editingTintPosition
+            colorPointNode.pose.position = editingTintPosition
             updateTintLinePath()
         }
     }

@@ -227,7 +227,7 @@ final class MoveSheetsAction: DragEventAction {
                     ?? .color(.disabled)
                 
                 let sf = rootView.sheetFrame(with: $0.key)
-                return Node(attitude: Attitude(position: sf.origin),
+                return Node(pose: Pose(position: sf.origin),
                             path: Path(Rect(size: sf.size)),
                             lineWidth: lw,
                             lineType: .color(.selected), fillType: fillType)
@@ -253,7 +253,7 @@ final class MoveSheetsAction: DragEventAction {
     func updateWithPasteSheet(at sp: Point, phase: Phase) {
         zip(csv.sheetIDs, pasteSheetNode.children).forEach { (sheetID, node) in
             let sf = rootView.sheetFrame(with: sheetID.key)
-            node.attitude = Attitude(position: sf.origin)
+            node.pose = Pose(position: sf.origin)
         }
         
         let p = rootView.convertScreenToWorld(sp)
@@ -265,7 +265,7 @@ final class MoveSheetsAction: DragEventAction {
             let nsf = Rect(origin: rootView.sheetFrame(with: nshp).origin,
                           size: sf.size)
             let lw = Line.defaultLineWidth / rootView.worldToScreenScale
-            children.append(Node(attitude: Attitude(position: nsf.origin),
+            children.append(Node(pose: Pose(position: nsf.origin),
                                  path: Path(Rect(size: nsf.size)),
                                  lineWidth: lw,
                                  lineType: selectingLineNode.lineType,
@@ -273,7 +273,7 @@ final class MoveSheetsAction: DragEventAction {
         }
         selectingLineNode.children = children
         
-        pasteSheetNode.attitude.position = p - csv.deltaPoint
+        pasteSheetNode.pose.position = p - csv.deltaPoint
     }
     func pasteSheet(at sp: Point) {
         rootView.cursorPoint = sp
@@ -786,8 +786,8 @@ final class MoveScoreAction: DragEventAction {
                     updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                     
                     let octaveNode = scoreView.octaveNode(noteIs: beganNotes.keys.sorted())
-                    octaveNode.attitude.position
-                    = sheetView.convertToWorld(scoreView.node.attitude.position)
+                    octaveNode.pose.position
+                    = sheetView.convertToWorld(scoreView.node.pose.position)
                     self.octaveNode = octaveNode
                     rootView.node.append(child: octaveNode)
                     
@@ -877,8 +877,8 @@ final class MoveScoreAction: DragEventAction {
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
                         let octaveNode = scoreView.octaveNode(noteIs: [noteI])
-                        octaveNode.attitude.position
-                        = sheetView.convertToWorld(scoreView.node.attitude.position)
+                        octaveNode.pose.position
+                        = sheetView.convertToWorld(scoreView.node.pose.position)
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                                                  
@@ -1099,8 +1099,8 @@ final class MoveScoreAction: DragEventAction {
                         updatePlayer(from: vs.map { $0.pitResult }, in: sheetView)
                         
                         let octaveNode = scoreView.octaveNode(noteIs: beganNotes.keys.sorted())
-                        octaveNode.attitude.position
-                        = sheetView.convertToWorld(scoreView.node.attitude.position)
+                        octaveNode.pose.position
+                        = sheetView.convertToWorld(scoreView.node.pose.position)
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                         
@@ -1147,8 +1147,8 @@ final class MoveScoreAction: DragEventAction {
                         beganPitchY = scoreView.y(fromPitch: beganPitch)
                         
                         let octaveNode = scoreView.scaleNode(mainPitch: beganPitch)
-                        octaveNode.attitude.position
-                        = sheetView.convertToWorld(scoreView.node.attitude.position)
+                        octaveNode.pose.position
+                        = sheetView.convertToWorld(scoreView.node.pose.position)
                         self.octaveNode = octaveNode
                         rootView.node.append(child: octaveNode)
                         

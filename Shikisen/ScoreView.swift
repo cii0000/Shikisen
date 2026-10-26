@@ -385,7 +385,7 @@ final class ScoreView: TimelineView, @unchecked Sendable {
             scoreTrackItem = .init(score: model, sampleRate: Audio.defaultSampleRate,
                                    isUpdateNotewaveDic: false)
         }
-        node.attitude.position.y = binder[keyPath: keyPath].timelineY
+        node.pose.position.y = binder[keyPath: keyPath].timelineY
     }
 }
 extension ScoreView {
@@ -431,14 +431,14 @@ extension ScoreView {
             timelineBorderNode.path = .init(borderPathlines)
             timelineSecondEditBorderNode.path = .init(secondEditBorderPathlines)
             timelineFullEditBorderNode.path = .init(fullEditBorderPathlines)
-            node.attitude.position.y = model.timelineY
+            node.pose.position.y = model.timelineY
         } else {
             timelineContentNode.path = .init()
             timelineSubBorderNode.path = .init()
             timelineBorderNode.path = .init()
             timelineSecondEditBorderNode.path = .init()
             timelineFullEditBorderNode.path = .init()
-            node.attitude.position = .init()
+            node.pose.position = .init()
         }
     }
     func updateChord() {
@@ -1019,7 +1019,7 @@ extension ScoreView {
             guard pitchRange.contains(nPitch) else { break }
             let node = noteNode.clone
             node.fillType = .color(color)
-            node.attitude.position.y = npd
+            node.pose.position.y = npd
             nodes.append(node)
             if isEnabledPitchLine && !addedPitches.contains(nPitch) {
                 nodes.append(Node(path: .init(Rect(x: sx, y: y(fromPitch: nPitch) - plw / 2,
@@ -1036,7 +1036,7 @@ extension ScoreView {
             guard pitchRange.contains(nPitch) else { break }
             let node = noteNode.clone
             node.fillType = .color(color)
-            node.attitude.position.y = npd
+            node.pose.position.y = npd
             nodes.append(node)
             if isEnabledPitchLine && !addedPitches.contains(nPitch) {
                 nodes.append(Node(path: .init(Rect(x: sx, y: y(fromPitch: nPitch) - plw / 2,
@@ -1204,7 +1204,7 @@ extension ScoreView {
                                                          width: 0.25, height: lh)))
                     let isEnabledLyric = !Phoneme.phonemes(fromHiragana: pit.lyric,
                                                            nextPhoneme: nil).isEmpty
-                    return .init(attitude: .init(position: .init(p.x + 1,
+                    return .init(pose: .init(position: .init(p.x + 1,
                                                                  p.y - lh + typesetter.height / 2)),
                                  path: typesetter.path(), fillType: .color(color ?? (isEnabledLyric ? .content : .interpolated)))
                 }
@@ -3049,7 +3049,7 @@ extension ScoreView {
             maxH = max(maxH, h)
             let x = allW * Double(xi) / Double(sm.frames.count)
             return Node(name: "spectrogram",
-                        attitude: .init(position: .init(x, 0)),
+                        pose: .init(position: .init(x, 0)),
                         path: Path(Rect(width: w, height: h)),
                         fillType: .texture(texture))
         }
@@ -3070,7 +3070,7 @@ extension ScoreView {
         
         let sNode = Node(name: "spectrogram",
                          children: nodes,
-                         attitude: .init(position: .init(firstX, y)),
+                         pose: .init(position: .init(firstX, y)),
                          path: Path(Rect(width: allW, height: maxH)))
         
         self.spectrogramNode = sNode

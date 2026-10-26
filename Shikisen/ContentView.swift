@@ -77,19 +77,19 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
         if let image = binder[keyPath: keyPath].image,
            let texture = try? Texture(image: image, isOpaque: false, .sRGB) {
             node = Node(children: [timelineNode, clippingNode, selectedNode],
-                        attitude: Attitude(position: binder[keyPath: keyPath].origin),
+                        pose: Pose(position: binder[keyPath: keyPath].origin),
                         path: Path(Rect(origin:binder[keyPath: keyPath].timeOption == nil ?
                             .init() : .init(0, Sheet.timelineHalfHeight + Sheet.timelineMargin),
                             size: binder[keyPath: keyPath].size)),
                         fillType: .texture(texture))
         } else if binder[keyPath: keyPath].type == .movie {
             node = Node(children: [timelineNode, clippingNode, selectedNode],
-                        attitude: Attitude(position: binder[keyPath: keyPath].origin),
+                        pose: Pose(position: binder[keyPath: keyPath].origin),
                         path: Path(Rect(origin: .init(0, Sheet.timelineHalfHeight + Sheet.timelineMargin),
                                         size: binder[keyPath: keyPath].size)))
         } else {
             node = Node(children: [timelineNode, clippingNode, selectedNode],
-                        attitude: Attitude(position: binder[keyPath: keyPath].origin))
+                        pose: Pose(position: binder[keyPath: keyPath].origin))
         }
         
         if model.type == .sound {
@@ -107,7 +107,7 @@ final class ContentView<T: BinderProtocol>: SpectrgramView, @unchecked Sendable 
 }
 extension ContentView {
     func updateWithModel() {
-        node.attitude.position = model.origin
+        node.pose.position = model.origin
         if let image = model.image,
            let texture = try? Texture(image: image, isOpaque: false, .sRGB) {
             node.fillType = .texture(texture)
@@ -152,13 +152,13 @@ extension ContentView {
                 node.path = .init(Rect(origin: .init(0, Sheet.timelineHalfHeight + Sheet.timelineMargin),
                                        size: model.size))
             }
-            node.attitude.position = model.origin
+            node.pose.position = model.origin
         } else if !timelineNode.children.isEmpty {
             timelineNode.children = []
             if model.type == .movie || model.type == .image {
                 node.path = .init(Rect(size: model.size))
             }
-            node.attitude.position = .init()
+            node.pose.position = .init()
         }
     }
     
@@ -269,13 +269,13 @@ extension ContentView {
     func set(_ timeOption: ContentTimeOption?, origin: Point) {
         unupdateModel.timeOption = timeOption
         unupdateModel.origin = origin
-        node.attitude.position = origin
+        node.pose.position = origin
         updateTimeline()
         updateClippingNode()
         if let timeOption = model.timeOption {
             pcmTrackItem?.change(from: timeOption)
             
-            spectrogramNode?.attitude.position.x
+            spectrogramNode?.pose.position.x
             = x(atBeat: timeOption.beatRange.start + timeOption.localStartBeat) + spectrogramDeltaX
         }
     }
@@ -288,7 +288,7 @@ extension ContentView {
             if let timeOption = model.timeOption {
                 pcmTrackItem?.change(from: timeOption)
                 
-                spectrogramNode?.attitude.position.x
+                spectrogramNode?.pose.position.x
                 = x(atBeat: timeOption.beatRange.start + timeOption.localStartBeat) + spectrogramDeltaX
             }
         }
@@ -297,7 +297,7 @@ extension ContentView {
         get { model.origin }
         set {
             unupdateModel.origin = newValue
-            node.attitude.position = newValue
+            node.pose.position = newValue
             updateClippingNode()
         }
     }
@@ -386,7 +386,7 @@ extension ContentView {
                 let timeText = Text(string: Animation.timeString(fromTime: beat, frameRate: 12),
                                     size: Font.smallSize)
                 let timeP = Point(sx + 1, centerY + timeText.size / 2 + 1)
-                textNodes.append(Node(attitude: Attitude(position: timeP),
+                textNodes.append(Node(pose: Pose(position: timeP),
                                       path: Path(timeText.typesetter, isPolygon: false),
                                       fillType: .color(.content)))
             } else if localBeatRange.start > 0 {
@@ -404,7 +404,7 @@ extension ContentView {
                                     size: Font.smallSize)
                 let timeFrame = timeText.frame ?? Rect()
                 let timeP = Point(ex - timeFrame.width - 2, centerY + timeText.size / 2 + 1)
-                textNodes.append(Node(attitude: Attitude(position: timeP),
+                textNodes.append(Node(pose: Pose(position: timeP),
                                       path: Path(timeText.typesetter,
                                                  isPolygon: false),
                                       fillType: .color(.content)))
@@ -588,7 +588,7 @@ extension ContentView {
             maxH = max(maxH, h)
             let x = allW * Double(xi) / Double(sm.frames.count)
             return Node(name: "spectrogram",
-                        attitude: .init(position: .init(x, 0)),
+                        pose: .init(position: .init(x, 0)),
                         path: Path(Rect(width: w, height: h)),
                         fillType: .texture(texture))
         }
@@ -609,7 +609,7 @@ extension ContentView {
         
         let sNode = Node(name: "spectrogram",
                          children: nodes,
-                         attitude: .init(position: .init(firstX, y)),
+                         pose: .init(position: .init(firstX, y)),
                          path: Path(Rect(width: allW, height: maxH)))
         
         self.spectrogramNode = sNode

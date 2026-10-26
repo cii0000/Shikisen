@@ -119,9 +119,9 @@ final class Node: @unchecked Sendable {
         }
     }
     
-    var attitude = Attitude() {
+    var pose = Pose() {
         didSet {
-            localTransform = attitude.transform
+            localTransform = pose.transform
             isIdentityFromLocal = localTransform.isIdentity
             localScale = isIdentityFromLocal ? 1 : localTransform.absXScale
             updateWorldTransform(parent?.worldTransform ?? .identity)
@@ -485,7 +485,7 @@ final class Node: @unchecked Sendable {
          children: [Node] = [],
          isHidden: Bool = false, isClippingChildrenLines: Bool = false,
          isEnabledCloneChildren: Bool = true,
-         attitude: Attitude = Attitude(),
+         pose: Pose = Pose(),
          path: Path = Path(),
          lineWidth: Double = 0, lineType: LineType? = nil,
          fillType: FillType? = nil) {
@@ -496,8 +496,8 @@ final class Node: @unchecked Sendable {
         self.isClippingChildrenLines = isClippingChildrenLines
         self.isEnabledCloneChildren = isEnabledCloneChildren
         self.aPath = path
-        self.attitude = attitude
-        self.localTransform = attitude.transform
+        self.pose = pose
+        self.localTransform = pose.transform
         self.isIdentityFromLocal = localTransform.isIdentity
         self.localScale = isIdentityFromLocal ? 1 : localTransform.absXScale
         worldTransform = localTransform
@@ -526,7 +526,7 @@ final class Node: @unchecked Sendable {
     }
     
     private init(name: String, backingChildren: [Node],
-                 isHidden: Bool, isClippingChildrenLines: Bool, attitude: Attitude,
+                 isHidden: Bool, isClippingChildrenLines: Bool, pose: Pose,
                  localTransform: Transform, isIdentityFromLocal: Bool, localScale: Double,
                  worldTransform: Transform, path: Path,
                  lineWidth : Double,
@@ -547,7 +547,7 @@ final class Node: @unchecked Sendable {
         self.backingChildren = backingChildren
         self.isHidden = isHidden
         self.isClippingChildrenLines = isClippingChildrenLines
-        self.attitude = attitude
+        self.pose = pose
         self.localTransform = localTransform
         self.isIdentityFromLocal = isIdentityFromLocal
         self.localScale = localScale
@@ -591,7 +591,7 @@ final class Node: @unchecked Sendable {
              backingChildren: isEnabledCloneChildren ? backingChildren.map { $0.clone } : [],
              isHidden: isHidden,
              isClippingChildrenLines: isClippingChildrenLines,
-             attitude: attitude,
+             pose: pose,
              localTransform: localTransform,
              isIdentityFromLocal: isIdentityFromLocal,
              localScale: localScale,

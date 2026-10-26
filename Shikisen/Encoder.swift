@@ -115,9 +115,9 @@ extension Caption {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize,
                                                in: bounds,
                                                padding: padding) else { return [] }
-        return [.init(attitude: .init(position: tp), path: path,
+        return [.init(pose: .init(position: tp), path: path,
                       lineWidth: outlineWidth, lineType: .color(.captionOutline)),
-                .init(attitude: .init(position: tp), path: path,
+                .init(pose: .init(position: tp), path: path,
                       fillType: .color(.background))]
     }
     
@@ -140,9 +140,9 @@ extension Caption {
                in bounds: Rect, padding: Double, outlineWidth: Double) -> [Node] {
         guard let (path, tp) = pathAndPosition(withFontSize: fontSize, in: bounds,
                                                padding: padding) else { return [] }
-        return [.init(attitude: .init(position: tp), path: path,
+        return [.init(pose: .init(position: tp), path: path,
                       lineWidth: outlineWidth, lineType: .color(.captionOutline)),
-                .init(attitude: .init(position: tp), path: path,
+                .init(pose: .init(position: tp), path: path,
                       fillType: .color(.background))]
     }
     

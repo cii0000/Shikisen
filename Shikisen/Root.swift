@@ -341,7 +341,7 @@ final class Root: @unchecked Sendable {
     var schemaRecord: Record<String>
     
     static let povRecordKey = "pov.pb"
-    var povRecord: Record<Attitude>
+    var povRecord: Record<Pose>
     
     static let sheetsDirectoryKey = "sheets"
     let sheetsDirectory: Directory
@@ -395,7 +395,7 @@ final class Root: @unchecked Sendable {
     func finding() -> Finding {
         findingRecord.decodedValue ?? .init()
     }
-    func pov() -> Attitude {
+    func pov() -> Pose {
         povRecord.decodedValue ?? Self.defaultPOV
     }
     
@@ -468,7 +468,7 @@ final class Root: @unchecked Sendable {
     }
 }
 extension Root {
-    static let defaultPOV = Attitude(position: Sheet.defaultBounds.centerPoint,
+    static let defaultPOV = Pose(position: Sheet.defaultBounds.centerPoint,
                                      scale: Size(width: 1.25, height: 1.25))
 }
 

@@ -1742,7 +1742,7 @@ extension Sheet: OConvertible {
                           mainFrame: mainFrame,
                           backgroundUUColor: backgroundUUColor,
                           selection: .init(),//
-                          keyframeAttitude: .init())//
+                          keyframePose: .init())//
             } else {
                 return nil
             }

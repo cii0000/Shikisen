@@ -123,12 +123,12 @@ final class ASelectVersionAction: Action {
         outlineNode.path = linePath
         lineNode.path = linePath
         
-        var attitude = Attitude(rootView.screenToWorldTransform)
+        var pose = Pose(rootView.screenToWorldTransform)
         let up = rootView.convertScreenToWorld(rootView.convertWorldToScreen(p))
-        attitude.position = up
-        rootNode.attitude = attitude
+        pose.position = up
+        rootNode.pose = pose
         
-        currentKnobNode.attitude.position = Point()
+        currentKnobNode.pose.position = Point()
         rootNode.append(child: outlineNode)
         rootNode.append(child: lineNode)
         rootNode.append(child: currentKnobNode)
@@ -156,8 +156,8 @@ final class ASelectVersionAction: Action {
             let (path, p) = yPath(selectedIndex: i, count: branch.childrenCount, x: x)
             let outlineYNode = Node(path: path, lineWidth: 2, lineType: .color(.background))
             let yNode = Node(path: path, lineWidth: 1, lineType: .color(.content))
-            outlineYNode.attitude.position = p
-            yNode.attitude.position = p
+            outlineYNode.pose.position = p
+            yNode.pose.position = p
             outlineYNodes.append(outlineYNode)
             yNodes.append(yNode)
         }
@@ -177,7 +177,7 @@ final class ASelectVersionAction: Action {
                     frame = sheetView.convertToWorld(aFrame)
                 }
                 aNodes.forEach {
-                    $0.attitude = sheetView.node.attitude
+                    $0.pose = sheetView.node.pose
                 }
                 nodes = aNodes
             } else {
@@ -282,12 +282,12 @@ final class ASelectVersionAction: Action {
                 
                 let rp = Point(undoXWidth * Double(topIndex), 0)
                 
-                var attitude = Attitude(rootView.screenToWorldTransform)
+                var pose = Pose(rootView.screenToWorldTransform)
                 let up = rootView.convertScreenToWorld(rootView.convertWorldToScreen(p) - rp)
-                attitude.position = up
-                rootNode.attitude = attitude
+                pose.position = up
+                rootNode.pose = pose
                 
-                currentKnobNode.attitude.position = rp
+                currentKnobNode.pose.position = rp
                 
                 rootNode.append(child: outlineNode)
                 rootNode.append(child: lineNode)
@@ -382,11 +382,11 @@ final class ASelectVersionAction: Action {
                 }
                 
                 updatePath(maxVersionIndex: currentMaxVersionIndex, history: history)
-                var attitude = Attitude(rootView.screenToWorldTransform)
+                var pose = Pose(rootView.screenToWorldTransform)
                 let up = rootView.convertScreenToWorld(rootView.convertWorldToScreen(p) - beganDP)
-                attitude.position = up
-                rootNode.attitude = attitude
-                currentKnobNode.attitude.position = beganDP
+                pose.position = up
+                rootNode.pose = pose
+                currentKnobNode.pose.position = beganDP
                 
                 rootView.node.append(child: rootNode)
                 selectingOutlineRootNode.lineWidth = rootView.worldLineWidth * 3
@@ -457,7 +457,7 @@ final class ASelectVersionAction: Action {
                     currentXIndex = newIndex
                     
                     undo(at: p, undoIndex: newIndex)
-                    currentKnobNode.attitude.position.x = undoXWidth * Double(newIndex)
+                    currentKnobNode.pose.position.x = undoXWidth * Double(newIndex)
                     
                     func updateY<T: UndoItem>(from history: History<T>) {
                         let currentVersion = history.currentVersion
@@ -483,7 +483,7 @@ final class ASelectVersionAction: Action {
                     let nnp = Point(undoXWidth * Double(beganXIndex),
                                     undoYWidth * Double(dyIndex))
                     let up = rootView.convertScreenToWorld(rootView.convertWorldToScreen(np) - nnp)
-                    rootNode.attitude.position = up
+                    rootNode.pose.position = up
                 }
             case .y:
                 if let yIndexPath {
@@ -511,7 +511,7 @@ final class ASelectVersionAction: Action {
                         let nnp = Point(undoXWidth * Double(beganXIndex),
                                         undoYWidth * Double(dyIndex))
                         let up = rootView.convertScreenToWorld(rootView.convertWorldToScreen(np) - nnp)
-                        rootNode.attitude.position = up
+                        rootNode.pose.position = up
                     }
                 }
             }

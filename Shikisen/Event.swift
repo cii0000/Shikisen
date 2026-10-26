@@ -609,12 +609,12 @@ extension ActionList {
                 guard let (nts, nNode) = textNode(with: action.name, color: color),
                       let (its, iNode)
                         = textNode(with: action.gesture.inputDisplayString, color: color) else { continue }
-                nNode.attitude.position = Point((margin + imagePadding).rounded(), h + fontSize / 2 - imagePadding)
-                iNode.attitude.position = Point(-its.width + imagePadding, h + fontSize / 2 - imagePadding)
+                nNode.pose.position = Point((margin + imagePadding).rounded(), h + fontSize / 2 - imagePadding)
+                iNode.pose.position = Point(-its.width + imagePadding, h + fontSize / 2 - imagePadding)
                 let qw: Double, qNode: Node
                 if let (mts, mNode) = textNode(with: action.gesture.modifierDisplayString, color: color) {
                     qw = (its.width + padding + mts.width).rounded()
-                    mNode.attitude.position = Point(-qw + imagePadding, h + fontSize / 2 - imagePadding)
+                    mNode.pose.position = Point(-qw + imagePadding, h + fontSize / 2 - imagePadding)
                     qNode = Node(children: [iNode, mNode])
                 } else {
                     qw = its.width.rounded()
@@ -642,7 +642,7 @@ extension ActionList {
         w += margin * 2
         
         for node in gestureNodes {
-            node.attitude.position.x = (w - margin).rounded()
+            node.pose.position.x = (w - margin).rounded()
         }
         for (height, node) in borderNodes {
             node.path = Path(Edge(Point(0, height), Point(w, height)))
@@ -650,7 +650,7 @@ extension ActionList {
         
         let f = Rect(x: 0, y: 0, width: w, height: h)
         let node = Node(children: children,
-                        attitude: Attitude(position: Point()),
+                        pose: Pose(position: Point()),
                         path: Path(f, cornerRadius: cornerRadius),
                         lineWidth: lineWidth, lineType: .color(.subBorder),
                         fillType: .color(.transparentDisabled))

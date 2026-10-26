@@ -270,16 +270,16 @@ final class LineAction: Action {
                 scoreView.append(note)
                 rootView.updateOtherAround(from: sheetView, isUpdateAlways: true)
 //                    let noteNode = scoreView.noteNode(from: note)
-//                    noteNode.attitude.position
-//                        = scoreView.node.attitude.position
-//                        + sheetView.node.attitude.position
+//                    noteNode.pose.position
+//                        = scoreView.node.pose.position
+//                        + sheetView.node.pose.position
 //                    self.tempLineNode = noteNode
 //                    rootView.node.insert(child: noteNode,
 //                                             at: rootView.accessoryNodeIndex)
                 
                 let octaveNode = scoreView.octaveNode(fromPitch: pitch, scoreView.notesNode.children.last!.children[0].clone)
-                octaveNode.attitude.position
-                = sheetView.convertToWorld(scoreView.node.attitude.position)
+                octaveNode.pose.position
+                = sheetView.convertToWorld(scoreView.node.pose.position)
                 self.octaveNode = octaveNode
                 rootView.node.append(child: octaveNode)
                 
@@ -994,9 +994,9 @@ final class LineAction: Action {
             
             let sheetView = rootView.sheetView(at: centerSHP)
             lineWidth = rootView.sheetLineWidth
-            * (sheetView?.keyframeAttitude.scale.width ?? 1)
+            * (sheetView?.keyframePose.scale.width ?? 1)
             
-            let tempLineNode = Node(attitude: Attitude(position: centerOrigin),
+            let tempLineNode = Node(pose: Pose(position: centerOrigin),
                                     path: Path(),
                                     lineWidth: lineWidth,
                                     lineType: .color(Line.defaultUUColor.value))
@@ -1227,11 +1227,11 @@ final class LineAction: Action {
             let lineType = Node.LineType.color(type == .copy ? .selected : .removing)
             let fillType = Node.FillType.color(type == .copy ? .subSelected : .subRemoving)
             
-            let outlineLassoNode = Node(attitude: Attitude(position: centerOrigin),
+            let outlineLassoNode = Node(pose: Pose(position: centerOrigin),
                                         path: path,
                                         lineWidth: lassoPathNodeLineWidth,
                                         lineType: lineType)
-            let lassoNode = Node(attitude: Attitude(position: centerOrigin),
+            let lassoNode = Node(pose: Pose(position: centerOrigin),
                                  path: path, fillType: fillType)
             selectingNode.lineType = lineType
             selectingNode.fillType = fillType

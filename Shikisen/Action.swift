@@ -626,7 +626,7 @@ final class ZoomAction: PinchEventAction {
         guard event.magnification != 0 else { return }
         let oldIsEditingSheet = rootView.isEditingSheet
         
-        guard var transform = isInter ? sheetView?.keyframeAttitude.transform : rootView.pov.transform else { return }
+        guard var transform = isInter ? sheetView?.keyframePose.transform : rootView.pov.transform else { return }
         let worldP = rootView.convertScreenToWorld(event.screenPoint)
         let p = isInter ? sheetView?.convertFromWorld(worldP) ?? worldP : worldP
         let log2Scale = transform.log2Scale
@@ -638,7 +638,7 @@ final class ZoomAction: PinchEventAction {
         transform.translate(by: p)
         
         if isInter {
-            sheetView?.keyframeAttitude = .init(transform)
+            sheetView?.keyframePose = .init(transform)
             rootView.updateSelectedFrame()
         } else {
             rootView.pov = RootView.clippedPOV(from: .init(transform))
@@ -794,7 +794,7 @@ final class ScrollAction: ScrollEventAction {
             let length = dp.length()
             let lengthDt = length / dt
             
-            guard var transform = isInter ? sheetView?.keyframeAttitude.transform : rootView.pov.transform else { return }
+            guard var transform = isInter ? sheetView?.keyframePose.transform : rootView.pov.transform else { return }
             let newPoint = dp * correction * transform.absXScale
             
             let oldPosition = transform.position
@@ -802,7 +802,7 @@ final class ScrollAction: ScrollEventAction {
             
             transform.translate(by: isInter ? -newP : newP)
             if isInter {
-                sheetView?.keyframeAttitude = .init(transform)
+                sheetView?.keyframePose = .init(transform)
                 rootView.updateSelectedFrame()
             } else {
                 rootView.pov = .init(transform)

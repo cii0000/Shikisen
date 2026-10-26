@@ -388,7 +388,7 @@ nonisolated struct PBRect: Sendable {
   fileprivate var _size: PBSize? = nil
 }
 
-nonisolated struct PBAttitude: Sendable {
+nonisolated struct PBPose: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1798,14 +1798,14 @@ nonisolated struct PBSheet: @unchecked Sendable {
   /// Clears the value of `selection`. Subsequent reads from it will return its default value.
   mutating func clearSelection() {_uniqueStorage()._selection = nil}
 
-  var keyframeAttitude: PBAttitude {
-    get {_storage._keyframeAttitude ?? PBAttitude()}
-    set {_uniqueStorage()._keyframeAttitude = newValue}
+  var keyframePose: PBPose {
+    get {_storage._keyframePose ?? PBPose()}
+    set {_uniqueStorage()._keyframePose = newValue}
   }
-  /// Returns true if `keyframeAttitude` has been explicitly set.
-  var hasKeyframeAttitude: Bool {_storage._keyframeAttitude != nil}
-  /// Clears the value of `keyframeAttitude`. Subsequent reads from it will return its default value.
-  mutating func clearKeyframeAttitude() {_uniqueStorage()._keyframeAttitude = nil}
+  /// Returns true if `keyframePose` has been explicitly set.
+  var hasKeyframePose: Bool {_storage._keyframePose != nil}
+  /// Clears the value of `keyframePose`. Subsequent reads from it will return its default value.
+  mutating func clearKeyframePose() {_uniqueStorage()._keyframePose = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4063,8 +4063,8 @@ nonisolated extension PBRect: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
   }
 }
 
-nonisolated extension PBAttitude: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = "PBAttitude"
+nonisolated extension PBPose: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = "PBPose"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}position\0\u{1}scale\0\u{1}rotation\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -4098,7 +4098,7 @@ nonisolated extension PBAttitude: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: PBAttitude, rhs: PBAttitude) -> Bool {
+  static func ==(lhs: PBPose, rhs: PBPose) -> Bool {
     if lhs._position != rhs._position {return false}
     if lhs._scale != rhs._scale {return false}
     if lhs.rotation != rhs.rotation {return false}
@@ -6238,7 +6238,7 @@ nonisolated extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheet"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{3}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0\u{1}keyframeAttitude\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{3}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0\u{1}keyframePose\0")
 
   fileprivate class _StorageClass {
     var _animation: PBAnimation? = nil
@@ -6249,7 +6249,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     var _mainFrame: PBRect? = nil
     var _backgroundUucolor: PBUUColor? = nil
     var _selection: PBSheetSelection? = nil
-    var _keyframeAttitude: PBAttitude? = nil
+    var _keyframePose: PBPose? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6268,7 +6268,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       _mainFrame = source._mainFrame
       _backgroundUucolor = source._backgroundUucolor
       _selection = source._selection
-      _keyframeAttitude = source._keyframeAttitude
+      _keyframePose = source._keyframePose
     }
   }
 
@@ -6295,7 +6295,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._contents) }()
         case 12: try { try decoder.decodeSingularMessageField(value: &_storage._mainFrame) }()
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._selection) }()
-        case 14: try { try decoder.decodeSingularMessageField(value: &_storage._keyframeAttitude) }()
+        case 14: try { try decoder.decodeSingularMessageField(value: &_storage._keyframePose) }()
         default: break
         }
       }
@@ -6332,7 +6332,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       try { if let v = _storage._selection {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
-      try { if let v = _storage._keyframeAttitude {
+      try { if let v = _storage._keyframePose {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
       } }()
     }
@@ -6352,7 +6352,7 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         if _storage._mainFrame != rhs_storage._mainFrame {return false}
         if _storage._backgroundUucolor != rhs_storage._backgroundUucolor {return false}
         if _storage._selection != rhs_storage._selection {return false}
-        if _storage._keyframeAttitude != rhs_storage._keyframeAttitude {return false}
+        if _storage._keyframePose != rhs_storage._keyframePose {return false}
         return true
       }
       if !storagesAreEqual {return false}

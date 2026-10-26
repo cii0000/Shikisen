@@ -52,7 +52,7 @@ message PBRect {
     PBSize size = 2;
 }
 
-message PBAttitude {
+message PBPose {
     PBPoint position = 1;
     PBSize scale = 2;
     double rotation = 3;
@@ -366,7 +366,7 @@ message PBSheet {
     PBRect mainFrame = 12;
     PBUUColor backgroundUUColor = 5;
     PBSheetSelection selection = 13;
-    optional PBAttitude keyframeAttitude = 14;
+    optional PBPose keyframePose = 14;
 }
 
 message PBWorldSelection {
