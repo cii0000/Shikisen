@@ -445,15 +445,6 @@ extension Sequence where Element == Point {
 //    }
 }
 
-extension Point {
-    func littleEndianToBigEndian() -> Point {
-        Point(x.littleEndianToBigEndian(), y.littleEndianToBigEndian())
-    }
-    func bigEndianToLittleEndian() -> Point {
-        Point(x.bigEndianToLittleEndian(), y.bigEndianToLittleEndian())
-    }
-}
-
 enum CrossDirection: Int8, Hashable, Codable {
     case left, straight, right
     init(_ v: Double) {

@@ -87,19 +87,6 @@ extension Double: Serializable {
     }
 }
 
-extension Array {
-    init(data: Data) {
-        let count = data.count /  MemoryLayout<Element>.stride
-        self = data.withUnsafeBytes {
-            guard let ptr = $0.baseAddress?.assumingMemoryBound(to: Element.self) else { return [] }
-            return Array(UnsafeBufferPointer<Element>(start: ptr, count: count))
-        }
-    }
-    var data: Data {
-        withUnsafeBufferPointer { Data(buffer: $0) }
-    }
-}
-
 extension Data: Serializable {
     init(serializedData: Data) throws {
         self = serializedData

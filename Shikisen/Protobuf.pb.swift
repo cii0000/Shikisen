@@ -583,11 +583,6 @@ nonisolated struct PBLine: @unchecked Sendable {
     set {_uniqueStorage()._pressures = newValue}
   }
 
-  var controls: [PBLine.PBControl] {
-    get {_storage._controls}
-    set {_uniqueStorage()._controls = newValue}
-  }
-
   var size: Double {
     get {_storage._size ?? 0}
     set {_uniqueStorage()._size = newValue}
@@ -636,31 +631,6 @@ nonisolated struct PBLine: @unchecked Sendable {
 
   }
 
-  nonisolated struct PBControl: Sendable {
-    // SwiftProtobuf.Message conformance is added in an extension below. See the
-    // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-    // methods supported on all messages.
-
-    var point: PBPoint {
-      get {_point ?? PBPoint()}
-      set {_point = newValue}
-    }
-    /// Returns true if `point` has been explicitly set.
-    var hasPoint: Bool {self._point != nil}
-    /// Clears the value of `point`. Subsequent reads from it will return its default value.
-    mutating func clearPoint() {self._point = nil}
-
-    var weight: Double = 0
-
-    var pressure: Double = 0
-
-    var unknownFields = SwiftProtobuf.UnknownStorage()
-
-    init() {}
-
-    fileprivate var _point: PBPoint? = nil
-  }
-
   init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
@@ -674,10 +644,6 @@ nonisolated struct PBPolygon: Sendable {
   var xs: [Double] = []
 
   var ys: [Double] = []
-
-  var points: [PBPoint] = []
-
-  var pointsData: Data = Data()
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -707,43 +673,45 @@ nonisolated struct PBTopolygon: Sendable {
   fileprivate var _polygon: PBPolygon? = nil
 }
 
-nonisolated struct PBPlane: @unchecked Sendable {
+nonisolated struct PBPlane: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   var topolygon: PBTopolygon {
-    get {_storage._topolygon ?? PBTopolygon()}
-    set {_uniqueStorage()._topolygon = newValue}
+    get {_topolygon ?? PBTopolygon()}
+    set {_topolygon = newValue}
   }
   /// Returns true if `topolygon` has been explicitly set.
-  var hasTopolygon: Bool {_storage._topolygon != nil}
+  var hasTopolygon: Bool {self._topolygon != nil}
   /// Clears the value of `topolygon`. Subsequent reads from it will return its default value.
-  mutating func clearTopolygon() {_uniqueStorage()._topolygon = nil}
+  mutating func clearTopolygon() {self._topolygon = nil}
 
   var polygon: PBPolygon {
-    get {_storage._polygon ?? PBPolygon()}
-    set {_uniqueStorage()._polygon = newValue}
+    get {_polygon ?? PBPolygon()}
+    set {_polygon = newValue}
   }
   /// Returns true if `polygon` has been explicitly set.
-  var hasPolygon: Bool {_storage._polygon != nil}
+  var hasPolygon: Bool {self._polygon != nil}
   /// Clears the value of `polygon`. Subsequent reads from it will return its default value.
-  mutating func clearPolygon() {_uniqueStorage()._polygon = nil}
+  mutating func clearPolygon() {self._polygon = nil}
 
   var uuColor: PBUUColor {
-    get {_storage._uuColor ?? PBUUColor()}
-    set {_uniqueStorage()._uuColor = newValue}
+    get {_uuColor ?? PBUUColor()}
+    set {_uuColor = newValue}
   }
   /// Returns true if `uuColor` has been explicitly set.
-  var hasUuColor: Bool {_storage._uuColor != nil}
+  var hasUuColor: Bool {self._uuColor != nil}
   /// Clears the value of `uuColor`. Subsequent reads from it will return its default value.
-  mutating func clearUuColor() {_uniqueStorage()._uuColor = nil}
+  mutating func clearUuColor() {self._uuColor = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _topolygon: PBTopolygon? = nil
+  fileprivate var _polygon: PBPolygon? = nil
+  fileprivate var _uuColor: PBUUColor? = nil
 }
 
 nonisolated struct PBPicture: Sendable {
@@ -1549,65 +1517,6 @@ nonisolated struct PBKeyframe: Sendable {
   fileprivate var _id: PBUUID? = nil
 }
 
-nonisolated struct PBKeyframeKey: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  var lineIs: [Int64] = []
-
-  var planeIs: [Int64] = []
-
-  var draftLineIs: [Int64] = []
-
-  var draftPlaneIs: [Int64] = []
-
-  var beat: PBRational {
-    get {_beat ?? PBRational()}
-    set {_beat = newValue}
-  }
-  /// Returns true if `beat` has been explicitly set.
-  var hasBeat: Bool {self._beat != nil}
-  /// Clears the value of `beat`. Subsequent reads from it will return its default value.
-  mutating func clearBeat() {self._beat = nil}
-
-  var id: PBUUID {
-    get {_id ?? PBUUID()}
-    set {_id = newValue}
-  }
-  /// Returns true if `id` has been explicitly set.
-  var hasID: Bool {self._id != nil}
-  /// Clears the value of `id`. Subsequent reads from it will return its default value.
-  mutating func clearID() {self._id = nil}
-
-  var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  init() {}
-
-  fileprivate var _beat: PBRational? = nil
-  fileprivate var _id: PBUUID? = nil
-}
-
-nonisolated struct PBAnimationCompressor: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  var keys: [PBKeyframeKey] = []
-
-  var lines: [PBLine] = []
-
-  var planes: [PBPlane] = []
-
-  var draftLines: [PBLine] = []
-
-  var draftPlanes: [PBPlane] = []
-
-  var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  init() {}
-}
-
 nonisolated struct PBAnimationOption: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1657,91 +1566,67 @@ nonisolated struct PBAnimationOption: Sendable {
   fileprivate var _tempo: PBRational? = nil
 }
 
-nonisolated struct PBAnimation: @unchecked Sendable {
+nonisolated struct PBAnimation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var keyframes: [PBKeyframe] {
-    get {_storage._keyframes}
-    set {_uniqueStorage()._keyframes = newValue}
-  }
-
-  var compressor: PBAnimationCompressor {
-    get {_storage._compressor ?? PBAnimationCompressor()}
-    set {_uniqueStorage()._compressor = newValue}
-  }
-  /// Returns true if `compressor` has been explicitly set.
-  var hasCompressor: Bool {_storage._compressor != nil}
-  /// Clears the value of `compressor`. Subsequent reads from it will return its default value.
-  mutating func clearCompressor() {_uniqueStorage()._compressor = nil}
+  var keyframes: [PBKeyframe] = []
 
   var rootBeat: PBRational {
-    get {_storage._rootBeat ?? PBRational()}
-    set {_uniqueStorage()._rootBeat = newValue}
+    get {_rootBeat ?? PBRational()}
+    set {_rootBeat = newValue}
   }
   /// Returns true if `rootBeat` has been explicitly set.
-  var hasRootBeat: Bool {_storage._rootBeat != nil}
+  var hasRootBeat: Bool {self._rootBeat != nil}
   /// Clears the value of `rootBeat`. Subsequent reads from it will return its default value.
-  mutating func clearRootBeat() {_uniqueStorage()._rootBeat = nil}
+  mutating func clearRootBeat() {self._rootBeat = nil}
 
   var beatRange: PBRationalRange {
-    get {_storage._beatRange ?? PBRationalRange()}
-    set {_uniqueStorage()._beatRange = newValue}
+    get {_beatRange ?? PBRationalRange()}
+    set {_beatRange = newValue}
   }
   /// Returns true if `beatRange` has been explicitly set.
-  var hasBeatRange: Bool {_storage._beatRange != nil}
+  var hasBeatRange: Bool {self._beatRange != nil}
   /// Clears the value of `beatRange`. Subsequent reads from it will return its default value.
-  mutating func clearBeatRange() {_uniqueStorage()._beatRange = nil}
+  mutating func clearBeatRange() {self._beatRange = nil}
 
   var loopDurBeat: PBRational {
-    get {_storage._loopDurBeat ?? PBRational()}
-    set {_uniqueStorage()._loopDurBeat = newValue}
+    get {_loopDurBeat ?? PBRational()}
+    set {_loopDurBeat = newValue}
   }
   /// Returns true if `loopDurBeat` has been explicitly set.
-  var hasLoopDurBeat: Bool {_storage._loopDurBeat != nil}
+  var hasLoopDurBeat: Bool {self._loopDurBeat != nil}
   /// Clears the value of `loopDurBeat`. Subsequent reads from it will return its default value.
-  mutating func clearLoopDurBeat() {_uniqueStorage()._loopDurBeat = nil}
+  mutating func clearLoopDurBeat() {self._loopDurBeat = nil}
 
   var tempo: PBRational {
-    get {_storage._tempo ?? PBRational()}
-    set {_uniqueStorage()._tempo = newValue}
+    get {_tempo ?? PBRational()}
+    set {_tempo = newValue}
   }
   /// Returns true if `tempo` has been explicitly set.
-  var hasTempo: Bool {_storage._tempo != nil}
+  var hasTempo: Bool {self._tempo != nil}
   /// Clears the value of `tempo`. Subsequent reads from it will return its default value.
-  mutating func clearTempo() {_uniqueStorage()._tempo = nil}
+  mutating func clearTempo() {self._tempo = nil}
 
-  var previousNext: PBPreviousNext {
-    get {_storage._previousNext}
-    set {_uniqueStorage()._previousNext = newValue}
-  }
+  var previousNext: PBPreviousNext = .off
 
-  var isPlaying: Bool {
-    get {_storage._isPlaying}
-    set {_uniqueStorage()._isPlaying = newValue}
-  }
+  var isPlaying: Bool = false
 
-  var keyBeats: [PBRational] {
-    get {_storage._keyBeats}
-    set {_uniqueStorage()._keyBeats = newValue}
-  }
+  var keyBeats: [PBRational] = []
 
-  var timelineY: Double {
-    get {_storage._timelineY}
-    set {_uniqueStorage()._timelineY = newValue}
-  }
+  var timelineY: Double = 0
 
-  var isEnabled: Bool {
-    get {_storage._isEnabled}
-    set {_uniqueStorage()._isEnabled = newValue}
-  }
+  var isEnabled: Bool = false
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _rootBeat: PBRational? = nil
+  fileprivate var _beatRange: PBRationalRange? = nil
+  fileprivate var _loopDurBeat: PBRational? = nil
+  fileprivate var _tempo: PBRational? = nil
 }
 
 nonisolated struct PBSheetOption: Sendable {
@@ -1870,24 +1755,6 @@ nonisolated struct PBSheet: @unchecked Sendable {
   var hasScore: Bool {_storage._score != nil}
   /// Clears the value of `score`. Subsequent reads from it will return its default value.
   mutating func clearScore() {_uniqueStorage()._score = nil}
-
-  var picture: PBPicture {
-    get {_storage._picture ?? PBPicture()}
-    set {_uniqueStorage()._picture = newValue}
-  }
-  /// Returns true if `picture` has been explicitly set.
-  var hasPicture: Bool {_storage._picture != nil}
-  /// Clears the value of `picture`. Subsequent reads from it will return its default value.
-  mutating func clearPicture() {_uniqueStorage()._picture = nil}
-
-  var draftPicture: PBPicture {
-    get {_storage._draftPicture ?? PBPicture()}
-    set {_uniqueStorage()._draftPicture = newValue}
-  }
-  /// Returns true if `draftPicture` has been explicitly set.
-  var hasDraftPicture: Bool {_storage._draftPicture != nil}
-  /// Clears the value of `draftPicture`. Subsequent reads from it will return its default value.
-  mutating func clearDraftPicture() {_uniqueStorage()._draftPicture = nil}
 
   var texts: [PBText] {
     get {_storage._texts}
@@ -2169,27 +2036,30 @@ nonisolated struct PBInterOptionIndexValue: Sendable {
   fileprivate var _value: PBInterOption? = nil
 }
 
-nonisolated struct PBPlaneIndexValue: Sendable {
+nonisolated struct PBPlaneIndexValue: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   var value: PBPlane {
-    get {_value ?? PBPlane()}
-    set {_value = newValue}
+    get {_storage._value ?? PBPlane()}
+    set {_uniqueStorage()._value = newValue}
   }
   /// Returns true if `value` has been explicitly set.
-  var hasValue: Bool {self._value != nil}
+  var hasValue: Bool {_storage._value != nil}
   /// Clears the value of `value`. Subsequent reads from it will return its default value.
-  mutating func clearValue() {self._value = nil}
+  mutating func clearValue() {_uniqueStorage()._value = nil}
 
-  var index: Int64 = 0
+  var index: Int64 {
+    get {_storage._index}
+    set {_uniqueStorage()._index = newValue}
+  }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _value: PBPlane? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 nonisolated struct PBTextIndexValue: Sendable {
@@ -3506,8 +3376,6 @@ nonisolated struct PBUndoGroup: Sendable {
 
   var values: [PBUndoDataValue] = []
 
-  var isFirstReverse: Bool = false
-
   var firstUndoItemData: Data = Data()
 
   var date: PBDate {
@@ -3635,45 +3503,43 @@ nonisolated struct PBPlanesValue: Sendable {
   init() {}
 }
 
-nonisolated struct PBCopiedAnimation: Sendable {
+nonisolated struct PBCopiedAnimation: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   var animation: PBAnimation {
-    get {_animation ?? PBAnimation()}
-    set {_animation = newValue}
+    get {_storage._animation ?? PBAnimation()}
+    set {_uniqueStorage()._animation = newValue}
   }
   /// Returns true if `animation` has been explicitly set.
-  var hasAnimation: Bool {self._animation != nil}
+  var hasAnimation: Bool {_storage._animation != nil}
   /// Clears the value of `animation`. Subsequent reads from it will return its default value.
-  mutating func clearAnimation() {self._animation = nil}
+  mutating func clearAnimation() {_uniqueStorage()._animation = nil}
 
   var sheetID: PBUUID {
-    get {_sheetID ?? PBUUID()}
-    set {_sheetID = newValue}
+    get {_storage._sheetID ?? PBUUID()}
+    set {_uniqueStorage()._sheetID = newValue}
   }
   /// Returns true if `sheetID` has been explicitly set.
-  var hasSheetID: Bool {self._sheetID != nil}
+  var hasSheetID: Bool {_storage._sheetID != nil}
   /// Clears the value of `sheetID`. Subsequent reads from it will return its default value.
-  mutating func clearSheetID() {self._sheetID = nil}
+  mutating func clearSheetID() {_uniqueStorage()._sheetID = nil}
 
   var keyframeID: PBUUID {
-    get {_keyframeID ?? PBUUID()}
-    set {_keyframeID = newValue}
+    get {_storage._keyframeID ?? PBUUID()}
+    set {_uniqueStorage()._keyframeID = newValue}
   }
   /// Returns true if `keyframeID` has been explicitly set.
-  var hasKeyframeID: Bool {self._keyframeID != nil}
+  var hasKeyframeID: Bool {_storage._keyframeID != nil}
   /// Clears the value of `keyframeID`. Subsequent reads from it will return its default value.
-  mutating func clearKeyframeID() {self._keyframeID = nil}
+  mutating func clearKeyframeID() {_uniqueStorage()._keyframeID = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _animation: PBAnimation? = nil
-  fileprivate var _sheetID: PBUUID? = nil
-  fileprivate var _keyframeID: PBUUID? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 nonisolated struct PBNotesValue: Sendable {
@@ -4490,14 +4356,13 @@ nonisolated extension PBInterOption: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
 nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBLine"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}controls\0\u{1}size\0\u{2}\u{2}interID\0\u{2}\u{2}controlsData\0\u{1}interType\0\u{1}uuColor\0\u{1}xs\0\u{1}ys\0\u{1}weights\0\u{1}pressures\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}size\0\u{2}\u{2}interID\0\u{2}\u{2}controlsData\0\u{1}interType\0\u{1}uuColor\0\u{1}xs\0\u{1}ys\0\u{1}weights\0\u{1}pressures\0")
 
   fileprivate class _StorageClass {
     var _xs: [Double] = []
     var _ys: [Double] = []
     var _weights: [Double] = []
     var _pressures: [Double] = []
-    var _controls: [PBLine.PBControl] = []
     var _size: Double? = nil
     var _interID: PBUUID? = nil
     var _interType: PBInterType = .none
@@ -4517,7 +4382,6 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       _ys = source._ys
       _weights = source._weights
       _pressures = source._pressures
-      _controls = source._controls
       _size = source._size
       _interID = source._interID
       _interType = source._interType
@@ -4541,7 +4405,6 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._controls) }()
         case 2: try { try decoder.decodeSingularDoubleField(value: &_storage._size) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._interID) }()
         case 6: try { try decoder.decodeSingularBytesField(value: &_storage._controlsData) }()
@@ -4575,9 +4438,6 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._controls.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._controls, fieldNumber: 1)
-      }
       try { if let v = _storage._size {
         try visitor.visitSingularDoubleField(value: v, fieldNumber: 2)
       } }()
@@ -4618,7 +4478,6 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
         if _storage._ys != rhs_storage._ys {return false}
         if _storage._weights != rhs_storage._weights {return false}
         if _storage._pressures != rhs_storage._pressures {return false}
-        if _storage._controls != rhs_storage._controls {return false}
         if _storage._size != rhs_storage._size {return false}
         if _storage._interID != rhs_storage._interID {return false}
         if _storage._interType != rhs_storage._interType {return false}
@@ -4633,53 +4492,9 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
   }
 }
 
-nonisolated extension PBLine.PBControl: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = PBLine.protoMessageName + ".PBControl"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}point\0\u{1}weight\0\u{1}pressure\0")
-
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._point) }()
-      case 2: try { try decoder.decodeSingularDoubleField(value: &self.weight) }()
-      case 3: try { try decoder.decodeSingularDoubleField(value: &self.pressure) }()
-      default: break
-      }
-    }
-  }
-
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._point {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if self.weight.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.weight, fieldNumber: 2)
-    }
-    if self.pressure.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.pressure, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  static func ==(lhs: PBLine.PBControl, rhs: PBLine.PBControl) -> Bool {
-    if lhs._point != rhs._point {return false}
-    if lhs.weight != rhs.weight {return false}
-    if lhs.pressure != rhs.pressure {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension PBPolygon: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBPolygon"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}points\0\u{1}pointsData\0\u{1}xs\0\u{1}ys\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{3}xs\0\u{1}ys\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4687,8 +4502,6 @@ nonisolated extension PBPolygon: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.points) }()
-      case 2: try { try decoder.decodeSingularBytesField(value: &self.pointsData) }()
       case 3: try { try decoder.decodeRepeatedDoubleField(value: &self.xs) }()
       case 4: try { try decoder.decodeRepeatedDoubleField(value: &self.ys) }()
       default: break
@@ -4697,12 +4510,6 @@ nonisolated extension PBPolygon: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.points.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.points, fieldNumber: 1)
-    }
-    if !self.pointsData.isEmpty {
-      try visitor.visitSingularBytesField(value: self.pointsData, fieldNumber: 2)
-    }
     if !self.xs.isEmpty {
       try visitor.visitPackedDoubleField(value: self.xs, fieldNumber: 3)
     }
@@ -4715,8 +4522,6 @@ nonisolated extension PBPolygon: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
   static func ==(lhs: PBPolygon, rhs: PBPolygon) -> Bool {
     if lhs.xs != rhs.xs {return false}
     if lhs.ys != rhs.ys {return false}
-    if lhs.points != rhs.points {return false}
-    if lhs.pointsData != rhs.pointsData {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -4765,81 +4570,41 @@ nonisolated extension PBPlane: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
   static let protoMessageName: String = "PBPlane"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}uuColor\0\u{1}polygon\0\u{1}topolygon\0")
 
-  fileprivate class _StorageClass {
-    var _topolygon: PBTopolygon? = nil
-    var _polygon: PBPolygon? = nil
-    var _uuColor: PBUUColor? = nil
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _topolygon = source._topolygon
-      _polygon = source._polygon
-      _uuColor = source._uuColor
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
-
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._uuColor) }()
-        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._polygon) }()
-        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._topolygon) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._uuColor) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._polygon) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._topolygon) }()
+      default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      try { if let v = _storage._uuColor {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-      } }()
-      try { if let v = _storage._polygon {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
-      try { if let v = _storage._topolygon {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      } }()
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._uuColor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._polygon {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._topolygon {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBPlane, rhs: PBPlane) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._topolygon != rhs_storage._topolygon {return false}
-        if _storage._polygon != rhs_storage._polygon {return false}
-        if _storage._uuColor != rhs_storage._uuColor {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs._topolygon != rhs._topolygon {return false}
+    if lhs._polygon != rhs._polygon {return false}
+    if lhs._uuColor != rhs._uuColor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6103,115 +5868,6 @@ nonisolated extension PBKeyframe: SwiftProtobuf.Message, SwiftProtobuf._MessageI
   }
 }
 
-nonisolated extension PBKeyframeKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = "PBKeyframeKey"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}lineIs\0\u{1}planeIs\0\u{1}draftLineIs\0\u{1}draftPlaneIs\0\u{1}beat\0\u{2}\u{4}id\0")
-
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedInt64Field(value: &self.lineIs) }()
-      case 2: try { try decoder.decodeRepeatedInt64Field(value: &self.planeIs) }()
-      case 3: try { try decoder.decodeRepeatedInt64Field(value: &self.draftLineIs) }()
-      case 4: try { try decoder.decodeRepeatedInt64Field(value: &self.draftPlaneIs) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._beat) }()
-      case 9: try { try decoder.decodeSingularMessageField(value: &self._id) }()
-      default: break
-      }
-    }
-  }
-
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.lineIs.isEmpty {
-      try visitor.visitPackedInt64Field(value: self.lineIs, fieldNumber: 1)
-    }
-    if !self.planeIs.isEmpty {
-      try visitor.visitPackedInt64Field(value: self.planeIs, fieldNumber: 2)
-    }
-    if !self.draftLineIs.isEmpty {
-      try visitor.visitPackedInt64Field(value: self.draftLineIs, fieldNumber: 3)
-    }
-    if !self.draftPlaneIs.isEmpty {
-      try visitor.visitPackedInt64Field(value: self.draftPlaneIs, fieldNumber: 4)
-    }
-    try { if let v = self._beat {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
-    try { if let v = self._id {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-    } }()
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  static func ==(lhs: PBKeyframeKey, rhs: PBKeyframeKey) -> Bool {
-    if lhs.lineIs != rhs.lineIs {return false}
-    if lhs.planeIs != rhs.planeIs {return false}
-    if lhs.draftLineIs != rhs.draftLineIs {return false}
-    if lhs.draftPlaneIs != rhs.draftPlaneIs {return false}
-    if lhs._beat != rhs._beat {return false}
-    if lhs._id != rhs._id {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension PBAnimationCompressor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = "PBAnimationCompressor"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keys\0\u{1}lines\0\u{1}planes\0\u{1}draftLines\0\u{1}draftPlanes\0")
-
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.keys) }()
-      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.lines) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.planes) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.draftLines) }()
-      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.draftPlanes) }()
-      default: break
-      }
-    }
-  }
-
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.keys.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.keys, fieldNumber: 1)
-    }
-    if !self.lines.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.lines, fieldNumber: 2)
-    }
-    if !self.planes.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.planes, fieldNumber: 3)
-    }
-    if !self.draftLines.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.draftLines, fieldNumber: 4)
-    }
-    if !self.draftPlanes.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.draftPlanes, fieldNumber: 5)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  static func ==(lhs: PBAnimationCompressor, rhs: PBAnimationCompressor) -> Bool {
-    if lhs.keys != rhs.keys {return false}
-    if lhs.lines != rhs.lines {return false}
-    if lhs.planes != rhs.planes {return false}
-    if lhs.draftLines != rhs.draftLines {return false}
-    if lhs.draftPlanes != rhs.draftPlanes {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBAnimationOption"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beatRange\0\u{1}tempo\0\u{1}timelineY\0\u{1}isEnabled\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
@@ -6278,139 +5934,78 @@ nonisolated extension PBAnimationOption: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension PBAnimation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBAnimation"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframes\0\u{1}rootBeat\0\u{1}beatRange\0\u{1}tempo\0\u{1}isPlaying\0\u{1}timelineY\0\u{1}isEnabled\0\u{1}compressor\0\u{1}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
-
-  fileprivate class _StorageClass {
-    var _keyframes: [PBKeyframe] = []
-    var _compressor: PBAnimationCompressor? = nil
-    var _rootBeat: PBRational? = nil
-    var _beatRange: PBRationalRange? = nil
-    var _loopDurBeat: PBRational? = nil
-    var _tempo: PBRational? = nil
-    var _previousNext: PBPreviousNext = .off
-    var _isPlaying: Bool = false
-    var _keyBeats: [PBRational] = []
-    var _timelineY: Double = 0
-    var _isEnabled: Bool = false
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _keyframes = source._keyframes
-      _compressor = source._compressor
-      _rootBeat = source._rootBeat
-      _beatRange = source._beatRange
-      _loopDurBeat = source._loopDurBeat
-      _tempo = source._tempo
-      _previousNext = source._previousNext
-      _isPlaying = source._isPlaying
-      _keyBeats = source._keyBeats
-      _timelineY = source._timelineY
-      _isEnabled = source._isEnabled
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}keyframes\0\u{1}rootBeat\0\u{1}beatRange\0\u{1}tempo\0\u{1}isPlaying\0\u{1}timelineY\0\u{1}isEnabled\0\u{2}\u{2}loopDurBeat\0\u{1}previousNext\0\u{1}keyBeats\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._keyframes) }()
-        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._rootBeat) }()
-        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._beatRange) }()
-        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._tempo) }()
-        case 5: try { try decoder.decodeSingularBoolField(value: &_storage._isPlaying) }()
-        case 6: try { try decoder.decodeSingularDoubleField(value: &_storage._timelineY) }()
-        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._isEnabled) }()
-        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._compressor) }()
-        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._loopDurBeat) }()
-        case 10: try { try decoder.decodeSingularEnumField(value: &_storage._previousNext) }()
-        case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._keyBeats) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.keyframes) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._rootBeat) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._beatRange) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._tempo) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.isPlaying) }()
+      case 6: try { try decoder.decodeSingularDoubleField(value: &self.timelineY) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.isEnabled) }()
+      case 9: try { try decoder.decodeSingularMessageField(value: &self._loopDurBeat) }()
+      case 10: try { try decoder.decodeSingularEnumField(value: &self.previousNext) }()
+      case 11: try { try decoder.decodeRepeatedMessageField(value: &self.keyBeats) }()
+      default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._keyframes.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._keyframes, fieldNumber: 1)
-      }
-      try { if let v = _storage._rootBeat {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-      } }()
-      try { if let v = _storage._beatRange {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
-      try { if let v = _storage._tempo {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      } }()
-      if _storage._isPlaying != false {
-        try visitor.visitSingularBoolField(value: _storage._isPlaying, fieldNumber: 5)
-      }
-      if _storage._timelineY.bitPattern != 0 {
-        try visitor.visitSingularDoubleField(value: _storage._timelineY, fieldNumber: 6)
-      }
-      if _storage._isEnabled != false {
-        try visitor.visitSingularBoolField(value: _storage._isEnabled, fieldNumber: 7)
-      }
-      try { if let v = _storage._compressor {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-      } }()
-      try { if let v = _storage._loopDurBeat {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-      } }()
-      if _storage._previousNext != .off {
-        try visitor.visitSingularEnumField(value: _storage._previousNext, fieldNumber: 10)
-      }
-      if !_storage._keyBeats.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._keyBeats, fieldNumber: 11)
-      }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.keyframes.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.keyframes, fieldNumber: 1)
+    }
+    try { if let v = self._rootBeat {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._beatRange {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._tempo {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if self.isPlaying != false {
+      try visitor.visitSingularBoolField(value: self.isPlaying, fieldNumber: 5)
+    }
+    if self.timelineY.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.timelineY, fieldNumber: 6)
+    }
+    if self.isEnabled != false {
+      try visitor.visitSingularBoolField(value: self.isEnabled, fieldNumber: 7)
+    }
+    try { if let v = self._loopDurBeat {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    } }()
+    if self.previousNext != .off {
+      try visitor.visitSingularEnumField(value: self.previousNext, fieldNumber: 10)
+    }
+    if !self.keyBeats.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.keyBeats, fieldNumber: 11)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBAnimation, rhs: PBAnimation) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._keyframes != rhs_storage._keyframes {return false}
-        if _storage._compressor != rhs_storage._compressor {return false}
-        if _storage._rootBeat != rhs_storage._rootBeat {return false}
-        if _storage._beatRange != rhs_storage._beatRange {return false}
-        if _storage._loopDurBeat != rhs_storage._loopDurBeat {return false}
-        if _storage._tempo != rhs_storage._tempo {return false}
-        if _storage._previousNext != rhs_storage._previousNext {return false}
-        if _storage._isPlaying != rhs_storage._isPlaying {return false}
-        if _storage._keyBeats != rhs_storage._keyBeats {return false}
-        if _storage._timelineY != rhs_storage._timelineY {return false}
-        if _storage._isEnabled != rhs_storage._isEnabled {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.keyframes != rhs.keyframes {return false}
+    if lhs._rootBeat != rhs._rootBeat {return false}
+    if lhs._beatRange != rhs._beatRange {return false}
+    if lhs._loopDurBeat != rhs._loopDurBeat {return false}
+    if lhs._tempo != rhs._tempo {return false}
+    if lhs.previousNext != rhs.previousNext {return false}
+    if lhs.isPlaying != rhs.isPlaying {return false}
+    if lhs.keyBeats != rhs.keyBeats {return false}
+    if lhs.timelineY != rhs.timelineY {return false}
+    if lhs.isEnabled != rhs.isEnabled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6643,13 +6238,11 @@ nonisolated extension PBSheetSelection: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBSheet"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}picture\0\u{1}draftPicture\0\u{1}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0\u{1}keyframeAttitude\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{3}texts\0\u{1}borders\0\u{1}backgroundUUColor\0\u{1}animation\0\u{2}\u{4}score\0\u{1}contents\0\u{1}mainFrame\0\u{1}selection\0\u{1}keyframeAttitude\0")
 
   fileprivate class _StorageClass {
     var _animation: PBAnimation? = nil
     var _score: PBScore? = nil
-    var _picture: PBPicture? = nil
-    var _draftPicture: PBPicture? = nil
     var _texts: [PBText] = []
     var _contents: [PBContent] = []
     var _borders: [PBBorder] = []
@@ -6669,8 +6262,6 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     init(copying source: _StorageClass) {
       _animation = source._animation
       _score = source._score
-      _picture = source._picture
-      _draftPicture = source._draftPicture
       _texts = source._texts
       _contents = source._contents
       _borders = source._borders
@@ -6696,8 +6287,6 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._picture) }()
-        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._draftPicture) }()
         case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._texts) }()
         case 4: try { try decoder.decodeRepeatedMessageField(value: &_storage._borders) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._backgroundUucolor) }()
@@ -6719,12 +6308,6 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      try { if let v = _storage._picture {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-      } }()
-      try { if let v = _storage._draftPicture {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-      } }()
       if !_storage._texts.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._texts, fieldNumber: 3)
       }
@@ -6763,8 +6346,6 @@ nonisolated extension PBSheet: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         let rhs_storage = _args.1
         if _storage._animation != rhs_storage._animation {return false}
         if _storage._score != rhs_storage._score {return false}
-        if _storage._picture != rhs_storage._picture {return false}
-        if _storage._draftPicture != rhs_storage._draftPicture {return false}
         if _storage._texts != rhs_storage._texts {return false}
         if _storage._contents != rhs_storage._contents {return false}
         if _storage._borders != rhs_storage._borders {return false}
@@ -7170,36 +6751,74 @@ nonisolated extension PBPlaneIndexValue: SwiftProtobuf.Message, SwiftProtobuf._M
   static let protoMessageName: String = "PBPlaneIndexValue"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}index\0")
 
+  fileprivate class _StorageClass {
+    var _value: PBPlane? = nil
+    var _index: Int64 = 0
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _value = source._value
+      _index = source._index
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._value) }()
-      case 2: try { try decoder.decodeSingularInt64Field(value: &self.index) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._value) }()
+        case 2: try { try decoder.decodeSingularInt64Field(value: &_storage._index) }()
+        default: break
+        }
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._value {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if self.index != 0 {
-      try visitor.visitSingularInt64Field(value: self.index, fieldNumber: 2)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._value {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if _storage._index != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._index, fieldNumber: 2)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBPlaneIndexValue, rhs: PBPlaneIndexValue) -> Bool {
-    if lhs._value != rhs._value {return false}
-    if lhs.index != rhs.index {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._value != rhs_storage._value {return false}
+        if _storage._index != rhs_storage._index {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -9758,7 +9377,7 @@ nonisolated extension PBUndoDataValue: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBUndoGroup"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}values\0\u{1}isFirstReverse\0\u{1}date\0\u{1}firstUndoItemData\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}values\0\u{2}\u{2}date\0\u{1}firstUndoItemData\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9767,7 +9386,6 @@ nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._Message
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.values) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self.isFirstReverse) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._date) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self.firstUndoItemData) }()
       default: break
@@ -9783,9 +9401,6 @@ nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._Message
     if !self.values.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.values, fieldNumber: 1)
     }
-    if self.isFirstReverse != false {
-      try visitor.visitSingularBoolField(value: self.isFirstReverse, fieldNumber: 2)
-    }
     try { if let v = self._date {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
@@ -9797,7 +9412,6 @@ nonisolated extension PBUndoGroup: SwiftProtobuf.Message, SwiftProtobuf._Message
 
   static func ==(lhs: PBUndoGroup, rhs: PBUndoGroup) -> Bool {
     if lhs.values != rhs.values {return false}
-    if lhs.isFirstReverse != rhs.isFirstReverse {return false}
     if lhs.firstUndoItemData != rhs.firstUndoItemData {return false}
     if lhs._date != rhs._date {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -10003,41 +9617,81 @@ nonisolated extension PBCopiedAnimation: SwiftProtobuf.Message, SwiftProtobuf._M
   static let protoMessageName: String = "PBCopiedAnimation"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}animation\0\u{1}sheetID\0\u{1}keyframeID\0")
 
+  fileprivate class _StorageClass {
+    var _animation: PBAnimation? = nil
+    var _sheetID: PBUUID? = nil
+    var _keyframeID: PBUUID? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _animation = source._animation
+      _sheetID = source._sheetID
+      _keyframeID = source._keyframeID
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._animation) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._sheetID) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._keyframeID) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._animation) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._sheetID) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._keyframeID) }()
+        default: break
+        }
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._animation {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._sheetID {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._keyframeID {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._animation {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._sheetID {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._keyframeID {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: PBCopiedAnimation, rhs: PBCopiedAnimation) -> Bool {
-    if lhs._animation != rhs._animation {return false}
-    if lhs._sheetID != rhs._sheetID {return false}
-    if lhs._keyframeID != rhs._keyframeID {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._animation != rhs_storage._animation {return false}
+        if _storage._sheetID != rhs_storage._sheetID {return false}
+        if _storage._keyframeID != rhs_storage._keyframeID {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

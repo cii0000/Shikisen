@@ -103,14 +103,6 @@ extension Polygon: Protobuf {
     init(_ pb: PBPolygon) throws {
         points = try zip(pb.xs, pb.ys).map { Point(try $0.notInfiniteAndNAN(),
                                                    try $1.notInfiniteAndNAN()) }
-        if points.isEmpty {
-            let aPoints = [Point](data: pb.pointsData)
-            switch ByteOrder.current() ?? .littleEndian {
-            case .littleEndian: points = aPoints
-            case .bigEndian: points = aPoints.map { $0.littleEndianToBigEndian() }
-            }
-            points = try points.map { try $0.notInfiniteAndNAN() }
-        }
     }
     var pb: PBPolygon {
         .with {

@@ -896,51 +896,11 @@ final class RootView: View, @unchecked Sendable {
         }
     }
     
-    var isUpdateFromSchema: Bool {
-        model.schemaVersion() < Root.currentSchemaVersion
+    var isEnabledFromSchema: Bool {
+        model.schemaVersion() >= Root.currentSchemaVersion
     }
     var isEmptyModel: Bool {
         history.isEmpty && model.sheetRecorders.isEmpty
-    }
-    func updateFromSchema(progressHandler: (Double) -> ()) async throws {
-        if model.schemaVersion() >= Root.currentSchemaVersion { return }
-        if !isEmptyModel {
-            for (i, v) in model.sheetRecorders.enumerated() {
-                let (_, sheetRecorder) = v
-                
-                let sheetRecord = sheetRecorder.sheetRecord
-                let historyRecord = sheetRecorder.sheetHistoryRecord
-                guard let sheet = sheetRecord.decodedValue,
-                      var history = historyRecord.decodedValue else { continue }
-                history._update()
-                sheetRecord.value = sheet
-                historyRecord.value = history
-                sheetRecord.willwriteClosure = { [weak historyRecord] (record) in
-                    record.value = sheet
-                    historyRecord?.value = history
-                    historyRecord?.isPreparedWrite = true
-                }
-                sheetRecord.isWillwrite = true
-                historyRecord.isWillwrite = true
-                
-                syncSave()
-                sheetRecord.resetWrite()
-                historyRecord.resetWrite()
-                sheetRecord.willwriteClosure = { _ in }
-                
-                progressHandler(Double(i + 1) / Double(model.sheetRecorders.count))
-                try Task.checkCancellation()
-            }
-            
-            history._update()
-            model.worldHistoryRecord.value = history
-            model.worldHistoryRecord.isWillwrite = true
-            
-            sheetViewValues.forEach { readAndClose(.none, at: $0.value.sheetID, $0.key) }
-            sheetViewValues.forEach { readAndClose(.sheet, at: $0.value.sheetID, $0.key) }
-        }
-        
-        saveSchema()
     }
     func saveSchema() {
         model.schemaRecord.value = "\(Root.currentSchemaVersion)"

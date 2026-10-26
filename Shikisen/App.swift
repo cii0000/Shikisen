@@ -675,25 +675,11 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         rootView.cursorPoint = clippedScreenPointFromCursor.my
     }
     func setupWithWindow() {
-        if rootView.isUpdateFromSchema {
+        if !rootView.isEnabledFromSchema {
             if rootView.isEmptyModel {
                 rootView.saveSchema()
             } else {
-                let progressPanel = ProgressPanel(message: String(format: "Updating %@".localized, System.dataName))
-                rootView.node.show(progressPanel)
-                let task = Task.detached(priority: .high) {
-                    do {
-                        try await self.rootView.updateFromSchema { (progress) in
-                            Task { @MainActor in
-                                progressPanel.progress = progress
-                            }
-                        }
-                    } catch {}
-                    Task { @MainActor in
-                        progressPanel.closePanel()
-                    }
-                }
-                progressPanel.cancelHandler = { task.cancel() }
+                rootAction.hudView.show(URL.ReadError())
             }
         }
         
@@ -3611,25 +3597,6 @@ actor ActorProgress {
     
     func close() {
         window.close()
-    }
-}
-
-enum ByteOrder {
-    case littleEndian, bigEndian
-    static func current() -> ByteOrder? {
-        switch UInt32(CFByteOrderGetCurrent()) {
-        case CFByteOrderLittleEndian.rawValue: .littleEndian
-        case CFByteOrderBigEndian.rawValue: .bigEndian
-        default: nil
-        }
-    }
-}
-extension Double {
-    func littleEndianToBigEndian() -> Double {
-        CFConvertDoubleSwappedToHost(CFSwappedFloat64(v: bitPattern))
-    }
-    func bigEndianToLittleEndian() -> Double {
-        Double(bitPattern: CFConvertDoubleHostToSwapped(self).v)
     }
 }
 

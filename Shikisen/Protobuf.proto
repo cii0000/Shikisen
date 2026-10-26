@@ -106,17 +106,10 @@ message PBInterOption {
 }
 
 message PBLine {
-    message PBControl {
-        PBPoint point = 1;
-        double weight = 2;
-        double pressure = 3;
-    }
     repeated double xs = 9;
     repeated double ys = 10;
     repeated double weights = 11;
     repeated double pressures = 12;
-    
-    repeated PBControl controls = 1;
     optional double size = 2;
     PBUUID interID = 4;
     PBInterType interType = 7;
@@ -129,9 +122,6 @@ message PBLine {
 message PBPolygon {
     repeated double xs = 3;
     repeated double ys = 4;
-    
-    repeated PBPoint points = 1;
-    bytes pointsData = 2;
 }
 message PBTopolygon {
     PBPolygon polygon = 1;
@@ -311,22 +301,6 @@ message PBKeyframe {
     PBUUID id = 7;
 }
 
-message PBKeyframeKey {
-    repeated int64 lineIs = 1;
-    repeated int64 planeIs = 2;
-    repeated int64 draftLineIs = 3;
-    repeated int64 draftPlaneIs = 4;
-    PBRational beat = 5;
-    PBUUID id = 9;
-}
-message PBAnimationCompressor {
-    repeated PBKeyframeKey keys = 1;
-    repeated PBLine lines = 2;
-    repeated PBPlane planes = 3;
-    repeated PBLine draftLines = 4;
-    repeated PBPlane draftPlanes = 5;
-}
-
 message PBAnimationOption {
     PBRationalRange beatRange = 1;
     PBRational loopDurBeat = 5;
@@ -338,7 +312,6 @@ message PBAnimationOption {
 }
 message PBAnimation {
     repeated PBKeyframe keyframes = 1;
-    PBAnimationCompressor compressor = 8;
     PBRational rootBeat = 2;
     PBRationalRange beatRange = 3;
     PBRational loopDurBeat = 9;
@@ -387,8 +360,6 @@ message PBSheetSelection {
 message PBSheet {
     PBAnimation animation = 6;
     PBScore score = 10;
-    PBPicture picture = 1;
-    PBPicture draftPicture = 2;
     repeated PBText texts = 3;
     repeated PBContent contents = 11;
     repeated PBBorder borders = 4;
@@ -700,7 +671,6 @@ message PBUndoDataValue {
 }
 message PBUndoGroup {
     repeated PBUndoDataValue values = 1;
-    bool isFirstReverse = 2;
     bytes firstUndoItemData = 4;
     PBDate date = 3;
 }

@@ -126,18 +126,6 @@ struct Line: Hashable, Codable {
     var interType = InterType.none
     var uuColor = Line.defaultUUColor
 }
-extension Line.Control {
-    func littleEndianToBigEndian() -> Line.Control {
-        Line.Control(point: point.littleEndianToBigEndian(),
-                     weight: weight.littleEndianToBigEndian(),
-                     pressure: pressure.littleEndianToBigEndian())
-    }
-    func bigEndianToLittleEndian() -> Line.Control {
-        Line.Control(point: point.bigEndianToLittleEndian(),
-                     weight: weight.bigEndianToLittleEndian(),
-                     pressure: pressure.bigEndianToLittleEndian())
-    }
-}
 extension Line: Protobuf {
     init(_ pb: PBLine) throws {
         controls = try zip(zip(pb.xs, pb.ys), zip(pb.weights, pb.pressures)).map {
@@ -145,19 +133,6 @@ extension Line: Protobuf {
                                try $0.1.notInfiniteAndNAN()),
                   weight: try $1.0.notNaN().clipped(min: 0, max: 1),
                   pressure: try $1.1.notNaN().clipped(min: 0, max: 1))
-        }
-        
-        if controls.isEmpty {
-            let aControls = [Control](data: pb.controlsData)
-            switch ByteOrder.current() ?? .littleEndian {
-            case .littleEndian: controls = aControls
-            case .bigEndian: controls = aControls.map { $0.littleEndianToBigEndian() }
-            }
-            for (i, c) in controls.enumerated() {
-                controls[i].point = try c.point.notInfiniteAndNAN()
-                controls[i].weight = (try c.weight.notNaN()).clipped(min: 0, max: 1)
-                controls[i].pressure = (try c.pressure.notNaN()).clipped(min: 0, max: 1)
-            }
         }
         
         let size = (pb.hasSize ? (try? pb.size.notNaN()) : nil) ?? Line.defaultLineWidth
@@ -186,20 +161,6 @@ extension Line: Protobuf {
             } else {
                 nil
             }
-        }
-    }
-}
-extension Line.Control: Protobuf {
-    init(_ pb: PBLine.PBControl) throws {
-        point = try Point(pb.point).notInfiniteAndNAN()
-        weight = try pb.weight.notNaN().clipped(min: 0, max: 1)
-        pressure = try pb.pressure.notNaN().clipped(min: 0, max: 1)
-    }
-    var pb: PBLine.PBControl {
-        .with {
-            $0.point = point.pb
-            $0.weight = weight
-            $0.pressure = pressure
         }
     }
 }

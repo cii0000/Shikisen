@@ -34,9 +34,7 @@ struct Version: Hashable, Codable {
     var indexPath = [Int](), groupIndex = 0
 }
 
-protocol UndoItem: Sendable, Protobuf, Hashable, Codable {
-    func reversed() -> Self?
-}
+protocol UndoItem: Sendable, Protobuf, Hashable, Codable {}
 extension UndoItem {
     var caseName: String {
         Mirror(reflecting: self).children.first?.label ?? .init(describing: self)
@@ -78,10 +76,6 @@ struct UndoError: LocalizedError, Equatable {
     static let errored = Self.init(errorDescription: "errored")
     init<T: UndoItem>(_ undoItem: T) {
         errorDescription = "\("History Error".localized): \(undoItem.caseName)"
-    }
-    
-    init<T: UndoItem>(from undoItem: T) {
-        errorDescription = "\("History Error".localized): from \(undoItem.caseName)"
     }
 }
 struct UndoDataValue<T: UndoItem>: Codable {
@@ -156,22 +150,13 @@ extension UndoGroup: Protobuf {
     typealias PB = PBUndoGroup
     init(_ pb: PBUndoGroup) throws {
         values = try pb.values.map { try UndoDataValue($0) }
-        
-        if pb.isFirstReverse, values.count >= 1 {
-            self.firstUndoItemData = values[0].undoItemData
-            values.removeFirst()
-        } else {
-            firstUndoItemData = pb.firstUndoItemData
-        }
-        
+        firstUndoItemData = pb.firstUndoItemData
         date = (try? Date(pb.date)) ?? Date(timeIntervalSinceReferenceDate: 0)
     }
     var pb: PBUndoGroup {
         .with {
             $0.values = values.map { $0.pb }
-            if !firstUndoItemData.isEmpty {
-                $0.firstUndoItemData = firstUndoItemData
-            }
+            if !firstUndoItemData.isEmpty { $0.firstUndoItemData = firstUndoItemData }
             $0.date = date.pb
         }
     }
@@ -883,38 +868,10 @@ extension History {
             }
         }
     }
-    
-    mutating func _update() {
-        allGroups { ip, groups in
-            for (gi, group) in groups.enumerated() {
-                for (vi, value) in group.values.enumerated() {
-                    let undoItem = try? T(serializedData: value.undoItemData)
-                    let redoItem = try? T(serializedData: value.redoItemData)
-                    if let undoItem, let redoItem {
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
-                        = (try? undoItem.serializedData()) ?? .init()
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
-                        = (try? redoItem.serializedData()) ?? .init()
-                    } else if undoItem == nil, let redoItem {
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
-                        = (try? redoItem.reversed()?.serializedData()) ?? .init()
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
-                        = (try? redoItem.serializedData()) ?? .init()
-                    } else if let undoItem, redoItem == nil {
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].undoItemData
-                        = (try? undoItem.serializedData()) ?? .init()
-                        self[Version(indexPath: ip, groupIndex: gi)].values[vi].redoItemData
-                        = (try? undoItem.reversed()?.serializedData()) ?? .init()
-                    }
-                }
-            }
-        }
-    }
 }
 
 protocol HisotryOwner {
     associatedtype OwnerUndoItem: UndoItem
-    func canSet(from item: OwnerUndoItem) -> Bool
     func canSet(_ item: OwnerUndoItem) -> Bool
     func reversed(_ item: OwnerUndoItem) -> OwnerUndoItem
 }
@@ -935,55 +892,18 @@ extension History {
                 }
                 
                 let udv = self[result]
-//                guard let undoItem = try? T(serializedData: udv.undoItemData),
-//                      let redoItem = try? T(serializedData: udv.redoItemData)
-//                else { throw UndoError.load }
-//                func uiv(from item: T, isReversed: Bool) throws -> UndoItemValue<T> {
-//                    guard owner.canSet(item) else { throw UndoError(item) }
-//                    return .init(undo: item, redo: owner.reversed(item),
-//                                 isReversed: isReversed)
-//                }
-//                let nuiv = switch result.type {
-//                case .undo: try uiv(from: undoItem, isReversed: false)
-//                case .redo: try uiv(from: redoItem, isReversed: true)
-//                }
-                
-                let undoItem = try? T(serializedData: udv.undoItemData)
-                let redoItem = try? T(serializedData: udv.redoItemData)
-                func uiv(from item: T,
-                         isTo: Bool, isReversed: Bool) throws -> UndoItemValue<T> {
-                    if isTo {
-                        guard owner.canSet(item) else { throw UndoError(item) }
-                    } else {
-                        guard owner.canSet(from: item) else { throw UndoError(from: item) }
-                    }
+                guard let undoItem = try? T(serializedData: udv.undoItemData),
+                      let redoItem = try? T(serializedData: udv.redoItemData)
+                else { throw UndoError.load }
+                func uiv(from item: T, isReversed: Bool) throws -> UndoItemValue<T> {
+                    guard owner.canSet(item) else { throw UndoError(item) }
                     return .init(undo: item, redo: owner.reversed(item),
                                  isReversed: isReversed)
                 }
-                let nuiv = if let undoItem {
-                    if let redoItem {
-                        switch result.type {
-                        case .undo:
-                            try uiv(from: undoItem, isTo: true, isReversed: false)
-                        case .redo:
-                            try uiv(from: redoItem, isTo: true, isReversed: true)
-                        }
-                    } else {
-                        switch result.type {
-                        case .undo:
-                            try uiv(from: undoItem, isTo: true, isReversed: false)
-                        case .redo:
-                            try uiv(from: undoItem, isTo: false, isReversed: false)
-                        }
-                    }
-                } else if let redoItem {
-                    switch result.type {
-                    case .undo:
-                        try uiv(from: redoItem, isTo: false, isReversed: true)
-                    case .redo:
-                        try uiv(from: redoItem, isTo: true, isReversed: true)
-                    }
-                } else { throw UndoError.load }
+                let nuiv = switch result.type {
+                case .undo: try uiv(from: undoItem, isReversed: false)
+                case .redo: try uiv(from: redoItem, isReversed: true)
+                }
                 
                 self[result].undoItemValue = nuiv
                 self[result].loadType = .loaded
