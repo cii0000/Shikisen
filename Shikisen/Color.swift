@@ -514,7 +514,7 @@ extension LCHA {
     }
 }
 
-struct RGBA: Hashable, Codable {
+struct RGBA: Hashable {
     var r, g, b, a: Float
     
     init() {
@@ -584,6 +584,22 @@ extension RGBA {
         } else {
             return nil
         }
+    }
+}
+extension RGBA: Codable {
+    init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        r = try container.decode(Float.self).notInfiniteAndNAN()
+        g = try container.decode(Float.self).notInfiniteAndNAN()
+        b = try container.decode(Float.self).notInfiniteAndNAN()
+        a = try container.decode(Float.self).notNaN().clipped(min: 0, max: 1)
+    }
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(r)
+        try container.encode(g)
+        try container.encode(b)
+        try container.encode(a)
     }
 }
 extension RGBA: Interpolatable {

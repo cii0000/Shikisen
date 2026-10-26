@@ -35,7 +35,6 @@ struct Version: Hashable, Codable {
 }
 
 protocol UndoItem: Sendable, Protobuf, Hashable, Codable {
-    var isRequiredEncodable: Bool { get }
     func reversed() -> Self?
 }
 extension UndoItem {
@@ -106,17 +105,8 @@ extension UndoDataValue {
         save()
     }
     mutating func save() {
-        undoItemData = Data()
-        redoItemData = Data()
-        guard let uiv = undoItemValue else { return }
-        if uiv.undoItem.isRequiredEncodable,
-            let undoItemData = try? uiv.undoItem.serializedData() {
-            self.undoItemData = undoItemData
-        }
-        if uiv.redoItem.isRequiredEncodable,
-           let redoItemData = try? uiv.redoItem.serializedData() {
-            self.redoItemData = redoItemData
-        }
+        undoItemData = (try? undoItemValue?.undoItem.serializedData()) ?? .init()
+        redoItemData = (try? undoItemValue?.redoItem.serializedData()) ?? .init()
     }
 }
 extension UndoDataValue: Protobuf {
@@ -936,6 +926,19 @@ extension History {
                 }
                 
                 let udv = self[result]
+//                guard let undoItem = try? T(serializedData: udv.undoItemData),
+//                      let redoItem = try? T(serializedData: udv.redoItemData)
+//                else { throw UndoError.load }
+//                func uiv(from item: T, isReversed: Bool) throws -> UndoItemValue<T> {
+//                    guard owner.canSet(item) else { throw UndoError(item) }
+//                    return .init(undo: item, redo: owner.reversed(item),
+//                                 isReversed: isReversed)
+//                }
+//                let nuiv = switch result.type {
+//                case .undo: try uiv(from: undoItem, isReversed: false)
+//                case .redo: try uiv(from: redoItem, isReversed: true)
+//                }
+                
                 let undoItem = try? T(serializedData: udv.undoItemData)
                 let redoItem = try? T(serializedData: udv.redoItemData)
                 func uiv(from item: T,
@@ -972,6 +975,7 @@ extension History {
                         try uiv(from: redoItem, isTo: true, isReversed: true)
                     }
                 } else { throw UndoError.load }
+                
                 self[result].undoItemValue = nuiv
                 self[result].loadType = .loaded
                 return result.undoItem(with: nuiv)

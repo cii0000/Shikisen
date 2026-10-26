@@ -337,6 +337,9 @@ final class Root: @unchecked Sendable {
     static let findingRecordKey = "finding.pb"
     var findingRecord: Record<Finding>
     
+    static let schemaRecordKey = "schema.txt"
+    var schemaRecord: Record<String>
+    
     static let povRecordKey = "pov.pb"
     var povRecord: Record<Attitude>
     
@@ -354,6 +357,7 @@ final class Root: @unchecked Sendable {
         worldHistoryRecord = rootDirectory.makeRecord(forKey: Self.worldHistoryRecordKey, isLoadOnly: isLoadOnly)
         findingRecord = rootDirectory.makeRecord(forKey: Self.findingRecordKey, isLoadOnly: isLoadOnly)
         povRecord = rootDirectory.makeRecord(forKey: Self.povRecordKey, isLoadOnly: isLoadOnly)
+        schemaRecord = rootDirectory.makeRecord(forKey: Self.schemaRecordKey, isLoadOnly: isLoadOnly)
         sheetsDirectory = rootDirectory.makeDirectory(forKey: Self.sheetsDirectoryKey, isLoadOnly: isLoadOnly)
         sheetRecorders = Self.sheetRecorders(from: sheetsDirectory, isLoadOnly: isLoadOnly)
     }
@@ -393,6 +397,11 @@ final class Root: @unchecked Sendable {
     }
     func pov() -> Attitude {
         povRecord.decodedValue ?? Self.defaultPOV
+    }
+    
+    static let currentSchemaVersion = 1
+    func schemaVersion() -> Int {
+        Int(schemaRecord.decodedValue ?? "0") ?? 0
     }
     
     func baseThumbnailBlocks() -> [UUID: Texture.Block] {

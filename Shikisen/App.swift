@@ -101,12 +101,7 @@ final class SubNSApplication: NSApplication {
             window.toggleFullScreen(nil)
         }
         
-        do {
-            try view.rootView.restoreDatabase()
-        } catch {
-            view.rootView.node.show(error)
-        }
-        view.rootView.cursorPoint = view.clippedScreenPointFromCursor.my
+        view.setupWithWindow()
         
         SubNSApplication.shared.servicesMenu = NSMenu()
         SubNSApplication.shared.mainMenu = mainMenu()
@@ -679,6 +674,36 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         
         rootView.cursorPoint = clippedScreenPointFromCursor.my
     }
+    func setupWithWindow() {
+        if rootView.isUpdateFromSchema {
+            if rootView.isEmptyModel {
+                rootView.saveSchema()
+            } else {
+                let progressPanel = ProgressPanel(message: String(format: "Updating %@".localized, System.dataName))
+                rootView.node.show(progressPanel)
+                let task = Task.detached(priority: .high) {
+                    do {
+                        try await self.rootView.updateFromSchema { (progress) in
+                            Task { @MainActor in
+                                progressPanel.progress = progress
+                            }
+                        }
+                    } catch {}
+                    Task { @MainActor in
+                        progressPanel.closePanel()
+                    }
+                }
+                progressPanel.cancelHandler = { task.cancel() }
+            }
+        }
+        
+        do {
+            try rootView.restoreDatabase()
+        } catch {
+            rootView.node.show(error)
+        }
+        rootView.cursorPoint = clippedScreenPointFromCursor.my
+    }
     
     var isShownTrackpadAlternative = false {
         didSet {
@@ -1053,6 +1078,7 @@ final class SubMTKView: MTKView, MTKViewDelegate, @preconcurrency NSServicesMenu
         rootView = .init(url: rootView.model.url)
         self.rootAction = .init(rootView, hudView)
         setupRootView()
+        setupWithWindow()
         do {
             try rootView.restoreDatabase()
         } catch {

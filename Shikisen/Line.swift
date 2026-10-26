@@ -140,22 +140,22 @@ extension Line.Control {
 }
 extension Line: Protobuf {
     init(_ pb: PBLine) throws {
-        let aControls = [Control](data: pb.controlsData)
-        switch ByteOrder.current() ?? .littleEndian {
-        case .littleEndian: controls = aControls
-        case .bigEndian: controls = aControls.map { $0.littleEndianToBigEndian() }
-        }
-        for (i, c) in controls.enumerated() {
-            controls[i].point = try c.point.notInfiniteAndNAN()
-            controls[i].weight = (try c.weight.notNaN()).clipped(min: 0, max: 1)
-            controls[i].pressure = (try c.pressure.notNaN()).clipped(min: 0, max: 1)
-        }
+        controls = try pb.controls.map { try Control($0) }
         
         if controls.isEmpty {
-            controls = try pb.controls.map { try Control($0) }
+            let aControls = [Control](data: pb.controlsData)
+            switch ByteOrder.current() ?? .littleEndian {
+            case .littleEndian: controls = aControls
+            case .bigEndian: controls = aControls.map { $0.littleEndianToBigEndian() }
+            }
+            for (i, c) in controls.enumerated() {
+                controls[i].point = try c.point.notInfiniteAndNAN()
+                controls[i].weight = (try c.weight.notNaN()).clipped(min: 0, max: 1)
+                controls[i].pressure = (try c.pressure.notNaN()).clipped(min: 0, max: 1)
+            }
         }
         
-        let size = (try? pb.size.notZeroAndNaN()) ?? Line.defaultLineWidth
+        let size = (pb.hasSize ? (try? pb.size.notNaN()) : nil) ?? Line.defaultLineWidth
         self.size = size.clipped(min: 0, max: Line.maxLineWidth)
         
         self.interID = (try? UUID(pb.interID)) ?? UUID()
@@ -166,29 +166,17 @@ extension Line: Protobuf {
         } else {
             uuColor = Line.defaultUUColor
         }
-        
-        
     }
     var pb: PBLine {
         .with {
-            switch ByteOrder.current() ?? .littleEndian {
-            case .littleEndian: $0.controlsData = controls.data
-            case .bigEndian: $0.controlsData = controls.map { $0.bigEndianToLittleEndian() }.data
-            }
-            
-            if size != Line.defaultLineWidth {
-                $0.size = size
-            }
-            
+            $0.controls = controls.map { $0.pb }
+            if size != Line.defaultLineWidth { $0.size = size }
             $0.interID = interID.pb
-            if interType != .none {
-                $0.interType = interType.pb
-            }
-            
-            if uuColor != Line.defaultUUColor {
-                $0.uuColorOptional = .uuColor(uuColor.pb)
+            if interType != .none { $0.interType = interType.pb }
+            $0.uuColorOptional = if uuColor != Line.defaultUUColor {
+                .uuColor(uuColor.pb)
             } else {
-                $0.uuColorOptional = nil
+                nil
             }
         }
     }

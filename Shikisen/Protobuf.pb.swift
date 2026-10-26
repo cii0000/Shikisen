@@ -569,9 +569,13 @@ nonisolated struct PBLine: @unchecked Sendable {
   }
 
   var size: Double {
-    get {_storage._size}
+    get {_storage._size ?? 0}
     set {_uniqueStorage()._size = newValue}
   }
+  /// Returns true if `size` has been explicitly set.
+  var hasSize: Bool {_storage._size != nil}
+  /// Clears the value of `size`. Subsequent reads from it will return its default value.
+  mutating func clearSize() {_uniqueStorage()._size = nil}
 
   var interID: PBUUID {
     get {_storage._interID ?? PBUUID()}
@@ -4471,7 +4475,7 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
 
   fileprivate class _StorageClass {
     var _controls: [PBLine.PBControl] = []
-    var _size: Double = 0
+    var _size: Double? = nil
     var _interID: PBUUID? = nil
     var _interType: PBInterType = .none
     var _controlsData: Data = Data()
@@ -4543,9 +4547,9 @@ nonisolated extension PBLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       if !_storage._controls.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._controls, fieldNumber: 1)
       }
-      if _storage._size.bitPattern != 0 {
-        try visitor.visitSingularDoubleField(value: _storage._size, fieldNumber: 2)
-      }
+      try { if let v = _storage._size {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 2)
+      } }()
       try { if let v = _storage._interID {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       } }()

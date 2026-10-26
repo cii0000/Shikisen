@@ -286,6 +286,8 @@
 
 "Texture Error: %@ is unsupport pixel format" = "テクスチャエラー：%@は未サポートのピクセルフォーマットです";
 
+"Updating %@" = "%@をアップデート中";
+
 "Calculating" = "計算中";
 
 "'%1$@' overlaps with multiplication by multiple single character variables" = "「%1$@」は一文字の変数による乗算と重複しています";

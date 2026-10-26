@@ -365,7 +365,9 @@ struct Animation: Hashable, Codable {
 }
 extension Animation: Protobuf {
     init(_ pb: PBAnimation) throws {
-        keyframes = pb.keyframes.compactMap { try? Keyframe($0) }.sorted(by: { $0.beat < $1.beat })
+        keyframes = pb.keyframes.compactMap { try? Keyframe($0) }
+            .sorted(by: { $0.beat < $1.beat })
+        
         if keyframes.isEmpty,
             let compressor = try? AnimationCompressor(pb.compressor) {
             
@@ -404,75 +406,11 @@ extension Animation: Protobuf {
         timelineY = pb.timelineY.clipped(min: Sheet.timelineY,
                                          max: Sheet.height - Sheet.timelineY)
         isEnabled = pb.isEnabled
-        index = keyframes.isEmpty ?
-            0 : index(atRootBeat: rootBeat)
+        index = keyframes.isEmpty ? 0 : index(atRootBeat: rootBeat)
     }
     var pb: PBAnimation {
         .with {
-            var lineIs = [Line: Int]()
-            var planeIs = [Plane: Int]()
-            var draftLineIs = [Line: Int]()
-            var draftPlaneIs = [Plane: Int]()
-            let keys: [KeyframeKey] = keyframes.map { keyframe in
-                let lineIs: [Int] = keyframe.picture.lines.map {
-                    if let i = lineIs[$0] {
-                        return i
-                    } else {
-                        let i = lineIs.count
-                        lineIs[$0] = i
-                        return i
-                    }
-                }
-                let planeIs: [Int] = keyframe.picture.planes.map {
-                    if let i = planeIs[$0] {
-                        return i
-                    } else {
-                        let i = planeIs.count
-                        planeIs[$0] = i
-                        return i
-                    }
-                }
-                let draftLineIs: [Int] = keyframe.draftPicture.lines.map {
-                    if let i = draftLineIs[$0] {
-                        return i
-                    } else {
-                        let i = draftLineIs.count
-                        draftLineIs[$0] = i
-                        return i
-                    }
-                }
-                let draftPlaneIs: [Int] = keyframe.draftPicture.planes.map {
-                    if let i = draftPlaneIs[$0] {
-                        return i
-                    } else {
-                        let i = draftPlaneIs.count
-                        draftPlaneIs[$0] = i
-                        return i
-                    }
-                }
-                
-                return .init(lineIs: lineIs,
-                             planeIs: planeIs,
-                             draftLineIs: draftLineIs,
-                             draftPlaneIs: draftPlaneIs,
-                             beat: keyframe.beat,
-                             id: keyframe.id)
-            }
-            
-            let lines = lineIs
-                .sorted(by: { $0.value < $1.value }).map { $0.key }
-            let planes = planeIs
-                .sorted(by: { $0.value < $1.value }).map { $0.key }
-            let draftLines = draftLineIs
-                .sorted(by: { $0.value < $1.value }).map { $0.key }
-            let draftPlanes = draftPlaneIs
-                .sorted(by: { $0.value < $1.value }).map { $0.key }
-            let compressor = AnimationCompressor(keys: keys,
-                                                 lines: lines, planes: planes,
-                                                 draftLines: draftLines,
-                                                 draftPlanes: draftPlanes)
-            $0.compressor = compressor.pb
-            
+            $0.keyframes = keyframes.map { $0.pb }
             $0.rootBeat = rootBeat.pb
             $0.beatRange = RationalRange(value: beatRange).pb
             $0.loopDurBeat = loopDurBeat.pb
@@ -1171,24 +1109,15 @@ extension Sheet: Protobuf {
     }
     var pb: PBSheet {
         .with {
-            if !animation.isEmpty {
-                $0.animation = animation.pb
-            } else {
-                $0.picture = picture.pb
-                $0.draftPicture = draftPicture.pb
-            }
+            $0.animation = animation.pb
             $0.score = score.pb
             $0.texts = texts.map { $0.pb }
             $0.contents = contents.map { $0.pb }
             $0.borders = borders.map { $0.pb }
-            if mainFrame != Sheet.defaultBounds {
-                $0.mainFrame = mainFrame.pb
-            }
+            if mainFrame != Sheet.defaultBounds { $0.mainFrame = mainFrame.pb }
             $0.backgroundUucolor = backgroundUUColor.pb
             $0.selection = selection.pb
-            if !keyframeAttitude.isIdentity {
-                $0.keyframeAttitude = keyframeAttitude.pb
-            }
+            if !keyframeAttitude.isIdentity { $0.keyframeAttitude = keyframeAttitude.pb }
         }
     }
 }

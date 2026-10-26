@@ -816,59 +816,58 @@ final class RootView: View, @unchecked Sendable {
         for (i, v) in model.sheetRecorders.enumerated() {
             let (sheetID, sheetRecorder) = v
             guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                guard let sheet = record.decodedValue,
-                      let shp = sheetPosition(at: sheetID) else { return }
-                let sheetBinder = RecordBinder(value: sheet,
-                                               record: record)
-                let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
-                                          history: .init())
-                sheetView.screenToWorldScale = self.screenToWorldScale
-                let frame = self.sheetFrame(with: shp)
-                sheetView.bounds = Rect(size: frame.size)
-                sheetView.node.allChildrenAndSelf { $0.updateDatas() }
-                
-                sheetView.contentsView.elementViews.forEach { $0.updateSpectrogram() }
-                sheetView.scoreView.updateSpectrogram()
-                
-                sheetView.stopNotifications.append { [weak self] _ in
-                    self?.showSelected()
-                }
-                sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
-                    self?.updateSelectedFrame()
-                }
-                
-                makeThumbnailRecord(at: sheetID, with: sheetView)
-                syncSave()
+            let record = sheetRecorder.sheetRecord
+            guard let sheet = record.decodedValue,
+                  let shp = sheetPosition(at: sheetID) else { return }
+            let sheetBinder = RecordBinder(value: sheet,
+                                           record: record)
+            let sheetView = SheetView(binder: sheetBinder, keyPath: \SheetBinder.value,
+                                      history: .init())
+            sheetView.screenToWorldScale = self.screenToWorldScale
+            let frame = self.sheetFrame(with: shp)
+            sheetView.bounds = Rect(size: frame.size)
+            sheetView.node.allChildrenAndSelf { $0.updateDatas() }
+            
+            sheetView.contentsView.elementViews.forEach { $0.updateSpectrogram() }
+            sheetView.scoreView.updateSpectrogram()
+            
+            sheetView.stopNotifications.append { [weak self] _ in
+                self?.showSelected()
             }
+            sheetView.changeSelectedFrameNotifications.append { [weak self] _, _ in
+                self?.updateSelectedFrame()
+            }
+            
+            makeThumbnailRecord(at: sheetID, with: sheetView)
+            syncSave()
         }
     }
-    func resetAllSheets(_ handler: (String) -> (Bool)) {
+    func resetAllSheets(progressHandler: (Double) -> ()) async throws {
         for (i, v) in model.sheetRecorders.enumerated() {
             let (_, sheetRecorder) = v
-            guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                guard let sheet = record.decodedValue else { return }
-                record.value = sheet
-                record.isWillwrite = true
-                syncSave()
+            let record = sheetRecorder.sheetRecord
+            guard let sheet = record.decodedValue else {
+                print("unload", i)
+                continue
             }
+            record.value = sheet
+            record.isWillwrite = true
+            syncSave()
+            
+            progressHandler(Double(i + 1) / Double(model.sheetRecorders.count))
+            try Task.checkCancellation()
         }
     }
     func resetAllAnimationSheets(_ handler: (String) -> (Bool)) {
         for (i, v) in model.sheetRecorders.enumerated() {
             let (_, sheetRecorder) = v
             guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                guard let sheet = record.decodedValue else { return }
-                if sheet.isEnabledAnimation {
-                    record.value = sheet
-                    record.isWillwrite = true
-                    syncSave()
-                }
+            let record = sheetRecorder.sheetRecord
+            guard let sheet = record.decodedValue else { return }
+            if sheet.isEnabledAnimation {
+                record.value = sheet
+                record.isWillwrite = true
+                syncSave()
             }
         }
     }
@@ -876,14 +875,12 @@ final class RootView: View, @unchecked Sendable {
         for (i, v) in model.sheetRecorders.enumerated() {
             let (_, sheetRecorder) = v
             guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                guard let sheet = record.decodedValue else { return }
-                if sheet.isEnabledAudio {
-                    record.value = sheet
-                    record.isWillwrite = true
-                    syncSave()
-                }
+            let record = sheetRecorder.sheetRecord
+            guard let sheet = record.decodedValue else { return }
+            if sheet.isEnabledAudio {
+                record.value = sheet
+                record.isWillwrite = true
+                syncSave()
             }
         }
     }
@@ -891,38 +888,63 @@ final class RootView: View, @unchecked Sendable {
         for (i, v) in model.sheetRecorders.enumerated() {
             let (_, sheetRecorder) = v
             guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                guard let sheet = record.decodedValue else { return }
-                sheetRecorder.stringRecord.value = sheet.allTextsString
-                sheetRecorder.stringRecord.isWillwrite = true
-                syncSave()
-            }
+            let record = sheetRecorder.sheetRecord
+            guard let sheet = record.decodedValue else { return }
+            sheetRecorder.stringRecord.value = sheet.allTextsString
+            sheetRecorder.stringRecord.isWillwrite = true
+            syncSave()
         }
     }
     
-    func update1_3(_ handler: (String) -> (Bool)) {
-        for (i, v) in model.sheetRecorders.enumerated() {
-            let (_, sheetRecorder) = v
-            guard handler("\(i) / \(model.sheetRecorders.count - 1)") else { return }
-            autoreleasepool {
-                let record = sheetRecorder.sheetRecord
-                let historyRecord = sheetRecorder.sheetHistoryRecord
-                guard let sheet = record.decodedValue,
-                      var history = historyRecord.decodedValue else { return }
-                record.value = sheet
-                record.isWillwrite = true
+    var isUpdateFromSchema: Bool {
+        model.schemaVersion() < Root.currentSchemaVersion
+    }
+    var isEmptyModel: Bool {
+        history.isEmpty && model.sheetRecorders.isEmpty
+    }
+    func updateFromSchema(progressHandler: (Double) -> ()) async throws {
+        if model.schemaVersion() >= Root.currentSchemaVersion { return }
+        if !isEmptyModel {
+            for (i, v) in model.sheetRecorders.enumerated() {
+                let (_, sheetRecorder) = v
                 
+                let sheetRecord = sheetRecorder.sheetRecord
+                let historyRecord = sheetRecorder.sheetHistoryRecord
+                guard let sheet = sheetRecord.decodedValue,
+                      var history = historyRecord.decodedValue else { continue }
                 history._update()
+                sheetRecord.value = sheet
                 historyRecord.value = history
+                sheetRecord.willwriteClosure = { [weak historyRecord] (record) in
+                    record.value = sheet
+                    historyRecord?.value = history
+                    historyRecord?.isPreparedWrite = true
+                }
+                sheetRecord.isWillwrite = true
                 historyRecord.isWillwrite = true
+                
                 syncSave()
+                sheetRecord.resetWrite()
+                historyRecord.resetWrite()
+                sheetRecord.willwriteClosure = { _ in }
+                
+                progressHandler(Double(i + 1) / Double(model.sheetRecorders.count))
+                try Task.checkCancellation()
             }
+            
+            history._update()
+            model.worldHistoryRecord.value = history
+            model.worldHistoryRecord.isWillwrite = true
+            
+            sheetViewValues.forEach { readAndClose(.none, at: $0.value.sheetID, $0.key) }
+            sheetViewValues.forEach { readAndClose(.sheet, at: $0.value.sheetID, $0.key) }
         }
         
-        history._update()
-        model.worldHistoryRecord.value = history
-        model.worldHistoryRecord.isWillwrite = true
+        saveSchema()
+    }
+    func saveSchema() {
+        model.schemaRecord.value = "\(Root.currentSchemaVersion)"
+        model.schemaRecord.isWillwrite = true
         
         syncSave()
     }

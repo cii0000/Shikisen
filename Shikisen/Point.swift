@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Shikisen.  If not, see <http://www.gnu.org/licenses/>.
 
-struct IntPoint: Hashable, Codable {
+struct IntPoint: Hashable {
     var x, y: Int
     
     init() {
@@ -45,6 +45,18 @@ extension Array where Element == IntPoint {
     }
     var pb: PBIntPointArray {
         .with { $0.value = map { $0.pb } }
+    }
+}
+extension IntPoint: Codable {
+    init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        x = try container.decode(Int.self)
+        y = try container.decode(Int.self)
+    }
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(x)
+        try container.encode(y)
     }
 }
 extension IntPoint {
@@ -78,7 +90,7 @@ extension IntPoint {
     }
 }
 
-struct PolarPoint: Hashable, Codable {
+struct PolarPoint {
     var r = 0.0, theta = 0.0
 }
 extension PolarPoint {

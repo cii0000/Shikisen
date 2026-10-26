@@ -112,7 +112,7 @@ message PBLine {
         double pressure = 3;
     }
     repeated PBControl controls = 1;
-    double size = 2;
+    optional double size = 2;
     PBUUID interID = 4;
     PBInterType interType = 7;
     bytes controlsData = 6;
