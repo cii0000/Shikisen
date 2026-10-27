@@ -413,10 +413,10 @@ final class Node: @unchecked Sendable {
     
     var isCPUFillAntialias = true
     
-    var enableCache = false {
+    var isEnabledCache = false {
         didSet {
-            guard enableCache != oldValue else { return }
-            if enableCache {
+            guard isEnabledCache != oldValue else { return }
+            if isEnabledCache {
                 allChildrenAndSelf { $0.cacheLink = self }
             } else {
                 allChildrenAndSelf { $0.cacheLink = nil }
@@ -435,7 +435,7 @@ final class Node: @unchecked Sendable {
     private weak var cacheLink: Node?
     private(set) var isUpdateCache = false
     func updateCache() {
-        if isRenderCache && enableCache {
+        if isRenderCache && isEnabledCache {
             if isUpdateCache || cacheTexture == nil {
                 newCache()
                 isUpdateCache = false
@@ -443,7 +443,7 @@ final class Node: @unchecked Sendable {
         }
     }
     private func newCache() {
-        guard enableCache else { return }
+        guard isEnabledCache else { return }
         guard let bounds = bounds else {
             cacheTexture = nil
             return
@@ -731,7 +731,7 @@ extension Node {
         
         updateDatas()
         
-        if isRenderCache && enableCache && tScale < 1 {
+        if isRenderCache && isEnabledCache && tScale < 1 {
             if isUpdateCache || cacheTexture == nil {
                 newCache()
                 isUpdateCache = false
@@ -841,7 +841,7 @@ extension Node {
             }
         }
         
-        if isRenderCache && enableCache, let owner = owner {
+        if isRenderCache && isEnabledCache, let owner = owner {
             ctx.clip(owner.viewportBounds(from: transform, bounds: bounds))
         }
         
@@ -951,7 +951,7 @@ extension Node {
                                        in: ctx) }
         }
         
-        if isRenderCache && enableCache, let owner = owner {
+        if isRenderCache && isEnabledCache, let owner = owner {
             ctx.clip(owner.viewportBounds)
         }
     }

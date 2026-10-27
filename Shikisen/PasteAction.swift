@@ -140,113 +140,65 @@ enum PastableObject: Sendable {
     case tempo(_ tempo: Rational)
 }
 extension PastableObject {
-    static func typeName(with obj: Any) -> String {
-        System.id + "." + String(describing: type(of: obj))
-            .replacingOccurrences(of: "<", with: "")
-            .replacingOccurrences(of: ">", with: "")
-    }
-    static func objectTypeName(with typeName: String) -> String {
-        typeName.replacingOccurrences(of: System.id + ".", with: "")
-    }
-    static func objectTypeName<T>(with obj: T.Type) -> String {
-        String(describing: obj)
-            .replacingOccurrences(of: "<", with: "")
-            .replacingOccurrences(of: ">", with: "")
-    }
     struct PastableError: LocalizedError {}
     var typeName: String {
-        switch self {
-        case .copiedSheetsValue(let copiedSheetsValue):
-             PastableObject.typeName(with: copiedSheetsValue)
-        case .sheetValue(let sheetValue):
-             PastableObject.typeName(with: sheetValue)
-        case .border(let border):
-             PastableObject.typeName(with: border)
-        case .text(let text):
-             PastableObject.typeName(with: text)
-        case .string(let string):
-             PastableObject.typeName(with: string)
-        case .picture(let picture):
-             PastableObject.typeName(with: picture)
-        case .planesValue(let planesValue):
-             PastableObject.typeName(with: planesValue)
-        case .uuColor(let uuColor):
-             PastableObject.typeName(with: uuColor)
-        case .copiedAnimation(let copiedAnimation):
-             PastableObject.typeName(with: copiedAnimation)
-        case .ids(let ids):
-             PastableObject.typeName(with: ids)
-        case .content(let content):
-             PastableObject.typeName(with: content)
-        case .image(let image):
-             PastableObject.typeName(with: image)
-        case .beatRange(let beatRange):
-             PastableObject.typeName(with: beatRange)
-        case .normalizationValue(let normalizationValue):
-             PastableObject.typeName(with: normalizationValue)
-        case .normalizationRationalValue(let normalizationRationalValue):
-             PastableObject.typeName(with: normalizationRationalValue)
-        case .notesValue(let notesValue):
-             PastableObject.typeName(with: notesValue)
-        case .stereo(let stereo):
-             PastableObject.typeName(with: stereo)
-        case .tone(let tone):
-             PastableObject.typeName(with: tone)
-        case .rect(let rect):
-             PastableObject.typeName(with: rect)
-        case .tempo(let tempo):
-             PastableObject.typeName(with: tempo)
-        }
+        let obj = Mirror(reflecting: self).children.first?.value ?? ""
+        return System.id + "." + String(describing: type(of: obj))
+            .replacingOccurrences(of: "<", with: "")
+            .replacingOccurrences(of: ">", with: "")
     }
     init(data: Data, typeName: String) throws {
-        let objectname = PastableObject.objectTypeName(with: typeName)
+        func objectTypeName<T>(with obj: T.Type) -> String {
+            String(describing: obj)
+                .replacingOccurrences(of: "<", with: "")
+                .replacingOccurrences(of: ">", with: "")
+        }
+        let objectname = typeName.replacingOccurrences(of: System.id + ".", with: "")
         switch objectname {
-        case PastableObject.objectTypeName(with: CopiedSheetsValue.self):
+        case objectTypeName(with: CopiedSheetsValue.self):
             self = .copiedSheetsValue(try CopiedSheetsValue(serializedData: data))
-        case PastableObject.objectTypeName(with: SheetValue.self):
+        case objectTypeName(with: SheetValue.self):
             self = .sheetValue(try SheetValue(serializedData: data))
-        case PastableObject.objectTypeName(with: Border.self):
+        case objectTypeName(with: Border.self):
             self = .border(try Border(serializedData: data))
-        case PastableObject.objectTypeName(with: Text.self):
+        case objectTypeName(with: Text.self):
             self = .text(try Text(serializedData: data))
-        case PastableObject.objectTypeName(with: String.self):
-            if let string = String(data: data, encoding: .utf8) {
-                self = .string(string)
-            } else {
-                throw PastableObject.PastableError()
-            }
-        case PastableObject.objectTypeName(with: Picture.self):
+        case objectTypeName(with: String.self):
+            guard let string = String(data: data, encoding: .utf8)
+            else { throw PastableError() }
+            self = .string(string)
+        case objectTypeName(with: Picture.self):
             self = .picture(try Picture(serializedData: data))
-        case PastableObject.objectTypeName(with: PlanesValue.self):
+        case objectTypeName(with: PlanesValue.self):
             self = .planesValue(try PlanesValue(serializedData: data))
-        case PastableObject.objectTypeName(with: UUColor.self):
+        case objectTypeName(with: UUColor.self):
             self = .uuColor(try UUColor(serializedData: data))
-        case PastableObject.objectTypeName(with: CopiedAnimation.self):
+        case objectTypeName(with: CopiedAnimation.self):
             self = .copiedAnimation(try CopiedAnimation(serializedData: data))
-        case PastableObject.objectTypeName(with: InteroptionsValue.self):
+        case objectTypeName(with: InteroptionsValue.self):
             self = .ids(try InteroptionsValue(serializedData: data))
-        case PastableObject.objectTypeName(with: Content.self):
+        case objectTypeName(with: Content.self):
             self = .content(try Content(serializedData: data))
-        case PastableObject.objectTypeName(with: Image.self):
+        case objectTypeName(with: Image.self):
             self = .image(try Image(serializedData: data))
-        case PastableObject.objectTypeName(with: Range<Rational>.self):
+        case objectTypeName(with: Range<Rational>.self):
             self = .beatRange(try RationalRange(serializedData: data).value)
-        case PastableObject.objectTypeName(with: Double.self):
+        case objectTypeName(with: Double.self):
             self = .normalizationValue(try Double(serializedData: data))
-        case PastableObject.objectTypeName(with: Rational.self):
+        case objectTypeName(with: Rational.self):
             self = .normalizationRationalValue(try Rational(serializedData: data))
-        case PastableObject.objectTypeName(with: NotesValue.self):
+        case objectTypeName(with: NotesValue.self):
             self = .notesValue(try NotesValue(serializedData: data))
-        case PastableObject.objectTypeName(with: Stereo.self):
+        case objectTypeName(with: Stereo.self):
             self = .stereo(try Stereo(serializedData: data))
-        case PastableObject.objectTypeName(with: Tone.self):
+        case objectTypeName(with: Tone.self):
             self = .tone(try Tone(serializedData: data))
-        case PastableObject.objectTypeName(with: Rect.self):
+        case objectTypeName(with: Rect.self):
             self = .rect(try Rect(serializedData: data))
-        case PastableObject.objectTypeName(with: Rational.self):
+        case objectTypeName(with: Rational.self):
             self = .tempo(try Rational(serializedData: data))
         default:
-            throw PastableObject.PastableError()
+            throw PastableError()
         }
     }
     var data: Data? {
@@ -291,101 +243,6 @@ extension PastableObject {
              try? rect.serializedData()
         case .tempo(let tempo):
              try? tempo.serializedData()
-        }
-    }
-}
-extension PastableObject: Protobuf {
-    init(_ pb: PBPastableObject) throws {
-        guard let value = pb.value else {
-            throw ProtobufError()
-        }
-        switch value {
-        case .copiedSheetsValue(let copiedSheetsValue):
-            self = .copiedSheetsValue(try CopiedSheetsValue(copiedSheetsValue))
-        case .sheetValue(let sheetValue):
-            self = .sheetValue(try SheetValue(sheetValue))
-        case .border(let border):
-            self = .border(try Border(border))
-        case .text(let text):
-            self = .text(try Text(text))
-        case .string(let string):
-            self = .string(string)
-        case .picture(let picture):
-            self = .picture(try Picture(picture))
-        case .planesValue(let planesValue):
-            self = .planesValue(try PlanesValue(planesValue))
-        case .uuColor(let uuColor):
-            self = .uuColor(try UUColor(uuColor))
-        case .copiedAnimation(let copiedAnimation):
-            self = .copiedAnimation(try CopiedAnimation(copiedAnimation))
-        case .ids(let ids):
-            self = .ids(try InteroptionsValue(ids))
-        case .content(let content):
-            self = .content(try Content(content))
-        case .image(let image):
-            self = .image(try Image(image))
-        case .beatRange(let beatRange):
-            self = .beatRange(try RationalRange(beatRange).value)
-        case .normalizationValue(let normalizationValue):
-            self = .normalizationValue(normalizationValue)
-        case .normalizationRationalValue(let normalizationRationalValue):
-            self = .normalizationRationalValue(try Rational(normalizationRationalValue))
-        case .notesValue(let notesValue):
-            self = .notesValue(try NotesValue(notesValue))
-        case .stereo(let stereo):
-            self = .stereo(try Stereo(stereo))
-        case .tone(let tone):
-            self = .tone(try Tone(tone))
-        case .rect(let rect):
-            self = .rect(try Rect(rect))
-        case .tempo(let tempo):
-            self = .tempo(try Rational(tempo))
-        }
-    }
-    var pb: PBPastableObject {
-        .with {
-            switch self {
-            case .copiedSheetsValue(let copiedSheetsValue):
-                $0.value = .copiedSheetsValue(copiedSheetsValue.pb)
-            case .sheetValue(let sheetValue):
-                $0.value = .sheetValue(sheetValue.pb)
-            case .border(let border):
-                $0.value = .border(border.pb)
-            case .text(let text):
-                $0.value = .text(text.pb)
-            case .string(let string):
-                $0.value = .string(string)
-            case .picture(let picture):
-                $0.value = .picture(picture.pb)
-            case .planesValue(let planesValue):
-                $0.value = .planesValue(planesValue.pb)
-            case .uuColor(let uuColor):
-                $0.value = .uuColor(uuColor.pb)
-            case .copiedAnimation(let copiedAnimation):
-                $0.value = .copiedAnimation(copiedAnimation.pb)
-            case .ids(let ids):
-                $0.value = .ids(ids.pb)
-            case .content(let content):
-                $0.value = .content(content.pb)
-            case .image(let image):
-                $0.value = .image(image.pb)
-            case .beatRange(let beatRange):
-                $0.value = .beatRange(RationalRange(value: beatRange).pb)
-            case .normalizationValue(let normalizationValue):
-                $0.value = .normalizationValue(normalizationValue)
-            case .normalizationRationalValue(let normalizationRationalValue):
-                $0.value = .normalizationRationalValue(normalizationRationalValue.pb)
-            case .notesValue(let notesValue):
-                $0.value = .notesValue(notesValue.pb)
-            case .stereo(let stereo):
-                $0.value = .stereo(stereo.pb)
-            case .tone(let tone):
-                $0.value = .tone(tone.pb)
-            case .rect(let rect):
-                $0.value = .rect(rect.pb)
-            case .tempo(let tempo):
-                $0.value = .tempo(tempo.pb)
-            }
         }
     }
 }
@@ -1781,7 +1638,7 @@ final class APasteAction: Action {
                 octaveNode: Node?, beganNotes = [Int: Note](), beganSheetView: SheetView?,
                 textNode: Node?, imageNode: Node?, textFrame: Rect?, textScale = 1.0,
                 filledSheetViews = [UUID: SheetView](), beganTime = 0.0
-    let enableUUColorTime = 0.3
+    let validUUColorTime = 0.3
     var snapDistance = 4.0
     private var notePlayer: NotePlayer?, playerBeatNoteIndexes = [Int](),
                 oldPitch: Rational?, oldBeat: Rational?
@@ -2340,7 +2197,7 @@ final class APasteAction: Action {
         case .border(let border):
             updateBorder(with: border)
         case .uuColor(let uuColor):
-            guard phase == .began || (event == nil ? false : (event!.time - beganTime > enableUUColorTime)) else { return }
+            guard phase == .began || (event == nil ? false : (event!.time - beganTime > validUUColorTime)) else { return }
             if let sheetView = rootView.sheetView(at: p),
                sheetView.selectedFrame(scale: rootView.screenToWorldScale)?
                 .contains(sheetView.convertFromWorld(p)) ?? false,
@@ -3060,7 +2917,7 @@ final class APasteAction: Action {
                 }
             }
         case .uuColor(let uuColor):
-            guard event == nil ? false : (event!.time - beganTime > enableUUColorTime) else { return }
+            guard event == nil ? false : (event!.time - beganTime > validUUColorTime) else { return }
             if let sheetView = rootView.sheetView(at: p),
                sheetView.containsSelectedLine(sheetView.convertFromWorld(p),
                                               scale: rootView.screenToWorldScale)

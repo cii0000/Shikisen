@@ -4714,7 +4714,7 @@ extension O {
     
     static let showAllDefinitionsName = "showAllDefinitions"
     static func showAllDefinitions(_ ao: O, _ oDic: inout [OKey: O],
-                                   enableCustom: Bool = true) -> O {
+                                   isEnabledCustom: Bool = true) -> O {
         guard case .sheet(let sheet) = ao else { return O(OError(String(format: "Argument $0 must be sheet, not '%1$@'".localized, ao.name))) }
         let b = sheet.bounds
         
@@ -4728,7 +4728,7 @@ extension O {
                 } else {
                     os[info.group] = [key: value]
                 }
-            } else if enableCustom {
+            } else if isEnabledCustom {
                 if os[customGroup] != nil {
                     os[customGroup]?[key] = value
                 } else {

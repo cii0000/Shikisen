@@ -58,12 +58,6 @@ struct UndoItemValue<T: UndoItem> {
             self.redoItem = redoItem
         }
     }
-    func item(at type: UndoType) -> T {
-        switch type {
-        case .undo: undoItem
-        case .redo: redoItem
-        }
-    }
 }
 
 struct UndoError: LocalizedError, Equatable {
@@ -849,18 +843,16 @@ extension History {
                     return firstUndoItem
                 }
                 
-                let udv = self[result]
-                guard let undoItem = try? T(serializedData: udv.undoItemData),
-                      let redoItem = try? T(serializedData: udv.redoItemData)
-                else { throw UndoError.load }
-                func uiv(from item: T, isReversed: Bool) throws -> UndoItemValue<T> {
+                func uiv(from data: Data, isReversed: Bool) throws -> UndoItemValue<T> {
+                    guard let item = try? T(serializedData: data)
+                    else { throw UndoError.load }
                     guard owner.canSet(item) else { throw UndoError(item) }
                     return .init(undo: item, redo: owner.reversed(item),
                                  isReversed: isReversed)
                 }
                 let nuiv = switch result.type {
-                case .undo: try uiv(from: undoItem, isReversed: false)
-                case .redo: try uiv(from: redoItem, isReversed: true)
+                case .undo: try uiv(from: self[result].undoItemData, isReversed: false)
+                case .redo: try uiv(from: self[result].redoItemData, isReversed: true)
                 }
                 
                 self[result].undoItemValue = nuiv

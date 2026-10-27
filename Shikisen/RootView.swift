@@ -611,9 +611,9 @@ final class RootView: View, @unchecked Sendable {
     private func cap(undo undoItem: WorldUndoItem) {
         history.append(undo: undoItem, redo: world.reversed(undoItem))
     }
-    private func set(_ redoItem: WorldUndoItem, enableNode: Bool = true) {
+    private func set(_ redoItem: WorldUndoItem, isEnabledNode: Bool = true) {
         history.append(undo: world.reversed(redoItem), redo: redoItem)
-        update(redoItem, enableNode: enableNode)
+        update(redoItem, isEnabledNode: isEnabledNode)
     }
     @discardableResult
     func undo(to toTopIndex: Int) throws -> Rect? {
@@ -628,9 +628,9 @@ final class RootView: View, @unchecked Sendable {
         return rect
     }
     @discardableResult
-    private func update(_ item: WorldUndoItem, enableNode: Bool = true,
+    private func update(_ item: WorldUndoItem, isEnabledNode: Bool = true,
                         isMakeRect: Bool = false) -> Rect? {
-        if enableNode {
+        if isEnabledNode {
             switch item {
             case .insertSheets(let sids):
                 var rect = Rect?.none
@@ -742,8 +742,8 @@ final class RootView: View, @unchecked Sendable {
             }
         }
     }
-    func append(_ sids: [IntPoint: UUID], enableNode: Bool = true) {
-        set(.insertSheets(sids), enableNode: enableNode)
+    func append(_ sids: [IntPoint: UUID], isEnabledNode: Bool = true) {
+        set(.insertSheets(sids), isEnabledNode: isEnabledNode)
     }
     func removeSheets(at shps: [IntPoint]) {
         set(.removeSheets(shps))
@@ -2773,7 +2773,7 @@ final class RootView: View, @unchecked Sendable {
                             sheetView.node.cacheTexture = try? .init(block: block)
                         }
                     } catch {
-    //                    sheetView.enableCache = true
+    //                    sheetView.isEnabledCache = true
                     }
                     try Task.checkCancellation()
                     
@@ -2805,7 +2805,7 @@ final class RootView: View, @unchecked Sendable {
                         self.sheetViewValues[shp] = .init(sheetID: sid, sheetView: sheetView, task: nil)
                         if sheetView.node.parent == nil {
                             self.sheetsNode.append(child: sheetView.node)
-                            sheetView.node.enableCache = true
+                            sheetView.node.isEnabledCache = true
                         }
                         
                         self.updateAround(in: sheetView, at: shp)
@@ -2888,7 +2888,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.bounds = Rect(size: frame.size)
         sheetView.node.pose.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
-        sheetView.node.enableCache = true
+        sheetView.node.isEnabledCache = true
         updateWithEditGrid(in: sheetView)
         
         sheetView.stopNotifications.append { [weak self] _ in
@@ -3019,7 +3019,7 @@ final class RootView: View, @unchecked Sendable {
         if isNewUndoGroup {
             newUndoGroup()
         }
-        append([shp: sid], enableNode: false)
+        append([shp: sid], isEnabledNode: false)
         
         let sheetRecorder = model.makeSheetRecorder(at: sid)
         let sheetRecord = sheetRecorder.sheetRecord
@@ -3034,7 +3034,7 @@ final class RootView: View, @unchecked Sendable {
         sheetView.bounds = Rect(size: frame.size)
         sheetView.node.pose.position = frame.origin
         sheetView.node.allChildrenAndSelf { $0.updateDatas() }
-        sheetView.node.enableCache = true
+        sheetView.node.isEnabledCache = true
         updateWithEditGrid(in: sheetView)
         
         sheetView.contentsView.elementViews.forEach { $0.updateSpectrogram() }

@@ -712,27 +712,3 @@ message PBInterOptionsValue {
     PBUUID sheetID = 2;
     int64 rootKeyframeIndex = 3;
 }
-message PBPastableObject {
-    oneof value {
-        PBCopiedSheetsValue copiedSheetsValue = 1;
-        PBSheetValue sheetValue = 2;
-        PBBorder border = 3;
-        PBText text = 4;
-        string string = 5;
-        PBPicture picture = 6;
-        PBPlanesValue planesValue = 7;
-        PBUUColor uuColor = 8;
-        PBCopiedAnimation copiedAnimation = 9;
-        PBInterOptionsValue ids = 10;
-        PBContent content = 22;
-        PBImage image = 21;
-        PBRationalRange beatRange = 12;
-        double normalizationValue = 13;
-        PBRational normalizationRationalValue = 16;
-        PBNotesValue notesValue = 14;
-        PBStereo stereo = 24;
-        PBTone tone = 15;
-        PBRect rect = 25;
-        PBRational tempo = 26;
-    }
-}

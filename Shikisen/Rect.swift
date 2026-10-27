@@ -727,6 +727,44 @@ extension Array where Element == Rect {
         reduce(into: Rect?.none) { $0 += $1 }
     }
 }
+extension Rect: Interpolatable {
+    static func linear(_ f0: Self, _ f1: Self, t: Double) -> Self {
+        .init(origin: .linear(f0.origin, f1.origin, t: t),
+              size: .linear(f0.size, f1.size, t: t))
+    }
+    static func firstSpline(_ f1: Self,
+                            _ f2: Self, _ f3: Self, t: Double) -> Self {
+        .init(origin: .firstSpline(f1.origin, f2.origin, f3.origin, t: t),
+              size: .firstSpline(f1.size, f2.size, f3.size, t: t))
+    }
+    static func spline(_ f0: Self, _ f1: Self,
+                       _ f2: Self, _ f3: Self, t: Double) -> Self {
+        .init(origin: .spline(f0.origin, f1.origin, f2.origin, f3.origin, t: t),
+              size: .spline(f0.size, f1.size, f2.size, f3.size, t: t))
+    }
+    static func lastSpline(_ f0: Self, _ f1: Self,
+                           _ f2: Self, t: Double) -> Self {
+        .init(origin: .lastSpline(f0.origin, f1.origin, f2.origin, t: t),
+              size: .lastSpline(f0.size, f1.size, f2.size, t: t))
+    }
+}
+extension Rect: MonoInterpolatable {
+    static func firstMonospline(_ f1: Self,
+                                _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(origin: .firstMonospline(f1.origin, f2.origin, f3.origin, with: ms),
+              size: .firstMonospline(f1.size, f2.size, f3.size, with: ms))
+    }
+    static func monospline(_ f0: Self, _ f1: Self,
+                           _ f2: Self, _ f3: Self, with ms: Monospline) -> Self {
+        .init(origin: .monospline(f0.origin, f1.origin, f2.origin, f3.origin, with: ms),
+              size: .monospline(f0.size, f1.size, f2.size, f3.size, with: ms))
+    }
+    static func lastMonospline(_ f0: Self, _ f1: Self,
+                               _ f2: Self, with ms: Monospline) -> Self {
+        .init(origin: .lastMonospline(f0.origin, f1.origin, f2.origin, with: ms),
+              size: .lastMonospline(f0.size, f1.size, f2.size, with: ms))
+    }
+}
 
 protocol Rectable {
     var bounds: Rect { get }

@@ -1804,28 +1804,38 @@ final class IOAction: Action {
                     let backgroundColor = sheetView.model.backgroundUUColor.value
                     guard let fkImage = Image(size: size,
                                              color: backgroundColor) else { throw MovieEncoder.ExportingError() }
-                    var kImages = [fkImage]
+                    struct KR {
+                        var image: Image, rect = Rect(), borderI = 20
+                        var isDraw = true {
+                            didSet { if isDraw { borderI = 20 } }
+                        }
+                    }
+                    var krs = [KR(image: fkImage)]
                     
                     let vs = [nil] + allGroups.map { $0.version }
-                    var nHistory = history, allCount = 0, exportableCount = 0
+                    var allCount = 0, exportableCount = 0
                     for (vi, version) in vs.enumerated() {
-                        await nHistory.move(to: version) { yIndexPath in
-                            nHistory.set(indexPath: yIndexPath)
+                        try await sheetView.history.move(to: version) { yIndexPath in
+                            sheetView.history.set(indexPath: yIndexPath)
                         } topIHandler: { toTopIndex in
                             if !(vi == 0 && toTopIndex != 0) {
                                 exportableCount += 1
                             }
                             allCount += 1
-                            nHistory.set(toTopIndex: toTopIndex)
+                            sheetView.history.set(toTopIndex: toTopIndex)
+                            
+                            progressHandler((.init(ri) + .init(vi) / .init(vs.count) * 0.1) / .init(renderings.count))
+                            try Task.checkCancellation()
                         }
                     }
+                    
                     let speed = isNormalSpeed ?
                     1 :
                     max(Int((Double(exportableCount / 60) / Double(120)).rounded(.up)), 1)
                     
                     let isEnabledAnimation = sheetView.model.isEnabledAnimation
-                    var currentI = 0, lastBitmap: Bitmap<UInt8>?
-                    var isRedraw = false, kiSet = Set<Int>(), oldKiss = [[Int]]()
+                    let minKeyframesCount = sheetView.model.animation.keyframes.count
+                    var currentI = 0, lastBitmap: Bitmap<UInt8>?, isRedraw = false
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
@@ -1849,66 +1859,61 @@ final class IOAction: Action {
                                 if !isFirst && isEnabledAnimation {
                                     switch undoItem {
                                     case .appendKeyLine(let kv):
-                                        kiSet.insert(kv.index)
+                                        krs[kv.index].isDraw = true
                                     case .removeKeyLastLine(let ki):
-                                        kiSet.insert(ki)
+                                        krs[ki].isDraw = true
                                     case .appendKeyLines(let kv):
-                                        kiSet.insert(kv.index)
+                                        krs[kv.index].isDraw = true
                                     case .removeKeyLastLines(let kv):
-                                        kiSet.insert(kv.index)
+                                        krs[kv.index].isDraw = true
                                     case .insertDraftKeyLines(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .insertDraftKeyPlanes(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .insertKeyLines(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .insertKeyPlanes(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .removeDraftKeyLines(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .removeDraftKeyPlanes(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .removeKeyLines(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .removeKeyPlanes(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .replaceKeyLines(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .replaceKeyPlanes(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .setKeyPlaneValues(let kvs):
-                                        kiSet.formUnion(kvs.map { $0.index })
+                                        kvs.forEach { krs[$0.index].isDraw = true }
                                     case .changedColors(let cv):
                                         if !cv.lineAnimationIndexes.isEmpty
                                             || !cv.planeAnimationIndexes.isEmpty {
                                             
-                                            kiSet.formUnion(cv.lineAnimationIndexes.map { $0.index })
-                                            kiSet.formUnion(cv.planeAnimationIndexes.map { $0.index })
+                                            cv.lineAnimationIndexes
+                                                .forEach { krs[$0.index].isDraw = true }
+                                            cv.planeAnimationIndexes
+                                                .forEach { krs[$0.index].isDraw = true }
                                         }
-                                        if cv.isBackground {
-                                            kiSet.formUnion(0 ..< sheetView.model.animation.keyframes.count)
-                                        }
-                                    case .setRootKeyframeI(let rootKI):
-                                        kiSet.insert(sheetView.model.animation.index(atRoot: rootKI))
                                     case .insertKeyframes(let kvs):
                                         for kv in kvs {
-                                            if kv.index <= kImages.count {
-                                                kImages.insert(fkImage, at: kv.index)
-                                            }
+                                            krs.insert(KR(image: fkImage), at: kv.index)
                                         }
                                         isRedraw = true
                                     case .removeKeyframes(let kis):
-                                        if kis.allSatisfy({ $0 < kImages.count }) {
-                                            kImages.remove(at: kis)
-                                        }
+                                        krs.remove(at: kis)
+                                        
                                         isRedraw = true
-                                    default: kiSet.insert(sheetView.model.animation.index)
+                                    default:
+                                        krs[sheetView.model.animation.index].isDraw = true
                                     }
                                 }
                             }
                             
                             if isFirst {
-                                progressHandler((.init(ri) + .init(currentI) / .init(allCount)) / .init(renderings.count))
+                                progressHandler((.init(ri) + .init(currentI) / .init(allCount) * 0.9 + 0.1) / .init(renderings.count))
                                 try Task.checkCancellation()
                                 return
                             }
@@ -1917,34 +1922,17 @@ final class IOAction: Action {
                                  || currentI == allCount - 1
                                  || currentI % speed == 0 else { return }
                             
-                            let kis = kiSet.sorted()
-                            
+                            let kis = krs.enumerated()
+                                .compactMap { $0.element.isDraw ? $0.offset : nil }
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
                             let sb = rendering.mainItem.frame.bounds
                             let borderWidth = 1.0
                             
-                            let kCount = sheetView.model.animation.keyframes.count
+                            let kCount = max(minKeyframesCount,
+                                             sheetView.model.animation.keyframes.count)
                             if isEnabledAnimation && kCount > 1 {
-                                let columnCount = Int(Double(kCount).squareRoot().rounded(.up))
-                                let cellWidth = inB.width / Double(columnCount)
-                                let cellheight = inB.height * cellWidth / inB.width
-                                func rect(at ki: Int) -> Rect {
-                                    let columnI = ki % columnCount
-                                    let rowI = ki / columnCount
-                                    return Rect(x: inB.minX + .init(columnI) * cellWidth,
-                                                y: inB.maxY - .init(rowI + 1) * cellheight,
-                                                width: cellWidth,
-                                                height: cellheight)
-                                }
-                                func draw(_ image: Image, at ki: Int,
-                                          borderColor: Color? = nil) {
-                                    let rect = rect(at: ki).inset(by: borderWidth)
-                                    bitmap.draw(image, in: rect, isHighQuality: true)
-                                }
-                            
                                 for ki in kis {
-                                    if ki >= kImages.count { break }
                                     let node = sheetView.animationView.elementViews[ki].node
                                     guard let image = Node(children: [node],
                                                            pose: .init(position: origin),
@@ -1953,50 +1941,88 @@ final class IOAction: Action {
                                         .renderedTexture(in: b, to: size,
                                                          backgroundColor: backgroundColor)?.image
                                     else { throw MovieEncoder.ExportingError() }
-                                    kImages[ki] = image
+                                    krs[ki].image = image
+                                }
+                                
+                                let columnCount
+                                = Int(Double(kCount).squareRoot().rounded(.up))
+                                let cellWidth = inB.width / Double(columnCount)
+                                let cellheight = inB.height * cellWidth / inB.width
+                                func rect(at ki: Int) -> Rect {
+                                    let columnI = ki % columnCount
+                                    let rowI = ki / columnCount
+                                    return Rect(x: inB.minX + .init(columnI) * cellWidth,
+                                                y: inB.maxY - .init(rowI + 1) * cellheight,
+                                                width: cellWidth,
+                                                height: cellheight).inset(by: borderWidth)
+                                }
+                                
+                                func draw(t: Double?) async throws {
+                                    func nRect(at ki: Int) -> Rect {
+                                        let toRect = rect(at: ki)
+                                        guard let t, t < 1 else { return toRect }
+                                        let fromRect = krs[ki].rect.isEmpty ?
+                                        toRect : krs[ki].rect
+                                        return Rect.linear(fromRect, toRect, t: t)
+                                    }
+                                    if t == nil {
+                                        for ki in kis {
+                                            bitmap.draw(krs[ki].image, in: nRect(at: ki),
+                                                        isHighQuality: true)
+                                        }
+                                    } else {
+                                        for (ki, im) in krs.enumerated() {
+                                            bitmap.draw(im.image, in: nRect(at: ki),
+                                                        isHighQuality: true)
+                                        }
+                                    }
+                                    
+                                    guard let nBitmap = bitmap.copy()
+                                    else { throw MovieEncoder.ExportingError() }
+                                    nBitmap.set(lineWidth: borderWidth * 2)
+                                    
+                                    for (ki, kr) in krs.enumerated() {
+                                        if !kr.isDraw && kr.borderI > 0 {
+                                            krs[ki].borderI -= 1
+                                            if krs[ki].borderI > 0 {
+                                                let t = Double(krs[ki].borderI)
+                                                    .clipped(min: 10, max: 0,
+                                                             newMin: 1, newMax: 0)
+                                                nBitmap.set(lineColor: .content
+                                                    .with(multiplyOpacity: t))
+                                                nBitmap.stroke(nRect(at: ki))
+                                            }
+                                        }
+                                    }
+                                    nBitmap.set(lineColor: .content)
+                                    for ki in kis {
+                                        nBitmap.stroke(nRect(at: ki))
+                                    }
+                                    
+                                    guard let image = nBitmap.image
+                                    else { throw MovieEncoder.ExportingError() }
+                                    
+                                    try await movieEncoder.write(image, duration: 1,
+                                                                 timeScale: 60)
+                                    
+                                    lastBitmap = bitmap
                                 }
                                 
                                 if isRedraw {
-                                    bitmap.set(fillColor: .disabled)
-                                    bitmap.fill(Rect(size: size))
-                                    for (ki, image) in kImages.enumerated() {
-                                        draw(image, at: ki)
+                                    isRedraw = false
+                                    
+                                    for i in 1 ... 6 {
+                                        bitmap.set(fillColor: .disabled)
+                                        bitmap.fill(Rect(size: size))
+                                        
+                                        try await draw(t: (Double(i) / 6).easeOut())
+                                    }
+                                    for ki in krs.count.range {
+                                        krs[ki].rect = rect(at: ki)
                                     }
                                 } else {
-                                    for ki in kis {
-                                        draw(kImages[ki], at: ki)
-                                    }
+                                    try await draw(t: nil)
                                 }
-                                
-                                guard let nBitmap = bitmap.copy()
-                                else { throw MovieEncoder.ExportingError() }
-                                nBitmap.set(lineWidth: borderWidth * 2)
-                                for (i, okis) in oldKiss.enumerated() {
-                                    let t = Double(20 - oldKiss.count + i)
-                                        .clipped(min: 0, max: 10, newMin: 0, newMax: 1)
-                                    nBitmap.set(lineColor: .content.with(multiplyOpacity: t))
-                                    for ki in okis {
-                                        nBitmap.stroke(rect(at: ki))
-                                    }
-                                }
-                                if oldKiss.count >= 20 {
-                                    oldKiss.removeFirst()
-                                }
-                                oldKiss.append(kis)
-                                nBitmap.set(lineColor: .content)
-                                for ki in kis {
-                                    nBitmap.stroke(rect(at: ki))
-                                }
-                                
-                                guard let image = nBitmap.image
-                                else { throw MovieEncoder.ExportingError() }
-                                
-                                try await movieEncoder.write(image, duration: 1, timeScale: 60)
-                                
-                                lastBitmap = bitmap
-                                
-                                isRedraw = false
-                                kiSet = []
                             } else {
                                 guard let image = Node(children: [sheetView.node],
                                                        pose: .init(position: origin),
@@ -2007,8 +2033,11 @@ final class IOAction: Action {
                                 else { throw MovieEncoder.ExportingError() }
                                 try await movieEncoder.write(image, duration: 1, timeScale: 60)
                             }
+                            for i in krs.count.range {
+                                krs[i].isDraw = false
+                            }
                             
-                            progressHandler((.init(ri) + .init(currentI) / .init(allCount)) / .init(renderings.count))
+                            progressHandler((.init(ri) + .init(currentI) / .init(allCount) * 0.9 + 0.1) / .init(renderings.count))
                             try Task.checkCancellation()
                         }
                     }
