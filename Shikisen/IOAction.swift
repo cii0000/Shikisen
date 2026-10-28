@@ -1805,12 +1805,12 @@ final class IOAction: Action {
                     guard let fkImage = Image(size: size,
                                              color: backgroundColor) else { throw MovieEncoder.ExportingError() }
                     struct KR {
-                        var image: Image, rect = Rect(), borderI = 20
+                        var image: Image, rect = Rect(), ki: Int, borderI = 20
                         var isDraw = true {
                             didSet { if isDraw { borderI = 20 } }
                         }
                     }
-                    var krs = [KR(image: fkImage)]
+                    var krs = [KR(image: fkImage, ki: 0)]
                     
                     let vs = [nil] + allGroups.map { $0.version }
                     var allCount = 0, exportableCount = 0
@@ -1835,6 +1835,13 @@ final class IOAction: Action {
                     
                     let isEnabledAnimation = sheetView.model.isEnabledAnimation
                     let minKeyframesCount = sheetView.model.animation.keyframes.count
+                    let keyMaps: [(beat: Rational, i: Int)]
+                    = sheetView.model.animation.keyframes.enumerated().map {
+                        ($0.element.beat, $0.offset)
+                    }
+                    func ki(fromBeat beat: Rational) -> Int {
+                        keyMaps.reversed().first { $0.beat <= beat }?.i ?? 0
+                    }
                     var currentI = 0, lastBitmap: Bitmap<UInt8>?, isRedraw = false
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
@@ -1903,13 +1910,20 @@ final class IOAction: Action {
                                         }
                                     case .insertKeyframes(let kvs):
                                         for kv in kvs {
-                                            krs.insert(KR(image: fkImage), at: kv.index)
+                                            krs.insert(KR(image: fkImage,
+                                                          ki: ki(fromBeat: kv.value.beat)),
+                                                       at: kv.index)
                                         }
                                         isRedraw = true
                                     case .removeKeyframes(let kis):
                                         krs.remove(at: kis)
                                         
                                         isRedraw = true
+                                    case .setKeyframeOptions(let kvs):
+                                        for kv in kvs {
+                                            krs[kv.index].ki = ki(fromBeat: kv.value.beat)
+                                        }
+                                        krs[sheetView.model.animation.index].isDraw = true
                                     default:
                                         krs[sheetView.model.animation.index].isDraw = true
                                     }
@@ -1928,13 +1942,19 @@ final class IOAction: Action {
                             
                             let kis = krs.enumerated()
                                 .compactMap { $0.element.isDraw ? $0.offset : nil }
+                            
+                            var nkrsIs = krs.map { $0.ki }
+                            for i in 1 ..< nkrsIs.count {
+                                if nkrsIs[i] <= nkrsIs[i - 1] {
+                                    nkrsIs[i] = nkrsIs[i - 1] + 1
+                                }
+                            }
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
                             let sb = rendering.mainItem.frame.bounds
                             let borderWidth = 1.0
                             
-                            let kCount = max(minKeyframesCount,
-                                             sheetView.model.animation.keyframes.count)
+                            let kCount = max(minKeyframesCount, nkrsIs.last! + 1)
                             if isEnabledAnimation && kCount > 1 {
                                 for ki in kis {
                                     let node = sheetView.animationView.elementViews[ki].node
@@ -1953,8 +1973,9 @@ final class IOAction: Action {
                                 let cellWidth = inB.width / Double(columnCount)
                                 let cellheight = inB.height * cellWidth / inB.width
                                 func rect(at ki: Int) -> Rect {
-                                    let columnI = ki % columnCount
-                                    let rowI = ki / columnCount
+                                    let nki = nkrsIs[ki]
+                                    let columnI = nki % columnCount
+                                    let rowI = nki / columnCount
                                     return Rect(x: inB.minX + .init(columnI) * cellWidth,
                                                 y: inB.maxY - .init(rowI + 1) * cellheight,
                                                 width: cellWidth,
@@ -2015,11 +2036,17 @@ final class IOAction: Action {
                                 if isRedraw {
                                     isRedraw = false
                                     
-                                    for i in 1 ... 6 {
-                                        bitmap.set(fillColor: .disabled)
-                                        bitmap.fill(Rect(size: size))
-                                        
-                                        try await draw(t: (Double(i) / 6).easeOut())
+                                    let isMove = krs.count.range
+                                        .contains { krs[$0].rect != rect(at: $0) }
+                                    if isMove {
+                                        for i in 1 ... 6 {
+                                            bitmap.set(fillColor: .disabled)
+                                            bitmap.fill(Rect(size: size))
+                                            
+                                            try await draw(t: (Double(i) / 6).easeOut())
+                                        }
+                                    } else {
+                                        try await draw(t: 1)
                                     }
                                     for ki in krs.count.range {
                                         krs[ki].rect = rect(at: ki)
