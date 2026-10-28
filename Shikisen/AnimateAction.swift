@@ -806,8 +806,8 @@ final class InsertAction: InputKeyEventAction {
                                 sheetView.newUndoGroup()
                             }
                             sheetView.replace(nivs)
-    //                        sheetView.set(ToneValue(tone: tone, noteIndexes: nis),
-    //                                      old: ToneValue(tone: oldTone, noteIndexes: nis))
+    //                        sheetView.set(ToneValue(tone: tone, noteIs: nis),
+    //                                      old: ToneValue(tone: oldTone, noteIs: nis))
                             
                             sheetView.updatePlaying()
                         } else {
@@ -1107,13 +1107,9 @@ final class InterpolateAction: InputKeyEventAction {
                             let scale = 1 / rootView.worldToScreenScale
                             svs.forEach {
                                 let cv = ColorValue(uuColor: $0.uuColor,
-                                                    planeAnimationIndexes: [.init(value: $0.pis,
+                                                    keysPlaneIs: [.init(value: $0.pis,
                                                                                   index: $0.ki)])
-                                let oldUUColor = sheetView.model.animation.keyframes[$0.ki].picture.planes[$0.pis.first!].uuColor
-                                let ocv = ColorValue(uuColor: oldUUColor,
-                                                     planeAnimationIndexes: [.init(value: $0.pis,
-                                                                                   index: $0.ki)])
-                                sheetView.set(cv, oldColorValue: ocv)
+                                sheetView.set(cv)
                                 
                                 let value = sheetView.worldColorPathValue(with: cv, toColor: nil,
                                                                      color: .selected,
@@ -1440,28 +1436,26 @@ final class InterpolateAction: InputKeyEventAction {
                             let uuKey = UUKey(fromUUColor: line.uuColor, toUUColor: oldLine.uuColor)
                             if cvsDic[uuKey] != nil {
                                 if nKI == animationView.model.index {
-                                    cvsDic[uuKey]?.lineIndexes.append(idiv.index)
+                                    cvsDic[uuKey]?.lineIs.append(idiv.index)
                                 } else {
-                                    cvsDic[uuKey]?.lineAnimationIndexes[nKI]
+                                    cvsDic[uuKey]?.keysLineIs[nKI]
                                         .value.append(idiv.index)
                                 }
                             } else {
                                 cvsDic[uuKey] = if nKI == animationView.model.index {
                                     .init(uuColor: oldLine.uuColor,
-                                          lineIndexes: [idiv.index])
+                                          lineIs: [idiv.index])
                                 } else {
                                     .init(uuColor: oldLine.uuColor,
-                                          lineAnimationIndexes: [.init(value: [idiv.index],
+                                          keysLineIs: [.init(value: [idiv.index],
                                                                        index: nKI)])
                                 }
                             }
                         }
                     }
-                    for (uuKey, cv) in cvsDic {
-                        var oldCV = cv
-                        oldCV.uuColor = uuKey.fromUUColor
+                    for cv in cvsDic.values {
                         updateUndoGroup()
-                        sheetView.set(cv, oldColorValue: oldCV)
+                        sheetView.set(cv)
                     }
                     
                     let oldKeyframe = animationView.model.keyframe(atRoot: oRootKI)

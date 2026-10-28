@@ -1889,12 +1889,16 @@ final class IOAction: Action {
                                     case .setKeyPlaneValues(let kvs):
                                         kvs.forEach { krs[$0.index].isDraw = true }
                                     case .changedColors(let cv):
-                                        if !cv.lineAnimationIndexes.isEmpty
-                                            || !cv.planeAnimationIndexes.isEmpty {
-                                            
-                                            cv.lineAnimationIndexes
+                                        if !cv.lineIs.isEmpty {
+                                            krs[sheetView.model.animation.index].isDraw = true
+                                        } else if !cv.keysLineIs.isEmpty {
+                                            cv.keysLineIs
                                                 .forEach { krs[$0.index].isDraw = true }
-                                            cv.planeAnimationIndexes
+                                        }
+                                        if !cv.planeIs.isEmpty {
+                                            krs[sheetView.model.animation.index].isDraw = true
+                                        } else if !cv.keysPlaneIs.isEmpty {
+                                            cv.keysPlaneIs
                                                 .forEach { krs[$0.index].isDraw = true }
                                         }
                                     case .insertKeyframes(let kvs):

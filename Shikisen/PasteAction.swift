@@ -1585,7 +1585,7 @@ final class APasteAction: Action {
                         }
                         $0.captureUUColor()
                         nug.insert($0.sheetView)
-                    } else if !$0.colorValue.planeIndexes.isEmpty {
+                    } else if !$0.colorValue.planeIs.isEmpty {
                         $0.uuColor = .init(.empty, id: .two)
                         if !nug.contains($0.sheetView) {
                             $0.sheetView.newUndoGroup()
@@ -1593,9 +1593,9 @@ final class APasteAction: Action {
                         }
                         $0.captureUUColor()
                         nug.insert($0.sheetView)
-                    } else if !$0.colorValue.planeAnimationIndexes.isEmpty {
+                    } else if !$0.colorValue.keysPlaneIs.isEmpty {
                         let ki = $0.sheetView.model.animation.index
-                        for v in $0.colorValue.planeAnimationIndexes {
+                        for v in $0.colorValue.keysPlaneIs {
                             if ki == v.index {
                                 if !v.value.isEmpty {
                                     $0.uuColor = .init(.empty, id: .two)
@@ -3112,8 +3112,7 @@ final class APasteAction: Action {
             notePlayer?.stop()
             
             guard let sheetView = beganSheetView else { return }
-            let scoreView = sheetView.scoreView
-            let score = scoreView.model
+            let score = sheetView.scoreView.model
             var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
             for (noteI, beganNote) in beganNotes.sorted(by: { $0.key < $1.key }) {
                 guard noteI < score.notes.count else { continue }
@@ -3124,7 +3123,7 @@ final class APasteAction: Action {
                 }
             }
             if !noteIVs.isEmpty {
-                sheetView.capture(noteIVs, old: oldNoteIVs)
+                sheetView.capture(old: oldNoteIVs)
             }
             if v.isSelected {
                 sheetView.set(SheetSelection(noteSelections: noteIVs.map { $0.index }

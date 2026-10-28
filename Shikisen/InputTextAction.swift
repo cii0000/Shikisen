@@ -1233,9 +1233,7 @@ final class InputTextAction: InputTextEventAction {
                               at: i, in: textView)
             for (j, aTextView) in sheetView.textsView.elementViews.enumerated() {
                 if j < captureOrigins.count && textView != aTextView {
-                    let origin = captureOrigins[j]
-                    sheetView.capture(captureOrigin: origin,
-                                      at: j, in: aTextView)
+                    sheetView.capture(oldOrigin: captureOrigins[j], at: j, in: aTextView)
                 }
             }
             captureString = textView.model.string

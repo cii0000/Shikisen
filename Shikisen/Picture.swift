@@ -118,9 +118,9 @@ extension Picture {
             }
         }
         
-        var planeIndexesDic = [Topolygon: Int]()
+        var planeIsDic = [Topolygon: Int]()
         planes.enumerated().forEach {
-            planeIndexesDic[$0.element.topolygon] = $0.offset
+            planeIsDic[$0.element.topolygon] = $0.offset
         }
         
         var indexValues = [IndexValue<Int>]()
@@ -136,7 +136,7 @@ extension Picture {
         
         var newPlanes: [(plane: Plane, area: Double)]
         newPlanes = nPlanes.enumerated().compactMap {
-            if let i = planeIndexesDic[$0.element.plane.topolygon] {
+            if let i = planeIsDic[$0.element.plane.topolygon] {
                 indexValues.append(IndexValue(value: i, index: $0.offset))
                 isIndexesArray[i] = true
                 return nil

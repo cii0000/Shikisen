@@ -452,10 +452,10 @@ message PBKeyframeOptionIndexValue {
 
 message PBColorValue {
     PBUUColor uuColor = 1;
-    repeated int64 planeIndexes = 3;
-    repeated int64 lineIndexes = 8;
-    PBIntArrayIndexValueArray planeAnimationIndexes = 6;
-    PBIntArrayIndexValueArray lineAnimationIndexes = 9;
+    repeated int64 planeIs = 3;
+    repeated int64 lineIs = 8;
+    PBIntArrayIndexValueArray keysPlaneIs = 6;
+    PBIntArrayIndexValueArray keysLineIs = 9;
     repeated PBColor animationColors = 7;
     bool isBackground = 5;
 }

@@ -658,44 +658,33 @@ final class ChangeColorAction: Action {
                 }
                 
                 if !beganNotePits.isEmpty {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
-                    
+                    let score = sheetView.scoreView.model
                     let beganNoteIAndNotes = beganNotePits.reduce(into: [Int: Note]()) {
                         for (noteI, v) in $1.value.dic {
                             $0[noteI] = v.note
                         }
                     }
-                    for (noteI, beganNote) in beganNoteIAndNotes {
-                        guard noteI < score.notes.count else { continue }
-                        let note = scoreView.model.notes[noteI]
-                        if beganNote != note {
-                            noteIVs.append(.init(value: note, index: noteI))
-                            oldNoteIVs.append(.init(value: beganNote, index: noteI))
-                        }
+                    let oldNoteIVs = beganNoteIAndNotes.compactMap { (noteI, beganNote) in
+                        noteI < score.notes.count && beganNote != score.notes[noteI] ?
+                        IndexValue(value: beganNote, index: noteI) : nil
                     }
-                    if !noteIVs.isEmpty {
+                    if !oldNoteIVs.isEmpty {
                         updateUndoGroup()
-                        sheetView.capture(noteIVs, old: oldNoteIVs)
+                        sheetView.capture(old: oldNoteIVs)
                     }
                 }
                 
                 if !beganNotes.isEmpty {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
-                    for (notei, beganNote) in beganNotes.sorted(by: { $0.key < $1.key }) {
-                        guard notei < score.notes.count else { continue }
-                        let note = score.notes[notei]
-                        if beganNote != note {
-                            noteIVs.append(.init(value: note, index: notei))
-                            oldNoteIVs.append(.init(value: beganNote, index: notei))
+                    let score = sheetView.scoreView.model
+                    let oldNoteIVs = beganNotes
+                        .sorted { $0.key < $1.key }
+                        .compactMap { (noteI, beganNote) in
+                            noteI < score.notes.count && beganNote != score.notes[noteI] ?
+                            IndexValue(value: beganNote, index: noteI) : nil
                         }
-                    }
-                    if !noteIVs.isEmpty {
+                    if !oldNoteIVs.isEmpty {
                         updateUndoGroup()
-                        sheetView.capture(noteIVs, old: oldNoteIVs)
+                        sheetView.capture(old: oldNoteIVs)
                     }
                 }
                 
@@ -1100,26 +1089,19 @@ final class ChangeColorAction: Action {
                 }
                 
                 if !beganNotePits.isEmpty {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
-                    
+                    let score = sheetView.scoreView.model
                     let beganNoteIAndNotes = beganNotePits.reduce(into: [Int: Note]()) {
                         for (noteI, v) in $1.value.dic {
                             $0[noteI] = v.note
                         }
                     }
-                    for (noteI, beganNote) in beganNoteIAndNotes {
-                        guard noteI < score.notes.count else { continue }
-                        let note = scoreView.model.notes[noteI]
-                        if beganNote != note {
-                            noteIVs.append(.init(value: note, index: noteI))
-                            oldNoteIVs.append(.init(value: beganNote, index: noteI))
-                        }
+                    let oldNoteIVs = beganNoteIAndNotes.compactMap { (noteI, beganNote) in
+                        noteI < score.notes.count && beganNote != score.notes[noteI] ?
+                        IndexValue(value: beganNote, index: noteI) : nil
                     }
-                    if !noteIVs.isEmpty {
+                    if !oldNoteIVs.isEmpty {
                         updateUndoGroup()
-                        sheetView.capture(noteIVs, old: oldNoteIVs)
+                        sheetView.capture(old: oldNoteIVs)
                     }
                 }
                 
@@ -1367,44 +1349,33 @@ final class ChangeColorAction: Action {
                 }
                 
                 if !beganNotePits.isEmpty {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
-                    
+                    let score = sheetView.scoreView.model
                     let beganNoteIAndNotes = beganNotePits.reduce(into: [Int: Note]()) {
                         for (noteI, v) in $1.value.dic {
                             $0[noteI] = v.note
                         }
                     }
-                    for (noteI, beganNote) in beganNoteIAndNotes {
-                        guard noteI < score.notes.count else { continue }
-                        let note = scoreView.model.notes[noteI]
-                        if beganNote != note {
-                            noteIVs.append(.init(value: note, index: noteI))
-                            oldNoteIVs.append(.init(value: beganNote, index: noteI))
-                        }
+                    let oldNoteIVs = beganNoteIAndNotes.compactMap { (noteI, beganNote) in
+                        noteI < score.notes.count && beganNote != score.notes[noteI] ?
+                        IndexValue(value: beganNote, index: noteI) : nil
                     }
-                    if !noteIVs.isEmpty {
+                    if !oldNoteIVs.isEmpty {
                         updateUndoGroup()
-                        sheetView.capture(noteIVs, old: oldNoteIVs)
+                        sheetView.capture(old: oldNoteIVs)
                     }
                 }
                 
                 if !beganNotes.isEmpty {
-                    let scoreView = sheetView.scoreView
-                    let score = scoreView.model
-                    var noteIVs = [IndexValue<Note>](), oldNoteIVs = [IndexValue<Note>]()
-                    for (notei, beganNote) in beganNotes.sorted(by: { $0.key < $1.key }) {
-                        guard notei < score.notes.count else { continue }
-                        let note = score.notes[notei]
-                        if beganNote != note {
-                            noteIVs.append(.init(value: note, index: notei))
-                            oldNoteIVs.append(.init(value: beganNote, index: notei))
+                    let score = sheetView.scoreView.model
+                    let oldNoteIVs = beganNotes
+                        .sorted { $0.key < $1.key }
+                        .compactMap { (noteI, beganNote) in
+                            noteI < score.notes.count && beganNote != score.notes[noteI] ?
+                            IndexValue(value: beganNote, index: noteI) : nil
                         }
-                    }
-                    if !noteIVs.isEmpty {
+                    if !oldNoteIVs.isEmpty {
                         updateUndoGroup()
-                        sheetView.capture(noteIVs, old: oldNoteIVs)
+                        sheetView.capture(old: oldNoteIVs)
                     }
                 }
                 

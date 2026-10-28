@@ -2214,33 +2214,33 @@ nonisolated struct PBColorValue: @unchecked Sendable {
   /// Clears the value of `uuColor`. Subsequent reads from it will return its default value.
   mutating func clearUuColor() {_uniqueStorage()._uuColor = nil}
 
-  var planeIndexes: [Int64] {
-    get {_storage._planeIndexes}
-    set {_uniqueStorage()._planeIndexes = newValue}
+  var planeIs: [Int64] {
+    get {_storage._planeIs}
+    set {_uniqueStorage()._planeIs = newValue}
   }
 
-  var lineIndexes: [Int64] {
-    get {_storage._lineIndexes}
-    set {_uniqueStorage()._lineIndexes = newValue}
+  var lineIs: [Int64] {
+    get {_storage._lineIs}
+    set {_uniqueStorage()._lineIs = newValue}
   }
 
-  var planeAnimationIndexes: PBIntArrayIndexValueArray {
-    get {_storage._planeAnimationIndexes ?? PBIntArrayIndexValueArray()}
-    set {_uniqueStorage()._planeAnimationIndexes = newValue}
+  var keysPlaneIs: PBIntArrayIndexValueArray {
+    get {_storage._keysPlaneIs ?? PBIntArrayIndexValueArray()}
+    set {_uniqueStorage()._keysPlaneIs = newValue}
   }
-  /// Returns true if `planeAnimationIndexes` has been explicitly set.
-  var hasPlaneAnimationIndexes: Bool {_storage._planeAnimationIndexes != nil}
-  /// Clears the value of `planeAnimationIndexes`. Subsequent reads from it will return its default value.
-  mutating func clearPlaneAnimationIndexes() {_uniqueStorage()._planeAnimationIndexes = nil}
+  /// Returns true if `keysPlaneIs` has been explicitly set.
+  var hasKeysPlaneIs: Bool {_storage._keysPlaneIs != nil}
+  /// Clears the value of `keysPlaneIs`. Subsequent reads from it will return its default value.
+  mutating func clearKeysPlaneIs() {_uniqueStorage()._keysPlaneIs = nil}
 
-  var lineAnimationIndexes: PBIntArrayIndexValueArray {
-    get {_storage._lineAnimationIndexes ?? PBIntArrayIndexValueArray()}
-    set {_uniqueStorage()._lineAnimationIndexes = newValue}
+  var keysLineIs: PBIntArrayIndexValueArray {
+    get {_storage._keysLineIs ?? PBIntArrayIndexValueArray()}
+    set {_uniqueStorage()._keysLineIs = newValue}
   }
-  /// Returns true if `lineAnimationIndexes` has been explicitly set.
-  var hasLineAnimationIndexes: Bool {_storage._lineAnimationIndexes != nil}
-  /// Clears the value of `lineAnimationIndexes`. Subsequent reads from it will return its default value.
-  mutating func clearLineAnimationIndexes() {_uniqueStorage()._lineAnimationIndexes = nil}
+  /// Returns true if `keysLineIs` has been explicitly set.
+  var hasKeysLineIs: Bool {_storage._keysLineIs != nil}
+  /// Clears the value of `keysLineIs`. Subsequent reads from it will return its default value.
+  mutating func clearKeysLineIs() {_uniqueStorage()._keysLineIs = nil}
 
   var animationColors: [PBColor] {
     get {_storage._animationColors}
@@ -6864,14 +6864,14 @@ nonisolated extension PBKeyframeOptionIndexValue: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PBColorValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uuColor\0\u{2}\u{2}planeIndexes\0\u{2}\u{2}isBackground\0\u{1}planeAnimationIndexes\0\u{1}animationColors\0\u{1}lineIndexes\0\u{1}lineAnimationIndexes\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uuColor\0\u{2}\u{2}planeIs\0\u{2}\u{2}isBackground\0\u{1}keysPlaneIs\0\u{1}animationColors\0\u{1}lineIs\0\u{1}keysLineIs\0")
 
   fileprivate class _StorageClass {
     var _uuColor: PBUUColor? = nil
-    var _planeIndexes: [Int64] = []
-    var _lineIndexes: [Int64] = []
-    var _planeAnimationIndexes: PBIntArrayIndexValueArray? = nil
-    var _lineAnimationIndexes: PBIntArrayIndexValueArray? = nil
+    var _planeIs: [Int64] = []
+    var _lineIs: [Int64] = []
+    var _keysPlaneIs: PBIntArrayIndexValueArray? = nil
+    var _keysLineIs: PBIntArrayIndexValueArray? = nil
     var _animationColors: [PBColor] = []
     var _isBackground: Bool = false
 
@@ -6885,10 +6885,10 @@ nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
     init(copying source: _StorageClass) {
       _uuColor = source._uuColor
-      _planeIndexes = source._planeIndexes
-      _lineIndexes = source._lineIndexes
-      _planeAnimationIndexes = source._planeAnimationIndexes
-      _lineAnimationIndexes = source._lineAnimationIndexes
+      _planeIs = source._planeIs
+      _lineIs = source._lineIs
+      _keysPlaneIs = source._keysPlaneIs
+      _keysLineIs = source._keysLineIs
       _animationColors = source._animationColors
       _isBackground = source._isBackground
     }
@@ -6910,12 +6910,12 @@ nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
         case 1: try { try decoder.decodeSingularMessageField(value: &_storage._uuColor) }()
-        case 3: try { try decoder.decodeRepeatedInt64Field(value: &_storage._planeIndexes) }()
+        case 3: try { try decoder.decodeRepeatedInt64Field(value: &_storage._planeIs) }()
         case 5: try { try decoder.decodeSingularBoolField(value: &_storage._isBackground) }()
-        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._planeAnimationIndexes) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._keysPlaneIs) }()
         case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._animationColors) }()
-        case 8: try { try decoder.decodeRepeatedInt64Field(value: &_storage._lineIndexes) }()
-        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._lineAnimationIndexes) }()
+        case 8: try { try decoder.decodeRepeatedInt64Field(value: &_storage._lineIs) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._keysLineIs) }()
         default: break
         }
       }
@@ -6931,22 +6931,22 @@ nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
       try { if let v = _storage._uuColor {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
       } }()
-      if !_storage._planeIndexes.isEmpty {
-        try visitor.visitPackedInt64Field(value: _storage._planeIndexes, fieldNumber: 3)
+      if !_storage._planeIs.isEmpty {
+        try visitor.visitPackedInt64Field(value: _storage._planeIs, fieldNumber: 3)
       }
       if _storage._isBackground != false {
         try visitor.visitSingularBoolField(value: _storage._isBackground, fieldNumber: 5)
       }
-      try { if let v = _storage._planeAnimationIndexes {
+      try { if let v = _storage._keysPlaneIs {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
       if !_storage._animationColors.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._animationColors, fieldNumber: 7)
       }
-      if !_storage._lineIndexes.isEmpty {
-        try visitor.visitPackedInt64Field(value: _storage._lineIndexes, fieldNumber: 8)
+      if !_storage._lineIs.isEmpty {
+        try visitor.visitPackedInt64Field(value: _storage._lineIs, fieldNumber: 8)
       }
-      try { if let v = _storage._lineAnimationIndexes {
+      try { if let v = _storage._keysLineIs {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
       } }()
     }
@@ -6959,10 +6959,10 @@ nonisolated extension PBColorValue: SwiftProtobuf.Message, SwiftProtobuf._Messag
         let _storage = _args.0
         let rhs_storage = _args.1
         if _storage._uuColor != rhs_storage._uuColor {return false}
-        if _storage._planeIndexes != rhs_storage._planeIndexes {return false}
-        if _storage._lineIndexes != rhs_storage._lineIndexes {return false}
-        if _storage._planeAnimationIndexes != rhs_storage._planeAnimationIndexes {return false}
-        if _storage._lineAnimationIndexes != rhs_storage._lineAnimationIndexes {return false}
+        if _storage._planeIs != rhs_storage._planeIs {return false}
+        if _storage._lineIs != rhs_storage._lineIs {return false}
+        if _storage._keysPlaneIs != rhs_storage._keysPlaneIs {return false}
+        if _storage._keysLineIs != rhs_storage._keysLineIs {return false}
         if _storage._animationColors != rhs_storage._animationColors {return false}
         if _storage._isBackground != rhs_storage._isBackground {return false}
         return true
