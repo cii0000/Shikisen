@@ -284,7 +284,7 @@ final class MovieEncoder {
         writer.startSession(atSourceTime: .zero)
     }
     
-    func write(_ image: Image, duration: Int, timeScale: Int) async throws {
+    func write(_ image: Image, dur: Int, timeScale: Int) async throws {
         guard let bufferPool = pbAdaptor.pixelBufferPool else { throw ExportingError() }
         var pixelBuffer: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault,
@@ -339,7 +339,7 @@ final class MovieEncoder {
             }
             if !pbAdaptor.append(pb, withPresentationTime: currentTime) { throw ExportingError() }
             
-            currentTime = currentTime + .init(value: .init(duration), timescale: .init(timeScale))
+            currentTime = currentTime + .init(value: .init(dur), timescale: .init(timeScale))
         }
     }
     

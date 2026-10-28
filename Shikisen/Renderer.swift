@@ -2069,7 +2069,8 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
               let image,
               let bitmap = Self(width: width, height: height,
                                 colorSpace: colorSpace) else { return nil }
-        bitmap.draw(image, in: .init(width: Double(width), height: Double(height)))
+        bitmap.draw(image, in: .init(width: Double(width), height: Double(height)),
+                    isHighQuality: false)
         return bitmap
     }
     
@@ -2094,7 +2095,7 @@ final class Bitmap<Value: FixedWidthInteger & UnsignedInteger> {
             ctx.draw(cgImage, in: rect.cg)
         }
     }
-    func draw(_ image: Image, in rect: Rect, isHighQuality: Bool = false) {
+    func draw(_ image: Image, in rect: Rect, isHighQuality: Bool = true) {
         if isHighQuality {
             ctx.interpolationQuality = .high
         }

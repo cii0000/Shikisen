@@ -1399,7 +1399,7 @@ final class IOAction: Action {
                     }
                     guard let image else { throw MovieEncoder.ExportingError() }
                     
-                    try await movieEncoder.write(image, duration: 1, timeScale: frameRate)
+                    try await movieEncoder.write(image, dur: 1, timeScale: frameRate)
                     
                     progressHandler(.init(fi + 1) / .init(frameCount) * (isEnabledAudio ? 0.8 : 0.9) + 0.1)
                     try Task.checkCancellation()
@@ -1758,6 +1758,7 @@ final class IOAction: Action {
     
     func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
                          _ colorSpace: ColorSpace, clipTime: Double? = 60,
+                         aroundColor: Color = .border,
                          size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
                               progressHandler: (Double) -> ()) async throws {
@@ -1793,24 +1794,6 @@ final class IOAction: Action {
                         allGroups.append((currentVersion, history[currentVersion]))
                     }
                     
-                    guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
-                                                     height: .init(size.height),
-                                                     colorSpace: .sRGB)
-                    else { throw MovieEncoder.ExportingError() }
-                    bitmap.set(fillColor: .disabled)
-                    bitmap.fill(Rect(size: size))
-                    
-                    let backgroundColor = sheetView.model.backgroundUUColor.value
-                    guard let fkImage = Image(size: size,
-                                             color: backgroundColor) else { throw MovieEncoder.ExportingError() }
-                    struct KR {
-                        var image: Image, rect = Rect(), borderI = 20
-                        var isDraw = true {
-                            didSet { if isDraw { borderI = 20 } }
-                        }
-                    }
-                    var krs = [KR(image: fkImage)]
-                    
                     let vs = [nil] + allGroups.map { $0.version }
                     var allCount = 0, exportableCount = 0
                     for (vi, version) in vs.enumerated() {
@@ -1832,9 +1815,55 @@ final class IOAction: Action {
                     max(Int((Double(exportableCount / 60) / clipTime!).rounded(.up)), 1) :
                     1
                     
+                    guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
+                                                     height: .init(size.height),
+                                                     colorSpace: .sRGB)
+                    else { throw MovieEncoder.ExportingError() }
+                    bitmap.set(fillColor: aroundColor)
+                    bitmap.fill(Rect(size: size))
+                    
+                    let backgroundColor = sheetView.model.backgroundUUColor.value
+                    guard let fkImage = Image(size: size,
+                                             color: backgroundColor) else { throw MovieEncoder.ExportingError() }
+                    struct RowColumn: Hashable {
+                        var row = 0.0, column = 0.0
+                       
+                        static func length(_ f0: Self, _ f1: Self,
+                                           columnCount: Double) -> Double {
+                            (f0.row * columnCount + f0.column)
+                                .distance(f1.row * columnCount + f1.column)
+                        }
+                        static func linear(_ f0: Self, _ f1: Self,
+                                           t: Double, columnCount: Double) -> [Self] {
+                            let startV = f0.row * columnCount + f0.column
+                            let endV = f1.row * columnCount + f1.column
+                            let v = Double.linear(startV, endV, t: t)
+                            let row = (v / columnCount).rounded(.down)
+                            let column = v - row * columnCount
+                            return if column > columnCount - 1 {
+                                [.init(row: row, column: column),
+                                 .init(row: row + 1, column: column - columnCount)]
+                            } else if column < 1 {
+                                [.init(row: row, column: column),
+                                 .init(row: row - 1, column: column + columnCount)]
+                            } else {
+                                [.init(row: row, column: column)]
+                            }
+                        }
+                    }
+                    struct KR {
+                        var image: Image, rect = Rect(), rowColumn = RowColumn()
+                        var isDraw = true
+                    }
+                    var krs = [KR(image: fkImage)]
                     let isEnabledAnimation = sheetView.model.isEnabledAnimation
                     let minKeyframesCount = sheetView.model.animation.keyframes.count
-                    var currentI = 0, lastBitmap: Bitmap<UInt8>?, isRedraw = false
+                    var currentI = 0, isRedraw = false
+                    func drawBitmap() async throws {
+                        guard let image = bitmap.image
+                        else { throw MovieEncoder.ExportingError() }
+                        try await movieEncoder.write(image, dur: 1, timeScale: 60)
+                    }
                     for (vi, version) in vs.enumerated() {
                         try await sheetView.history.move(to: version) { yIndexPath in
                             sheetView.history.set(indexPath: yIndexPath)
@@ -1923,19 +1952,15 @@ final class IOAction: Action {
                             
                             guard currentI == 0
                                  || currentI == allCount - 1
-                                 || currentI % speed == 0 || isRedraw else { return }
+                                 || currentI % speed == 0 else { return }
                             
-                            let kis = krs.enumerated()
-                                .compactMap { $0.element.isDraw ? $0.offset : nil }
                             let origin = rendering.mainItem.frame.origin
                             let b = rendering.bounds
                             let sb = rendering.mainItem.frame.bounds
-                            let borderWidth = 0.5
-                            let inB = Rect(size: size).inset(by: borderWidth * 2)
-                            
-                            let kCount = max(minKeyframesCount, krs.count)
                             if isEnabledAnimation {
-                                for ki in kis {
+                                let drawKIs = krs.enumerated()
+                                    .compactMap { $0.element.isDraw ? $0.offset : nil }
+                                for ki in drawKIs {
                                     let node = sheetView.animationView.elementViews[ki].node
                                     guard let image = Node(children: [node],
                                                            pose: .init(position: origin),
@@ -1947,101 +1972,101 @@ final class IOAction: Action {
                                     krs[ki].image = image
                                 }
                                 
+                                let padding = 2.0
+                                let inB = Rect(size: size).inset(by: padding * 2)
+                                let kCount = max(minKeyframesCount, krs.count)
                                 let columnCount
                                 = Int(Double(kCount).squareRoot().rounded(.up))
                                 let cellWidth = inB.width / Double(columnCount)
                                 let cellheight = inB.height * cellWidth / inB.width
-                                func rect(at ki: Int) -> Rect {
-                                    let columnI = ki % columnCount
-                                    let rowI = ki / columnCount
-                                    return Rect(x: inB.minX + .init(columnI) * cellWidth,
-                                                y: inB.maxY - .init(rowI + 1) * cellheight,
-                                                width: cellWidth,
-                                                height: cellheight).inset(by: borderWidth)
+                                func rowColumn(at ki: Int) -> RowColumn {
+                                    .init(row: Double(ki / columnCount),
+                                          column: Double(ki % columnCount))
                                 }
-                                
-                                func draw(t: Double?) async throws {
-                                    func nRect(at ki: Int) -> Rect? {
-                                        let toRect = rect(at: ki)
-                                        guard let t, t < 1 else { return toRect }
-                                        guard !krs[ki].rect.isEmpty else { return nil }
-                                        let fromRect = krs[ki].rect
-                                        return Rect.linear(fromRect, toRect, t: t)
-                                    }
-                                    if t == nil {
-                                        for ki in kis {
-                                            if let rect = nRect(at: ki) {
-                                                bitmap.draw(krs[ki].image, in: rect,
-                                                            isHighQuality: true)
-                                            }
-                                        }
-                                    } else {
-                                        for (ki, im) in krs.enumerated() {
-                                            if let rect = nRect(at: ki) {
-                                                bitmap.draw(im.image, in: rect,
-                                                            isHighQuality: true)
-                                            }
-                                        }
-                                    }
-                                    
-                                    guard let nBitmap = bitmap.copy()
-                                    else { throw MovieEncoder.ExportingError() }
-                                    nBitmap.set(lineWidth: borderWidth * 2)
-                                    
-                                    if t == nil {
-                                        nBitmap.set(lineColor: .content)
-                                        for ki in kis {
-                                            if let rect = nRect(at: ki) {
-                                                nBitmap.stroke(rect)
-                                            }
-                                        }
-                                    }
-                                    for (ki, kr) in krs.enumerated() {
-                                        if !kr.isDraw && kr.borderI > 0 {
-                                            let t = Double(krs[ki].borderI)
-                                                .clipped(min: 10, max: 0,
-                                                         newMin: 1, newMax: 0)
-                                            nBitmap.set(lineColor: .content
-                                                .with(multiplyOpacity: t))
-                                            if let rect = nRect(at: ki) {
-                                                nBitmap.stroke(rect)
-                                            }
-                                            krs[ki].borderI -= 1
-                                        }
-                                    }
-                                    
-                                    guard let image = nBitmap.image
-                                    else { throw MovieEncoder.ExportingError() }
-                                    
-                                    try await movieEncoder.write(image, duration: 1,
-                                                                 timeScale: 60)
-                                    
-                                    lastBitmap = bitmap
+                                func rect(at rc: RowColumn) -> Rect {
+                                    Rect(x: inB.minX + rc.column * cellWidth,
+                                         y: inB.maxY - (rc.row + 1) * cellheight,
+                                         width: cellWidth,
+                                         height: cellheight).inset(by: padding)
+                                }
+                                func rect(at ki: Int) -> Rect {
+                                    rect(at: rowColumn(at: ki))
                                 }
                                 
                                 if isRedraw {
                                     isRedraw = false
                                     
+                                    func draw(t: Double) async throws {
+                                        bitmap.set(fillColor: aroundColor)
+                                        bitmap.fill(Rect(size: size))
+                                        
+                                        for (ki, kr) in krs.enumerated() {
+                                            guard t == 1
+                                                    || !krs[ki].rect.isEmpty else { continue }
+                                            let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
+                                            if oRC.row != nRC.row {
+                                                let rcs = RowColumn
+                                                    .linear(oRC, nRC, t: t,
+                                                            columnCount: Double(columnCount))
+                                                let b = Rect.linear(krs[ki].rect,
+                                                                    rect(at: ki), t: t)
+                                                func nRect(at rc: RowColumn) -> Rect {
+                                                    var r = rect(at: rc)
+                                                    r.size.width = b.width
+                                                    r.size.height = b.height
+                                                    return r
+                                                }
+                                                if rcs.count == 2 {
+                                                    bitmap.draw(kr.image,
+                                                                in: nRect(at: rcs[0]))
+                                                    bitmap.draw(kr.image,
+                                                                in: nRect(at: rcs[1]))
+                                                } else {
+                                                    bitmap.draw(kr.image,
+                                                                in: nRect(at: rcs[0]))
+                                                }
+                                            } else {
+                                                let rect = Rect.linear(krs[ki].rect,
+                                                                       rect(at: ki), t: t)
+                                                bitmap.draw(kr.image, in: rect)
+                                            }
+                                        }
+                                        try await drawBitmap()
+                                    }
+                                    
                                     let isMove = krs.count.range
                                         .contains { !krs[$0].rect.isEmpty && krs[$0].rect != rect(at: $0) }
                                     if isMove {
-                                        for i in 1 ... 10 {
-                                            bitmap.set(fillColor: .disabled)
-                                            bitmap.fill(Rect(size: size))
-                                            
-                                            try await draw(t: (Double(i) / 10).easeOut())
+                                        var maxLength = 1.0
+                                        for (ki, kr) in krs.enumerated() {
+                                            guard !krs[ki].rect.isEmpty else { continue }
+                                            let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
+                                            let l = RowColumn
+                                                .length(oRC, nRC,
+                                                        columnCount: Double(columnCount))
+                                            maxLength = max(l, maxLength)
+                                        }
+                                        let count = Int(maxLength.clipped(min: 1, max: 10,
+                                                                          newMin: 6,
+                                                                          newMax: 30))
+                                        for i in 1 ... count {
+                                            try await draw(t: (Double(i) / Double(count)).easeOut())
                                         }
                                     } else {
                                         try await draw(t: 1)
                                     }
                                     for ki in krs.count.range {
                                         krs[ki].rect = rect(at: ki)
+                                        krs[ki].rowColumn = rowColumn(at: ki)
                                     }
                                 } else {
-                                    try await draw(t: nil)
+                                    for ki in drawKIs {
+                                        bitmap.draw(krs[ki].image, in: rect(at: ki))
+                                    }
+                                    try await drawBitmap()
                                 }
-                                for i in krs.count.range {
-                                    krs[i].isDraw = false
+                                for ki in krs.count.range {
+                                    krs[ki].isDraw = false
                                 }
                             } else {
                                 guard let image = Node(children: [sheetView.node],
@@ -2051,17 +2076,12 @@ final class IOAction: Action {
                                     .renderedTexture(in: b, to: size,
                                                      backgroundColor: backgroundColor)?.image
                                 else { throw MovieEncoder.ExportingError() }
-                                try await movieEncoder.write(image, duration: 1, timeScale: 60)
+                                try await movieEncoder.write(image, dur: 1, timeScale: 60)
                             }
                             
                             progressHandler((.init(ri) + .init(currentI) / .init(allCount) * 0.9 + 0.1) / .init(renderings.count))
                             try Task.checkCancellation()
                         }
-                    }
-                    if let lastBitmap {
-                        guard let image = lastBitmap.image
-                        else { throw MovieEncoder.ExportingError() }
-                        try await movieEncoder.write(image, duration: 1, timeScale: 60)
                     }
                 }
                 
