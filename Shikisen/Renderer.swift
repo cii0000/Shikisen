@@ -1730,7 +1730,9 @@ struct Image {
         }
     }
     init?(size: Size, color: Color) {
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
+        let bitmapInfo = color.opacity == 1 ?
+        CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue) :
+        CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         guard let ctx = CGContext(data: nil,
                                   width: Int(size.width), height: Int(size.height),
                                   bitsPerComponent: 8, bytesPerRow: 0,

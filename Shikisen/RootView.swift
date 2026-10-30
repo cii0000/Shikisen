@@ -22,44 +22,67 @@ import struct Foundation.UUID
 import struct Foundation.Date
 import class Foundation.Timer
 import class Foundation.DateFormatter
+import class Foundation.DateComponentsFormatter
 import protocol Foundation.LocalizedError
 
 struct HUDItem {
     let node = Node()
-    private(set) var size: Size
+    private(set) var size: Size, stringNode: Node
     
-    init(string: String) {
-        let (node, b) = Self.node(string: string)
+    init(string: String, fontSize: Double = 12, rightPaddingRatio: Double = 0) {
+        let (node, b) = Self.node(string: string, fontSize: fontSize,
+                                  rightPaddingRatio: rightPaddingRatio)
+        stringNode = node
         self.node.children = [node]
         self.node.path = .init(b)
         self.size = b.size
+        self.fontSize = fontSize
+        self.rightPaddingRatio = rightPaddingRatio
     }
     
     var string = "" {
         didSet {
+            guard string != oldValue else { return }
+            updateWithString()
+        }
+    }
+    var fontSize = 12.0 {
+        didSet {
+            guard fontSize != oldValue else { return }
             updateWithString()
         }
     }
     var backgroundColor = Color.transparentDisabled {
         didSet {
+            guard backgroundColor != oldValue else { return }
             node.children[0].fillType = .color(backgroundColor)
         }
     }
     var borderColor = Color.subBorder {
         didSet {
+            guard borderColor != oldValue else { return }
             node.children[0].lineType = .color(borderColor)
         }
     }
+    var rightPaddingRatio = 0.0 {
+        didSet {
+            guard rightPaddingRatio != oldValue else { return }
+            updateWithString()
+        }
+    }
     mutating func updateWithString() {
-        let (node, b) = Self.node(string: string)
-        self.node.children = [node]
+        let (node, b) = Self.node(string: string, fontSize: fontSize,
+                                  rightPaddingRatio: rightPaddingRatio)
+        stringNode.removeFromParent()
+        stringNode = node
+        self.node.children.insert(node, at: 0)
         self.node.path = .init(b)
         self.size = b.size
     }
-    static func node(string: String) -> (node: Node, bounds: Rect) {
-        let fontSize = 12.0
-        let padding = fontSize / 2, lineWidth = 1.0, cornerRadius = 8.0
-        let margin = fontSize / 2 + 1.0, imagePadding = 3.0
+    static func node(string: String, fontSize: Double,
+                     rightPaddingRatio: Double) -> (node: Node, bounds: Rect) {
+        let lineWidth = 1.0, cornerRadius = 8.0
+        let padding = fontSize / 2 + 1.0, imagePadding = 3.0
         
         func textNode(with string: String, color: Color = .content) -> (size: Size, node: Node)? {
             let typesetter = Text(string: string, size: fontSize).typesetter
@@ -74,22 +97,21 @@ struct HUDItem {
         
         var children = [Node]()
         
-        var w = 0.0, h = margin
+        var w = 0.0, h = padding
         let color = Color.content
         if let (nts, nNode) = textNode(with: string, color: color) {
-            nNode.pose.position = Point((margin + imagePadding).rounded(), h + nts.height - fontSize / 2 - imagePadding)
-            w = max(w, nts.width + margin * 2)
+            w = max(w, nts.width + padding * 2 + rightPaddingRatio * (nts.height + padding))
+            nNode.pose.position = Point((padding + imagePadding).rounded() - w,
+                                        h + nts.height - fontSize / 2 - imagePadding)
             children.append(nNode)
             h += nts.height + padding
-            
-            h += -padding + margin
         }
         
-        let f = Rect(x: 0, y: 0, width: w, height: h)
+        let f = Rect(x: -w, y: 0, width: w, height: h)
         return (Node(children: children,
-                        path: Path(f, cornerRadius: cornerRadius),
-                        lineWidth: lineWidth, lineType: .color(.subBorder),
-                        fillType: .color(.transparentDisabled)), f)
+                     path: Path(f, cornerRadius: cornerRadius),
+                     lineWidth: lineWidth, lineType: .color(.subBorder),
+                     fillType: .color(.transparentDisabled)), f)
     }
     
     func contains(_ p: Point) -> Bool {
@@ -97,6 +119,13 @@ struct HUDItem {
     }
 }
 
+struct ExportingError: LocalizedError {
+    var errorDescription: String?
+    init(type: Exporting.ExportType, name: String, description: String) {
+        errorDescription = String(format: "Failed to Export %1$@ \"%2$@\"".localized,
+                                  type.displayName, name) + " | " + description
+    }
+}
 struct Exporting {
     enum ExportType {
         case image, image4K, images, images4K, pdf, gif, movie, movie4K,
@@ -128,28 +157,92 @@ struct Exporting {
         }
     }
 }
+struct IntervalManager {
+    var interval = 0.1
+    var clock = SuspendingClock.now
+    
+    mutating func isUpdate() -> Bool {
+        if clock.duration(to: .now).sec > interval {
+            clock = .now
+            return true
+        } else {
+            return false
+        }
+    }
+}
 final class ExportingView: View, @unchecked Sendable {
     typealias Model = Exporting
     var model = Model()
     
     var hudItem: HUDItem
-    let node: Node
-    let type: Exporting.ExportType, name: String
+    let node: Node,
+        outlineProgressNode = Node(lineWidth: 2, lineType: .color(.border)),
+        progressNode = Node(lineWidth: 2, lineType: .color(.selected))
+    let type: Exporting.ExportType, name: String, title: String
     
     init(type: Exporting.ExportType, name: String) {
         self.type = type
         self.name = name
-        hudItem = .init(string: String(format: "Exporting %1$@ \"%2$@\"".localized + ": %3$3d%%",
-                                       type.displayName, name, Int(progress)))
+        title = String(format: "Exporting %1$@ \"%2$@\"".localized,
+                       type.displayName, name)
+        hudItem = .init(string: title, rightPaddingRatio: 1)
         node = hudItem.node
+        let p = Point(-hudItem.size.height / 2, hudItem.size.height / 2)
+        outlineProgressNode.pose = .init(position: p)
+        progressNode.pose = .init(position: p)
+        outlineProgressNode.path = .init(circleRadius: hudItem.size.height / 2 * 0.5)
+        node.append(child: outlineProgressNode)
+        node.append(child: progressNode)
     }
     
+    var startClock: SuspendingClock.Instant?, oldClock: SuspendingClock.Instant?,
+        isFirstClock = true, enabledClockString = false
     var progress = 0.0 {
         didSet {
             guard progress != oldValue else { return }
-            hudItem.string = String(format: "Exporting %1$@ \"%2$@\"".localized + ": %3$3d%%",
-                                    type.displayName, name, Int(progress * 100))
+            
+            if let startClock {
+                if progress != 0 {
+                    if let oldClock, oldClock.duration(to: .now).sec >=
+                        (isFirstClock ? 30 : 5) {
+                        
+                        let dTime = startClock.duration(to: .now).sec
+                        let time = dTime / progress - dTime
+                        if isFirstClock {
+                            if time > 60 { enabledClockString = true }
+                            isFirstClock = false
+                        }
+                        if enabledClockString {
+                            let formatter = DateComponentsFormatter()
+                            formatter.unitsStyle = .abbreviated
+                            formatter.allowedUnits = [.hour, .minute]
+                            formatter.zeroFormattingBehavior = .dropAll
+                            if time < 60 {
+                                hudItem.string = title + ": " + "< 1m".localized
+                            } else if let timeStr = formatter.string(from: time) {
+                                hudItem.string = title + ": " + String(format: "%@ left".localized,
+                                                                       timeStr)
+                            }
+                        }
+                        self.oldClock = .now
+                    } else if oldClock == nil {
+                        oldClock = .now
+                    }
+                }
+            } else {
+                startClock = .now
+            }
+            
+            progressNode.path = .init([Pathline(Arc(centerPosition: .init(),
+                                                    radius: hudItem.size.height / 2 * 0.5,
+                                                    startAngle: .pi / 2,
+                                                    endAngle: .pi / 2 - progress * .pi * 2))])
+            
         }
+    }
+    
+    func error(with error: any Error) -> ExportingError {
+        ExportingError(type: type, name: name, description: error.localizedDescription)
     }
     
     var isCanceled = false, isClosed = false
@@ -285,7 +378,7 @@ final class HUDView: View, @unchecked Sendable {
             } else {
                 0.0
             }
-            dateView.node.pose.position = Point(sb.maxX - size.width + dx - padding, sb.maxY - size.height - padding)
+            dateView.node.pose.position = Point(sb.maxX + dx - padding, sb.maxY - size.height - padding)
         }
     }
     func updateActionListWithScreenBounds() {
@@ -322,13 +415,13 @@ final class HUDView: View, @unchecked Sendable {
         p.y -= padding
         for exportingView in exportingViews {
             exportingView.node.pose.position
-            = .init(p.x - exportingView.hudItem.size.width,
+            = .init(p.x,
                     p.y - exportingView.hudItem.size.height)
             p.y -= exportingView.hudItem.size.height + padding
         }
         for errorView in errorViews {
             errorView.node.pose.position
-            = .init(p.x - errorView.hudItem.size.width,
+            = .init(p.x,
                     p.y - errorView.hudItem.size.height)
             p.y -= errorView.hudItem.size.height + padding
         }

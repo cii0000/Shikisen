@@ -17,6 +17,7 @@
 
 import struct Foundation.UUID
 import struct Foundation.Data
+import struct Foundation.Date
 import struct Foundation.URL
 import class Foundation.FileManager
 
@@ -805,7 +806,24 @@ final class IOAction: Action {
                 }
             }
             documentRecorders = []
-        case .gif, .movie, .movie4K, .sound, .linearPCM, .caption:
+        case .gif, .movie, .movie4K, .sound, .linearPCM, .caption, .timelapse:
+            func item(sid: UUID, shp: IntPoint,
+                      sheetRecord: Record<Sheet>) -> Rendering.Item {
+                if type == .timelapse,
+                   let sheetHistoryRecord
+                    = rootView.model.sheetRecorders[sid]?.sheetHistoryRecord {
+                  .init(id: sid, sheet: sheetRecord.value,
+                        data: sheetRecord.data, url: sheetRecord.url,
+                        frame: rootView.sheetFrame(with: shp),
+                        sheetHistory: sheetHistoryRecord.value,
+                        historyData: sheetHistoryRecord.data,
+                        historyURL: sheetHistoryRecord.url)
+                } else {
+                    .init(id: sid, sheet: sheetRecord.value,
+                          data: sheetRecord.data, url: sheetRecord.url,
+                          frame: rootView.sheetFrame(with: shp))
+                }
+            }
             renderings = nvs.map {
                 var filledShps = Set<IntPoint>()
                 
@@ -818,9 +836,7 @@ final class IOAction: Action {
                     if !filledShps.contains(shp) {
                         filledShps.insert(shp)
                         
-                        bottomItems.append(.init(id: sid, sheet: sheetRecord.value,
-                                                 data: sheetRecord.data, url: sheetRecord.url,
-                                                 frame: rootView.sheetFrame(with: shp)))
+                        bottomItems.append(item(sid: sid, shp: shp, sheetRecord: sheetRecord))
                     }
                     shp.y -= 1
                 }
@@ -834,9 +850,7 @@ final class IOAction: Action {
                     if !filledShps.contains(shp) {
                         filledShps.insert(shp)
                         
-                        topItems.append(.init(id: sid, sheet: sheetRecord.value,
-                                              data: sheetRecord.data, url: sheetRecord.url,
-                                              frame: rootView.sheetFrame(with: shp)))
+                        topItems.append(item(sid: sid, shp: shp, sheetRecord: sheetRecord))
                     }
                     
                     shp.y += 1
@@ -844,9 +858,7 @@ final class IOAction: Action {
                 
                 return if let sid = rootView.sheetID(at: $0.shp),
                           let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord {
-                    .init(mainItem: .init(id: sid, sheet: sheetRecord.value,
-                                          data: sheetRecord.data, url: sheetRecord.url,
-                                          frame: rootView.sheetFrame(with: $0.shp)),
+                    .init(mainItem: item(sid: sid, shp: shp, sheetRecord: sheetRecord),
                           bottomItems: bottomItems, topItems: topItems,
                           bounds: mainFrame ?? $0.bounds)
                 } else {
@@ -854,29 +866,6 @@ final class IOAction: Action {
                                           data: nil, url: nil,
                                           frame: rootView.sheetFrame(with: $0.shp)),
                           bottomItems: bottomItems, topItems: topItems,
-                          bounds: mainFrame ?? $0.bounds)
-                }
-            }
-            documentRecorders = []
-        case .timelapse:
-            renderings = nvs.map {
-                if let sid = rootView.sheetID(at: $0.shp),
-                   let sheetRecord = rootView.model.sheetRecorders[sid]?.sheetRecord,
-                   let sheetHistoryRecord = rootView.model.sheetRecorders[sid]?.sheetHistoryRecord {
-                    .init(mainItem: .init(id: sid, sheet: sheetRecord.value,
-                                          data: sheetRecord.data, url: sheetRecord.url,
-                                          frame: rootView.sheetFrame(with: $0.shp),
-                                          sheetHistory: sheetHistoryRecord.value,
-                                          historyData: sheetHistoryRecord.data,
-                                          historyURL: sheetHistoryRecord.url),
-                          bottomItems: [], topItems: [],
-                          
-                          bounds: mainFrame ?? $0.bounds)
-                } else {
-                    .init(mainItem: .init(id: .init(), sheet: nil,
-                                          data: nil, url: nil,
-                                          frame: rootView.sheetFrame(with: $0.shp)),
-                          bottomItems: [], topItems: [],
                           bounds: mainFrame ?? $0.bounds)
                 }
             }
@@ -1033,32 +1022,32 @@ final class IOAction: Action {
                     }
                 }
             } catch {
-                rootView.node.show(error)
+                rootAction.hudView.show(error)
             }
         } else {
+            @Sendable func export(from renderings: [Rendering],
+                                  progressHandler: (Double) -> ()) async throws {
+                for (ri, rendering) in renderings.enumerated() {
+                    if let node = rendering.renderableMainSheetNode() {
+                        if let image = node.image(in: rendering.bounds, to: size,
+                                                  colorSpace) {
+                            let subIOResult = ioResult.sub(name: "\(ri).png")
+                            try image.write(.png, to: subIOResult.url)
+                            try subIOResult.setAttributes()
+                        }
+                    }
+                    
+                    progressHandler(Double(ri + 1) / Double(renderings.count))
+                    try Task.checkCancellation()
+                }
+            }
+            
             let exportingView = ExportingView(type: is4K ? .images4K : .images,
                                               name: ioResult.name)
             rootAction.hudView.append(exportingView)
             do {
                 try ioResult.remove()
                 try ioResult.makeDirectory()
-                
-                @Sendable func export(from renderings: [Rendering],
-                                      progressHandler: (Double) -> ()) throws {
-                    for (ri, rendering) in renderings.enumerated() {
-                        if let node = rendering.renderableMainSheetNode() {
-                            if let image = node.image(in: rendering.bounds, to: size,
-                                                      colorSpace) {
-                                let subIOResult = ioResult.sub(name: "\(ri).png")
-                                try image.write(.png, to: subIOResult.url)
-                                try subIOResult.setAttributes()
-                            }
-                        }
-                        
-                        progressHandler(Double(ri + 1) / Double(renderings.count))
-                        try Task.checkCancellation()
-                    }
-                }
                 
                 let task = Task.detached(priority: .utility) {
                     var renderings = renderings
@@ -1067,17 +1056,20 @@ final class IOAction: Action {
                     }
                     defer { renderings.forEach { $0.resetTemps() } }
                     
+                    var im = IntervalManager()
                     do {
-                        try export(from: renderings) { (progress) in
-                            Task { @MainActor in
-                                exportingView.progress = progress
+                        try await export(from: renderings) { (progress) in
+                            if im.isUpdate() {
+                                Task { @MainActor in
+                                    exportingView.progress = progress
+                                }
                             }
                         }
                     } catch {
                         try ioResult.remove()
                         if !(error is CancellationError) {
                             Task { @MainActor in
-                                self.rootView.node.show(error)
+                                self.rootAction.hudView.show(exportingView.error(with: error))
                             }
                         }
                     }
@@ -1087,7 +1079,7 @@ final class IOAction: Action {
                 }
                 exportingView.cancelHandler = { task.cancel() }
             } catch {
-                self.rootView.node.show(error)
+                self.rootAction.hudView.show(error)
                 exportingView.close()
             }
         }
@@ -1095,7 +1087,7 @@ final class IOAction: Action {
     
     func exportPDF(from renderings: [Rendering], size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double) -> ()) throws {
+                              progressHandler: (Double) -> ()) async throws {
             let pdf = try PDF(url: ioResult.url, mediaBox: Rect(size: size))
             for (ri, rendering) in renderings.enumerated() {
                 if let node = rendering.renderableMainSheetNode() {
@@ -1113,8 +1105,14 @@ final class IOAction: Action {
         
         if renderings.count == 1 {
             do {
-                try export(from: renderings) { (_) in }
-            } catch is CancellationError {
+                let pdf = try PDF(url: ioResult.url, mediaBox: Rect(size: size))
+                if let node = renderings[0].renderableMainSheetNode() {
+                    pdf.newPage { pdf in
+                        node.render(in: renderings[0].bounds, to: size, in: pdf)
+                    }
+                }
+                pdf.finish()
+                try ioResult.setAttributes()
             } catch {
                 rootView.node.show(error)
             }
@@ -1132,17 +1130,20 @@ final class IOAction: Action {
                     }
                     defer { renderings.forEach { $0.resetTemps() } }
                     
+                    var im = IntervalManager()
                     do {
-                        try export(from: renderings) { (progress) in
-                            Task { @MainActor in
-                                exportingView.progress = progress
+                        try await export(from: renderings) { (progress) in
+                            if im.isUpdate() {
+                                Task { @MainActor in
+                                    exportingView.progress = progress
+                                }
                             }
                         }
                     } catch {
                         try ioResult.remove()
                         if !(error is CancellationError) {
                             Task { @MainActor in
-                                self.rootView.node.show(error)
+                                self.rootAction.hudView.show(exportingView.error(with: error))
                             }
                         }
                     }
@@ -1152,7 +1153,7 @@ final class IOAction: Action {
                 }
                 exportingView.cancelHandler = { task.cancel() }
             } catch {
-                rootView.node.show(error)
+                rootAction.hudView.show(error)
                 exportingView.close()
             }
         }
@@ -1161,7 +1162,7 @@ final class IOAction: Action {
     func exportGIF(from renderings: [Rendering], _ colorSpace: ColorSpace,
                    size: Size, at ioResult: IOResult) {
         @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double) -> ()) throws {
+                              progressHandler: (Double) -> ()) async throws {
             var images = [(image: Image, time: Rational)]()
             for (ri, rendering) in renderings.enumerated() {
                 if let sheet = rendering.mainItem.decodedSheet() {
@@ -1209,17 +1210,20 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
+                var im = IntervalManager()
                 do {
-                    try export(from: renderings) { (progress) in
-                        Task { @MainActor in
-                            exportingView.progress = progress
+                    try await export(from: renderings) { (progress) in
+                        if im.isUpdate() {
+                            Task { @MainActor in
+                                exportingView.progress = progress
+                            }
                         }
                     }
                 } catch {
                     try ioResult.remove()
                     if !(error is CancellationError) {
                         Task { @MainActor in
-                            self.rootView.node.show(error)
+                            self.rootAction.hudView.show(exportingView.error(with: error))
                         }
                     }
                 }
@@ -1229,7 +1233,7 @@ final class IOAction: Action {
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
-            rootView.node.show(error)
+            rootAction.hudView.show(error)
             exportingView.close()
         }
     }
@@ -1433,17 +1437,20 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
+                var im = IntervalManager()
                 do {
                     try await export(from: renderings) { (progress) in
-                        Task { @MainActor in
-                            exportingView.progress = progress
+                        if im.isUpdate() {
+                            Task { @MainActor in
+                                exportingView.progress = progress
+                            }
                         }
                     }
                 } catch {
                     try ioResult.remove()
                     if !(error is CancellationError) {
                         Task { @MainActor in
-                            self.rootView.node.show(error)
+                            self.rootAction.hudView.show(exportingView.error(with: error))
                         }
                     }
                 }
@@ -1453,7 +1460,7 @@ final class IOAction: Action {
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
-            rootView.node.show(error)
+            rootAction.hudView.show(error)
             exportingView.close()
         }
     }
@@ -1514,17 +1521,20 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
+                var im = IntervalManager()
                 do {
                     try await export(from: renderings) { (progress) in
-                        Task { @MainActor in
-                            exportingView.progress = progress
+                        if im.isUpdate() {
+                            Task { @MainActor in
+                                exportingView.progress = progress
+                            }
                         }
                     }
                 } catch {
                     try ioResult.remove()
                     if !(error is CancellationError) {
                         Task { @MainActor in
-                            self.rootView.node.show(error)
+                            self.rootAction.hudView.show(exportingView.error(with: error))
                         }
                     }
                 }
@@ -1534,7 +1544,7 @@ final class IOAction: Action {
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
-            rootView.node.show(error)
+            rootAction.hudView.show(error)
             exportingView.close()
         }
     }
@@ -1593,16 +1603,16 @@ final class IOAction: Action {
             }
             
             let frameRate = Sheet.standardFrameRate(from: sheets)
-            let encoder = try CaptionEncoder(url: ioResult.url, frameRate: frameRate)
+            let captionEncoder = try CaptionEncoder(url: ioResult.url, frameRate: frameRate)
             do {
-                try await encoder.write(captions: nCaptions, duration: currentSec) { (t) in
+                try await captionEncoder.write(captions: nCaptions, duration: currentSec) { (t) in
                     progressHandler(t * 0.3 + 0.7)
                     try Task.checkCancellation()
                 }
-                try await encoder.finish()
+                try await captionEncoder.finish()
                 try ioResult.setAttributes()
             } catch {
-                encoder.cancel()
+                captionEncoder.cancel()
                 throw error
             }
         }
@@ -1619,17 +1629,20 @@ final class IOAction: Action {
                 }
                 defer { renderings.forEach { $0.resetTemps() } }
                 
+                var im = IntervalManager()
                 do {
                     try await export(from: renderings) { (progress) in
-                        Task { @MainActor in
-                            exportingView.progress = progress
+                        if im.isUpdate() {
+                            Task { @MainActor in
+                                exportingView.progress = progress
+                            }
                         }
                     }
                 } catch {
                     try ioResult.remove()
                     if !(error is CancellationError) {
                         Task { @MainActor in
-                            self.rootView.node.show(error)
+                            self.rootAction.hudView.show(exportingView.error(with: error))
                         }
                     }
                 }
@@ -1639,7 +1652,622 @@ final class IOAction: Action {
             }
             exportingView.cancelHandler = { task.cancel() }
         } catch {
-            rootView.node.show(error)
+            rootAction.hudView.show(error)
+            exportingView.close()
+        }
+    }
+    
+    func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
+                         _ colorSpace: ColorSpace, clipTime: Double? = 60,
+                         aroundColor: Color = .border,
+                         size: Size, at ioResult: IOResult) {
+        @Sendable func export(from renderings: [Rendering],
+                              progressHandler: (Double) -> ()) async throws {
+            var filledIDs = Set<UUID>()
+            let movieEncoder = try MovieEncoder(url: ioResult.url, renderSize: size,
+                                                isAlphaChannel: isAlphaChannel,
+                                                colorSpace, frameRate: 60,
+                                                isEnabledAudio: false, isLinearPCM: false)
+            do {
+                for (ri, rendering) in renderings.enumerated() {
+                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
+                    filledIDs.insert(rendering.mainItem.id)
+                    
+                    struct K {
+                        var image: Image, beat: Rational = 0, isUpdate = true
+                    }
+                    class SB {
+                        var view: SheetView, bounds: Rect, ks = [K]()
+                        
+                        init(item: Rendering.Item) throws {
+                            guard let url = item.url,
+                               let sheet = item.decodedSheet(),
+                               let history = item.decodedSheetHistory()
+                            else { throw MovieEncoder.ExportingError() }
+                                
+                            let sheetBinder = RecordBinder(value: sheet,
+                                                           record: Record(url: url))
+                            view = SheetView(binder: sheetBinder,
+                                             keyPath: \SheetBinder.value,
+                                             history: history)
+                            bounds = item.frame.bounds
+                        }
+                    }
+                    
+                    var sbs = [SB]()
+                    for item in rendering.bottomItems {
+                        filledIDs.insert(item.id)
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
+                        if sheet.isEnabledAnimation {
+                            sbs.append(try .init(item: item))
+                        }
+                    }
+                    sbs.reverse()
+                    
+                    sbs.append(try .init(item: rendering.mainItem))
+                    
+                    let isEnabledAnimation = sbs.last!.view.model.isEnabledAnimation
+                    let mainBackgroundColor = sbs.last!.view.model.backgroundUUColor.value
+                    guard let fkImage = Image(size: size, color: mainBackgroundColor)
+                    else { throw MovieEncoder.ExportingError() }
+                    
+                    for item in rendering.topItems {
+                        filledIDs.insert(item.id)
+                        guard let sheet = item.decodedSheet(), sheet.isEnabledTimeline else { break }
+                        if sheet.isEnabledAnimation {
+                            sbs.append(try .init(item: item))
+                        }
+                    }
+                    
+                    var allGroups = [(si: Int, sb: SB, version: Version?, date: Date)]()
+                    for (si, sb) in sbs.enumerated() {
+                        allGroups.append((si, sb, nil, .distantPast))
+                        sb.view.history.allGroups { indexPath, groups in
+                            allGroups += groups.enumerated()
+                                .map { (si, sb,
+                                        .init(indexPath: indexPath, groupIndex: $0.offset),
+                                        $0.element.date) }
+                        }
+                        if allGroups.last?.date != sb.view.history.currentDate {
+                            allGroups.append((si, sb, sb.view.history.currentVersion,
+                                              .distantFuture))
+                        }
+                    }
+                    allGroups.sort { $0.date < $1.date }
+                    
+                    let isMultiK = sbs.count > 1
+                    
+                    let minKeyframesCount = isMultiK ?
+                    sbs.reduce(into: Set<Rational>()) {
+                        $0.formUnion($1.view.model.animation.keyframes.map { $0.beat })
+                    }.count :
+                    sbs[0].view.model.animation.keyframes.count
+                    
+                    func moveFirst() async throws {
+                        for (si, sb) in sbs.enumerated() {
+                            let topCount = sb.view.history.currentVersionIndex + 1
+                            try await sb.view.history.move(to: nil) { yIndexPath in
+                                sb.view.history.set(indexPath: yIndexPath)
+                            } topIHandler: { toTopIndex in
+                                for result in sb.view.history.undoResults(to: toTopIndex) {
+                                    let undoItem = try sb.view.history
+                                        .undoItem(with: result, sb.view.model)
+                                    sb.view.update(undoItem,
+                                                   isMakeRect: false, isSleep: false)
+                                    switch undoItem {
+                                    case .setSelection(let selection):
+                                        if !selection.isEmpty {
+                                            sb.view.updateNode(from: .empty,
+                                                               old: sb.view.model.selection)
+                                        }
+                                    default: break
+                                    }
+                                }
+                                
+                                let t = (.init(si) + .init(topCount - toTopIndex) / .init(topCount))
+                                / Double(sbs.count)
+                                progressHandler((.init(ri) + t * 0.05) / .init(renderings.count))
+                                try Task.checkCancellation()
+                            }
+                        }
+                    }
+                    try await moveFirst()
+                    
+                    func calculateCount() async throws -> Int {
+                        var allCount = 1
+                        var countHistotys = sbs.map { $0.view.history }
+                        for (vi, group) in allGroups.enumerated() {
+                            try await countHistotys[group.si].move(to: group.version) { yIndexPath in
+                                countHistotys[group.si].set(indexPath: yIndexPath)
+                            } topIHandler: { toTopIndex in
+                                allCount += 1
+                                countHistotys[group.si].set(toTopIndex: toTopIndex)
+                                
+                                progressHandler((.init(ri) + .init(vi + 1) / .init(allGroups.count) * 0.05 + 0.05) / .init(renderings.count))
+                                try Task.checkCancellation()
+                            }
+                        }
+                        return allCount
+                    }
+                    let allCount = try await calculateCount()
+                    
+                    let speed = clipTime != nil ?
+                    max(Int((Double(allCount / 60) / clipTime!).rounded(.up)), 1) : 1
+                    
+                    guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
+                                                     height: .init(size.height),
+                                                     colorSpace: .sRGB)
+                    else { throw MovieEncoder.ExportingError() }
+                    bitmap.set(fillColor: aroundColor)
+                    bitmap.fill(Rect(size: size))
+                    
+                    struct RowColumn: Hashable {
+                        var row = 0.0, column = 0.0
+                       
+                        static func length(_ f0: Self, _ f1: Self,
+                                           columnCount: Double) -> Double {
+                            (f0.row * columnCount + f0.column)
+                                .distance(f1.row * columnCount + f1.column)
+                        }
+                        static func linear(_ f0: Self, _ f1: Self,
+                                           t: Double, columnCount: Double) -> [Self] {
+                            let startV = f0.row * columnCount + f0.column
+                            let endV = f1.row * columnCount + f1.column
+                            let v = Double.linear(startV, endV, t: t)
+                            let row = (v / columnCount).rounded(.down)
+                            let column = v - row * columnCount
+                            return if column > columnCount - 1 {
+                                [.init(row: row, column: column),
+                                 .init(row: row + 1, column: column - columnCount)]
+                            } else if column < 1 {
+                                [.init(row: row, column: column),
+                                 .init(row: row - 1, column: column + columnCount)]
+                            } else {
+                                [.init(row: row, column: column)]
+                            }
+                        }
+                    }
+                    struct KR {
+                        var image: Image, beat: Rational = 0, isUpdate = true,
+                            rect = Rect?.none, rowColumn = RowColumn()
+                    }
+                    func drawBitmap() async throws {
+                        guard let image = bitmap.image
+                        else { throw MovieEncoder.ExportingError() }
+                        try await movieEncoder.write(image, dur: 1, timeScale: 60)
+                    }
+                    
+                    let padding = 2.0
+                    let inB = Rect(size: size).inset(by: padding * 2)
+                    
+                    let columnCount = Int(Double(minKeyframesCount).squareRoot().rounded(.up))
+                    let minCellWidth = (inB.width / Double(columnCount)).rounded(.up)
+                    let minSize = Size(width: minCellWidth,
+                                       height: (inB.height * minCellWidth / inB.width).rounded(.up))
+                    
+                    let emptyColor = Color(white: 0, opacity: 0)
+                    guard let fkrImage = Image(size: minSize,
+                                               color: mainBackgroundColor),
+                          let ofkImage = isMultiK ?
+                            Image(size: minSize, color: emptyColor) :
+                                (isEnabledAnimation ? fkrImage : fkImage)
+                    else { throw MovieEncoder.ExportingError() }
+                    for i in sbs.count.range {
+                        sbs[i].ks = [K(image: fkrImage)]
+                    }
+                    
+                    var krs = [KR(image: ofkImage)], currentI = 0, isRedraw = false
+                    func setIsupdateKRs(from beatRange: Range<Rational>) {
+                        for kri in krs.count.range {
+                            if beatRange.contains(krs[kri].beat) {
+                                krs[kri].isUpdate = true
+                            }
+                        }
+                    }
+                    func make() async throws {
+                        let origin = rendering.mainItem.frame.origin
+                        let b = rendering.bounds
+                        let sheetBounds = rendering.mainItem.frame.bounds
+                        if isEnabledAnimation {
+                            for sb in sbs {
+                                let updateKIs = sb.ks.enumerated()
+                                    .compactMap { $0.element.isUpdate ? $0.offset : nil }
+                                let backgroundColor = isMultiK ?
+                                emptyColor : mainBackgroundColor
+                                for ki in updateKIs {
+                                    let node = sb.view.animationView.elementViews[ki].node
+                                    guard let image = Node(children: [node],
+                                                           pose: .init(position: origin),
+                                                           path: Path(sheetBounds),
+                                                           fillType: .color(backgroundColor))
+                                        .renderedTexture(in: b, to: minSize,
+                                                         backgroundColor: backgroundColor)?.image
+                                            else { throw MovieEncoder.ExportingError() }
+                                    sb.ks[ki].image = image
+                                }
+                            }
+                            
+                            var updatedKRIs = Set<Int>()
+                            if isMultiK {
+                                for sb in sbs {
+                                    let updateKIs = sb.ks.enumerated()
+                                        .compactMap { $0.element.isUpdate ? $0.offset : nil }
+                                    for ki in updateKIs {
+                                        let beat = sb.ks[ki].beat
+                                        let beatRange = beat ..< (ki + 1 < sb.ks.count ? sb.ks[ki + 1].beat : .max)
+                                        setIsupdateKRs(from: beatRange)
+                                    }
+                                }
+                                
+                                func updateKR(at kri: Int) throws {
+                                    guard !updatedKRIs.contains(kri) else { return }
+                                    updatedKRIs.insert(kri)
+                                    
+                                    let beat = krs[kri].beat
+                                    let nImages = (0 ..< sbs.count).compactMap {
+                                        sbs[$0].ks.reversed()
+                                            .first(where: { $0.beat <= beat })?.image
+                                    }
+                                    if nImages.count == 1 {
+                                        krs[kri].image = nImages[0]
+                                    } else {
+                                        guard let nBitmap = Bitmap<UInt8>(width: .init(minSize.width),
+                                                                         height: .init(minSize.height),
+                                                                         colorSpace: .sRGB)
+                                        else { throw MovieEncoder.ExportingError() }
+                                        nBitmap.set(fillColor: mainBackgroundColor)
+                                        nBitmap.fill(Rect(size: minSize))
+                                        for nsi in 0 ..< sbs.count {
+                                            if let nImage = sbs[nsi].ks.reversed()
+                                                .first(where: { $0.beat <= beat })?.image {
+                                                nBitmap.draw(nImage,
+                                                             in: .init(size: minSize))
+                                            }
+                                        }
+                                        guard let image = nBitmap.image
+                                        else { throw MovieEncoder.ExportingError() }
+                                        krs[kri].image = image
+                                    }
+                                }
+                                
+                                for kri in krs.count.range {
+                                    if krs[kri].isUpdate {
+                                        try updateKR(at: kri)
+                                        krs[kri].isUpdate = false
+                                    }
+                                }
+                            } else {
+                                sbs[0].ks.enumerated().forEach {
+                                    krs[$0.offset].image = $0.element.image
+                                    updatedKRIs.insert($0.offset)
+                                }
+                            }
+                            for sb in sbs {
+                                for ki in sb.ks.count.range {
+                                    sb.ks[ki].isUpdate = false
+                                }
+                            }
+                            
+                            let kCount = max(minKeyframesCount, krs.count)
+                            let columnCount
+                            = Int(Double(kCount).squareRoot().rounded(.up))
+                            let cellWidth = inB.width / Double(columnCount)
+                            let cellheight = inB.height * cellWidth / inB.width
+                            func rowColumn(at ki: Int) -> RowColumn {
+                                .init(row: Double(ki / columnCount),
+                                      column: Double(ki % columnCount))
+                            }
+                            func rect(at rc: RowColumn) -> Rect {
+                                Rect(x: inB.minX + rc.column * cellWidth,
+                                     y: inB.maxY - (rc.row + 1) * cellheight,
+                                     width: cellWidth,
+                                     height: cellheight).inset(by: padding)
+                            }
+                            func rect(at ki: Int) -> Rect {
+                                rect(at: rowColumn(at: ki))
+                            }
+                            
+                            if isRedraw {
+                                isRedraw = false
+                                
+                                func draw(t: Double) async throws {
+                                    bitmap.set(fillColor: aroundColor)
+                                    bitmap.fill(Rect(size: size))
+                                    
+                                    for (ki, kr) in krs.enumerated() {
+                                        guard let oRect = t == 1 ?
+                                                rect(at: ki) : krs[ki].rect else { continue }
+                                        let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
+                                        if oRC.row != nRC.row {
+                                            let rcs = RowColumn
+                                                .linear(oRC, nRC, t: t,
+                                                        columnCount: Double(columnCount))
+                                            let b = Rect.linear(oRect,
+                                                                rect(at: ki), t: t)
+                                            func nRect(at rc: RowColumn) -> Rect {
+                                                var r = rect(at: rc)
+                                                r.size.width = b.width
+                                                r.size.height = b.height
+                                                return r
+                                            }
+                                            if rcs.count == 2 {
+                                                bitmap.draw(kr.image,
+                                                            in: nRect(at: rcs[0]))
+                                                bitmap.draw(kr.image,
+                                                            in: nRect(at: rcs[1]))
+                                            } else {
+                                                bitmap.draw(kr.image,
+                                                            in: nRect(at: rcs[0]))
+                                            }
+                                        } else {
+                                            let rect = Rect.linear(oRect,
+                                                                   rect(at: ki), t: t)
+                                            bitmap.draw(kr.image, in: rect)
+                                        }
+                                    }
+                                    try await drawBitmap()
+                                }
+                                
+                                let isMove = krs.count.range
+                                    .contains { krs[$0].rect != nil
+                                        && krs[$0].rect != rect(at: $0) }
+                                if isMove {
+                                    var maxLength = 1.0
+                                    for (ki, kr) in krs.enumerated() {
+                                        guard krs[ki].rect != nil else { continue }
+                                        let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
+                                        let l = RowColumn
+                                            .length(oRC, nRC,
+                                                    columnCount: Double(columnCount))
+                                        maxLength = max(l, maxLength)
+                                    }
+                                    let count = Int(maxLength.clipped(min: 1, max: 10,
+                                                                      newMin: 6,
+                                                                      newMax: 30))
+                                    for i in 1 ... count {
+                                        try await draw(t: (Double(i) / Double(count)).easeOut())
+                                    }
+                                } else {
+                                    try await draw(t: 1)
+                                }
+                                for ki in krs.count.range {
+                                    krs[ki].rect = rect(at: ki)
+                                    krs[ki].rowColumn = rowColumn(at: ki)
+                                }
+                            } else {
+                                for ki in updatedKRIs.sorted() {
+                                    bitmap.draw(krs[ki].image, in: rect(at: ki))
+                                }
+                                try await drawBitmap()
+                            }
+                        } else {
+                            guard let image = Node(children: [sbs[0].view.node],
+                                                   pose: .init(position: origin),
+                                                   path: Path(sheetBounds),
+                                                   fillType: .color(mainBackgroundColor))
+                                .renderedTexture(in: b, to: size,
+                                                 backgroundColor: mainBackgroundColor)?.image
+                            else { throw MovieEncoder.ExportingError() }
+                            try await movieEncoder.write(image, dur: 1, timeScale: 60)
+                        }
+                    }
+                    
+                    try await make()
+                    
+                    let t = 1.0 / .init(allCount) * 0.9
+                    progressHandler((.init(ri) + t + 0.1) / .init(renderings.count))
+                    try Task.checkCancellation()
+                    
+                    currentI = 1
+                    for group in allGroups {
+                        let sb = group.sb
+                        let sheetView = sb.view
+                        try await sheetView.history.move(to: group.version) { yIndexPath in
+                            sheetView.history.set(indexPath: yIndexPath)
+                        } topIHandler: { toTopIndex in
+                            defer { currentI += 1 }
+                            for result in sheetView.history.undoResults(to: toTopIndex) {
+                                let undoItem = try sheetView.history
+                                    .undoItem(with: result, sheetView.model)
+                                sheetView.update(undoItem, isMakeRect: false, isSleep: false)
+                                switch undoItem {
+                                case .setSelection(let selection):
+                                    if !selection.isEmpty {
+                                        sheetView.updateNode(from: .empty,
+                                                             old: sheetView.model.selection)
+                                    }
+                                default: break
+                                }
+                                
+                                if isEnabledAnimation {
+                                    switch undoItem {
+                                    case .appendKeyLine(let kv):
+                                        sb.ks[kv.index].isUpdate = true
+                                    case .removeKeyLastLine(let ki):
+                                        sb.ks[ki].isUpdate = true
+                                    case .appendKeyLines(let kv):
+                                        sb.ks[kv.index].isUpdate = true
+                                    case .removeKeyLastLines(let kv):
+                                        sb.ks[kv.index].isUpdate = true
+                                    case .insertDraftKeyLines(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .insertDraftKeyPlanes(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .insertKeyLines(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .insertKeyPlanes(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .removeDraftKeyLines(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .removeDraftKeyPlanes(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .removeKeyLines(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .removeKeyPlanes(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .replaceKeyLines(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .replaceKeyPlanes(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .setKeyPlaneValues(let kvs):
+                                        kvs.forEach { sb.ks[$0.index].isUpdate = true }
+                                    case .changedColors(let cv):
+                                        if !cv.lineIs.isEmpty {
+                                            sb.ks[sheetView.model.animation.index].isUpdate = true
+                                        } else if !cv.keysLineIs.isEmpty {
+                                            cv.keysLineIs
+                                                .forEach { sb.ks[$0.index].isUpdate = true }
+                                        }
+                                        if !cv.planeIs.isEmpty {
+                                            sb.ks[sheetView.model.animation.index].isUpdate = true
+                                        } else if !cv.keysPlaneIs.isEmpty {
+                                            cv.keysPlaneIs
+                                                .forEach { sb.ks[$0.index].isUpdate = true }
+                                        }
+                                    case .insertKeyframes(let kvs):
+                                        for kv in kvs {
+                                            sb.ks.insert(K(image: ofkImage,
+                                                           beat: kv.value.beat),
+                                                         at: kv.index)
+                                            
+                                            if isMultiK {
+                                                if let kri = krs.enumerated().reversed()
+                                                    .first(where: { kv.value.beat >= $0.element.beat })?.offset {
+                                                    if krs[kri].beat != kv.value.beat {
+                                                        krs.insert(KR(image: fkrImage,
+                                                                      beat: kv.value.beat),
+                                                                   at: kri + 1)
+                                                    }
+                                                    for ki in krs.count.range {
+                                                        krs[ki].isUpdate = true
+                                                    }
+                                                }
+                                            } else {
+                                                krs.insert(KR(image: fkrImage,
+                                                              beat: kv.value.beat),
+                                                           at: kv.index)
+                                            }
+                                        }
+                                        
+                                        isRedraw = true
+                                    case .removeKeyframes(let kis):
+                                        if isMultiK {
+                                            for ki in kis.reversed() {
+                                                let oldBeat = sb.ks[ki].beat
+                                                let isNoRemove = sbs.enumerated().contains { (si, sb) in
+                                                    si != group.si
+                                                    && sb.ks.contains(where: { $0.beat == oldBeat })
+                                                }
+                                                
+                                                sb.ks.remove(at: ki)
+                                                
+                                                if let kri = krs.firstIndex(where: { $0.beat == oldBeat }) {
+                                                    if !isNoRemove {
+                                                        krs.remove(at: kri)
+                                                    }
+                                                }
+                                            }
+                                            for ki in krs.count.range {
+                                                krs[ki].isUpdate = true
+                                            }
+                                        } else {
+                                            sb.ks.remove(at: kis)
+                                            krs.remove(at: kis)
+                                        }
+                                        
+                                        isRedraw = true
+                                    case .setKeyframeOptions(let kvs):
+                                        for kv in kvs {
+                                            if isMultiK {
+                                                let krsCount = krs.count
+                                                let oldBeat = sb.ks[kv.index].beat
+                                                let isNoRemove = sbs.enumerated().contains { (si, sb) in
+                                                    si != group.si
+                                                    && sb.ks.contains(where: { $0.beat == oldBeat })
+                                                }
+                                                if let kri = krs.firstIndex(where: { $0.beat == oldBeat }) {
+                                                    if !isNoRemove {
+                                                       krs.remove(at: kri)
+                                                    }
+                                                }
+                                                
+                                                if let kri = krs.enumerated().reversed()
+                                                    .first(where: { kv.value.beat >= $0.element.beat })?.offset {
+                                                    if krs[kri].beat != kv.value.beat {
+                                                        krs.insert(KR(image: fkrImage,
+                                                                      beat: kv.value.beat),
+                                                                   at: kri + 1)
+                                                    }
+                                                }
+                                                if krsCount != krs.count {
+                                                    isRedraw = true
+                                                }
+                                                for ki in krs.count.range {
+                                                    krs[ki].isUpdate = true
+                                                }
+                                            }
+                                            sb.ks[kv.index].beat = kv.value.beat
+                                        }
+                                    default:
+                                        sb.ks[sheetView.model.animation.index].isUpdate = true
+                                    }
+                                }
+                            }
+                            
+                            if currentI % speed == 0 || currentI == allCount - 1 {
+                                try await make()
+                            }
+                            let t = .init(currentI + 1) / .init(allCount) * 0.9
+                            progressHandler((.init(ri) + t + 0.1) / .init(renderings.count))
+                            try Task.checkCancellation()
+                        }
+                    }
+                }
+                
+                try await movieEncoder.finish()
+                try ioResult.setAttributes()
+            } catch {
+                movieEncoder.cancel()
+                throw error
+            }
+        }
+        
+        let exportingView = ExportingView(type: .timelapse, name: ioResult.name)
+        rootAction.hudView.append(exportingView)
+        do {
+            try ioResult.remove()
+            
+            let task = Task.detached(priority: .utility) {
+                var renderings = renderings
+                for i in renderings.count.range {
+                    try? renderings[i].makeTemps()
+                }
+                defer { renderings.forEach { $0.resetTemps() } }
+                
+                var im = IntervalManager()
+                do {
+                    try await export(from: renderings) { (progress) in
+                        if im.isUpdate() {
+                            Task { @MainActor in
+                                exportingView.progress = progress
+                            }
+                        }
+                    }
+                } catch {
+                    try ioResult.remove()
+                    if !(error is CancellationError) {
+                        Task { @MainActor in
+                            self.rootAction.hudView.show(exportingView.error(with: error))
+                        }
+                    }
+                }
+                Task { @MainActor in
+                    exportingView.close()
+                }
+            }
+            exportingView.cancelHandler = { task.cancel() }
+        } catch {
+            rootAction.hudView.show(error)
             exportingView.close()
         }
     }
@@ -1747,386 +2375,12 @@ final class IOAction: Action {
                     }
                 } catch {
                     Task { @MainActor in
-                        self.rootView.node.show(error)
+                        self.rootAction.hudView.show(error)
                         progressPanel.closePanel()
                     }
                 }
             }
             progressPanel.cancelHandler = { task.cancel() }
-        }
-    }
-    
-    func exportTimelapse(from renderings: [Rendering], isAlphaChannel: Bool,
-                         _ colorSpace: ColorSpace, clipTime: Double? = 60,
-                         aroundColor: Color = .border,
-                         size: Size, at ioResult: IOResult) {
-        @Sendable func export(from renderings: [Rendering],
-                              progressHandler: (Double) -> ()) async throws {
-            var filledIDs = Set<UUID>()
-            let movieEncoder = try MovieEncoder(url: ioResult.url, renderSize: size,
-                                                isAlphaChannel: isAlphaChannel,
-                                                colorSpace, frameRate: 60,
-                                                isEnabledAudio: false, isLinearPCM: false)
-            do {
-                for (ri, rendering) in renderings.enumerated() {
-                    guard !filledIDs.contains(rendering.mainItem.id) else { continue }
-                    filledIDs.insert(rendering.mainItem.id)
-                    
-                    guard let url = rendering.mainItem.url,
-                       let sheet = rendering.mainItem.decodedSheet(),
-                       let history = rendering.mainItem.decodedSheetHistory()
-                    else { throw MovieEncoder.ExportingError() }
-                        
-                    let sheetBinder = RecordBinder(value: sheet, record: Record(url: url))
-                    let sheetView = SheetView(binder: sheetBinder,
-                                              keyPath: \SheetBinder.value,
-                                              history: history)
-                    
-                    var allGroups = [(version: Version, group: UndoGroup<SheetUndoItem>)]()
-                    history.allGroups { indexPath, groups in
-                        allGroups += groups.enumerated()
-                            .map { (.init(indexPath: indexPath, groupIndex: $0.offset),
-                                    $0.element) }
-                    }
-                    allGroups.sort { $0.group.date < $1.group.date }
-                    if let currentVersion = history.currentVersion,
-                       allGroups.last?.group.date != history.currentDate {
-                        allGroups.append((currentVersion, history[currentVersion]))
-                    }
-                    
-                    let vs = [nil] + allGroups.map { $0.version }
-                    var allCount = 0, exportableCount = 0
-                    for (vi, version) in vs.enumerated() {
-                        try await sheetView.history.move(to: version) { yIndexPath in
-                            sheetView.history.set(indexPath: yIndexPath)
-                        } topIHandler: { toTopIndex in
-                            if !(vi == 0 && toTopIndex != 0) {
-                                exportableCount += 1
-                            }
-                            allCount += 1
-                            sheetView.history.set(toTopIndex: toTopIndex)
-                            
-                            progressHandler((.init(ri) + .init(vi) / .init(vs.count) * 0.1) / .init(renderings.count))
-                            try Task.checkCancellation()
-                        }
-                    }
-                    
-                    let speed = clipTime != nil ?
-                    max(Int((Double(exportableCount / 60) / clipTime!).rounded(.up)), 1) :
-                    1
-                    
-                    guard let bitmap = Bitmap<UInt8>(width: .init(size.width),
-                                                     height: .init(size.height),
-                                                     colorSpace: .sRGB)
-                    else { throw MovieEncoder.ExportingError() }
-                    bitmap.set(fillColor: aroundColor)
-                    bitmap.fill(Rect(size: size))
-                    
-                    let backgroundColor = sheetView.model.backgroundUUColor.value
-                    guard let fkImage = Image(size: size,
-                                             color: backgroundColor) else { throw MovieEncoder.ExportingError() }
-                    struct RowColumn: Hashable {
-                        var row = 0.0, column = 0.0
-                       
-                        static func length(_ f0: Self, _ f1: Self,
-                                           columnCount: Double) -> Double {
-                            (f0.row * columnCount + f0.column)
-                                .distance(f1.row * columnCount + f1.column)
-                        }
-                        static func linear(_ f0: Self, _ f1: Self,
-                                           t: Double, columnCount: Double) -> [Self] {
-                            let startV = f0.row * columnCount + f0.column
-                            let endV = f1.row * columnCount + f1.column
-                            let v = Double.linear(startV, endV, t: t)
-                            let row = (v / columnCount).rounded(.down)
-                            let column = v - row * columnCount
-                            return if column > columnCount - 1 {
-                                [.init(row: row, column: column),
-                                 .init(row: row + 1, column: column - columnCount)]
-                            } else if column < 1 {
-                                [.init(row: row, column: column),
-                                 .init(row: row - 1, column: column + columnCount)]
-                            } else {
-                                [.init(row: row, column: column)]
-                            }
-                        }
-                    }
-                    struct KR {
-                        var image: Image, rect = Rect(), rowColumn = RowColumn()
-                        var isDraw = true
-                    }
-                    var krs = [KR(image: fkImage)]
-                    let isEnabledAnimation = sheetView.model.isEnabledAnimation
-                    let minKeyframesCount = sheetView.model.animation.keyframes.count
-                    var currentI = 0, isRedraw = false
-                    func drawBitmap() async throws {
-                        guard let image = bitmap.image
-                        else { throw MovieEncoder.ExportingError() }
-                        try await movieEncoder.write(image, dur: 1, timeScale: 60)
-                    }
-                    for (vi, version) in vs.enumerated() {
-                        try await sheetView.history.move(to: version) { yIndexPath in
-                            sheetView.history.set(indexPath: yIndexPath)
-                        } topIHandler: { toTopIndex in
-                            defer { currentI += 1 }
-                            let isFirst = vi == 0 && toTopIndex != 0
-                            let results = sheetView.history.undoResults(to: toTopIndex)
-                            for result in results {
-                                let undoItem = try sheetView.history.undoItem(with: result, sheetView.model)
-                                
-                                sheetView.update(undoItem, isMakeRect: false, isSleep: false)
-                                switch undoItem {
-                                case .setSelection(let selection):
-                                    if !selection.isEmpty {
-                                        sheetView.updateNode(from: .empty,
-                                                             old: sheetView.model.selection)
-                                    }
-                                default: break
-                                }
-                                
-                                if !isFirst && isEnabledAnimation {
-                                    switch undoItem {
-                                    case .appendKeyLine(let kv):
-                                        krs[kv.index].isDraw = true
-                                    case .removeKeyLastLine(let ki):
-                                        krs[ki].isDraw = true
-                                    case .appendKeyLines(let kv):
-                                        krs[kv.index].isDraw = true
-                                    case .removeKeyLastLines(let kv):
-                                        krs[kv.index].isDraw = true
-                                    case .insertDraftKeyLines(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .insertDraftKeyPlanes(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .insertKeyLines(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .insertKeyPlanes(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .removeDraftKeyLines(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .removeDraftKeyPlanes(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .removeKeyLines(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .removeKeyPlanes(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .replaceKeyLines(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .replaceKeyPlanes(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .setKeyPlaneValues(let kvs):
-                                        kvs.forEach { krs[$0.index].isDraw = true }
-                                    case .changedColors(let cv):
-                                        if !cv.lineIs.isEmpty {
-                                            krs[sheetView.model.animation.index].isDraw = true
-                                        } else if !cv.keysLineIs.isEmpty {
-                                            cv.keysLineIs
-                                                .forEach { krs[$0.index].isDraw = true }
-                                        }
-                                        if !cv.planeIs.isEmpty {
-                                            krs[sheetView.model.animation.index].isDraw = true
-                                        } else if !cv.keysPlaneIs.isEmpty {
-                                            cv.keysPlaneIs
-                                                .forEach { krs[$0.index].isDraw = true }
-                                        }
-                                    case .insertKeyframes(let kvs):
-                                        for kv in kvs {
-                                            krs.insert(KR(image: fkImage), at: kv.index)
-                                        }
-                                        isRedraw = true
-                                    case .removeKeyframes(let kis):
-                                        krs.remove(at: kis)
-                                        
-                                        isRedraw = true
-                                    default:
-                                        krs[sheetView.model.animation.index].isDraw = true
-                                    }
-                                }
-                            }
-                            
-                            if isFirst {
-                                progressHandler((.init(ri) + .init(currentI) / .init(allCount) * 0.9 + 0.1) / .init(renderings.count))
-                                try Task.checkCancellation()
-                                return
-                            }
-                            
-                            guard currentI == 0
-                                 || currentI == allCount - 1
-                                 || currentI % speed == 0 else { return }
-                            
-                            let origin = rendering.mainItem.frame.origin
-                            let b = rendering.bounds
-                            let sb = rendering.mainItem.frame.bounds
-                            if isEnabledAnimation {
-                                let drawKIs = krs.enumerated()
-                                    .compactMap { $0.element.isDraw ? $0.offset : nil }
-                                for ki in drawKIs {
-                                    let node = sheetView.animationView.elementViews[ki].node
-                                    guard let image = Node(children: [node],
-                                                           pose: .init(position: origin),
-                                                           path: Path(sb),
-                                                           fillType: .color(backgroundColor))
-                                        .renderedTexture(in: b, to: size,
-                                                         backgroundColor: backgroundColor)?.image
-                                    else { throw MovieEncoder.ExportingError() }
-                                    krs[ki].image = image
-                                }
-                                
-                                let padding = 2.0
-                                let inB = Rect(size: size).inset(by: padding * 2)
-                                let kCount = max(minKeyframesCount, krs.count)
-                                let columnCount
-                                = Int(Double(kCount).squareRoot().rounded(.up))
-                                let cellWidth = inB.width / Double(columnCount)
-                                let cellheight = inB.height * cellWidth / inB.width
-                                func rowColumn(at ki: Int) -> RowColumn {
-                                    .init(row: Double(ki / columnCount),
-                                          column: Double(ki % columnCount))
-                                }
-                                func rect(at rc: RowColumn) -> Rect {
-                                    Rect(x: inB.minX + rc.column * cellWidth,
-                                         y: inB.maxY - (rc.row + 1) * cellheight,
-                                         width: cellWidth,
-                                         height: cellheight).inset(by: padding)
-                                }
-                                func rect(at ki: Int) -> Rect {
-                                    rect(at: rowColumn(at: ki))
-                                }
-                                
-                                if isRedraw {
-                                    isRedraw = false
-                                    
-                                    func draw(t: Double) async throws {
-                                        bitmap.set(fillColor: aroundColor)
-                                        bitmap.fill(Rect(size: size))
-                                        
-                                        for (ki, kr) in krs.enumerated() {
-                                            guard t == 1
-                                                    || !krs[ki].rect.isEmpty else { continue }
-                                            let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
-                                            if oRC.row != nRC.row {
-                                                let rcs = RowColumn
-                                                    .linear(oRC, nRC, t: t,
-                                                            columnCount: Double(columnCount))
-                                                let b = Rect.linear(krs[ki].rect,
-                                                                    rect(at: ki), t: t)
-                                                func nRect(at rc: RowColumn) -> Rect {
-                                                    var r = rect(at: rc)
-                                                    r.size.width = b.width
-                                                    r.size.height = b.height
-                                                    return r
-                                                }
-                                                if rcs.count == 2 {
-                                                    bitmap.draw(kr.image,
-                                                                in: nRect(at: rcs[0]))
-                                                    bitmap.draw(kr.image,
-                                                                in: nRect(at: rcs[1]))
-                                                } else {
-                                                    bitmap.draw(kr.image,
-                                                                in: nRect(at: rcs[0]))
-                                                }
-                                            } else {
-                                                let rect = Rect.linear(krs[ki].rect,
-                                                                       rect(at: ki), t: t)
-                                                bitmap.draw(kr.image, in: rect)
-                                            }
-                                        }
-                                        try await drawBitmap()
-                                    }
-                                    
-                                    let isMove = krs.count.range
-                                        .contains { !krs[$0].rect.isEmpty && krs[$0].rect != rect(at: $0) }
-                                    if isMove {
-                                        var maxLength = 1.0
-                                        for (ki, kr) in krs.enumerated() {
-                                            guard !krs[ki].rect.isEmpty else { continue }
-                                            let oRC = kr.rowColumn, nRC = rowColumn(at: ki)
-                                            let l = RowColumn
-                                                .length(oRC, nRC,
-                                                        columnCount: Double(columnCount))
-                                            maxLength = max(l, maxLength)
-                                        }
-                                        let count = Int(maxLength.clipped(min: 1, max: 10,
-                                                                          newMin: 6,
-                                                                          newMax: 30))
-                                        for i in 1 ... count {
-                                            try await draw(t: (Double(i) / Double(count)).easeOut())
-                                        }
-                                    } else {
-                                        try await draw(t: 1)
-                                    }
-                                    for ki in krs.count.range {
-                                        krs[ki].rect = rect(at: ki)
-                                        krs[ki].rowColumn = rowColumn(at: ki)
-                                    }
-                                } else {
-                                    for ki in drawKIs {
-                                        bitmap.draw(krs[ki].image, in: rect(at: ki))
-                                    }
-                                    try await drawBitmap()
-                                }
-                                for ki in krs.count.range {
-                                    krs[ki].isDraw = false
-                                }
-                            } else {
-                                guard let image = Node(children: [sheetView.node],
-                                                       pose: .init(position: origin),
-                                                       path: Path(sb),
-                                                       fillType: .color(backgroundColor))
-                                    .renderedTexture(in: b, to: size,
-                                                     backgroundColor: backgroundColor)?.image
-                                else { throw MovieEncoder.ExportingError() }
-                                try await movieEncoder.write(image, dur: 1, timeScale: 60)
-                            }
-                            
-                            progressHandler((.init(ri) + .init(currentI) / .init(allCount) * 0.9 + 0.1) / .init(renderings.count))
-                            try Task.checkCancellation()
-                        }
-                    }
-                }
-                
-                try await movieEncoder.finish()
-                try ioResult.setAttributes()
-            } catch {
-                movieEncoder.cancel()
-                throw error
-            }
-        }
-        
-        let exportingView = ExportingView(type: .timelapse, name: ioResult.name)
-        rootAction.hudView.append(exportingView)
-        do {
-            try ioResult.remove()
-            
-            let task = Task.detached(priority: .utility) {
-                var renderings = renderings
-                for i in renderings.count.range {
-                    try? renderings[i].makeTemps()
-                }
-                defer { renderings.forEach { $0.resetTemps() } }
-                
-                do {
-                    try await export(from: renderings) { (progress) in
-                        Task { @MainActor in
-                            exportingView.progress = progress
-                        }
-                    }
-                } catch {
-                    try ioResult.remove()
-                    if !(error is CancellationError) {
-                        Task { @MainActor in
-                            self.rootView.node.show(error)
-                        }
-                    }
-                }
-                Task { @MainActor in
-                    exportingView.close()
-                }
-            }
-            exportingView.cancelHandler = { task.cancel() }
-        } catch {
-            rootView.node.show(error)
-            exportingView.close()
         }
     }
 }
